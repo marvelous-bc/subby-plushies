@@ -1,5 +1,5 @@
 {
-  "version": "1.8.6",
+  "version": "1.8.7",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Adds per-user color customization for both the lo-fi Use menu and Extensions control center, with independent palettes, color pickers, presets, copy controls, and reset options."
+  "notes": "Adds a dedicated Pink theme and shared theme presets that apply to both the Use menu and the Extensions control center while preserving independent per-interface color customization."
 }
