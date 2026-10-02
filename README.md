@@ -6,8 +6,7 @@ A standalone Bondage Club R132 plushie companion addon with modular plush artwor
 
 Choose **one** installation method:
 
-- **`SubbysPlushies.user.js`** — full commented/source build.
-- **`SubbysPlushies.min.user.js`** — production build with code comments removed.
+- **`SubbysPlushies.user.js`** — 
 - **`SubbysPlushies-Launcher.user.js`** — recommended if you want automatic release pickup. The launcher checks `version.json` on every Bondage Club load, downloads the production build only when the release version changes, and keeps the last working release cached as a fallback.
 
 Do not enable the launcher and a full build at the same time. The addon intentionally has a duplicate-instance guard.
