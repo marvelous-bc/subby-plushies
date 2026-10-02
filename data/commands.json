@@ -29,6 +29,10 @@
           "description": "Open the Settings tab."
         },
         {
+          "command": "/subbyplushlayout",
+          "description": "Open the Layout customization tab."
+        },
+        {
           "command": "/subbyplushremove",
           "description": "Remove the held Subby's Plushies item."
         },

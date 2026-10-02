@@ -1,5 +1,5 @@
 {
-  "version": "1.8.4",
+  "version": "1.8.5",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Adds the Join the cuddle room achievement, routes Use-menu Stats/Achievements to their detailed Extensions pages, adds a named-player Battle prompt, adds hover plush previews, shrinks/tucks the Easy Drag mouse toggle, and refreshes the Use menu with a lo-fi visual style."
+  "notes": "Cleans and paginates the lo-fi Use menu, adds a matching lo-fi Extensions theme with no blue active accents, keeps hover-preview plush art in its natural colors, and adds persistent user layout customization options."
 }
