@@ -1,5 +1,5 @@
 {
-  "version": "1.8.3",
+  "version": "1.8.4",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Adds the Meet the cuddle queen achievement for sharing a room with member 89413, permanently grants it to member 89413, and replaces the Easy Drag text button with a smaller mouse-icon state button."
+  "notes": "Adds the Join the cuddle room achievement, routes Use-menu Stats/Achievements to their detailed Extensions pages, adds a named-player Battle prompt, adds hover plush previews, shrinks/tucks the Easy Drag mouse toggle, and refreshes the Use menu with a lo-fi visual style."
 }

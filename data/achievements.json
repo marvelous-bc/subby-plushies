@@ -123,6 +123,16 @@
       }
     },
     {
+      "id": "join_cuddle_room",
+      "name": "Join the cuddle room",
+      "description": "Join Subbycat's place.",
+      "condition": {
+        "metric": "cuddleRoomJoined",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
       "id": "mascot_maker",
       "name": "Mascot Maker",
       "description": "Set a room mascot once.",
