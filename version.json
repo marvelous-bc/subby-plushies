@@ -1,5 +1,5 @@
 {
-  "version": "1.9.0",
+  "version": "1.9.1",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Adds per-plush relationship levels, favorites, local mood-state symbols and sleepy state, three saved pose slots per plush, local plushie emotes, and portable backup/restore."
+  "notes": "Removes unreleased backward-compatibility code for older Subby's Plushies builds, including legacy Offer transport, compact battle wire formats, the old instance guard, and pre-1.5.52 transform migration."
 }
