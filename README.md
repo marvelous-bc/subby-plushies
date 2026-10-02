@@ -1,77 +1,55 @@
-# Subby's Plushies
+# Subby's Plushies v2
 
-**Subby's Plushies** is a Bondage Club R132+ userscript by **Marvelous** that adds a modular handheld plushie collection with custom activities, positioning tools, moods, relationships, room-synced emotes, room mascots, plushie battles, achievements, themes, backups, and a native Preferences → Extensions control center.
-
-Current development build: **v2 - first official release**  
-Designed for: **Bondage Club R132**
-
-> This is an independent addon and is not part of the Bondage Club base game.
-
-## Highlights
-
-- 18 public plushie options in one modular `ItemHandheld` asset.
-- Searchable, paginated lo-fi Use menu with Favorites, hover preview, Emotes, Presets, Battle, Mascot, Settings, and Extension Menu shortcuts.
-- BC-native Move / Resize, Easy Drag, snap points, per-plush saved Pose 1/2/3 presets, scaling, and rotation.
-- Plush activities including cuddle, pet, pat, nuzzle, kiss, bonk, hide behind, balance on head, offer, show, whisper, wave, and Hug Tightly.
-- Persistent per-plush happiness, mood history, sleepy state, relationship levels, favorites, lore, achievements, and relationship milestone celebration bubbles.
-- Happiness passively decays by **1 every 15 minutes** and stops at **29**.
-- **15-second room-synced emotes** (`♥`, `!!`, `zZ`, `!`, `…`) visible to other room members who run Subby's Plushies.
-- Persistent room mascot stored in synchronized room custom data so late joiners can recover the current mascot even if they were offline when it was set.
-- Multiplayer plushie battles with target prompt, local battle history, stats, and achievements.
-- Native **Preferences → Extensions** control center with lo-fi themes, custom colors, layout options, performance mode, backup/restore, history, and detailed plush information.
-- Normal / Low CPU performance modes.
-- Git-backed validated JSON configuration with local known-good cache and built-in fallback values. Remote JavaScript is never executed.
-- Public `window.SubbysPlushies` API for other addons; API documentation lives in this README rather than the user-facing Extensions menu.
+A standalone Bondage Club R132 plushie companion addon with modular plush artwork, activities, moods, relationships, synchronized emotes, room mascots, battles, saved poses, themes, stats, achievements, history, and a native **Preferences → Extensions** control center.
 
 ## Installation
 
-1. Install a userscript manager.
-2. Install `SubbysPlushies.user.js` from this repository.
-3. Enable it on the Bondage Club domain you use.
-4. Reload Bondage Club.
-5. Enter a chat room and use `/plushie` or open **Preferences → Extensions → Subby's Plushies**.
+Choose **one** installation method:
 
-The metadata includes the current Bondage Club ElementFX, Europe, and Asia locations used by the script.
+- **`SubbysPlushies.user.js`** — full commented/source build.
+- **`SubbysPlushies.min.user.js`** — production build with code comments removed.
+- **`SubbysPlushies-Launcher.user.js`** — recommended if you want automatic release pickup. The launcher checks `version.json` on every Bondage Club load, downloads the production build only when the release version changes, and keeps the last working release cached as a fallback.
 
-## Quick Start
+Do not enable the launcher and a full build at the same time. The addon intentionally has a duplicate-instance guard.
 
-```text
-/plushie
-/plushieuse
-/plushieextensions
-/plushieposition
-/plushiedrag on
-/plushieemote happy
-```
+## v2 command integration
 
-The complete command reference is available in-game in **Extensions → Commands** and below.
+All addon commands use the `/plushie...` namespace.
 
-## Use Menu
+- `/help` keeps Bondage Club's normal help and adds a compact Subby's Plushies command summary.
+- `/help plushie` (or `/help plushies`) shows the full plushie command reference with descriptions.
+- Press **Tab** while typing `/plu...` in chat to complete and cycle matching commands.
+- Tab completion also supports common arguments for emotes, performance mode, Easy Drag, mascot actions, pose slots, and snap points.
+- Typing `/help p...` and pressing Tab completes the plushie help command.
+- The same reference is available in **Preferences → Extensions → Subby's Plushies → Commands**.
 
-The Use menu is a themed lo-fi selector with pagination and search. Favorites appear first, and the bottom controls provide:
+## Main features
 
-- **Emotes** — Happy, Angry, Sleepy, Protective, Sulky.
-- **Mascot** — room mascot controls.
-- **Settings** — quick feature toggles.
-- **Presets** — save/apply Pose 1/2/3.
-- **Extension Menu** — opens the full control center.
-- **Battle** — opens a player-name/member-number challenge prompt.
+- 18 public plushie variants in one native modular `ItemHandheld` asset.
+- Native per-layer Move/Resize, Easy Drag, and named snap positions.
+- Plush activities including cuddle, nuzzle, pat, pet, hide, kiss, bonk, head balance, offer, show, whisper, squeeze cheeks, wave, Hug Tightly + purr, Protect Me, and more.
+- Per-plush happiness with passive **-1 every 15 minutes** until 29.
+- Per-plush mood history and relationships: **Stranger → Familiar → Friend → Bestie → Bonded**.
+- Relationship milestone celebration bubbles.
+- Favorites, sleepy state, and three saved pose slots per plush.
+- 15-second room-synchronized plushie emotes.
+- `zZ`, `…`, `♥`, `!`, and temporary emote symbols follow the plush's transformed position through Move/Resize, Easy Drag, scale, rotation, temporary poses, and saved poses.
+- Persistent room mascot in synchronized room custom data, recoverable by later joiners.
+- Multiplayer plushie battles, battle history, stats, and achievements.
+- Searchable/paginated lo-fi Use menu with Favorites, Emotes, Mascot, Settings, Presets, Extension Menu, and Battle.
+- Lo-fi Extensions UI with independent color customization, layout settings, and themes including Pink.
+- Normal / Low CPU performance modes.
+- Backup/restore with tamper-evident sealing for progression values.
+- Validated Git-backed JSON with local last-known-good caching and built-in safe fallbacks.
+- Public `window.SubbysPlushies` API for other addons; developer API details stay out of the user-facing Extensions menu.
 
-Users can customize Use-menu colors independently from the Extensions control center, or apply a shared preset such as Lo-fi, Pink, Midnight, Rose, Sage, or Monochrome.
+## Mood, relationships, and sleep
 
-## Mood, Sleep, and Relationships
-
-Each plush tracks its own happiness. Interactions can raise or lower happiness, while passive decay removes **1 point every 15 minutes** until the score reaches **29**. Mood changes are stored locally in a short per-plush history.
-
-Relationship progression is also per plush:
-
-**Stranger → Familiar → Friend → Bestie → Bonded**
-
-Relationship milestones trigger a small local celebration bubble and can unlock relationship speech/achievements. A plush can become sleepy after extended inactivity; interacting with or selecting it wakes it.
+Each plush keeps its own mood, relationship interaction count, favorite state, sleep timing, pose slots, and mood history. Positive/negative activities alter happiness while passive decay only moves downward to 29. Relationship milestones can unlock speech/achievements and trigger a brief local celebration bubble.
 
 ## Emotes
 
-Emotes last **15 seconds**:
+Manual emotes last **15 seconds** and synchronize to other room users running Subby's Plushies:
 
 ```text
 /plushieemote happy
@@ -81,61 +59,35 @@ Emotes last **15 seconds**:
 /plushieemote sulky
 ```
 
-The icon and tiny bubble are positioned from the plushie's actual transformed bounds, so they follow Move / Resize, Easy Drag, scale, and rotation. Emotes are synchronized through the room for other users running Subby's Plushies; they do not require permanent room state.
+## Room mascot
 
-## Positioning and Saved Poses
+Room admins can set/clear the mascot. The current mascot is stored in synchronized room `Custom` data, so players who join after it was set can still recover it. Each player may hide/show the mascot overlay locally without changing room state.
 
-Subby's Plushies uses BC's native per-layer transforms. Easy Drag updates locally while dragging and publishes once on release. Named snap positions include Hands, Chest, Face, Head, Left Shoulder, and Right Shoulder.
+## Performance and v2 cleanup
 
-Each plush has three local saved pose slots containing X, Y, Scale X/Y, and Rotation. Pose presets are useful for screenshots and frequently used placements.
+**Normal** keeps optional visuals enabled. **Low CPU** pauses optional idle/petting animations and stretches safety-monitor intervals while preserving core actions, Easy Drag, battles, synchronized emotes, room mascot sync, and commands.
 
-## Room Mascot
+v2 consolidates local speech-bubble/status-symbol position work into one animation-frame scheduler and reduces safety polling where event-driven hooks already provide immediate updates.
 
-Only synchronized room admins may set or clear the room mascot. The mascot is stored in the room's synchronized `Custom` data, which means a player who joins later can recover the current mascot even if they were offline when it was originally chosen.
+## Always-latest launcher
 
-Each player can still hide/show the mascot overlay locally without changing the room state.
+The launcher uses fixed raw URLs from this repository. On every Bondage Club load it:
 
-## Battles and History
+1. fetches `version.json` with cache-busting;
+2. compares the release version with its cached version;
+3. fetches `SubbysPlushies.min.user.js` only when the release changes;
+4. caches the successfully started release;
+5. falls back to the cached release if GitHub is temporarily unavailable.
 
-Plushie Battle supports name/member-number targeting, accept/decline prompts, multiple randomized rounds, local detailed results, and a **last 20 battles** history page. Battle history records opponent, plushies, score, result, and date/time.
+The launcher itself has userscript `@updateURL` / `@downloadURL` metadata so launcher fixes can also be updated by the userscript manager. Because the launcher intentionally executes the production script from this repository, only use it if you trust releases published here.
 
-## Extensions Control Center
-
-Open **Preferences → Extensions → Subby's Plushies**.
-
-Current tabs:
-
-| Tab | Purpose |
-| --- | --- |
-| **Status** | Current plush, mood, mascot, settings, performance, and data/update status. |
-| **Lore** | Search/browse plush lore with artwork and held-plush shortcut. |
-| **Plushies** | Relationship progress, favorites, emotes, sleepy state, and saved poses. |
-| **History** | Recent per-plush mood changes and last 20 battles. |
-| **Settings** | Feature toggles, room-synced emotes, Normal/Low CPU mode, and utility controls. |
-| **Layout** | Menu density, hover preview, lore side, theme presets, and independent interface colors. |
-| **Stats** | Detailed local interaction/battle statistics. |
-| **Achievements** | Locked/unlocked achievements and timestamps. |
-| **Backup** | Export/import preferences and sealed progression data. |
-| **Commands** | Slash-command reference. |
-
-There is a public dev API.
-
-## Backup / Restore
-
-Backup schema v3 exports portable local preferences and data, including moods/history, battle history, favorites, layouts/themes, nicknames, and saved poses. Progression values (stats, achievements, relationships) are integrity-sealed. If those values are manually modified, progression restore is rejected while ordinary preference data can still be imported.
-
-
-
-## Performance
-
-**Normal** mode provides all optional animations and standard recovery checks. **Low CPU** pauses optional idle/petting animations, reduces visual refresh work, and lengthens background watchdog intervals while keeping core actions, drag, battles, emotes, mascot sync, and other functional behavior available.
-
-## Command Reference
+## Command reference
 
 ### General
 
 | Command | Description |
 | --- | --- |
+| `/help plushie` | Show Subby's Plushies commands with descriptions. Plain /help also includes a plushie command summary. |
 | `/plushie` | Equip Subby's Plushies. |
 | `/plushieuse` | Open the plushie selector/use menu. |
 | `/plushieextensions` | Open the Subby's Plushies Extensions control center. |
@@ -227,54 +179,26 @@ Backup schema v3 exports portable local preferences and data, including moods/hi
 | `/plushieexport` | Export a portable Subby's Plushies JSON backup. |
 | `/plushieimport` | Choose and restore a Subby's Plushies JSON backup. |
 
-## Developer API
+## Public addon API
 
-Other addons can integrate through `window.SubbysPlushies` instead of hooking private internals. Current API v1 includes:
+`window.SubbysPlushies` exposes the stable public integration surface. Current useful methods include `getHeld()`, `getMood()`, `getMoodHistory()`, `getRelationship()`, `getBattleHistory()`, `showEmote()`, `getPerformanceMode()`, `setPerformanceMode()`, `on()`, `off()`, and `once()`. Other addons should use this API rather than hook Subby's Plushies internals.
+
+## Repository layout
 
 ```text
-SubbysPlushies.getHeld()
-SubbysPlushies.getMood(name?)
-SubbysPlushies.getMoodHistory(name?, limit?)
-SubbysPlushies.getRelationship(name?)
-SubbysPlushies.getBattleHistory(limit?)
-SubbysPlushies.showEmote(type)
-SubbysPlushies.getPerformanceMode()
-SubbysPlushies.setPerformanceMode(mode)
-SubbysPlushies.on(event, callback)
-SubbysPlushies.off(event, callback)
-SubbysPlushies.once(event, callback)
+SubbysPlushies.user.js           # commented/source build
+SubbysPlushies.min.user.js       # production/comment-free build
+SubbysPlushies-Launcher.user.js  # version-aware launcher
+assets/plushies/                  # plush artwork
+assets/sfx/                       # sound effects
+data/                             # validated configuration JSON
+version.json                      # updater + launcher manifest
+README.md
+CHANGELOG.md
 ```
 
-Events include `interaction`, `mood`, `relationship`, `battle`, `emote`, `favorite`, `pose`, and `performance`.
+## Support
 
-## Git-backed Data
+Repository: https://github.com/marvelous-bc/subby-plushies
 
-`data/index.json` is the manifest for validated configuration. The runtime loads cached known-good JSON immediately when available and refreshes Git data asynchronously. Invalid or unavailable remote data falls back to cache/built-in values.
-
-Configured data files include plush metadata, lore, speech, moods, achievements, battle settings, commands, poses, defaults, activities, idle settings, protect settings, stats schema, and relationship thresholds/speech.
-
-Executable/security-sensitive behavior stays in the userscript: BC hooks, runtime asset/activity registration, image mapping, drag, transfers, room sync, battle networking, persistence internals, and validation.
-
-## Assets
-
-Artwork: `assets/plushies/`  
-Sound effects: `assets/sfx/`
-
-Asset filenames are case-sensitive on Git hosting.
-
-## Updating
-
-`version.json` provides version/update metadata. The updater does not execute JavaScript from the manifest. Automatic checks can be disabled from Settings.
-
-## Troubleshooting
-
-- Make sure only one current Subby's Plushies userscript is enabled.
-- Reload Bondage Club after replacing the script.
-- Use `/plushiedebug` for detailed console diagnostics.
-- Use `/plushierecover` to rebuild the local held-plush state if needed.
-- If artwork is missing, verify the exact filename/capitalization under `assets/plushies/`.
-- If a command is unclear, check the in-game Commands tab; all published commands use the `/plushie...` namespace.
-
----
-
-**Subby's Plushies v2** — cute chaos, plushie cuddles, and a suspicious amount of bonking.
+Issues: https://github.com/marvelous-bc/subby-plushies/issues

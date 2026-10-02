@@ -5,6 +5,10 @@
       "title": "General",
       "commands": [
         {
+          "command": "/help plushie",
+          "description": "Show Subby's Plushies commands with descriptions. Plain /help also includes a plushie command summary."
+        },
+        {
           "command": "/plushie",
           "description": "Equip Subby's Plushies."
         },

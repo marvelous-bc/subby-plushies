@@ -1,5 +1,6 @@
 {
-  "version": "1.9.4",
+  "version": "2.0.0",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Room-syncs 15-second plushie emotes, fixes zZ/mood-symbol positioning after plush transforms, removes Plugin API docs from Extensions, refreshes /plushie command help, and updates README/CHANGELOG for the current feature set."
+  "launcherUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js",
+  "notes": "v2 release: /help integration and Tab autocomplete, corrected transformed mood/emote icon anchoring, release cleanup/performance tuning, two distributable builds, and an always-latest launcher."
 }
