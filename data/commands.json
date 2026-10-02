@@ -5,39 +5,39 @@
       "title": "General",
       "commands": [
         {
-          "command": "/subbyplush",
+          "command": "/plushie",
           "description": "Equip Subby's Plushies."
         },
         {
-          "command": "/subbyplushuse",
+          "command": "/plushieuse",
           "description": "Open the plushie selector/use menu."
         },
         {
-          "command": "/subbyplushextensions",
+          "command": "/plushieextensions",
           "description": "Open the Subby's Plushies Extensions control center."
         },
         {
-          "command": "/subbyplushcommands",
+          "command": "/plushiecommands",
           "description": "Open the Commands tab directly."
         },
         {
-          "command": "/subbyplushstatus",
+          "command": "/plushiestatus",
           "description": "Open the Status tab."
         },
         {
-          "command": "/subbyplushsettings",
+          "command": "/plushiesettings",
           "description": "Open the Settings tab."
         },
         {
-          "command": "/subbyplushlayout",
+          "command": "/plushielayout",
           "description": "Open the Layout customization tab."
         },
         {
-          "command": "/subbyplushremove",
+          "command": "/plushieremove",
           "description": "Remove the held Subby's Plushies item."
         },
         {
-          "command": "/subbyplushrecover",
+          "command": "/plushierecover",
           "description": "Run the plush recovery helper."
         }
       ]
@@ -46,31 +46,31 @@
       "title": "Positioning",
       "commands": [
         {
-          "command": "/subbyplushposition",
+          "command": "/plushieposition",
           "description": "Open BC's native Move / Resize editor."
         },
         {
-          "command": "/subbyplushmove",
+          "command": "/plushiemove",
           "description": "Alias for Move / Resize."
         },
         {
-          "command": "/subbyplushresize",
+          "command": "/plushieresize",
           "description": "Alias for Move / Resize."
         },
         {
-          "command": "/subbyplushhands",
+          "command": "/plushiehands",
           "description": "Reset the plush to its default hands position."
         },
         {
-          "command": "/subbyplushcenter",
+          "command": "/plushiecenter",
           "description": "Alias for resetting the plush position."
         },
         {
-          "command": "/subbyplushdrag [on|off]",
+          "command": "/plushiedrag [on|off]",
           "description": "Toggle Easy Drag, or explicitly turn it on/off."
         },
         {
-          "command": "/subbyplushsnap <point>",
+          "command": "/plushiesnap <point>",
           "description": "Snap to a named point such as head, face, chest, hands, left shoulder, or right shoulder."
         }
       ]
@@ -79,47 +79,47 @@
       "title": "Features",
       "commands": [
         {
-          "command": "/subbyplushmood",
+          "command": "/plushiemood",
           "description": "Show the current plushie's mood and quick info."
         },
         {
-          "command": "/subbyplushlore",
+          "command": "/plushielore",
           "description": "Open the Lore browser on the held plushie."
         },
         {
-          "command": "/subbyplushinfo",
+          "command": "/plushieinfo",
           "description": "Show the current plushie's mood and quick info."
         },
         {
-          "command": "/subbyplushprotect",
+          "command": "/plushieprotect",
           "description": "Toggle Protect Me mode."
         },
         {
-          "command": "/subbyplushjealous",
+          "command": "/plushiejealous",
           "description": "Toggle Jealous Plushie mode."
         },
         {
-          "command": "/subbyplushidle",
+          "command": "/plushieidle",
           "description": "Toggle idle plush animations."
         },
         {
-          "command": "/subbyplushspeech",
+          "command": "/plushiespeech",
           "description": "Toggle local speech bubbles."
         },
         {
-          "command": "/subbyplushspeak",
+          "command": "/plushiespeak",
           "description": "Force one local plush speech bubble."
         },
         {
-          "command": "/subbyplushbubble",
-          "description": "Alias for /subbyplushspeak."
+          "command": "/plushiebubble",
+          "description": "Alias for /plushiespeak."
         },
         {
-          "command": "/subbyplushpurr",
+          "command": "/plushiepurr",
           "description": "Play the plush purr sound locally."
         },
         {
-          "command": "/subbyplushfeatures",
+          "command": "/plushiefeatures",
           "description": "Show the current feature-toggle status."
         }
       ]
@@ -128,27 +128,27 @@
       "title": "Room Mascot",
       "commands": [
         {
-          "command": "/subbyplushmascot set",
+          "command": "/plushiemascot set",
           "description": "Set your held plush as the room mascot (room admin only)."
         },
         {
-          "command": "/subbyplushmascot clear",
+          "command": "/plushiemascot clear",
           "description": "Clear the room mascot (room admin only)."
         },
         {
-          "command": "/subbyplushmascot show",
+          "command": "/plushiemascot show",
           "description": "Show mascot information / restore the mascot picture."
         },
         {
-          "command": "/subbyplushmascot hide",
+          "command": "/plushiemascot hide",
           "description": "Hide the mascot picture locally."
         },
         {
-          "command": "/subbyplushmascotshow",
+          "command": "/plushiemascotshow",
           "description": "Shortcut to show the mascot picture."
         },
         {
-          "command": "/subbyplushmascothide",
+          "command": "/plushiemascothide",
           "description": "Shortcut to hide the mascot picture."
         }
       ]
@@ -157,19 +157,19 @@
       "title": "Battle, Stats & Achievements",
       "commands": [
         {
-          "command": "/subbyplushbattle <member/name>",
+          "command": "/plushiebattle <member/name>",
           "description": "Challenge another player to a plushie battle. With no argument, uses the focused character when possible."
         },
         {
-          "command": "/subbyplushstats",
+          "command": "/plushiestats",
           "description": "Show your locally stored plushie stats."
         },
         {
-          "command": "/subbyplushachievements",
+          "command": "/plushieachievements",
           "description": "Show your achievements."
         },
         {
-          "command": "/subbyplushach",
+          "command": "/plushieach",
           "description": "Short alias for achievements."
         }
       ]
@@ -178,23 +178,23 @@
       "title": "Updates & Diagnostics",
       "commands": [
         {
-          "command": "/subbyplushupdate",
+          "command": "/plushieupdate",
           "description": "Check the GitHub version manifest for an update."
         },
         {
-          "command": "/subbyplushupdateopen",
+          "command": "/plushieupdateopen",
           "description": "Open the latest update/download page."
         },
         {
-          "command": "/subbyplushdebug",
+          "command": "/plushiedebug",
           "description": "Print detailed plugin diagnostics to the browser console."
         },
         {
-          "command": "/subbyplushdata",
+          "command": "/plushiedata",
           "description": "Show Git-backed data source/cache status."
         },
         {
-          "command": "/subbyplushdatareload",
+          "command": "/plushiedatareload",
           "description": "Force-refresh validated data files from GitHub."
         }
       ]
@@ -203,31 +203,31 @@
       "title": "Plushies & Relationships",
       "commands": [
         {
-          "command": "/subbyplushplushies",
+          "command": "/plushieplushies",
           "description": "Open the Plushies tab with relationship, favorites, emotes, and saved poses."
         },
         {
-          "command": "/subbyplushfavorite",
+          "command": "/plushiefavorite",
           "description": "Toggle the held plushie as a favorite."
         },
         {
-          "command": "/subbyplushemote happy|angry|sleepy|protective|sulky",
-          "description": "Show a brief local plushie emote and mood symbol."
+          "command": "/plushieemote happy|angry|sleepy|protective|sulky",
+          "description": "Show a 15-second local plushie emote and mood symbol."
         },
         {
-          "command": "/subbyplushposes",
+          "command": "/plushieposes",
           "description": "Open the Plushies tab at the saved-pose controls."
         },
         {
-          "command": "/subbyplushposesave <1|2|3>",
+          "command": "/plushieposesave <1|2|3>",
           "description": "Save the held plushie current X/Y, scale, and rotation."
         },
         {
-          "command": "/subbyplushposeload <1|2|3>",
+          "command": "/plushieposeload <1|2|3>",
           "description": "Apply a saved pose for the held plushie."
         },
         {
-          "command": "/subbyplushposeclear <1|2|3>",
+          "command": "/plushieposeclear <1|2|3>",
           "description": "Clear a saved pose slot for the held plushie."
         }
       ]
@@ -236,15 +236,15 @@
       "title": "Backup / Restore",
       "commands": [
         {
-          "command": "/subbyplushbackup",
+          "command": "/plushiebackup",
           "description": "Open the Backup / Restore tab."
         },
         {
-          "command": "/subbyplushexport",
+          "command": "/plushieexport",
           "description": "Export a portable Subby's Plushies JSON backup."
         },
         {
-          "command": "/subbyplushimport",
+          "command": "/plushieimport",
           "description": "Choose and restore a Subby's Plushies JSON backup."
         }
       ]
