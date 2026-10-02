@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "pluginVersion": "1.7.7",
+  "files": {
+    "plushies.json": {
+      "path": "data/plushies.json",
+      "schemaVersion": 1
+    },
+    "lore.json": {
+      "path": "data/lore.json",
+      "schemaVersion": 1
+    },
+    "speech.json": {
+      "path": "data/speech.json",
+      "schemaVersion": 1
+    },
+    "moods.json": {
+      "path": "data/moods.json",
+      "schemaVersion": 1
+    },
+    "achievements.json": {
+      "path": "data/achievements.json",
+      "schemaVersion": 1
+    },
+    "battle.json": {
+      "path": "data/battle.json",
+      "schemaVersion": 1
+    },
+    "commands.json": {
+      "path": "data/commands.json",
+      "schemaVersion": 1
+    },
+    "poses.json": {
+      "path": "data/poses.json",
+      "schemaVersion": 1
+    },
+    "defaults.json": {
+      "path": "data/defaults.json",
+      "schemaVersion": 1
+    },
+    "activities.json": {
+      "path": "data/activities.json",
+      "schemaVersion": 1
+    },
+    "idle.json": {
+      "path": "data/idle.json",
+      "schemaVersion": 1
+    },
+    "protect.json": {
+      "path": "data/protect.json",
+      "schemaVersion": 1
+    },
+    "stats-schema.json": {
+      "path": "data/stats-schema.json",
+      "schemaVersion": 1
+    }
+  },
+  "loadPolicyRecommendation": {
+    "network": "Fetch JSON from GitHub raw only when cache is missing/stale.",
+    "cache": "Cache last-known-good validated JSON in localStorage.",
+    "fallback": "Keep safe built-in defaults for startup-critical behavior."
+  }
+}

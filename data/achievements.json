@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "affectionActionKeys": [
+    "rubFace",
+    "cuddleChest",
+    "nuzzle",
+    "pat",
+    "pet",
+    "kissPlushie",
+    "kissWith",
+    "whisper",
+    "hugTightly"
+  ],
+  "achievements": [
+    {
+      "id": "first_friend",
+      "name": "First Friend",
+      "description": "Interact with a plushie once.",
+      "condition": {
+        "metric": "totalInteractions",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "plush_pal",
+      "name": "Plush Pal",
+      "description": "Reach 25 plushie interactions.",
+      "condition": {
+        "metric": "totalInteractions",
+        "operator": ">=",
+        "value": 25
+      }
+    },
+    {
+      "id": "professional_cuddler",
+      "name": "Professional Cuddler",
+      "description": "Reach 100 affectionate plushie interactions.",
+      "condition": {
+        "metric": "affectionCount",
+        "operator": ">=",
+        "value": 100
+      }
+    },
+    {
+      "id": "bonk_scholar",
+      "name": "Bonk Scholar",
+      "description": "Use Bonk With Plushie 10 times.",
+      "condition": {
+        "metric": "actions.bonk",
+        "operator": ">=",
+        "value": 10
+      }
+    },
+    {
+      "id": "head_case",
+      "name": "Head Case",
+      "description": "Balance a plushie on a head 25 times.",
+      "condition": {
+        "metric": "actions.balanceHead",
+        "operator": ">=",
+        "value": 25
+      }
+    },
+    {
+      "id": "collector",
+      "name": "Collector",
+      "description": "Use 10 different plushies.",
+      "condition": {
+        "metric": "uniquePlushiesUsed",
+        "operator": ">=",
+        "value": 10
+      }
+    },
+    {
+      "id": "chatty_plush",
+      "name": "Chatty Plush",
+      "description": "Show 25 plushie speech bubbles.",
+      "condition": {
+        "metric": "speechBubbles",
+        "operator": ">=",
+        "value": 25
+      }
+    },
+    {
+      "id": "wiggle_worm",
+      "name": "Wiggle Worm",
+      "description": "See 25 idle plushie animations.",
+      "condition": {
+        "metric": "idleAnimations",
+        "operator": ">=",
+        "value": 25
+      }
+    },
+    {
+      "id": "battle_tested",
+      "name": "Battle Tested",
+      "description": "Finish your first plushie battle.",
+      "condition": {
+        "metric": "battles.played",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "plush_champion",
+      "name": "Plush Champion",
+      "description": "Win 10 plushie battles.",
+      "condition": {
+        "metric": "battles.wins",
+        "operator": ">=",
+        "value": 10
+      }
+    },
+    {
+      "id": "mascot_maker",
+      "name": "Mascot Maker",
+      "description": "Set a room mascot once.",
+      "condition": {
+        "metric": "mascotSets",
+        "operator": ">=",
+        "value": 1
+      }
+    }
+  ]
+}

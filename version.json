@@ -1,0 +1,5 @@
+{
+  "version": "1.7.7",
+  "downloadUrl": "https://github.com/marvelous-bc/subby-plushies",
+  "notes": "Adds a Commands tab to the native Extensions page and moves plush speech bubbles 5 CSS pixels lower while preserving the v1.7.6 bubble positioning fix."
+}

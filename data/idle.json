@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "minDelayMs": 52000,
+  "maxDelayMs": 148000,
+  "frames": [
+    {
+      "delayMs": 0,
+      "deltaY": -2,
+      "rotationMultiplier": 2
+    },
+    {
+      "delayMs": 160,
+      "deltaY": -5,
+      "rotationMultiplier": -3
+    },
+    {
+      "delayMs": 340,
+      "deltaY": -2,
+      "rotationMultiplier": 2
+    },
+    {
+      "delayMs": 520,
+      "deltaY": 0,
+      "rotationMultiplier": 0,
+      "restore": true
+    }
+  ],
+  "randomDirectionValues": [
+    -1,
+    1
+  ],
+  "speechChanceAfterAnimation": 0.32
+}

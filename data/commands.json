@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "groups": [
+    {
+      "title": "General",
+      "commands": [
+        {
+          "command": "/subbyplush",
+          "description": "Equip Subby's Plushies."
+        },
+        {
+          "command": "/subbyplushuse",
+          "description": "Open the plushie selector/use menu."
+        },
+        {
+          "command": "/subbyplushextensions",
+          "description": "Open the Subby's Plushies Extensions menu."
+        },
+        {
+          "command": "/subbyplushcommands",
+          "description": "Open the Commands tab directly."
+        },
+        {
+          "command": "/subbyplushstatus",
+          "description": "Open the Status tab."
+        },
+        {
+          "command": "/subbyplushsettings",
+          "description": "Open the Settings tab."
+        },
+        {
+          "command": "/subbyplushremove",
+          "description": "Remove the held Subby's Plushies item."
+        },
+        {
+          "command": "/subbyplushrecover",
+          "description": "Run the plush recovery helper."
+        }
+      ]
+    },
+    {
+      "title": "Positioning",
+      "commands": [
+        {
+          "command": "/subbyplushposition",
+          "description": "Open BC's native Move / Resize editor."
+        },
+        {
+          "command": "/subbyplushmove",
+          "description": "Alias for Move / Resize."
+        },
+        {
+          "command": "/subbyplushresize",
+          "description": "Alias for Move / Resize."
+        },
+        {
+          "command": "/subbyplushhands",
+          "description": "Reset the plush to its default hands position."
+        },
+        {
+          "command": "/subbyplushcenter",
+          "description": "Alias for resetting the plush position."
+        },
+        {
+          "command": "/subbyplushdrag [on|off]",
+          "description": "Toggle Easy Drag, or explicitly turn it on/off."
+        },
+        {
+          "command": "/subbyplushsnap <point>",
+          "description": "Snap to a named point such as head, face, chest, hands, left shoulder, or right shoulder."
+        }
+      ]
+    },
+    {
+      "title": "Features",
+      "commands": [
+        {
+          "command": "/subbyplushmood",
+          "description": "Show the current plushie's mood and lore."
+        },
+        {
+          "command": "/subbyplushlore",
+          "description": "Alias for mood/lore info."
+        },
+        {
+          "command": "/subbyplushinfo",
+          "description": "Alias for mood/lore info."
+        },
+        {
+          "command": "/subbyplushprotect",
+          "description": "Toggle Protect Me mode."
+        },
+        {
+          "command": "/subbyplushjealous",
+          "description": "Toggle Jealous Plushie mode."
+        },
+        {
+          "command": "/subbyplushidle",
+          "description": "Toggle idle plush animations."
+        },
+        {
+          "command": "/subbyplushspeech",
+          "description": "Toggle local speech bubbles."
+        },
+        {
+          "command": "/subbyplushspeak",
+          "description": "Force one local plush speech bubble."
+        },
+        {
+          "command": "/subbyplushbubble",
+          "description": "Alias for /subbyplushspeak."
+        },
+        {
+          "command": "/subbyplushpurr",
+          "description": "Play the plush purr sound locally."
+        },
+        {
+          "command": "/subbyplushfeatures",
+          "description": "Show the current feature-toggle status."
+        }
+      ]
+    },
+    {
+      "title": "Room Mascot",
+      "commands": [
+        {
+          "command": "/subbyplushmascot set",
+          "description": "Set your held plush as the room mascot (room admin only)."
+        },
+        {
+          "command": "/subbyplushmascot clear",
+          "description": "Clear the room mascot (room admin only)."
+        },
+        {
+          "command": "/subbyplushmascot show",
+          "description": "Show mascot information / restore the mascot picture."
+        },
+        {
+          "command": "/subbyplushmascot hide",
+          "description": "Hide the mascot picture locally."
+        },
+        {
+          "command": "/subbyplushmascotshow",
+          "description": "Shortcut to show the mascot picture."
+        },
+        {
+          "command": "/subbyplushmascothide",
+          "description": "Shortcut to hide the mascot picture."
+        }
+      ]
+    },
+    {
+      "title": "Battle, Stats & Achievements",
+      "commands": [
+        {
+          "command": "/subbyplushbattle <member/name>",
+          "description": "Challenge another player to a plushie battle."
+        },
+        {
+          "command": "/subbyplushstats",
+          "description": "Show your locally stored plushie stats."
+        },
+        {
+          "command": "/subbyplushachievements",
+          "description": "Show your achievements."
+        },
+        {
+          "command": "/subbyplushach",
+          "description": "Short alias for achievements."
+        }
+      ]
+    },
+    {
+      "title": "Updates & Diagnostics",
+      "commands": [
+        {
+          "command": "/subbyplushupdate",
+          "description": "Check the GitHub version manifest for an update."
+        },
+        {
+          "command": "/subbyplushupdateopen",
+          "description": "Open the latest update/download page."
+        },
+        {
+          "command": "/subbyplushdebug",
+          "description": "Print detailed plugin diagnostics to the browser console."
+        }
+      ]
+    }
+  ]
+}

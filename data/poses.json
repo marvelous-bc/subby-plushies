@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "drawPriority": 51,
+  "renderBox": {
+    "left": 186,
+    "top": 305,
+    "width": 128,
+    "height": 128
+  },
+  "defaultTransform": {
+    "TranslationX": 0,
+    "TranslationY": 0,
+    "ScaleX": 1,
+    "ScaleY": 1,
+    "Rotation": 0
+  },
+  "snapRadius": 34,
+  "snapPoints": [
+    {
+      "name": "Hands",
+      "TranslationX": 0,
+      "TranslationY": 0
+    },
+    {
+      "name": "Chest",
+      "TranslationX": 0,
+      "TranslationY": -48
+    },
+    {
+      "name": "Face",
+      "TranslationX": 0,
+      "TranslationY": -105
+    },
+    {
+      "name": "Head",
+      "TranslationX": 0,
+      "TranslationY": -170
+    },
+    {
+      "name": "Left Shoulder",
+      "TranslationX": -92,
+      "TranslationY": -88
+    },
+    {
+      "name": "Right Shoulder",
+      "TranslationX": 92,
+      "TranslationY": -88
+    }
+  ],
+  "temporaryPoses": {
+    "balanceHead": {
+      "durationMs": 8000,
+      "TranslationX": 0,
+      "TranslationY": -170,
+      "Rotation": 0
+    },
+    "hideBehindFace": {
+      "durationMs": 8000,
+      "TranslationX": 0,
+      "TranslationY": -105,
+      "Rotation": 0
+    },
+    "protect": {
+      "durationMs": 2800,
+      "TranslationX": 0,
+      "TranslationY": -78,
+      "Rotation": 0
+    }
+  }
+}

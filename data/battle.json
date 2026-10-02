@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "rounds": 3,
+  "challengeTtlMs": 90000,
+  "resultDelayMs": 180,
+  "moves": [
+    {
+      "name": "Cuddlecrush",
+      "min": 3,
+      "max": 8
+    },
+    {
+      "name": "Tiny bonk",
+      "min": 2,
+      "max": 10
+    },
+    {
+      "name": "Plushie cuddle crush",
+      "min": 4,
+      "max": 8
+    },
+    {
+      "name": "Dramatic stare",
+      "min": 1,
+      "max": 11
+    },
+        {
+      "name": "Kitty missile",
+      "min": 5,
+      "max": 6
+    },
+        {
+      "name": "Lap occupation",
+      "min": 1,
+      "max": 10
+    },
+        {
+      "name": "Plushie inspection",
+      "min": 3,
+      "max": 8
+    },
+        {
+      "name": "Cuddle lock (finisher)",
+      "min": 6,
+      "max": 12
+    },
+        {
+      "name": "Cuddle restraint order",
+      "min": 3,
+      "max": 8
+    },
+        {
+      "name": "Soft rope cocoon",
+      "min": 2,
+      "max": 7
+    },
+        {
+      "name": "Plushie petsuit",
+      "min": 6,
+      "max": 10
+    },
+    {
+      "name": "Plushie pounce",
+      "min": 3,
+      "max": 9
+    }
+  ],
+  "chatText": {
+    "challenge": "{Source} challenges {Target} to a plushie battle with {Plush}.",
+    "accept": "{Source} accepts {Challenger}'s plushie battle challenge with {Plush}.",
+    "decline": "{Source} declines {Challenger}'s plushie battle challenge.",
+    "result": "Plushie battle result: {Player} [{PlayerPlush}] {Result} against {Opponent} [{OpponentPlush}]. Scores {PlayerScore}-{OpponentScore}.",
+    "round": "R{Round}: {OpponentPlush} {OpponentMove} {OpponentScore} vs {PlayerPlush} {PlayerMove} {PlayerScore}",
+    "final": "Final: {PlayerPlush} {PlayerScore} — {OpponentPlush} {OpponentScore}"
+  }
+}

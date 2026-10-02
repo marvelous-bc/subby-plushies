@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "publicCount": 18,
+  "subbycatWireOption": 18,
+  "fallbackImage": "subbycat.png",
+  "plushies": [
+    {
+      "option": 0,
+      "name": "Subbycat",
+      "image": "subbycat.png"
+    },
+    {
+      "option": 1,
+      "name": "Ale",
+      "image": "subbyale.png"
+    },
+    {
+      "option": 2,
+      "name": "M",
+      "image": "M.png",
+      "cacheRevision": "1.5.49"
+    },
+    {
+      "option": 3,
+      "name": "Izneas",
+      "image": "izneas.png"
+    },
+    {
+      "option": 4,
+      "name": "Lyra",
+      "image": "lyra.png"
+    },
+    {
+      "option": 5,
+      "name": "Subbycat and luna",
+      "image": "subbyluna.png"
+    },
+    {
+      "option": 6,
+      "name": "Subbycat and ale",
+      "image": "subbyale.png"
+    },
+    {
+      "option": 7,
+      "name": "Subbycat and Terra",
+      "image": "subbyterra.png"
+    },
+    {
+      "option": 8,
+      "name": "Subbycat and pink",
+      "image": "pink.png"
+    },
+    {
+      "option": 9,
+      "name": "Subbycat and Steele",
+      "image": "subbysteele.png"
+    },
+    {
+      "option": 10,
+      "name": "Terra",
+      "image": "terra.png"
+    },
+    {
+      "option": 11,
+      "name": "Steele",
+      "image": "steele.png"
+    },
+    {
+      "option": 12,
+      "name": "Izzy and lyly",
+      "image": "izzylyly.png"
+    },
+    {
+      "option": 13,
+      "name": "Hari",
+      "image": "hari'.png"
+    },
+    {
+      "option": 14,
+      "name": "Fog",
+      "image": "subbycat.png",
+      "usesFallback": true
+    },
+    {
+      "option": 15,
+      "name": "Hira",
+      "image": "hira.png"
+    },
+    {
+      "option": 16,
+      "name": "Pink",
+      "image": "pink.png"
+    },
+    {
+      "option": 17,
+      "name": "Kyu",
+      "image": "subbycat.png",
+      "usesFallback": true
+    },
+    {
+      "option": 18,
+      "name": "Subbycat",
+      "image": "subbycat.png",
+      "wireAlias": true,
+      "hidden": true
+    }
+  ],
+  "menus": {
+    "characters": [
+      {
+        "label": "Subbycat",
+        "submenu": "subbycat"
+      },
+      {
+        "label": "Ale",
+        "option": 1
+      },
+      {
+        "label": "M",
+        "option": 2
+      },
+      {
+        "label": "Terra",
+        "option": 10
+      },
+      {
+        "label": "Steele",
+        "option": 11
+      },
+      {
+        "label": "Izneas",
+        "option": 3
+      },
+      {
+        "label": "Lyra",
+        "option": 4
+      },
+      {
+        "label": "Izzy and lyly",
+        "option": 12
+      },
+      {
+        "label": "Hari",
+        "option": 13
+      },
+      {
+        "label": "Fog",
+        "option": 14
+      },
+      {
+        "label": "Hira",
+        "option": 15
+      },
+      {
+        "label": "Pink",
+        "option": 16
+      },
+      {
+        "label": "Kyu",
+        "option": 17
+      }
+    ],
+    "subbycat": [
+      {
+        "label": "Subbycat",
+        "option": 0
+      },
+      {
+        "label": "Subbycat and luna",
+        "option": 5
+      },
+      {
+        "label": "Subbycat and ale",
+        "option": 6
+      },
+      {
+        "label": "Subbycat and Terra",
+        "option": 7
+      },
+      {
+        "label": "Subbycat and pink",
+        "option": 8
+      },
+      {
+        "label": "Subbycat and Steele",
+        "option": 9
+      }
+    ]
+  }
+}

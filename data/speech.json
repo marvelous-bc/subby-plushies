@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "bubbleDurationMs": 3400,
+  "bubbleYOffsetCssPx": 5,
+  "moodBuckets": {
+    "grumpy": {
+      "maxScore": 38,
+      "lines": [
+        "Hmph.",
+        "No more bonks.",
+        "I require cuddles.",
+        "Excuse me?!"
+      ]
+    },
+    "calm": {
+      "maxScore": 65,
+      "lines": [
+        "Comfy.",
+        "Hi there.",
+        "Just plushie things.",
+        "I'm watching."
+      ]
+    },
+    "happy": {
+      "maxScore": 92,
+      "lines": [
+        "Cuddle?",
+        "Prrr~",
+        "This is nice!",
+        "Again!",
+        "Hehe~"
+      ]
+    },
+    "adoring": {
+      "maxScore": 100,
+      "lines": [
+        "You're my favorite!",
+        "Never letting go.",
+        "Best holder ever!",
+        "More cuddles!"
+      ]
+    }
+  },
+  "automaticTriggers": {
+    "interactionActions": [
+      "pet",
+      "pat",
+      "cuddleChest",
+      "kissPlushie"
+    ],
+    "interactionChance": 0.45,
+    "interactionDelayMs": 140,
+    "idleChance": 0.32
+  }
+}

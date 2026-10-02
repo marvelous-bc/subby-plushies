@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "defaultScore": 60,
+  "minimumScore": 0,
+  "maximumScore": 100,
+  "driftTarget": 60,
+  "driftStep": 1,
+  "driftEveryMinutes": 90,
+  "labels": [
+    {
+      "maxScore": 18,
+      "label": "Grumpy"
+    },
+    {
+      "maxScore": 38,
+      "label": "Sulky"
+    },
+    {
+      "maxScore": 58,
+      "label": "Calm"
+    },
+    {
+      "maxScore": 78,
+      "label": "Happy"
+    },
+    {
+      "maxScore": 92,
+      "label": "Very Happy"
+    },
+    {
+      "maxScore": 100,
+      "label": "Adoring"
+    }
+  ],
+  "interactionDeltas": {
+    "rubFace": 4,
+    "cuddleChest": 7,
+    "nuzzle": 5,
+    "pat": 3,
+    "pet": 6,
+    "hideBehind": 1,
+    "kissPlushie": 6,
+    "kissWith": 3,
+    "bonk": -8,
+    "balanceHead": 2,
+    "show": 2,
+    "whisper": 3,
+    "squeezeCheeks": -2,
+    "wave": 1,
+    "hugTightly": 10,
+    "protect": 4,
+    "jealous": -4
+  }
+}

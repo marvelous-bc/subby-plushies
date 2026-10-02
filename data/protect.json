@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "durationMs": 2800,
+  "transform": {
+    "TranslationX": 0,
+    "TranslationY": -78,
+    "Rotation": 0
+  },
+  "keywords": [
+    "slap",
+    "spank",
+    "hit",
+    "punch",
+    "kick",
+    "bonk",
+    "poke",
+    "tickle",
+    "bite",
+    "pinch",
+    "whip",
+    "shock",
+    "zap",
+    "attack",
+    "smack",
+    "swat"
+  ],
+  "renderVerbs": [
+    "slap",
+    "spank",
+    "hit",
+    "punch",
+    "kick",
+    "bonk",
+    "poke",
+    "tickle",
+    "bite",
+    "pinch",
+    "whip",
+    "shock",
+    "zap",
+    "attack",
+    "smack",
+    "swat"
+  ],
+  "jealousActivityKeywords": [
+    "kiss",
+    "hug",
+    "cuddle",
+    "caress",
+    "nuzzle",
+    "snuggle",
+    "pet",
+    "lick",
+    "smooch"
+  ]
+}

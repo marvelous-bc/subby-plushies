@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 1,
+  "activities": [
+    {
+      "key": "rubFace",
+      "name": "SubbysPlushiesRubAgainstFaceItem",
+      "label": "Rub Against Face",
+      "targets": [
+        "ItemMouth"
+      ],
+      "targetSelf": true,
+      "selfText": "{Source} rubs the plushie against their face.",
+      "otherText": "{Source} rubs the plushie against {Target}'s face."
+    },
+    {
+      "key": "cuddleChest",
+      "name": "SubbysPlushiesCuddleToChestItem",
+      "label": "Cuddle to Chest",
+      "targets": [
+        "ItemTorso",
+        "ItemBreast"
+      ],
+      "targetSelf": true,
+      "selfText": "{Source} cuddles the plushie against their chest.",
+      "otherText": "{Source} cuddles the plushie against {Target}'s chest."
+    },
+    {
+      "key": "nuzzle",
+      "name": "SubbysPlushiesNuzzlePlushieItem",
+      "label": "Nuzzle Plushie",
+      "targets": [
+        "ItemMouth"
+      ],
+      "targetSelf": true,
+      "selfText": "{Source} nuzzles into the plushie.",
+      "otherText": "{Source} nuzzles the plushie against {Target}'s cheek."
+    },
+    {
+      "key": "pat",
+      "name": "SubbysPlushiesPatPlushieItem",
+      "label": "Pat Plushie",
+      "targets": [
+        "ItemHands"
+      ],
+      "targetSelf": true,
+      "selfText": "{Source} gives the plushie a gentle pat.",
+      "otherText": "{Source} holds the plushie out for {Target} and gives it a gentle pat."
+    },
+    {
+      "key": "pet",
+      "name": "SubbysPlushiesPetPlushieItem",
+      "label": "Pet Plushie",
+      "targets": [
+        "ItemHands"
+      ],
+      "targetSelf": true,
+      "selfText": "{Source} pets the plushie affectionately.",
+      "otherText": "{Source} lets {Target} pet the plushie."
+    },
+    {
+      "key": "hideBehind",
+      "name": "SubbysPlushiesHideBehindPlushieItem",
+      "label": "Hide Behind Plushie",
+      "targets": [
+        "ItemMouth",
+        "ItemHood"
+      ],
+      "targetSelf": true,
+      "selfText": "{Source} hides their face behind the plushie.",
+      "otherText": "{Source} playfully hides the plushie in front of {Target}'s face.",
+      "effect": "hideBehindFace"
+    },
+    {
+      "key": "kissPlushie",
+      "name": "SubbysPlushiesKissPlushieItem",
+      "label": "Kiss Plushie",
+      "targets": [
+        "ItemMouth"
+      ],
+      "targetSelf": true,
+      "selfText": "{Source} gives the plushie a little kiss.",
+      "otherText": "{Source} gives the plushie a little kiss in front of {Target}."
+    },
+    {
+      "key": "kissWith",
+      "name": "SubbysPlushiesKissWithPlushieItem",
+      "label": "Kiss With Plushie",
+      "targets": [
+        "ItemMouth"
+      ],
+      "targetSelf": false,
+      "selfText": "{Source} gives the plushie a little kiss.",
+      "otherText": "{Source} presses the plushie to {Target}'s cheek in a little kiss."
+    },
+    {
+      "key": "bonk",
+      "name": "SubbysPlushiesBonkWithPlushieItem",
+      "label": "Bonk With Plushie",
+      "targets": [
+        "ItemHood",
+        "ItemMouth"
+      ],
+      "targetSelf": true,
+      "selfText": "{Source} gently bonks themself with the plushie.",
+      "otherText": "{Source} gently bonks {Target} with the plushie."
+    },
+    {
+      "key": "balanceHead",
+      "name": "SubbysPlushiesBalanceOnHeadItem",
+      "label": "Balance Plushie on Head",
+      "targets": [
+        "ItemHood"
+      ],
+      "targetSelf": true,
+      "selfText": "{Source} balances the plushie on their head.",
+      "otherText": "{Source} balances the plushie on {Target}'s head.",
+      "effect": "balanceHead"
+    },
+    {
+      "key": "offer",
+      "name": "SubbysPlushiesOfferPlushieItem",
+      "label": "Offer Plushie",
+      "targets": [
+        "ItemHands"
+      ],
+      "targetSelf": false,
+      "selfText": "{Source} offers the plushie.",
+      "otherText": "{Source} offers the plushie to {Target}.",
+      "prompt": true
+    },
+    {
+      "key": "show",
+      "name": "SubbysPlushiesShowPlushieItem",
+      "label": "Show Plushie",
+      "targets": [
+        "ItemHands"
+      ],
+      "targetSelf": false,
+      "selfText": "{Source} holds up the plushie.",
+      "otherText": "{Source} holds up the plushie to show {Target}."
+    },
+    {
+      "key": "whisper",
+      "name": "SubbysPlushiesWhisperToPlushieItem",
+      "label": "Whisper to Plushie",
+      "targets": [
+        "ItemMouth"
+      ],
+      "targetSelf": true,
+      "selfText": "{Source} leans in and whispers something to the plushie.",
+      "otherText": "{Source} whispers something to the plushie while looking at {Target}."
+    },
+    {
+      "key": "squeezeCheeks",
+      "name": "SubbysPlushiesSqueezeCheeksWithPlushieItem",
+      "label": "Squeeze Cheeks With Plushie",
+      "targets": [
+        "ItemMouth"
+      ],
+      "targetSelf": false,
+      "selfText": "{Source} gently squishes their cheeks with the plushie.",
+      "otherText": "{Source} gently squishes {Target}'s cheeks with the plushie."
+    },
+    {
+      "key": "wave",
+      "name": "SubbysPlushiesWavePlushieItem",
+      "label": "Wave Plushie",
+      "targets": [
+        "ItemHands"
+      ],
+      "targetSelf": false,
+      "selfText": "{Source} waves the plushie.",
+      "otherText": "{Source} waves the plushie at {Target}."
+    }
+  ]
+}

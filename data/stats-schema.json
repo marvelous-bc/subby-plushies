@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "storageKey": "SubbysPlushies:stats:v1",
+  "fields": {
+    "totalInteractions": "number",
+    "actions": "object<string,number>",
+    "plushesUsed": "object<string,number>",
+    "speechBubbles": "number",
+    "idleAnimations": "number",
+    "mascotSets": "number",
+    "drags": "number",
+    "offers": "number",
+    "battles": {
+      "played": "number",
+      "wins": "number",
+      "losses": "number",
+      "draws": "number"
+    },
+    "achievements": "object<achievementId,timestampMs>"
+  },
+  "note": "Per-user stats remain in localStorage. This file documents the structure only; it is not user data."
+}
