@@ -1,5 +1,5 @@
 {
-  "version": "1.8.1",
+  "version": "1.8.3",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Adds a dedicated Lore tab and plushie lore browser. The held-plush Lore button now opens directly to that plushie's lore, with browse, previous/next, image, title, mood, and Git-backed lore text."
+  "notes": "Adds the Meet the cuddle queen achievement for sharing a room with member 89413, permanently grants it to member 89413, and replaces the Easy Drag text button with a smaller mouse-icon state button."
 }

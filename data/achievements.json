@@ -113,6 +113,16 @@
       }
     },
     {
+      "id": "meet_cuddle_queen",
+      "name": "Meet the cuddle queen",
+      "description": "Share a chat room with the Cuddle Queen.",
+      "condition": {
+        "metric": "cuddleQueenEncounter",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
       "id": "mascot_maker",
       "name": "Mascot Maker",
       "description": "Set a room mascot once.",
