@@ -1,5 +1,5 @@
 {
-  "version": "1.7.7",
-  "downloadUrl": "https://github.com/marvelous-bc/subby-plushies",
-  "notes": "Adds a Commands tab to the native Extensions page and moves plush speech bubbles 5 CSS pixels lower while preserving the v1.7.6 bubble positioning fix."
+  "version": "1.8.1",
+  "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
+  "notes": "Adds a dedicated Lore tab and plushie lore browser. The held-plush Lore button now opens directly to that plushie's lore, with browse, previous/next, image, title, mood, and Git-backed lore text."
 }

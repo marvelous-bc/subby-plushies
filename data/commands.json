@@ -14,7 +14,7 @@
         },
         {
           "command": "/subbyplushextensions",
-          "description": "Open the Subby's Plushies Extensions menu."
+          "description": "Open the Subby's Plushies Extensions control center."
         },
         {
           "command": "/subbyplushcommands",
@@ -76,15 +76,15 @@
       "commands": [
         {
           "command": "/subbyplushmood",
-          "description": "Show the current plushie's mood and lore."
+          "description": "Show the current plushie's mood and quick info."
         },
         {
           "command": "/subbyplushlore",
-          "description": "Alias for mood/lore info."
+          "description": "Open the Lore browser on the held plushie."
         },
         {
           "command": "/subbyplushinfo",
-          "description": "Alias for mood/lore info."
+          "description": "Show the current plushie's mood and quick info."
         },
         {
           "command": "/subbyplushprotect",
@@ -154,7 +154,7 @@
       "commands": [
         {
           "command": "/subbyplushbattle <member/name>",
-          "description": "Challenge another player to a plushie battle."
+          "description": "Challenge another player to a plushie battle. With no argument, uses the focused character when possible."
         },
         {
           "command": "/subbyplushstats",
@@ -184,6 +184,14 @@
         {
           "command": "/subbyplushdebug",
           "description": "Print detailed plugin diagnostics to the browser console."
+        },
+        {
+          "command": "/subbyplushdata",
+          "description": "Show Git-backed data source/cache status."
+        },
+        {
+          "command": "/subbyplushdatareload",
+          "description": "Force-refresh validated data files from GitHub."
         }
       ]
     }
