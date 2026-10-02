@@ -21,6 +21,10 @@
           "description": "Open the Commands tab directly."
         },
         {
+          "command": "/plushiecommand",
+          "description": "Alias for /plushiecommands."
+        },
+        {
           "command": "/plushiestatus",
           "description": "Open the Status tab."
         },
@@ -170,15 +174,15 @@
         },
         {
           "command": "/plushiestats",
-          "description": "Show your locally stored plushie stats."
+          "description": "Open the detailed Stats tab."
         },
         {
           "command": "/plushieachievements",
-          "description": "Show your achievements."
+          "description": "Open the detailed Achievements tab."
         },
         {
           "command": "/plushieach",
-          "description": "Short alias for achievements."
+          "description": "Open the detailed Achievements tab."
         }
       ]
     },
@@ -220,7 +224,7 @@
         },
         {
           "command": "/plushieemote happy|angry|sleepy|protective|sulky",
-          "description": "Show a 15-second local plushie emote and mood symbol."
+          "description": "Show a 15-second room-synced plushie emote and mood symbol to other Subby's Plushies users in the room."
         },
         {
           "command": "/plushieposes",

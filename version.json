@@ -1,5 +1,5 @@
 {
-  "version": "1.9.3",
+  "version": "1.9.4",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Adds per-plush mood history, relationship milestone celebration bubbles, a 20-entry battle history, Normal/Low CPU performance mode, and a documented Plugin API v1 with local events."
+  "notes": "Room-syncs 15-second plushie emotes, fixes zZ/mood-symbol positioning after plush transforms, removes Plugin API docs from Extensions, refreshes /plushie command help, and updates README/CHANGELOG for the current feature set."
 }
