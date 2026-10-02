@@ -6,8 +6,8 @@
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, emotes, battles, mascot, themes, poses, stats, achievements, and more
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
-// @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.min.user.js
-// @downloadURL   https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.min.user.js
+// @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
+// @downloadURL   https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
 // @match        https://www.bondageprojects.elementfx.com/R*
 // @match        https://www.bondageeurope.com/*/BondageClub/
 // @match        https://www.bondage-europe.com/*/BondageClub/
