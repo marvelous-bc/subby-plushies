@@ -1,5 +1,5 @@
 {
-  "version": "1.8.9",
+  "version": "1.9.0",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Halves plush speech-bubble visuals, moves bubbles 5 CSS pixels upward, and changes passive happiness decay to 1 point every 15 minutes with a floor of 29."
+  "notes": "Adds per-plush relationship levels, favorites, local mood-state symbols and sleepy state, three saved pose slots per plush, local plushie emotes, and portable backup/restore."
 }

@@ -198,6 +198,56 @@
           "description": "Force-refresh validated data files from GitHub."
         }
       ]
+    },
+    {
+      "title": "Plushies & Relationships",
+      "commands": [
+        {
+          "command": "/subbyplushplushies",
+          "description": "Open the Plushies tab with relationship, favorites, emotes, and saved poses."
+        },
+        {
+          "command": "/subbyplushfavorite",
+          "description": "Toggle the held plushie as a favorite."
+        },
+        {
+          "command": "/subbyplushemote happy|angry|sleepy|protective|sulky",
+          "description": "Show a brief local plushie emote and mood symbol."
+        },
+        {
+          "command": "/subbyplushposes",
+          "description": "Open the Plushies tab at the saved-pose controls."
+        },
+        {
+          "command": "/subbyplushposesave <1|2|3>",
+          "description": "Save the held plushie current X/Y, scale, and rotation."
+        },
+        {
+          "command": "/subbyplushposeload <1|2|3>",
+          "description": "Apply a saved pose for the held plushie."
+        },
+        {
+          "command": "/subbyplushposeclear <1|2|3>",
+          "description": "Clear a saved pose slot for the held plushie."
+        }
+      ]
+    },
+    {
+      "title": "Backup / Restore",
+      "commands": [
+        {
+          "command": "/subbyplushbackup",
+          "description": "Open the Backup / Restore tab."
+        },
+        {
+          "command": "/subbyplushexport",
+          "description": "Export a portable Subby's Plushies JSON backup."
+        },
+        {
+          "command": "/subbyplushimport",
+          "description": "Choose and restore a Subby's Plushies JSON backup."
+        }
+      ]
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pluginVersion": "1.8.9",
+  "pluginVersion": "1.9.0",
   "files": {
     "plushies.json": {
       "path": "data/plushies.json",
@@ -52,6 +52,10 @@
     },
     "stats-schema.json": {
       "path": "data/stats-schema.json",
+      "schemaVersion": 1
+    },
+    "relationships.json": {
+      "path": "data/relationships.json",
       "schemaVersion": 1
     }
   },

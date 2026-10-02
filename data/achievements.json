@@ -133,6 +133,26 @@
       }
     },
     {
+      "id": "bestie_material",
+      "name": "Bestie Material",
+      "description": "Reach Bestie relationship with any plushie.",
+      "condition": {
+        "metric": "maxRelationshipInteractions",
+        "operator": ">=",
+        "value": 50
+      }
+    },
+    {
+      "id": "stitched_together",
+      "name": "Stitched Together",
+      "description": "Reach Bonded relationship with any plushie.",
+      "condition": {
+        "metric": "maxRelationshipInteractions",
+        "operator": ">=",
+        "value": 100
+      }
+    },
+    {
       "id": "mascot_maker",
       "name": "Mascot Maker",
       "description": "Set a room mascot once.",

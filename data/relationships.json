@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "sleepyAfterMinutes": 30,
+  "levels": [
+    {
+      "name": "Stranger",
+      "minInteractions": 0
+    },
+    {
+      "name": "Familiar",
+      "minInteractions": 5
+    },
+    {
+      "name": "Friend",
+      "minInteractions": 20
+    },
+    {
+      "name": "Bestie",
+      "minInteractions": 50
+    },
+    {
+      "name": "Bonded",
+      "minInteractions": 100
+    }
+  ],
+  "speechLines": {
+    "Familiar": [
+      "I know you!",
+      "You're familiar now."
+    ],
+    "Friend": [
+      "I'm glad you're here.",
+      "Friend cuddle?"
+    ],
+    "Bestie": [
+      "Bestie cuddle!",
+      "You always come back ♥"
+    ],
+    "Bonded": [
+      "Always with you. ♥",
+      "We're stitched together now."
+    ]
+  }
+}
