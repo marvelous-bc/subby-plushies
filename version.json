@@ -1,5 +1,5 @@
 {
-  "version": "1.8.7",
+  "version": "1.8.9",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Adds a dedicated Pink theme and shared theme presets that apply to both the Use menu and the Extensions control center while preserving independent per-interface color customization."
+  "notes": "Halves plush speech-bubble visuals, moves bubbles 5 CSS pixels upward, and changes passive happiness decay to 1 point every 15 minutes with a floor of 29."
 }

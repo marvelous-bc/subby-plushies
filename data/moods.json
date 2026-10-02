@@ -3,9 +3,9 @@
   "defaultScore": 60,
   "minimumScore": 0,
   "maximumScore": 100,
-  "driftTarget": 60,
+  "driftTarget": 29,
   "driftStep": 1,
-  "driftEveryMinutes": 90,
+  "driftEveryMinutes": 15,
   "labels": [
     {
       "maxScore": 18,
