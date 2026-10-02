@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pluginVersion": "1.9.2",
+  "pluginVersion": "1.9.3",
   "files": {
     "plushies.json": {
       "path": "data/plushies.json",

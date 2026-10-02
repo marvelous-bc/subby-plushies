@@ -1,5 +1,5 @@
 {
-  "version": "1.9.1",
+  "version": "1.9.3",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Removes unreleased backward-compatibility code for older Subby's Plushies builds, including legacy Offer transport, compact battle wire formats, the old instance guard, and pre-1.5.52 transform migration."
+  "notes": "Adds per-plush mood history, relationship milestone celebration bubbles, a 20-entry battle history, Normal/Low CPU performance mode, and a documented Plugin API v1 with local events."
 }

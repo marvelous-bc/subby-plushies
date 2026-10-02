@@ -121,6 +121,14 @@
         {
           "command": "/plushiefeatures",
           "description": "Show the current feature-toggle status."
+        },
+        {
+          "command": "/plushiehistory",
+          "description": "Open the History tab with recent mood changes and the last 20 plushie battles."
+        },
+        {
+          "command": "/plushieperformance normal|low",
+          "description": "Switch between Normal and Low CPU mode. Low CPU pauses optional animations and reduces background refresh/watchdog frequency."
         }
       ]
     },
