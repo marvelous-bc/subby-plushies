@@ -1,6 +1,6 @@
 {
-  "version": "2.3.1",
-  "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "launcherUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js",
-  "notes": "v2.3.1 stabilized: restores pet-suit plush rendering with cuddle-safe canvas transforms, adds a reliable character-top addon icon, removes per-action mood-history writes for performance, makes Easy Drag movable, corrects plush mood-marker positioning, makes room mascots draggable/responsive, and names plushies with character-gender-aware pronouns in action text."
+  "version": "2.3.2",
+  "downloadUrl": "https://github.com/marvelous-bc/subby-plushies",
+  "notes": "v2.3.2: fixes the plugin icon registration, makes mascot dragging local-only, keeps plushies visible with pet suits/arm restraints, adds ItemNeckRestraints wear support, scopes battle stats/history per account, and updates backup import/export for account-scoped battle data with no migration/backward compatibility.",
+  "sha256": "dea128b5d06ab2aaf52b76adfa27a131dc0ae6c42b5ef3dacdab199e692c14af"
 }
