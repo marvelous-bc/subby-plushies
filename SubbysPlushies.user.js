@@ -1017,6 +1017,8 @@
     let actionRecoveryCount = 0;
     let lastActionRecovery = null;
     let actionRecoveryGeneration = 0;
+    let localPlushRepairSuppressedUntil = 0;
+    let lastLocalPlushRepairSuppression = null;
 
     let roomRosterSignature = null;
     let roomRosterWatchdog = null;
@@ -6783,6 +6785,11 @@
             if (activeHideBehindSession) restoreActiveHideBehind("Offer Plushie transferred away");
             if (activeProtectSession) restoreActiveProtect("Offer Plushie transferred away");
 
+            // EBC can synchronously enter CharacterRefresh/CharacterUpdate while
+            // InventoryRemove is still unwinding. Suppress repair first so the
+            // outgoing plush cannot be reconstructed during that window.
+            suppressLocalPlushRepair("Offer Plushie transferred away", 2500);
+            clearRememberedLocalPlushState();
             InventoryRemove(window.Player, GROUP);
             refresh(window.Player, true);
             try {
@@ -8199,6 +8206,39 @@
         return true;
     }
 
+    function isLocalPlayerCharacter(C) {
+        if (!C || !window.Player) return false;
+        if (C === window.Player) return true;
+        const playerMember = Number(window.Player?.MemberNumber);
+        return Number.isFinite(playerMember) && Number(C?.MemberNumber) === playerMember;
+    }
+
+    function suppressLocalPlushRepair(reason = "intentional change", durationMs = 1800) {
+        const now = Date.now();
+        localPlushRepairSuppressedUntil = Math.max(
+            localPlushRepairSuppressedUntil,
+            now + Math.max(250, Number(durationMs) || 1800)
+        );
+        stabilizerGeneration++;
+        actionRecoveryGeneration++;
+        lastLocalPlushRepairSuppression = {
+            reason: String(reason || "intentional change"),
+            until: new Date(localPlushRepairSuppressedUntil).toISOString(),
+            at: new Date(now).toISOString(),
+        };
+        return localPlushRepairSuppressedUntil;
+    }
+
+    function localPlushRepairSuppressed(C = window.Player) {
+        return isLocalPlayerCharacter(C) && Date.now() < localPlushRepairSuppressedUntil;
+    }
+
+    function clearRememberedLocalPlushState() {
+        const key = getCharacterStateKey(window.Player);
+        if (key) plushStateByCharacter.delete(key);
+        return true;
+    }
+
     function getCharacterStateKey(C) {
         if (!C) return null;
         if (Number.isFinite(C.MemberNumber)) return `member:${C.MemberNumber}`;
@@ -8276,6 +8316,10 @@
     }
 
     function repairPlushState(item, preferredOption = lastPlushOption, reason = "refresh", C = window.Player) {
+        // Remote characters are server-authoritative. Rewriting their appearance can
+        // resurrect stale plushie state on EBC/ModSDK after room updates.
+        if (!isLocalPlayerCharacter(C)) return false;
+        if (localPlushRepairSuppressed(C)) return false;
         if (!isOurs(item)) return false;
 
         const property = getProperty(item);
@@ -8384,18 +8428,10 @@
     }
 
     function captureVisiblePlushStates() {
+        // Only persist the local player's plush state. Remote appearance is
+        // authoritative from the server and must never be repaired from a cache.
         const player = window.Player;
-        if (player) rememberCharacterPlushState(player);
-
-        const playerMember = Number(player?.MemberNumber);
-        const characters = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : null;
-        if (!characters) return;
-
-        for (const C of characters) {
-            if (!C || C === player) continue;
-            if (Number.isFinite(playerMember) && Number(C?.MemberNumber) === playerMember) continue;
-            rememberCharacterPlushState(C);
-        }
+        if (player && !localPlushRepairSuppressed(player)) rememberCharacterPlushState(player);
     }
 
     function rebuildCharacterCanvas(C, reason = "plush repair") {
@@ -8421,26 +8457,13 @@
     function repairVisiblePlushStates(reason) {
         const affected = [];
         const player = window.Player;
-        const playerMember = Number(player?.MemberNumber);
+        if (!player || localPlushRepairSuppressed(player)) return affected;
 
-        const inspect = C => {
-            if (!C) return;
-            const item = getHeld(C);
-            if (!isOurs(item)) return;
-            const preferred = rememberedPlushOption(C, C === player ? lastPlushOption : 0);
-            affected.push({ C, changed: repairPlushState(item, preferred, reason, C) });
-        };
+        const item = getHeld(player);
+        if (!isOurs(item)) return affected;
 
-        inspect(player);
-        const characters = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : null;
-        if (characters) {
-            for (const C of characters) {
-                if (!C || C === player) continue;
-                if (Number.isFinite(playerMember) && Number(C?.MemberNumber) === playerMember) continue;
-                inspect(C);
-            }
-        }
-
+        const preferred = rememberedPlushOption(player, lastPlushOption);
+        affected.push({ C: player, changed: repairPlushState(item, preferred, reason, player) });
         return affected;
     }
 
@@ -8798,12 +8821,12 @@
 
         const refreshHooked = installHook("CharacterRefresh", 10000, (args, next) => {
             const C = args?.[0];
-            if (!C) return next(args);
+            if (!C || !isLocalPlayerCharacter(C) || localPlushRepairSuppressed(C)) return next(args);
 
             let item = getHeld(C);
             if (!isOurs(item)) return next(args);
 
-            const preferred = rememberedPlushOption(C, C === window.Player ? lastPlushOption : 0);
+            const preferred = rememberedPlushOption(C, lastPlushOption);
             repairPlushState(item, preferred, "CharacterRefresh pre", C);
 
             const result = next(args);
@@ -8861,9 +8884,10 @@
 
         const updateHooked = installHook("ChatRoomCharacterUpdate", 10000, (args, next) => {
             const C = args?.[0] || window.Player;
+            if (!isLocalPlayerCharacter(C) || localPlushRepairSuppressed(C)) return next(args);
             const item = getHeld(C);
             if (isOurs(item)) {
-                const preferred = rememberedPlushOption(C, C === window.Player ? lastPlushOption : 0);
+                const preferred = rememberedPlushOption(C, lastPlushOption);
                 repairPlushState(item, preferred, "ChatRoomCharacterUpdate", C);
 
                 if (C === window.Player && activeBalanceHeadSession) {
@@ -11175,6 +11199,8 @@
         }
 
         try {
+            suppressLocalPlushRepair("explicit remove", 1800);
+            clearRememberedLocalPlushState();
             InventoryRemove(window.Player, GROUP);
             refresh(window.Player, true);
             syncHugTightlyActivityAvailability("explicit remove");
@@ -11194,6 +11220,8 @@
         setDragMode(false);
         activeProtectSession = null;
         try {
+            suppressLocalPlushRepair("explicit recover", 2200);
+            clearRememberedLocalPlushState();
             const appearance = Array.isArray(window.Player?.Appearance)
                 ? window.Player.Appearance
                 : [];
@@ -11330,6 +11358,10 @@
                 actionRecoveryCount,
                 actionRecoveryGeneration,
                 lastActionRecovery,
+                localRepairSuppressed: Date.now() < localPlushRepairSuppressedUntil,
+                localRepairSuppressedUntil: localPlushRepairSuppressedUntil ? new Date(localPlushRepairSuppressedUntil).toISOString() : null,
+                lastLocalPlushRepairSuppression,
+                remoteRepairPolicy: "server-authoritative; never rewritten from remembered plush state",
                 roomRosterSignature,
                 roomRosterRecoveryCount,
                 lastRoomRosterRecovery,
