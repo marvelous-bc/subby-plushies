@@ -10140,54 +10140,99 @@
         }
     }
 
+    function getAssetAddSignatureFunction() {
+        const add = window.AssetAdd;
+        if (typeof add !== "function") return null;
+
+        try {
+            const sdk = window.bcModSdk || window.bcModSDK;
+            const patchingInfo = typeof sdk?.getPatchingInfo === "function" ? sdk.getPatchingInfo() : null;
+            const entry = patchingInfo && typeof patchingInfo.get === "function"
+                ? patchingInfo.get("AssetAdd")
+                : null;
+            if (typeof entry?.original === "function") return entry.original;
+        } catch (_) {}
+
+        return add;
+    }
+
     function callAssetAdd(definition, runtimeGroup) {
         const add = window.AssetAdd;
         if (typeof add !== "function") throw new Error("AssetAdd is unavailable.");
+        if (!runtimeGroup || typeof runtimeGroup !== "object") {
+            throw new Error(`AssetAdd runtime group ${GROUP} is unavailable.`);
+        }
+        if (!definition || typeof definition !== "object" || !definition.Name) {
+            throw new Error("AssetAdd received an invalid plushie asset definition.");
+        }
 
         const previousCurrentGroup = window.AssetCurrentGroup;
-        const params = getParameterNames(add);
+        const signatureFunction = getAssetAddSignatureFunction() || add;
+        const params = getParameterNames(signatureFunction);
+        const arity = Math.max(Number(signatureFunction.length) || 0, params.length);
         const extendedConfig = makeExtendedConfig();
         const sourceGroup = findSourceAssetGroup();
 
         try {
-            if (runtimeGroup) window.AssetCurrentGroup = runtimeGroup;
+            window.AssetCurrentGroup = runtimeGroup;
 
-            if (add.length <= 1 || params.length <= 1) {
-                assetAddStrategy = "AssetAdd(definition)";
-                add(definition);
+            // R132 uses AssetAdd(Group, A, ExtendedConfig). ModSDK wraps global
+            // functions with a variadic router, so inspecting window.AssetAdd.length
+            // directly incorrectly makes it look like a one-argument function.
+            if (arity === 3 && (!params.length || params.every(name => name.length <= 2))) {
+                assetAddStrategy = "AssetAdd(runtimeGroup, definition, extendedConfig) [R132/ModSDK]";
+                add(runtimeGroup, definition, extendedConfig);
+                return;
+            }
+
+            if (!params.length && arity >= 2 && arity <= 3) {
+                assetAddStrategy = "AssetAdd(runtimeGroup, definition, extendedConfig) [arity fallback]";
+                add(runtimeGroup, definition, ...(arity >= 3 ? [extendedConfig] : []));
                 return;
             }
 
             const args = params.map((parameter, index) => {
                 const name = parameter.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-                if (name.includes("extendedconfig")) return extendedConfig;
-                if (name.includes("groupdef")) return sourceGroup;
-                if (name === "group" || name === "assetgroup" || name === "runtimegroup") return runtimeGroup;
+                if (name.includes("extendedconfig") || name === "config" || name === "extendeditemconfig") return extendedConfig;
+                if (name.includes("groupdef") || name === "sourcegroup") return sourceGroup;
+                if (name === "group" || name === "g" || name === "assetgroup" || name === "runtimegroup") return runtimeGroup;
                 if (name.includes("family")) return FAMILY;
-                if (name.includes("assetdef") || name === "asset" || name.includes("definition") || name === "item") {
+                if (name === "a" || name === "asset" || name === "assetdef" || name === "assetdefinition" ||
+                    name.includes("definition") || name === "item") {
                     return definition;
                 }
-
                 if (name === "extended" || name === "extend") return true;
 
-                if (index >= add.length) return undefined;
+                // Known R132 positional signature: (Group, A, ExtendedConfig).
+                if (arity === 3) {
+                    if (index === 0) return runtimeGroup;
+                    if (index === 1) return definition;
+                    if (index === 2) return extendedConfig;
+                }
+
                 return undefined;
             });
 
-            const recognizedRequired = params.slice(0, add.length).every((parameter, index) => {
-                const name = parameter.toLowerCase();
-                return args[index] !== undefined || /optional|callback|refresh|groupdef/.test(name);
-            });
+            const requiredCount = arity || params.length;
+            const recognizedRequired = args.slice(0, requiredCount).every(value => value !== undefined);
 
             if (!recognizedRequired) {
+                // Safe compatibility fallback for current BC releases. Passing an
+                // extra third argument is harmless for two-argument JS functions.
+                if (requiredCount >= 2 && requiredCount <= 3) {
+                    assetAddStrategy = "AssetAdd(runtimeGroup, definition, extendedConfig) [compat fallback]";
+                    add(runtimeGroup, definition, extendedConfig);
+                    return;
+                }
+
                 throw new Error(
-                    `Unsupported AssetAdd signature: (${params.join(", ") || `${add.length} parameter(s)`})`
+                    `Unsupported AssetAdd signature: (${params.join(", ") || `${arity} parameter(s)`})`
                 );
             }
 
-            assetAddStrategy = `AssetAdd(${params.join(", ")})`;
-            add(...args);
+            assetAddStrategy = `AssetAdd(${params.join(", ") || `${arity} args`})`;
+            add(...args.slice(0, requiredCount));
         } finally {
             try { window.AssetCurrentGroup = previousCurrentGroup; } catch (_) {}
         }
