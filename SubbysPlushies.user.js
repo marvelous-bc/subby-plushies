@@ -876,6 +876,8 @@
     let lastOfferChatRow = null;
     const processedOfferChatRows = new WeakSet();
     const processedOfferDecisionRows = new WeakSet();
+    const OFFER_DECISION_DEDUPE_MS = 8000;
+    const recentOfferDecisionTokens = new Map();
     const processedBalanceHeadChatRows = new WeakSet();
     const processedHideBehindChatRows = new WeakSet();
     const processedProtectChatRows = new WeakSet();
@@ -6682,36 +6684,48 @@
         };
     }
 
-    function inspectRenderedOfferDecisionRow(row) {
-        if (!(row instanceof Element)) return false;
-        if (row.classList?.contains("SubbysPlushiesOfferPrompt")) return false;
-        if (processedOfferDecisionRows.has(row)) return false;
+    function pruneRecentOfferDecisionTokens(now = Date.now()) {
+        for (const [token, seenAt] of recentOfferDecisionTokens) {
+            if (!Number.isFinite(seenAt) || now - seenAt > OFFER_DECISION_DEDUPE_MS) {
+                recentOfferDecisionTokens.delete(token);
+            }
+        }
+    }
 
-        const text = String(row.textContent || "").replace(/\s+/g, " ").trim();
-        const parsed = parseRenderedOfferDecision(text);
-        if (!parsed) return false;
-        processedOfferDecisionRows.add(row);
+    function handleOfferDecision(parsed, text = "", triggerSource = "unknown") {
+        if (!parsed || !Number.isFinite(parsed.actorMember) || !Number.isFinite(parsed.sourceMember)) return false;
 
         const playerMember = Number(window.Player?.MemberNumber);
-        lastOfferDecisionSeen = { ...parsed, text, at: new Date().toISOString() };
+        const now = Date.now();
+        lastOfferDecisionSeen = {
+            ...parsed,
+            text: String(text || ""),
+            triggerSource,
+            at: new Date(now).toISOString(),
+        };
         if (!Number.isFinite(playerMember) || parsed.sourceMember !== playerMember) return false;
 
-        prunePendingOutgoingPlushOffers();
+        pruneRecentOfferDecisionTokens(now);
+        const decisionToken = `${parsed.actorMember}:${parsed.sourceMember}:${parsed.decision}`;
+        const previousDecisionAt = recentOfferDecisionTokens.get(decisionToken);
+        if (Number.isFinite(previousDecisionAt) && now - previousDecisionAt <= OFFER_DECISION_DEDUPE_MS) return true;
+
+        prunePendingOutgoingPlushOffers(now);
         let pending = pendingOutgoingPlushOffers.get(parsed.actorMember);
 
         if (!pending && lastRenderedOutgoingOfferCapture &&
             lastRenderedOutgoingOfferCapture.sourceMember === playerMember &&
             lastRenderedOutgoingOfferCapture.targetMember === parsed.actorMember) {
-            const age = Date.now() - Date.parse(lastRenderedOutgoingOfferCapture.at);
+            const age = now - Date.parse(lastRenderedOutgoingOfferCapture.at);
             if (Number.isFinite(age) && age >= 0 && age <= OFFER_TRANSFER_PENDING_MS) {
                 const heldNow = getHeld(window.Player);
                 const snap = snapshotPlushItem(heldNow);
                 if (snap) {
                     pending = {
                         targetMember: parsed.actorMember,
-                        token: lastRenderedOutgoingOfferCapture.token || "rendered-fallback",
+                        token: lastRenderedOutgoingOfferCapture.token || `${triggerSource}-fallback`,
                         option: snap.option,
-                        createdAt: Date.now(),
+                        createdAt: now,
                     };
                 }
             }
@@ -6722,12 +6736,14 @@
                 side: "sender",
                 reason: "Ignored an acceptance/decline because no recent outgoing plush offer to that recipient could be confirmed.",
                 actorMember: parsed.actorMember,
-                at: new Date().toISOString(),
+                triggerSource,
+                at: new Date(now).toISOString(),
             };
             return false;
         }
 
         pendingOutgoingPlushOffers.delete(parsed.actorMember);
+        recentOfferDecisionTokens.set(decisionToken, now);
         if (parsed.decision !== "accepts") return true;
 
         const held = getHeld(window.Player);
@@ -6737,6 +6753,7 @@
                 side: "sender",
                 reason: "The sender no longer has Subby's Plushies in ItemHandheld, so nothing was removed.",
                 actorMember: parsed.actorMember,
+                triggerSource,
                 at: new Date().toISOString(),
             };
             return false;
@@ -6751,22 +6768,39 @@
                 actorMember: parsed.actorMember,
                 offeredOption: pending.option,
                 currentOption,
+                triggerSource,
                 at: new Date().toISOString(),
             };
             return false;
         }
 
         try {
+            cancelIdleAnimation(false);
+            removeSpeechBubble();
+            removePlushStatusIcon();
+            if (dragModeEnabled) setDragMode(false);
+            if (activeBalanceHeadSession) restoreActiveBalanceHead("Offer Plushie transferred away");
+            if (activeHideBehindSession) restoreActiveHideBehind("Offer Plushie transferred away");
+            if (activeProtectSession) restoreActiveProtect("Offer Plushie transferred away");
+
             InventoryRemove(window.Player, GROUP);
             refresh(window.Player, true);
+            try {
+                if (typeof window.ChatRoomCharacterUpdate === "function") window.ChatRoomCharacterUpdate(window.Player);
+            } catch (updateError) {
+                warn("Offer Plushie sender removal could not immediately publish CharacterUpdate:", updateError);
+            }
             syncHugTightlyActivityAvailability("Offer Plushie transferred away");
+            refreshDragToggleButton();
+            refreshPlushStatusIcon();
             offerTransferSenderRemovals++;
             lastOfferSenderRemoval = {
                 recipientMember: parsed.actorMember,
                 option: pending.option,
+                triggerSource,
                 at: new Date().toISOString(),
             };
-            log(`Transferred plushie away to #${parsed.actorMember}; removed sender ItemHandheld copy.`);
+            log(`Transferred plushie away to #${parsed.actorMember}; removed sender ItemHandheld copy (${triggerSource}).`);
             return true;
         } catch (e) {
             offerTransferSenderRemovalFailures++;
@@ -6774,10 +6808,31 @@
                 side: "sender",
                 reason: `Could not remove transferred plushie from sender: ${String(e)}`,
                 actorMember: parsed.actorMember,
+                triggerSource,
                 at: new Date().toISOString(),
             };
             return false;
         }
+    }
+
+    function processOfferDecisionAction(data) {
+        if (!isChatAction(data)) return false;
+        const text = getDictionaryText(data, "msg") || "";
+        const parsed = parseRenderedOfferDecision(text);
+        if (!parsed) return false;
+        return handleOfferDecision(parsed, text, "ChatRoomMessage");
+    }
+
+    function inspectRenderedOfferDecisionRow(row) {
+        if (!(row instanceof Element)) return false;
+        if (row.classList?.contains("SubbysPlushiesOfferPrompt")) return false;
+        if (processedOfferDecisionRows.has(row)) return false;
+
+        const text = String(row.textContent || "").replace(/\s+/g, " ").trim();
+        const parsed = parseRenderedOfferDecision(text);
+        if (!parsed) return false;
+        processedOfferDecisionRows.add(row);
+        return handleOfferDecision(parsed, text, "rendered chat row");
     }
 
     function sendStandaloneActionMessage(message) {
@@ -8845,8 +8900,9 @@
             }
             if (!isChatAction(data)) return next(args);
 
+            const offerDecisionHandled = processOfferDecisionAction(data);
             const protectCandidate = getFeatureSettings().protectMe && actionLooksProtectable(data);
-            const plushRelated = isPotentialPlushAction(data);
+            const plushRelated = offerDecisionHandled || isPotentialPlushAction(data);
             if (!plushRelated && !protectCandidate) return next(args);
 
             const hugTightly = plushRelated && isHugTightlyAction(data);
