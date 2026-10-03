@@ -228,6 +228,9 @@
     const PLUSH_EMOTE_SYNC_CONTENT_PREFIX = "SubbysPlushiesEmote:";
     const PLUSH_EMOTE_SYNC_TAG = "SubbysPlushiesEmote";
     const PLUSH_EMOTE_DURATION_MS = 15000;
+    const OFFER_TRANSFER_SYNC_CONTENT = "SubbysPlushiesOfferSync";
+    const OFFER_TRANSFER_SYNC_PROTOCOL = 1;
+    const OFFER_TRANSFER_SYNC_RETRY_DELAYS_MS = Object.freeze([0, 250, 900]);
     const CUDDLE_QUEEN_MEMBER_NUMBER = 89413;
     const CUDDLE_ROOM_NAME = "Subbycat's place";
     let FEATURE_DEFAULTS = Object.freeze({
@@ -6592,6 +6595,87 @@
         return true;
     }
 
+    function sendOfferDecisionSignal(sourceMember, actorMember, token, decision) {
+        if (!Number.isFinite(sourceMember) || !Number.isFinite(actorMember)) return false;
+        if (typeof window.ServerSend !== "function") return false;
+
+        const normalizedDecision = decision === "accepts" ? "accepts" : "declines";
+        const message = {
+            IsSubbysPlushies: true,
+            protocol: OFFER_TRANSFER_SYNC_PROTOCOL,
+            version: VERSION,
+            kind: "offer-decision",
+            sourceMember,
+            actorMember,
+            token: String(token || ""),
+            decision: normalizedDecision,
+        };
+
+        const send = () => {
+            window.ServerSend("ChatRoomChat", {
+                Type: "Hidden",
+                Content: OFFER_TRANSFER_SYNC_CONTENT,
+                Sender: actorMember,
+                Dictionary: [{ message }],
+            });
+        };
+
+        let sent = false;
+        for (const delay of OFFER_TRANSFER_SYNC_RETRY_DELAYS_MS) {
+            if (delay === 0) {
+                try {
+                    send();
+                    sent = true;
+                } catch (e) {
+                    warn("Could not send Offer Plushie transfer signal:", e);
+                }
+                continue;
+            }
+            window.setTimeout(() => {
+                try { send(); } catch (e) { warn("Could not retry Offer Plushie transfer signal:", e); }
+            }, delay);
+        }
+        return sent;
+    }
+
+    function parseOfferDecisionSignal(data) {
+        if (!data || data.Type !== "Hidden" || data.Content !== OFFER_TRANSFER_SYNC_CONTENT) return null;
+        const dictionary = Array.isArray(data.Dictionary) ? data.Dictionary : [];
+        const entry = dictionary.find(part => part && typeof part === "object" && part.message && typeof part.message === "object");
+        const message = entry?.message;
+        if (!message || message.IsSubbysPlushies !== true || message.protocol !== OFFER_TRANSFER_SYNC_PROTOCOL || message.kind !== "offer-decision") return null;
+
+        const sourceMember = Number(message.sourceMember);
+        const actorMember = Number(message.actorMember);
+        const senderMember = Number(data.Sender);
+        const decision = String(message.decision || "").toLowerCase();
+        if (!Number.isFinite(sourceMember) || !Number.isFinite(actorMember)) return null;
+        if (Number.isFinite(senderMember) && senderMember !== actorMember) return null;
+        if (decision !== "accepts" && decision !== "declines") return null;
+
+        return {
+            actorName: getCharacterDisplayName(getRoomCharacterByMember(actorMember)) || null,
+            actorMember,
+            decision,
+            sourceName: getCharacterDisplayName(getRoomCharacterByMember(sourceMember)) || null,
+            sourceMember,
+            token: String(message.token || ""),
+        };
+    }
+
+    function processOfferDecisionSignal(data) {
+        const parsed = parseOfferDecisionSignal(data);
+        if (!parsed) return false;
+        offerSignalsReceived++;
+        lastOfferSignalReceived = {
+            ...parsed,
+            sender: Number.isFinite(Number(data?.Sender)) ? Number(data.Sender) : null,
+            at: new Date().toISOString(),
+        };
+        handleOfferDecision(parsed, "", "Hidden offer sync", parsed.token);
+        return true;
+    }
+
     function receiveOfferedPlush(sourceMember, sourceName, cachedSnapshot = null) {
         offerTransferReceiveAttempts++;
 
@@ -6607,29 +6691,19 @@
             return { ok: false, reason };
         };
 
-        if (!Number.isFinite(sourceMember)) {
-            return fail("Could not identify the sender's member number.");
-        }
-
-        if (getHeld(window.Player)) {
-            return fail("Your hands are occupied. Free your ItemHandheld slot and press Accept again.");
-        }
+        if (!Number.isFinite(sourceMember)) return fail("Could not identify the sender's member number.");
+        if (getHeld(window.Player)) return fail("Your hands are occupied. Free your ItemHandheld slot and press Accept again.");
 
         const sourceCharacter = getRoomCharacterByMember(sourceMember);
-        if (!sourceCharacter) {
-            return fail("The sender is no longer available in the room.");
-        }
+        if (!sourceCharacter) return fail("The sender is no longer available in the room.");
 
-        const sourceItem = getHeld(sourceCharacter);
-        const liveSnapshot = snapshotPlushItem(sourceItem);
+        const liveSnapshot = snapshotPlushItem(getHeld(sourceCharacter));
         const snapshot = liveSnapshot || cachedSnapshot;
         if (!liveSnapshot || !snapshot || snapshot.assetName !== ASSET_NAME || snapshot.groupName !== GROUP) {
             return fail("The offered plushie is no longer in the sender's hand.");
         }
 
         try {
-            InventoryRemove(sourceCharacter, GROUP, false);
-
             const received = InventoryWear(
                 window.Player,
                 ASSET_NAME,
@@ -6653,23 +6727,19 @@
             setItemPlushState(heldReceived, snapshot.option);
             ensureNativeTransform(heldReceived);
             rememberCharacterPlushState(window.Player, heldReceived);
-            refresh(sourceCharacter, true);
-            refresh(window.Player, true);
+            refresh(window.Player, false);
             schedulePlushStabilization(snapshot.option);
             syncHugTightlyActivityAvailability("Offer Plushie received");
 
             window.setTimeout(() => {
                 try {
-                    if (typeof window.ChatRoomCharacterUpdate === "function") window.ChatRoomCharacterUpdate(sourceCharacter);
+                    if (typeof window.ChatRoomCharacterItemUpdate === "function") {
+                        window.ChatRoomCharacterItemUpdate(window.Player, GROUP);
+                    } else if (typeof window.ChatRoomCharacterUpdate === "function") {
+                        window.ChatRoomCharacterUpdate(window.Player);
+                    }
                 } catch (e) {
-                    warn("Offer Plushie could not publish sender CharacterUpdate:", e);
-                }
-            }, 0);
-            window.setTimeout(() => {
-                try {
-                    if (typeof window.ChatRoomCharacterUpdate === "function") window.ChatRoomCharacterUpdate(window.Player);
-                } catch (e) {
-                    warn("Offer Plushie could not publish recipient CharacterUpdate:", e);
+                    warn("Offer Plushie could not publish recipient ItemHandheld update:", e);
                 }
             }, 0);
 
@@ -6679,32 +6749,20 @@
                 sourceName: sourceName || null,
                 option: snapshot.option,
                 craftPreserved: snapshot.craft != null,
-                transferStrategy: "LSCG-style two-character ItemHandheld transfer",
+                transferStrategy: "recipient self-equip plus hidden sender self-removal",
                 at: new Date().toISOString(),
             };
-            log(`Received offered plushie from #${sourceMember} using LSCG-style ItemHandheld transfer.`, lastOfferTransferReceived);
+            log(`Received offered plushie from #${sourceMember}; waiting for sender self-removal sync.`, lastOfferTransferReceived);
             return { ok: true, snapshot };
         } catch (e) {
             try {
-                if (!isOurs(getHeld(sourceCharacter))) {
-                    const restored = InventoryWear(
-                        sourceCharacter,
-                        ASSET_NAME,
-                        GROUP,
-                        cloneTransferValue(snapshot.color),
-                        Number.isFinite(snapshot.difficulty) ? snapshot.difficulty : undefined,
-                        sourceMember,
-                        cloneTransferValue(snapshot.craft),
-                        false
-                    );
-                    if (restored) restored.Property = cloneTransferValue(snapshot.property || {});
-                    refresh(sourceCharacter, true);
-                }
                 if (isOurs(getHeld(window.Player))) {
                     suppressLocalPlushRepair("failed Offer Plushie rollback", 1200);
                     clearRememberedLocalPlushState();
                     InventoryRemove(window.Player, GROUP, false);
-                    refresh(window.Player, true);
+                    refresh(window.Player, false);
+                    if (typeof window.ChatRoomCharacterItemUpdate === "function") window.ChatRoomCharacterItemUpdate(window.Player, GROUP);
+                    else if (typeof window.ChatRoomCharacterUpdate === "function") window.ChatRoomCharacterUpdate(window.Player);
                 }
             } catch (_) {}
             return fail(`Could not transfer the offered plushie: ${String(e)}`);
@@ -6740,7 +6798,7 @@
         }
     }
 
-    function handleOfferDecision(parsed, text = "", triggerSource = "unknown") {
+    function handleOfferDecision(parsed, text = "", triggerSource = "unknown", syncToken = "") {
         if (!parsed || !Number.isFinite(parsed.actorMember) || !Number.isFinite(parsed.sourceMember)) return false;
 
         const playerMember = Number(window.Player?.MemberNumber);
@@ -6790,6 +6848,22 @@
             return false;
         }
 
+        const incomingToken = String(syncToken || "");
+        const pendingToken = String(pending.token || "");
+        if (incomingToken && pendingToken && incomingToken !== pendingToken) {
+            const fallbackToken = value => /^offer-(?:rendered|chat|action):/i.test(value);
+            if (!fallbackToken(incomingToken) && !fallbackToken(pendingToken)) {
+                lastOfferTransferFailure = {
+                    side: "sender",
+                    reason: "Ignored an Offer Plushie transfer signal because its token did not match the pending offer.",
+                    actorMember: parsed.actorMember,
+                    triggerSource,
+                    at: new Date(now).toISOString(),
+                };
+                return false;
+            }
+        }
+
         pendingOutgoingPlushOffers.delete(parsed.actorMember);
         recentOfferDecisionTokens.set(decisionToken, now);
         if (parsed.decision !== "accepts") return true;
@@ -6831,15 +6905,36 @@
             if (activeHideBehindSession) restoreActiveHideBehind("Offer Plushie transferred away");
             if (activeProtectSession) restoreActiveProtect("Offer Plushie transferred away");
 
-            suppressLocalPlushRepair("Offer Plushie transferred away", 2500);
+            suppressLocalPlushRepair("Offer Plushie transferred away", 3500);
             clearRememberedLocalPlushState();
-            InventoryRemove(window.Player, GROUP);
-            refresh(window.Player, true);
-            try {
-                if (typeof window.ChatRoomCharacterUpdate === "function") window.ChatRoomCharacterUpdate(window.Player);
-            } catch (updateError) {
-                warn("Offer Plushie sender removal could not immediately publish CharacterUpdate:", updateError);
+            InventoryRemove(window.Player, GROUP, false);
+
+            if (isOurs(getHeld(window.Player)) && Array.isArray(window.Player?.Appearance)) {
+                window.Player.Appearance = window.Player.Appearance.filter(item => !(
+                    item?.Asset?.Group?.Name === GROUP && item?.Asset?.Name === ASSET_NAME
+                ));
             }
+
+            if (isOurs(getHeld(window.Player))) throw new Error("ItemHandheld still contained Subby's Plushies after removal.");
+
+            refresh(window.Player, false);
+            const publishRemoval = () => {
+                try {
+                    if (typeof window.ChatRoomCharacterItemUpdate === "function") {
+                        window.ChatRoomCharacterItemUpdate(window.Player, GROUP);
+                    }
+                } catch (itemUpdateError) {
+                    warn("Offer Plushie sender removal could not publish ItemHandheld update:", itemUpdateError);
+                }
+                try {
+                    if (typeof window.ChatRoomCharacterUpdate === "function") window.ChatRoomCharacterUpdate(window.Player);
+                } catch (updateError) {
+                    warn("Offer Plushie sender removal could not publish CharacterUpdate:", updateError);
+                }
+            };
+            publishRemoval();
+            window.setTimeout(publishRemoval, 250);
+            window.setTimeout(publishRemoval, 900);
             syncHugTightlyActivityAvailability("Offer Plushie transferred away");
             refreshDragToggleButton();
             refreshPlushStatusIcon();
@@ -7385,6 +7480,13 @@
         const decide = accepted => {
             if (!row.isConnected || row.getAttribute("data-subbys-plushies-decided") === "true") return;
 
+            const playerName = getCharacterDisplayName(window.Player) || "Someone";
+            const playerMember = Number.isFinite(window.Player?.MemberNumber) ? window.Player.MemberNumber : null;
+            if (!Number.isFinite(playerMember) || !Number.isFinite(sourceMember)) {
+                question.textContent = "Could not synchronize this plushie transfer because a member number is missing.";
+                return;
+            }
+
             if (accepted) {
                 const transfer = receiveOfferedPlush(sourceMember, sourceName, offeredSnapshot);
                 if (!transfer.ok) {
@@ -7394,12 +7496,30 @@
                 offeredSnapshot = transfer.snapshot;
             }
 
+            const signalSent = sendOfferDecisionSignal(
+                sourceMember,
+                playerMember,
+                token,
+                accepted ? "accepts" : "declines"
+            );
+
+            if (!signalSent && accepted) {
+                try {
+                    suppressLocalPlushRepair("Offer Plushie sync failure rollback", 1200);
+                    clearRememberedLocalPlushState();
+                    InventoryRemove(window.Player, GROUP, false);
+                    refresh(window.Player, false);
+                    if (typeof window.ChatRoomCharacterItemUpdate === "function") window.ChatRoomCharacterItemUpdate(window.Player, GROUP);
+                    else if (typeof window.ChatRoomCharacterUpdate === "function") window.ChatRoomCharacterUpdate(window.Player);
+                } catch (_) {}
+                question.textContent = "Could not notify the sender. The transfer was cancelled; press Accept to try again.";
+                return;
+            }
+
             row.setAttribute("data-subbys-plushies-decided", "true");
             accept.disabled = true;
             decline.disabled = true;
 
-            const playerName = getCharacterDisplayName(window.Player) || "Someone";
-            const playerMember = Number.isFinite(window.Player?.MemberNumber) ? window.Player.MemberNumber : null;
             const playerLabel = formatOfferCharacterLabel(playerName, playerMember);
             question.textContent = accepted ? "Accepted — plushie transferred." : "Declined.";
             controls.remove();
@@ -8955,6 +9075,8 @@
 
         const actionMessageHooked = installHook("ChatRoomMessage", 10000, (args, next) => {
             const data = args?.[0];
+            if (processOfferDecisionSignal(data)) return next(args);
+
             const syncedEmote = isSyncedPlushEmotePacket(data);
 
             if (syncedEmote) {
