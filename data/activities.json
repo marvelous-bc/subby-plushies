@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "pluginVersion": "2.3.7.13",
   "activities": [
     {
       "key": "rubFace",
@@ -9,8 +10,9 @@
         "ItemMouth"
       ],
       "targetSelf": true,
-      "selfText": "{Source} rubs the plushie against their face.",
-      "otherText": "{Source} rubs the plushie against {Target}'s face."
+      "handsFree": true,
+      "selfText": "{Source} rubs their cheek against the plushie.",
+      "otherText": "{Source} leans in with the plushie so {Target} can rub their cheek against it."
     },
     {
       "key": "cuddleChest",
@@ -21,8 +23,9 @@
         "ItemBreast"
       ],
       "targetSelf": true,
-      "selfText": "{Source} cuddles the plushie against their chest.",
-      "otherText": "{Source} cuddles the plushie against {Target}'s chest."
+      "handsFree": true,
+      "selfText": "{Source} snuggles their chest against the plushie.",
+      "otherText": "{Source} leans close with the plushie so {Target} can snuggle against it."
     },
     {
       "key": "nuzzle",
@@ -32,8 +35,9 @@
         "ItemMouth"
       ],
       "targetSelf": true,
+      "handsFree": true,
       "selfText": "{Source} nuzzles into the plushie.",
-      "otherText": "{Source} nuzzles the plushie against {Target}'s cheek."
+      "otherText": "{Source} leans in with the plushie so {Target} can nuzzle against it."
     },
     {
       "key": "pat",
@@ -78,8 +82,9 @@
         "ItemMouth"
       ],
       "targetSelf": true,
+      "handsFree": true,
       "selfText": "{Source} gives the plushie a little kiss.",
-      "otherText": "{Source} gives the plushie a little kiss in front of {Target}."
+      "otherText": "{Source} leans in with the plushie and gives it a little kiss beside {Target}."
     },
     {
       "key": "kissWith",
@@ -89,8 +94,59 @@
         "ItemMouth"
       ],
       "targetSelf": false,
+      "handsFree": true,
       "selfText": "{Source} gives the plushie a little kiss.",
-      "otherText": "{Source} presses the plushie to {Target}'s cheek in a little kiss."
+      "otherText": "{Source} leans in with the plushie tucked close and gives {Target} a little cheek kiss."
+    },
+    {
+      "key": "noseBoop",
+      "name": "SubbysPlushiesNoseBoopItem",
+      "label": "Nose Boop Plushie",
+      "targets": [
+        "ItemNose",
+        "ItemMouth"
+      ],
+      "targetSelf": true,
+      "handsFree": true,
+      "selfText": "{Source} gently boops their nose against the plushie.",
+      "otherText": "{Source} leans in with the plushie so {Target} can gently boop it with their nose."
+    },
+    {
+      "key": "cheekRest",
+      "name": "SubbysPlushiesCheekRestItem",
+      "label": "Rest Cheek on Plushie",
+      "targets": [
+        "ItemMouth"
+      ],
+      "targetSelf": true,
+      "handsFree": true,
+      "selfText": "{Source} rests their cheek against the plushie.",
+      "otherText": "{Source} leans close with the plushie so {Target} can rest their cheek against it."
+    },
+    {
+      "key": "foreheadBump",
+      "name": "SubbysPlushiesForeheadBumpItem",
+      "label": "Forehead Bump Plushie",
+      "targets": [
+        "ItemHood"
+      ],
+      "targetSelf": true,
+      "handsFree": true,
+      "selfText": "{Source} gently bumps their forehead against the plushie.",
+      "otherText": "{Source} leans in with the plushie so {Target} can gently bump their forehead against it."
+    },
+    {
+      "key": "snugglePlushie",
+      "name": "SubbysPlushiesSnuggleItem",
+      "label": "Snuggle Plushie",
+      "targets": [
+        "ItemTorso",
+        "ItemBreast"
+      ],
+      "targetSelf": true,
+      "handsFree": true,
+      "selfText": "{Source} snuggles close against the plushie.",
+      "otherText": "{Source} leans close with the plushie so {Target} can snuggle against it."
     },
     {
       "key": "bonk",
@@ -112,8 +168,8 @@
         "ItemHood"
       ],
       "targetSelf": true,
-      "selfText": "{Source} balances the plushie on their head.",
-      "otherText": "{Source} balances the plushie on {Target}'s head.",
+      "selfText": "{Source} tries to balance the plushie on their head.",
+      "otherText": "{Source} tries to balance the plushie on {Target}'s head.",
       "effect": "balanceHead"
     },
     {
@@ -147,6 +203,7 @@
         "ItemMouth"
       ],
       "targetSelf": true,
+      "handsFree": true,
       "selfText": "{Source} leans in and whispers something to the plushie.",
       "otherText": "{Source} whispers something to the plushie while looking at {Target}."
     },

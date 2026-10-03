@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "pluginVersion": "2.3.7.13",
   "bubbleDurationMs": 3400,
   "bubbleYOffsetCssPx": 5,
   "moodBuckets": {
@@ -46,7 +47,11 @@
       "pet",
       "pat",
       "cuddleChest",
-      "kissPlushie"
+      "kissPlushie",
+      "noseBoop",
+      "cheekRest",
+      "foreheadBump",
+      "snugglePlushie"
     ],
     "interactionChance": 0.45,
     "interactionDelayMs": 140,

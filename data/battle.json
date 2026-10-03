@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "pluginVersion": "2.3.7.13",
   "rounds": 3,
   "challengeTtlMs": 90000,
   "resultDelayMs": 180,
@@ -24,37 +25,37 @@
       "min": 1,
       "max": 11
     },
-        {
+    {
       "name": "Kitty missile",
       "min": 5,
       "max": 6
     },
-        {
+    {
       "name": "Lap occupation",
       "min": 1,
       "max": 10
     },
-        {
+    {
       "name": "Plushie inspection",
       "min": 3,
       "max": 8
     },
-        {
+    {
       "name": "Cuddle lock (finisher)",
       "min": 6,
       "max": 12
     },
-        {
+    {
       "name": "Cuddle restraint order",
       "min": 3,
       "max": 8
     },
-        {
+    {
       "name": "Soft rope cocoon",
       "min": 2,
       "max": 7
     },
-        {
+    {
       "name": "Plushie petsuit",
       "min": 6,
       "max": 10

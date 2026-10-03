@@ -1,8 +1,8 @@
 {
-  "version": "2.3.7",
+  "version": "2.3.7.13",
+  "releaseDate": "2026-10-03",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "launcherVersion": "2.1.1",
-  "launcherUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js",
-  "sha256": "1f786cd8fc57b2951b1d093676a726590db593668f6a130610afd52ab1e1378a",
-  "notes": "v2.3.7 current release. Canonical downloadUrl points directly to SubbysPlushies.user.js."
+  "repositoryUrl": "https://github.com/marvelous-bc/subby-plushies",
+  "notes": "Repository-sync release: current Opera/page-context compatibility, ItemAddon second plushie, hourly shared mascot cycling, 8-hour unequipped-only affection decay, Protect/Jealous keyword update, transform persistence, named plushie actions, and synchronized command/data documentation.",
+  "sha256": "3eec7466bc3f11198a052bc3bbdec5dff571eb1ba32a64c971a3f61cfca50cc7"
 }

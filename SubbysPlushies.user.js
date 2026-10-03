@@ -2,25 +2,29 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.3.7
-// @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, emotes, battles, mascot, themes, poses, stats, achievements, and more
+// @version      2.3.7.13
+// @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
 // @downloadURL   https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
+// @match        https://bondageprojects.elementfx.com/R*
 // @match        https://www.bondageprojects.elementfx.com/R*
+// @match        https://bondageeurope.com/*/BondageClub/
 // @match        https://www.bondageeurope.com/*/BondageClub/
+// @match        https://bondage-europe.com/*/BondageClub/
 // @match        https://www.bondage-europe.com/*/BondageClub/
+// @match        https://bondage-asia.com/club/*/
 // @match        https://www.bondage-asia.com/club/*/
-// @run-at       document-start
+// @run-at       document-end
 // @grant        none
-// @sandbox      raw
 // ==/UserScript==
 
-(() => {
+function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "2.3.7";
+    const VERSION = "2.3.7.13";
+    const BUILD_DATE = "2026-10-03";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -276,6 +280,10 @@
     const BACKUP_PROGRESS_SEAL_VERSION = 2;
     const BACKUP_PROGRESS_SEAL_KEY = ["Subbys", "Plushies", "portable", "progress", "v4", "89413"].join("|");
     const ROOM_MASCOT_CUSTOM_KEY = "SubbysPlushiesMascot";
+    const ROOM_MASCOT_CYCLE_MS = 60 * 60 * 1000;
+    const ROOM_MASCOT_CYCLE_CHECK_MS = 30 * 1000;
+    const ROOM_MASCOT_CYCLE_SETTLE_MS = 15 * 1000;
+    const ROOM_MASCOT_AFFECTION_MODIFIER = 1;
     const ROOM_MASCOT_CACHE_STORAGE_KEY = "SubbysPlushies:room-mascots:v1";
     const ROOM_MASCOT_POSITION_STORAGE_KEY = "SubbysPlushies:room-mascot-position:v1";
     const DRAG_TOGGLE_POSITION_STORAGE_KEY = "SubbysPlushies:drag-toggle-position:v1";
@@ -295,6 +303,7 @@
         protectMe: false,
         jealousPlushie: false,
         showRoomMascot: true,
+        hourlyMascotCycle: true,
         autoUpdateChecks: true,
         idleAnimations: true,
         speechBubbles: true,
@@ -322,22 +331,22 @@
         Rotation: 0,
     });
     let PROTECT_KEYWORDS = Object.freeze([
-        "slap", "spank", "hit", "punch", "kick", "bonk", "poke", "tickle",
+        "slap", "spank", "hit", "punch", "kick", "bonk", "boop", "bap", "tickle",
         "bite", "pinch", "whip", "shock", "zap", "attack", "smack", "swat",
     ]);
-    let PROTECT_RENDER_VERB_RE = /\b(slaps?|spanks?|hits?|punch(?:es)?|kicks?|bonks?|pokes?|tickles?|bites?|pinches?|whips?|shocks?|zaps?|attacks?|smacks?|swats?)\b/i;
-    let PROTECT_RENDER_ACTION_RE = /(.+?)\s+(slaps?|spanks?|hits?|punch(?:es)?|kicks?|bonks?|pokes?|tickles?|bites?|pinches?|whips?|shocks?|zaps?|attacks?|smacks?|swats?)\s+(.+?)(?:'s|')\s+[^.)]+/i;
+    let PROTECT_RENDER_VERB_RE = /\b(slaps?|spanks?|hits?|punch(?:es)?|kicks?|bonks?|boops?|baps?|tickles?|bites?|pinches?|whips?|shocks?|zaps?|attacks?|smacks?|swats?)\b/i;
+    let PROTECT_RENDER_ACTION_RE = /(.+?)\s+(slaps?|spanks?|hits?|punch(?:es)?|kicks?|bonks?|boops?|baps?|tickles?|bites?|pinches?|whips?|shocks?|zaps?|attacks?|smacks?|swats?)\s+(.+?)(?:'s|')\s+[^.)]+/i;
     let JEALOUS_ACTIVITY_KEYWORDS = Object.freeze([
-        "kiss", "hug", "cuddle", "caress", "nuzzle", "snuggle", "pet", "lick", "smooch",
+        "kiss", "hug", "cuddle", "caress", "nuzzle", "snuggle", "pet", "lick", "smooch", "poke",
     ]);
 
     let MOOD_DEFAULT_SCORE = 60;
     let MOOD_MIN_SCORE = 0;
     let MOOD_MAX_SCORE = 100;
-    let MOOD_DRIFT_TARGET = 29;
+    let MOOD_DRIFT_TARGET = 0;
     let MOOD_DRIFT_STEP = 1;
-    let MOOD_DRIFT_EVERY_MS = 15 * 60 * 1000;
-    const MOOD_MAX_IDLE_DECAY_LOSS = 10;
+    let MOOD_DRIFT_EVERY_MS = 8 * 60 * 60 * 1000;
+    const MOOD_HELD_CLOCK_WRITE_MS = 10 * 60 * 1000;
     let MOOD_LABELS = Object.freeze([
         Object.freeze({ maxScore: 18, label: "Grumpy" }),
         Object.freeze({ maxScore: 38, label: "Sulky" }),
@@ -683,214 +692,115 @@
     const EXTENSIONS_BUTTON_TEXT = "Subby's Plushies";
     const EXTENSIONS_TABS = Object.freeze(["status", "lore", "plushies", "history", "settings", "layout", "stats", "achievements", "backup", "commands"]);
 
-    let EXTENSIONS_COMMAND_GROUPS = [
-        {
-                "title": "General",
-                "commands": [
-                        {
-                                "command": "/plushie",
-                                "description": "Equip Subby's Plushies."
-                        },
-                        {
-                                "command": "/plushieuse",
-                                "description": "Open the plushie selector/use menu."
-                        },
-                        {
-                                "command": "/plushieextensions",
-                                "description": "Open the Subby's Plushies Extensions control center."
-                        },
-                        {
-                                "command": "/plushiecommands",
-                                "description": "Open the Commands tab directly."
-                        },
-                        {
-                                "command": "/plushiecommand",
-                                "description": "Alias for /plushiecommands."
-                        },
-                        {
-                                "command": "/plushiestatus",
-                                "description": "Open the Status tab."
-                        },
-                        {
-                                "command": "/plushiesettings",
-                                "description": "Open the Settings tab."
-                        },
-                        {
-                                "command": "/plushielayout",
-                                "description": "Open the Layout customization tab."
-                        },
-                        {
-                                "command": "/plushieremove",
-                                "description": "Remove the held Subby's Plushies item."
-                        },
-                        {
-                                "command": "/plushierecover",
-                                "description": "Run the plush recovery helper."
-                        }
-                ]
-        },
-        {
-                "title": "Positioning",
-                "commands": [
-                        {
-                                "command": "/plushieposition",
-                                "description": "Open BC's native Move / Resize editor."
-                        },
-                        {
-                                "command": "/plushiemove",
-                                "description": "Alias for Move / Resize."
-                        },
-                        {
-                                "command": "/plushieresize",
-                                "description": "Alias for Move / Resize."
-                        },
-                        {
-                                "command": "/plushiehands",
-                                "description": "Reset the plush to its default hands position."
-                        },
-                        {
-                                "command": "/plushiecenter",
-                                "description": "Alias for resetting the plush position."
-                        },
-                        {
-                                "command": "/plushiedrag [on|off]",
-                                "description": "Toggle Easy Drag, or explicitly turn it on/off."
-                        },
-                        {
-                                "command": "/plushiesnap <point>",
-                                "description": "Snap to a named point such as head, face, chest, hands, left shoulder, or right shoulder."
-                        }
-                ]
-        },
-        {
-                "title": "Features",
-                "commands": [
-                        {
-                                "command": "/plushiemood",
-                                "description": "Show the current plushie's mood and quick info."
-                        },
-                        {
-                                "command": "/plushielore",
-                                "description": "Open the Lore browser on the held plushie."
-                        },
-                        {
-                                "command": "/plushieinfo",
-                                "description": "Show the current plushie's mood and quick info."
-                        },
-                        {
-                                "command": "/plushieprotect",
-                                "description": "Toggle Protect Me mode."
-                        },
-                        {
-                                "command": "/plushiejealous",
-                                "description": "Toggle Jealous Plushie mode."
-                        },
-                        {
-                                "command": "/plushieidle",
-                                "description": "Toggle idle plush animations."
-                        },
-                        {
-                                "command": "/plushiespeech",
-                                "description": "Toggle local speech bubbles."
-                        },
-                        {
-                                "command": "/plushiespeak",
-                                "description": "Force one local plush speech bubble."
-                        },
-                        {
-                                "command": "/plushiebubble",
-                                "description": "Alias for /plushiespeak."
-                        },
-                        {
-                                "command": "/plushiepurr",
-                                "description": "Play the plush purr sound locally."
-                        },
-                        {
-                                "command": "/plushiefeatures",
-                                "description": "Show the current feature-toggle status."
-                        }
-                ]
-        },
-        {
-                "title": "Room Mascot",
-                "commands": [
-                        {
-                                "command": "/plushiemascot set",
-                                "description": "Set your held plush as the room mascot (room admin only)."
-                        },
-                        {
-                                "command": "/plushiemascot random",
-                                "description": "Pick a random plushie as the room mascot and announce it in chat (room admin only)."
-                        },
-                        {
-                                "command": "/plushiemascot clear",
-                                "description": "Clear the room mascot (room admin only)."
-                        },
-                        {
-                                "command": "/plushiemascot show",
-                                "description": "Show mascot information / restore the mascot picture."
-                        },
-                        {
-                                "command": "/plushiemascot hide",
-                                "description": "Hide the mascot picture locally."
-                        },
-                        {
-                                "command": "/plushiemascotshow",
-                                "description": "Shortcut to show the mascot picture."
-                        },
-                        {
-                                "command": "/plushiemascothide",
-                                "description": "Shortcut to hide the mascot picture."
-                        }
-                ]
-        },
-        {
-                "title": "Battle, Stats & Achievements",
-                "commands": [
-                        {
-                                "command": "/plushiebattle <member/name>",
-                                "description": "Challenge another player to a plushie battle. With no argument, uses the focused character when possible."
-                        },
-                        {
-                                "command": "/plushiestats",
-                                "description": "Open the detailed Stats tab."
-                        },
-                        {
-                                "command": "/plushieachievements",
-                                "description": "Open the detailed Achievements tab."
-                        },
-                        {
-                                "command": "/plushieach",
-                                "description": "Short alias for /plushieachievements."
-                        }
-                ]
-        },
-        {
-                "title": "Updates & Diagnostics",
-                "commands": [
-                        {
-                                "command": "/plushieupdate",
-                                "description": "Check the GitHub version manifest for an update."
-                        },
-                        {
-                                "command": "/plushieupdateopen",
-                                "description": "Open the latest update/download page."
-                        },
-                        {
-                                "command": "/plushiedebug",
-                                "description": "Print detailed addon diagnostics to the browser console."
-                        },
-                        {
-                                "command": "/plushiedata",
-                                "description": "Show Git-backed data source/cache status."
-                        },
-                        {
-                                "command": "/plushiedatareload",
-                                "description": "Force-refresh validated data files from GitHub."
-                        }
-                ]
-        }
-];
+    const CURRENT_COMMAND_GROUPS = Object.freeze([
+        Object.freeze({
+            title: "General",
+            commands: Object.freeze([
+                Object.freeze({ command: "/help plushie", description: "Show the complete Subby's Plushies command reference in chat." }),
+                Object.freeze({ command: "/help plushies", description: "Alias for /help plushie." }),
+                Object.freeze({ command: "/plushie", description: "Equip Subby's Plushies in ItemHandheld." }),
+                Object.freeze({ command: "/plushieuse", description: "Open the plushie selector / Use menu." }),
+                Object.freeze({ command: "/plushieaddon", description: "Wear a second Subby's Plushies plushie in ItemAddon (Body slot)." }),
+                Object.freeze({ command: "/plushieremove", description: "Remove the held Subby's Plushies item." }),
+                Object.freeze({ command: "/plushierecover", description: "Run the plush recovery helper." }),
+                Object.freeze({ command: "/plushiefeatures", description: "Show the current feature-toggle status." }),
+            ]),
+        }),
+        Object.freeze({
+            title: "Extensions Tabs",
+            commands: Object.freeze([
+                Object.freeze({ command: "/plushieextensions", description: "Open the Subby's Plushies Extensions control center on Settings." }),
+                Object.freeze({ command: "/plushiestatus", description: "Open the Status tab." }),
+                Object.freeze({ command: "/plushiesettings", description: "Open the Settings tab." }),
+                Object.freeze({ command: "/plushielayout", description: "Open the Layout customization tab." }),
+                Object.freeze({ command: "/plushieplushies", description: "Open the Plushies tab with relationships, favorites, emotes, and saved poses." }),
+                Object.freeze({ command: "/plushiehistory", description: "Open the History tab for mood and plushie battles." }),
+                Object.freeze({ command: "/plushiebackup", description: "Open the Backup / Restore tab." }),
+                Object.freeze({ command: "/plushiecommands", description: "Open the Commands tab directly." }),
+                Object.freeze({ command: "/plushiecommand", description: "Alias for /plushiecommands." }),
+            ]),
+        }),
+        Object.freeze({
+            title: "Positioning & Poses",
+            commands: Object.freeze([
+                Object.freeze({ command: "/plushieposition", description: "Open BC's native Move / Resize editor for the plushie." }),
+                Object.freeze({ command: "/plushiemove", description: "Alias for /plushieposition." }),
+                Object.freeze({ command: "/plushieresize", description: "Alias for /plushieposition." }),
+                Object.freeze({ command: "/plushiehands", description: "Reset the plushie to its default hands position." }),
+                Object.freeze({ command: "/plushiecenter", description: "Alias for /plushiehands." }),
+                Object.freeze({ command: "/plushiedrag [on|off]", description: "Toggle Easy Drag, or explicitly turn it on/off." }),
+                Object.freeze({ command: "/plushiesnap <point>", description: "Snap to hands, chest, face, head, left shoulder, or right shoulder." }),
+                Object.freeze({ command: "/plushiebalance", description: "Open the Balance on Head minigame directly." }),
+                Object.freeze({ command: "/plushieposes", description: "Open the Plushies tab at the saved-pose controls." }),
+                Object.freeze({ command: "/plushieposesave <1|2|3>", description: "Save the current plushie's X/Y position, scale, and rotation to a pose slot." }),
+                Object.freeze({ command: "/plushieposeload <1|2|3>", description: "Apply a saved pose for the held plushie." }),
+                Object.freeze({ command: "/plushieposeclear <1|2|3>", description: "Clear a saved pose slot for the held plushie." }),
+            ]),
+        }),
+        Object.freeze({
+            title: "Mood & Interactions",
+            commands: Object.freeze([
+                Object.freeze({ command: "/plushiemood", description: "Show the held plushie's mood, relationship, and quick info." }),
+                Object.freeze({ command: "/plushieinfo", description: "Alias for /plushiemood." }),
+                Object.freeze({ command: "/plushielore", description: "Open the Lore browser on the held plushie." }),
+                Object.freeze({ command: "/plushiefavorite", description: "Toggle the held plushie as a favorite." }),
+                Object.freeze({ command: "/plushieemote <happy|angry|sleepy|protective|sulky>", description: "Show a 15-second room-synced plushie emote and bubble." }),
+                Object.freeze({ command: "/plushieprotect", description: "Toggle Protect Me mode." }),
+                Object.freeze({ command: "/plushiejealous", description: "Toggle Jealous Plushie mode." }),
+                Object.freeze({ command: "/plushieidle", description: "Toggle idle plushie wiggle animations." }),
+                Object.freeze({ command: "/plushiespeech", description: "Toggle local automatic speech bubbles." }),
+                Object.freeze({ command: "/plushiespeak", description: "Force one local plushie speech bubble." }),
+                Object.freeze({ command: "/plushiebubble", description: "Alias for /plushiespeak." }),
+                Object.freeze({ command: "/plushiepurr", description: "Play the plushie purr sound locally." }),
+                Object.freeze({ command: "/plushieperformance [normal|low]", description: "Show or change the performance mode." }),
+            ]),
+        }),
+        Object.freeze({
+            title: "Room Mascot",
+            commands: Object.freeze([
+                Object.freeze({ command: "/plushiemascot", description: "Show current room mascot information." }),
+                Object.freeze({ command: "/plushiemascot set", description: "Set your held plushie as the shared room mascot (room admin only)." }),
+                Object.freeze({ command: "/plushiemascot random", description: "Pick and publish a random shared room mascot (room admin only)." }),
+                Object.freeze({ command: "/plushiemascot picker", description: "Open the room mascot picker (room admin only; aliases: pick, open, choose)." }),
+                Object.freeze({ command: "/plushiemascot clear", description: "Clear the shared room mascot (room admin only; alias: remove)." }),
+                Object.freeze({ command: "/plushiemascot show", description: "Restore the mascot picture locally (alias: unhide)." }),
+                Object.freeze({ command: "/plushiemascot hide", description: "Hide the mascot picture locally." }),
+                Object.freeze({ command: "/plushiemascotshow", description: "Shortcut for /plushiemascot show." }),
+                Object.freeze({ command: "/plushiemascothide", description: "Shortcut for /plushiemascot hide." }),
+            ]),
+        }),
+        Object.freeze({
+            title: "Battle, Stats & Achievements",
+            commands: Object.freeze([
+                Object.freeze({ command: "/plushiebattle [member/name]", description: "Challenge another player to a plushie battle; with no target, use the focused character when possible." }),
+                Object.freeze({ command: "/plushiestats", description: "Open the detailed Stats tab." }),
+                Object.freeze({ command: "/plushieachievements", description: "Open the detailed Achievements tab." }),
+                Object.freeze({ command: "/plushieach", description: "Short alias for /plushieachievements." }),
+            ]),
+        }),
+        Object.freeze({
+            title: "Backup / Restore",
+            commands: Object.freeze([
+                Object.freeze({ command: "/plushieexport", description: "Export a portable Subby's Plushies JSON backup." }),
+                Object.freeze({ command: "/plushieimport", description: "Choose and restore a Subby's Plushies JSON backup." }),
+            ]),
+        }),
+        Object.freeze({
+            title: "Updates & Diagnostics",
+            commands: Object.freeze([
+                Object.freeze({ command: "/plushieupdate", description: "Check the GitHub version manifest for an update." }),
+                Object.freeze({ command: "/plushieupdateopen", description: "Open the latest update / download page." }),
+                Object.freeze({ command: "/plushiedata", description: "Show Git-backed data source and cache status." }),
+                Object.freeze({ command: "/plushiedatareload", description: "Force-refresh validated data files from GitHub." }),
+                Object.freeze({ command: "/plushiedebug", description: "Print detailed addon diagnostics to the browser console." }),
+            ]),
+        }),
+    ]);
+
+    // Git-backed commands.json may add documentation entries, but the current
+    // executable command list above always remains authoritative for the UI/help.
+    let EXTENSIONS_COMMAND_GROUPS = CURRENT_COMMAND_GROUPS;
+
 
     const SIZE_TOKENS = Object.freeze(["Normal", "Small", "Large", "XLarge"]);
     const assetBaseForGroup = groupName => `Assets/${FAMILY}/${groupName}/${ASSET_NAME}`;
@@ -1013,6 +923,13 @@
     let dragFrameRequest = null;
     let lastDragSnap = null;
     let dragHandlersInstalled = false;
+
+    // Overlay positioning uses authoritative visual bounds instead of trying to
+    // re-derive BC/WCE layer translation math. During Easy Drag we move these
+    // bounds by the exact MainCanvas pointer delta; after release the final
+    // correction is retained for the exact item transform.
+    const directDragOverlayBoundsByGroup = new Map();
+    const directDragOverlayErrorByGroup = new Map();
     let dragToggleButton = null;
     let dragToggleUiTimer = null;
     let dragTogglePositionState = null;
@@ -1035,6 +952,9 @@
     let roomMascotAdminSnapshot = null;
     let roomMascotAdminPendingAction = null;
     let roomMascotDragSession = null;
+    let roomMascotCycleTimer = null;
+    let roomMascotCycleEligibleAt = 0;
+    let roomMascotCyclePendingUntil = 0;
     let queuedRoomMascotPublish = null;
     let queuedRoomMascotPublishTimer = null;
     let lastUpdateInfo = null;
@@ -1045,6 +965,7 @@
     let activeIdleAnimationSession = null;
     let speechBubbleElement = null;
     let speechBubbleTimer = null;
+    let speechBubbleGroupName = null;
     let plushStatusIconElement = null;
     let plushStatusIconTimer = null;
     let localOverlayRepositionFrame = null;
@@ -1055,8 +976,19 @@
     const addonPresenceMembers = new Map();
     let lastAddonPresenceBroadcastAt = 0;
     const petSuitRenderStates = new Map();
+    const manualPlushMainBounds = new Map();
     const canvasOverlayImageCache = new Map();
     const lastCharacterChatRoomDraw = new Map();
+    const exactCharacterCanvasProjection = new Map();
+
+    // Tracks the plushie's REAL canvas rectangle as BC/WCE render it.
+    // This deliberately does not reconstruct LayerTranslation math.
+    const plushImageRenderMeta = new WeakMap();
+    const trackedPlushCanvasMarks = new WeakMap();
+    let plushCanvasTrackingInstalled = false;
+    let activeDrawCharacter = null;
+    let activeDrawCharacterKey = null;
+
     let backupImportInput = null;
     let lastPlayerChatRoomDraw = null;
     let plushSearchInput = null;
@@ -1155,6 +1087,7 @@
                 name: MOD_NAME,
                 fullName: DISPLAY_NAME,
                 version: VERSION,
+                repository: "https://github.com/marvelous-bc/subby-plushies",
             });
             hookBackend = "SDK";
         } catch (e) {
@@ -1224,6 +1157,7 @@
             protectMe: storedBoolean("protectMe"),
             jealousPlushie: storedBoolean("jealousPlushie"),
             showRoomMascot: storedBoolean("showRoomMascot"),
+            hourlyMascotCycle: storedBoolean("hourlyMascotCycle"),
             autoUpdateChecks: storedBoolean("autoUpdateChecks"),
             idleAnimations: storedBoolean("idleAnimations"),
             speechBubbles: storedBoolean("speechBubbles"),
@@ -1246,6 +1180,10 @@
         if (key === "showDragButton") {
             if (settings[key]) refreshDragToggleButton();
             else removeDragToggleButton();
+        }
+        if (key === "hourlyMascotCycle") {
+            if (settings[key]) startRoomMascotCycleMonitor();
+            else stopRoomMascotCycleMonitor();
         }
         return settings[key];
     }
@@ -1288,6 +1226,10 @@
                 () => checkRoomRosterChange(isLowCpuMode() ? "120-second watchdog" : "60-second watchdog"),
                 performanceInterval(ROOM_ROSTER_WATCHDOG_INTERVAL_MS, ROOM_ROSTER_WATCHDOG_INTERVAL_MS * 3)
             );
+        }
+        if (roomMascotCycleTimer != null) {
+            stopRoomMascotCycleMonitor();
+            if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
         }
         return true;
     }
@@ -2037,6 +1979,14 @@
         return MOOD_LABELS.at?.(-1)?.label || "Adoring";
     }
 
+    function isPlushNameEquippedLocally(name) {
+        const wanted = normalizeLoreLookupKey(name);
+        if (!wanted) return false;
+        return getEquippedPlushItems(window.Player).some(item =>
+            normalizeLoreLookupKey(plushNameForItem(item)) === wanted
+        );
+    }
+
     function getPlushMoodRecord(name = currentPlushName()) {
         const store = getMoodStore();
         const now = Date.now();
@@ -2053,14 +2003,27 @@
         if (!Number.isFinite(Number(record.decayBaseScore))) record.decayBaseScore = record.score;
         record.decayBaseScore = clampMood(record.decayBaseScore);
         const last = Number(record.updatedAt) || now;
+
+        // Equipped plushies are protected from affection decay. Touch the decay
+        // clock occasionally so a held plush never accumulates a hidden 8-hour loss.
+        if (isPlushNameEquippedLocally(name)) {
+            if (now - last >= MOOD_HELD_CLOCK_WRITE_MS) {
+                record.updatedAt = now;
+                store[name] = record;
+                writeLocalJSON(MOOD_STORAGE_KEY, store);
+            }
+            return record;
+        }
+
         const steps = Math.floor(Math.max(0, now - last) / MOOD_DRIFT_EVERY_MS);
         if (steps > 0) {
             const beforeScore = record.score;
-            const decayFloor = Math.max(MOOD_DRIFT_TARGET, record.decayBaseScore - MOOD_MAX_IDLE_DECAY_LOSS);
-            if (record.score > decayFloor) {
-                record.score = clampMood(Math.max(decayFloor, record.score - steps * MOOD_DRIFT_STEP));
+            if (record.score > MOOD_DRIFT_TARGET) {
+                record.score = clampMood(Math.max(MOOD_DRIFT_TARGET, record.score - steps * MOOD_DRIFT_STEP));
             }
-            record.updatedAt = now;
+            // Preserve the partial remainder so decay is exactly once per 8-hour block.
+            record.updatedAt = last + steps * MOOD_DRIFT_EVERY_MS;
+            store[name] = record;
             writeLocalJSON(MOOD_STORAGE_KEY, store);
             const appliedDelta = record.score - beforeScore;
             if (appliedDelta) {
@@ -2072,21 +2035,32 @@
         return record;
     }
 
+    function roomMascotAffectionModifier(name, delta, reason = "interaction") {
+        if (!(Number(delta) > 0)) return 0;
+        if (String(reason || "").toLowerCase() === "room mascot") return 0;
+        const mascotName = String(roomMascotState?.name || "");
+        if (!mascotName || normalizeLoreLookupKey(mascotName) !== normalizeLoreLookupKey(name)) return 0;
+        const shared = Number(roomMascotState?.affectionModifier);
+        return Number.isFinite(shared) ? shared : ROOM_MASCOT_AFFECTION_MODIFIER;
+    }
+
     function adjustCurrentPlushMood(delta, reason = "interaction") {
         if (!Number.isFinite(delta) || delta === 0) return getPlushMoodRecord();
         const name = currentPlushName();
         const store = getMoodStore();
         const record = getPlushMoodRecord(name);
-        record.score = clampMood(record.score + delta);
+        const mascotModifier = roomMascotAffectionModifier(name, delta, reason);
+        const effectiveDelta = delta + mascotModifier;
+        record.score = clampMood(record.score + effectiveDelta);
         record.interactions = Math.max(0, Math.floor(Number(record.interactions) || 0)) + 1;
         record.decayBaseScore = record.score;
         record.updatedAt = Date.now();
         store[name] = record;
         writeLocalJSON(MOOD_STORAGE_KEY, store);
-        const historyEntry = recordMoodHistory(name, delta, reason, record.score);
-        lastMoodChange = { name, delta, reason, score: record.score, at: new Date().toISOString() };
+        const historyEntry = recordMoodHistory(name, effectiveDelta, reason, record.score);
+        lastMoodChange = { name, delta: effectiveDelta, baseDelta: delta, mascotModifier, reason, score: record.score, at: new Date().toISOString() };
         refreshPlushStatusIcon();
-        emitPluginApiEvent("mood", { plushName: name, delta, reason: moodReasonLabel(reason), score: record.score, historyEntry });
+        emitPluginApiEvent("mood", { plushName: name, delta: effectiveDelta, baseDelta: delta, mascotModifier, reason: moodReasonLabel(reason), score: record.score, historyEntry });
         return record;
     }
 
@@ -2246,6 +2220,7 @@
         speechBubbleTimer = null;
         try { speechBubbleElement?.remove?.(); } catch (_) {}
         speechBubbleElement = null;
+        speechBubbleGroupName = null;
         localOverlayPositionSignature = null;
     }
 
@@ -2292,6 +2267,203 @@
         };
     }
 
+    function characterProjectionKey(C) {
+        const member = Number(C?.MemberNumber);
+        if (Number.isFinite(member)) return `member:${member}`;
+        if (C === window.Player) return "player";
+        return `character:${String(C?.ID ?? C?.Name ?? "unknown")}`;
+    }
+
+    function matrixSnapshotFromContext(ctx) {
+        if (!ctx || typeof ctx.getTransform !== "function") return null;
+        try {
+            const matrix = ctx.getTransform();
+            const values = [matrix?.a, matrix?.b, matrix?.c, matrix?.d, matrix?.e, matrix?.f].map(Number);
+            if (!values.every(Number.isFinite)) return null;
+            return { a: values[0], b: values[1], c: values[2], d: values[3], e: values[4], f: values[5] };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function normalizeDrawImageProjection(source, args, matrix) {
+        const sourceWidth = Number(source?.width ?? source?.naturalWidth);
+        const sourceHeight = Number(source?.height ?? source?.naturalHeight);
+        if (!Number.isFinite(sourceWidth) || sourceWidth <= 0 || !Number.isFinite(sourceHeight) || sourceHeight <= 0) return null;
+
+        let sx = 0, sy = 0, sw = sourceWidth, sh = sourceHeight;
+        let dx, dy, dw, dh;
+
+        if (args.length === 3) {
+            dx = Number(args[1]);
+            dy = Number(args[2]);
+            dw = sourceWidth;
+            dh = sourceHeight;
+        } else if (args.length === 5) {
+            dx = Number(args[1]);
+            dy = Number(args[2]);
+            dw = Number(args[3]);
+            dh = Number(args[4]);
+        } else if (args.length >= 9) {
+            sx = Number(args[1]);
+            sy = Number(args[2]);
+            sw = Number(args[3]);
+            sh = Number(args[4]);
+            dx = Number(args[5]);
+            dy = Number(args[6]);
+            dw = Number(args[7]);
+            dh = Number(args[8]);
+        } else {
+            return null;
+        }
+
+        if (![sx, sy, sw, sh, dx, dy, dw, dh].every(Number.isFinite) || sw === 0 || sh === 0) return null;
+
+        return {
+            source,
+            sourceWidth,
+            sourceHeight,
+            sx, sy, sw, sh,
+            dx, dy, dw, dh,
+            matrix,
+            at: Date.now(),
+        };
+    }
+
+    function characterCanvasCandidateScore(C, source, projection) {
+        if (!source || !projection) return -Infinity;
+        let score = 0;
+
+        const direct = [
+            C?.Canvas,
+            C?.CanvasBlink,
+            C?.CanvasTemp,
+            C?.CanvasStatic,
+        ].filter(Boolean);
+        if (direct.includes(source)) score += 1000;
+
+        const width = projection.sourceWidth;
+        const height = projection.sourceHeight;
+        if (width >= 450 && width <= 600) score += 120;
+        if (height >= 900) score += 120;
+
+        const destArea = Math.abs(projection.dw * projection.dh);
+        if (destArea > 100000) score += Math.min(100, destArea / 10000);
+
+        return score;
+    }
+
+    function captureExactCharacterProjection(C, next) {
+        const ctx = window.MainCanvas;
+        if (!C || !ctx || typeof ctx.drawImage !== "function" || typeof next !== "function") return next();
+
+        const original = ctx.drawImage;
+        let best = null;
+        let bestScore = -Infinity;
+        let wrapped = false;
+
+        try {
+            ctx.drawImage = function (...drawArgs) {
+                try {
+                    const source = drawArgs[0];
+                    const projection = normalizeDrawImageProjection(source, drawArgs, matrixSnapshotFromContext(ctx));
+                    const score = characterCanvasCandidateScore(C, source, projection);
+                    if (projection && score > bestScore) {
+                        best = projection;
+                        bestScore = score;
+                    }
+                } catch (_) {}
+                return original.apply(this, drawArgs);
+            };
+            wrapped = ctx.drawImage !== original;
+        } catch (_) {}
+
+        let result;
+        try {
+            result = next();
+        } finally {
+            if (wrapped) {
+                try { ctx.drawImage = original; } catch (_) {}
+            }
+        }
+
+        if (best && bestScore >= 100) {
+            exactCharacterCanvasProjection.set(characterProjectionKey(C), best);
+        }
+        return result;
+    }
+
+    function characterCanvasUpperOverflow(projection) {
+        const height = Number(projection?.sourceHeight) || 0;
+        if (height <= 1050) return 0;
+
+        try {
+            if (typeof CanvasUpperOverflow === "number" && Number.isFinite(CanvasUpperOverflow)) {
+                return Number(CanvasUpperOverflow);
+            }
+        } catch (_) {}
+
+        // BC's expanded character canvas historically reserves 150px below the
+        // normal 1000px character space; infer the upper overflow from the source.
+        const inferred = height - 1000 - 150;
+        return inferred > 0 && inferred < 1200 ? inferred : 600;
+    }
+
+    function exactCharacterPointToMainCanvas(C, characterX, characterY) {
+        const projection = exactCharacterCanvasProjection.get(characterProjectionKey(C));
+        if (!projection) return null;
+
+        const x = Number(characterX);
+        const y = Number(characterY);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+
+        // Character asset coordinates use (0,0) at the normal character's top-left.
+        // Expanded BC character canvases store that at +CanvasUpperOverflow.
+        const sourceX = x;
+        const sourceY = y + characterCanvasUpperOverflow(projection);
+
+        const unitX = (sourceX - projection.sx) / projection.sw;
+        const unitY = (sourceY - projection.sy) / projection.sh;
+        const destX = projection.dx + unitX * projection.dw;
+        const destY = projection.dy + unitY * projection.dh;
+
+        const matrix = projection.matrix;
+        if (!matrix) return { x: destX, y: destY };
+        return {
+            x: matrix.a * destX + matrix.c * destY + matrix.e,
+            y: matrix.b * destX + matrix.d * destY + matrix.f,
+        };
+    }
+
+    function exactMainCanvasPointToCharacter(C, mainX, mainY) {
+        const projection = exactCharacterCanvasProjection.get(characterProjectionKey(C));
+        if (!projection) return null;
+
+        let x = Number(mainX);
+        let y = Number(mainY);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+
+        const matrix = projection.matrix;
+        if (matrix) {
+            const det = matrix.a * matrix.d - matrix.b * matrix.c;
+            if (!Number.isFinite(det) || Math.abs(det) < 1e-8) return null;
+            const px = x - matrix.e;
+            const py = y - matrix.f;
+            x = (matrix.d * px - matrix.c * py) / det;
+            y = (-matrix.b * px + matrix.a * py) / det;
+        }
+
+        const unitX = (x - projection.dx) / projection.dw;
+        const unitY = (y - projection.dy) / projection.dh;
+        const sourceX = projection.sx + unitX * projection.sw;
+        const sourceY = projection.sy + unitY * projection.sh;
+
+        return {
+            x: sourceX,
+            y: sourceY - characterCanvasUpperOverflow(projection),
+        };
+    }
+
     function characterDrawMetrics(C, draw) {
         if (!draw || !Number.isFinite(draw.x) || !Number.isFinite(draw.y) || !Number.isFinite(draw.zoom)) return null;
         let heightRatio = Number(C?.HeightRatio);
@@ -2323,6 +2495,9 @@
     }
 
     function characterPointToMainCanvas(C, characterX, characterY) {
+        const exact = exactCharacterPointToMainCanvas(C, characterX, characterY);
+        if (exact) return exact;
+
         const draw = characterChatRoomDraw(C);
         let mainX = Number(characterX);
         let mainY = Number(characterY);
@@ -2360,6 +2535,10 @@
         const logicalHeight = Number(canvas.height) || 1000;
         const mainX = (event.clientX - rect.left) * logicalWidth / rect.width;
         const mainY = (event.clientY - rect.top) * logicalHeight / rect.height;
+
+        const exact = exactMainCanvasPointToCharacter(C, mainX, mainY);
+        if (exact) return { canvas, x: exact.x, y: exact.y, mainX, mainY };
+
         const draw = characterChatRoomDraw(C);
         const untransformed = invertDrawMatrix(draw, mainX, mainY);
         if (!untransformed) return null;
@@ -2388,6 +2567,7 @@
 
     function clearPetSuitPlushOverlays() {
         petSuitRenderStates.clear();
+        manualPlushMainBounds.clear();
     }
 
     function schedulePetSuitNativeRestore(C, key) {
@@ -2453,6 +2633,16 @@
         let image = canvasOverlayImageCache.get(source);
         if (!image) {
             image = new Image();
+            const option = renderImages.findIndex(value => value === source);
+            if (option >= 0) {
+                try {
+                    plushImageRenderMeta.set(image, {
+                        groupName: GROUP,
+                        option,
+                        source: "canvas-overlay",
+                    });
+                } catch (_) {}
+            }
             canvasOverlayImageCache.set(source, image);
             image.src = source;
         }
@@ -2483,15 +2673,33 @@
         const scaleY = Number(transform.ScaleY) || 1;
         const halfWidth = PLUSH_RENDER.Width * Math.max(0.05, Math.abs(scaleX)) / 2;
         const halfHeight = PLUSH_RENDER.Height * Math.max(0.05, Math.abs(scaleY)) / 2;
-        const centerX = PLUSH_RENDER.Left + PLUSH_RENDER.Width / 2 + (Number(transform.TranslationX) || 0);
-        const centerY = PLUSH_RENDER.Top + PLUSH_RENDER.Height / 2 + (Number(transform.TranslationY) || 0);
+        const centerX = PLUSH_RENDER.Left + PLUSH_RENDER.Width / 2;
+        const centerY = PLUSH_RENDER.Top + PLUSH_RENDER.Height / 2;
         const rotation = (Number(transform.Rotation) || 0) * Math.PI / 180;
         const center = characterPointToMainCanvas(C, centerX, centerY);
         const xPoint = characterPointToMainCanvas(C, centerX + Math.cos(rotation) * halfWidth, centerY + Math.sin(rotation) * halfWidth);
         const yPoint = characterPointToMainCanvas(C, centerX - Math.sin(rotation) * halfHeight, centerY + Math.cos(rotation) * halfHeight);
-        if (!center || !xPoint || !yPoint) return false;
+        const translation = layerTranslationMainCanvasDelta(
+            C,
+            centerX,
+            centerY,
+            Number(transform.TranslationX) || 0,
+            Number(transform.TranslationY) || 0
+        );
+        if (!center || !xPoint || !yPoint || !translation) return false;
+        center.x += translation.x;
+        center.y += translation.y;
+        xPoint.x += translation.x;
+        xPoint.y += translation.y;
+        yPoint.x += translation.x;
+        yPoint.y += translation.y;
         const xVec = { x: xPoint.x - center.x, y: xPoint.y - center.y };
         const yVec = { x: yPoint.x - center.x, y: yPoint.y - center.y };
+
+        // These are the exact same vectors used to paint the visible fallback.
+        // Reuse them for bubbles/status instead of calculating another position.
+        storeManualPlushMainBounds(C, item, center, xVec, yVec);
+
         const width = Math.max(8, Math.hypot(xVec.x, xVec.y) * 2);
         const height = Math.max(8, Math.hypot(yVec.x, yVec.y) * 2);
         const angle = Math.atan2(xVec.y, xVec.x);
@@ -2542,24 +2750,392 @@
         ].join("|");
     }
 
+    function mainCanvasCssScale() {
+        const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
+        const rect = canvas?.getBoundingClientRect?.();
+        if (!canvas || !rect || rect.width <= 0 || rect.height <= 0) return null;
+        const logicalWidth = Number(canvas.width) || 2000;
+        const logicalHeight = Number(canvas.height) || 1000;
+        return {
+            canvas,
+            rect,
+            logicalWidth,
+            logicalHeight,
+            cssPerMainX: rect.width / logicalWidth,
+            cssPerMainY: rect.height / logicalHeight,
+        };
+    }
+
+    function cloneBounds(bounds) {
+        if (!bounds) return null;
+        const points = Array.isArray(bounds.points)
+            ? bounds.points.map(point => ({ x: Number(point.x), y: Number(point.y) }))
+            : [
+                { x: Number(bounds.left), y: Number(bounds.top) },
+                { x: Number(bounds.right), y: Number(bounds.top) },
+                { x: Number(bounds.right), y: Number(bounds.bottom) },
+                { x: Number(bounds.left), y: Number(bounds.bottom) },
+            ];
+        return boundsFromCanvasPoints(points);
+    }
+
+    function screenBoundsToMainBounds(bounds) {
+        const scale = mainCanvasCssScale();
+        if (!bounds || !scale) return null;
+        const points = (Array.isArray(bounds.points) && bounds.points.length
+            ? bounds.points
+            : [
+                { x: bounds.left, y: bounds.top },
+                { x: bounds.right, y: bounds.top },
+                { x: bounds.right, y: bounds.bottom },
+                { x: bounds.left, y: bounds.bottom },
+            ]).map(point => ({
+                x: (Number(point.x) - scale.rect.left) / scale.cssPerMainX,
+                y: (Number(point.y) - scale.rect.top) / scale.cssPerMainY,
+            }));
+        return boundsFromCanvasPoints(points);
+    }
+
+    function mainBoundsToScreenBounds(bounds) {
+        const scale = mainCanvasCssScale();
+        if (!bounds || !scale) return null;
+        const points = (Array.isArray(bounds.points) && bounds.points.length
+            ? bounds.points
+            : [
+                { x: bounds.left, y: bounds.top },
+                { x: bounds.right, y: bounds.top },
+                { x: bounds.right, y: bounds.bottom },
+                { x: bounds.left, y: bounds.bottom },
+            ]).map(point => ({
+                x: scale.rect.left + Number(point.x) * scale.cssPerMainX,
+                y: scale.rect.top + Number(point.y) * scale.cssPerMainY,
+            }));
+        return boundsFromCanvasPoints(points);
+    }
+
+    function translateMainBounds(bounds, dx, dy) {
+        if (!bounds) return null;
+        const x = Number(dx) || 0;
+        const y = Number(dy) || 0;
+        const points = (Array.isArray(bounds.points) && bounds.points.length
+            ? bounds.points
+            : [
+                { x: bounds.left, y: bounds.top },
+                { x: bounds.right, y: bounds.top },
+                { x: bounds.right, y: bounds.bottom },
+                { x: bounds.left, y: bounds.bottom },
+            ]).map(point => ({ x: Number(point.x) + x, y: Number(point.y) + y }));
+        return boundsFromCanvasPoints(points);
+    }
+
+    function overlayBoundsKey(C, item) {
+        const group = item?.Asset?.Group?.Name || GROUP;
+        return `${characterProjectionKey(C)}|${group}`;
+    }
+
+    function storeManualPlushMainBounds(C, item, center, xVec, yVec) {
+        if (!C || !isOurs(item) || !center || !xVec || !yVec) return false;
+        const points = [
+            { x: center.x - xVec.x - yVec.x, y: center.y - xVec.y - yVec.y },
+            { x: center.x + xVec.x - yVec.x, y: center.y + xVec.y - yVec.y },
+            { x: center.x + xVec.x + yVec.x, y: center.y + xVec.y + yVec.y },
+            { x: center.x - xVec.x + yVec.x, y: center.y - xVec.y + yVec.y },
+        ];
+        const bounds = boundsFromCanvasPoints(points);
+        if (!bounds) return false;
+        manualPlushMainBounds.set(overlayBoundsKey(C, item), {
+            bounds,
+            transformSignature: plushTransformSignature(item),
+            at: Date.now(),
+        });
+        return true;
+    }
+
+    function manualPlushScreenBounds(C, item) {
+        if (!C || !isOurs(item)) return null;
+        const entry = manualPlushMainBounds.get(overlayBoundsKey(C, item));
+        if (!entry || Date.now() - Number(entry.at || 0) > 1500) return null;
+        if (entry.transformSignature !== plushTransformSignature(item)) return null;
+        return mainBoundsToScreenBounds(entry.bounds);
+    }
+
+    function dragOverlayBoundsForItem(C, item) {
+        if (!C || !isOurs(item) || C !== window.Player) return null;
+        const groupName = item?.Asset?.Group?.Name || GROUP;
+
+        if (dragSession?.groupName === groupName && dragSession.overlayCurrentMainBounds) {
+            return mainBoundsToScreenBounds(dragSession.overlayCurrentMainBounds);
+        }
+
+        const entry = directDragOverlayBoundsByGroup.get(groupName);
+        if (!entry || entry.transformSignature !== plushTransformSignature(item)) return null;
+
+        // Rebase the saved correction on the current character placement. This
+        // keeps it usable after responsive-room/WCE redraws.
+        const calculated = calculatedPlushScreenBounds(C, item);
+        const calculatedMain = screenBoundsToMainBounds(calculated);
+        if (!calculatedMain) return mainBoundsToScreenBounds(entry.bounds);
+
+        const currentDraw = characterChatRoomDraw(C);
+        const currentZoom = Number(currentDraw?.zoom);
+        const storedZoom = Number(entry.drawZoom);
+        const zoomRatio = Number.isFinite(currentZoom) && currentZoom > 0 &&
+            Number.isFinite(storedZoom) && storedZoom > 0
+            ? currentZoom / storedZoom
+            : 1;
+
+        return mainBoundsToScreenBounds(translateMainBounds(
+            calculatedMain,
+            Number(entry.correctionX || 0) * zoomRatio,
+            Number(entry.correctionY || 0) * zoomRatio
+        ));
+    }
+
+    function applyLearnedOverlayError(C, item, calculatedBounds) {
+        if (!C || C !== window.Player || !isOurs(item) || !calculatedBounds) return calculatedBounds;
+        const groupName = item?.Asset?.Group?.Name || GROUP;
+        const learned = directDragOverlayErrorByGroup.get(groupName);
+        const transform = readActivePlushLayerTransform(item);
+        if (!learned || !transform) return calculatedBounds;
+
+        const tx = Number(transform.TranslationX) || 0;
+        const ty = Number(transform.TranslationY) || 0;
+        let dx = 0;
+        let dy = 0;
+        if (Number.isFinite(learned.errorPerTranslationX)) dx += tx * learned.errorPerTranslationX;
+        if (Number.isFinite(learned.errorPerTranslationY)) dy += ty * learned.errorPerTranslationY;
+
+        if (!dx && !dy) return calculatedBounds;
+        const main = screenBoundsToMainBounds(calculatedBounds);
+        if (!main) return calculatedBounds;
+        return mainBoundsToScreenBounds(translateMainBounds(main, dx, dy)) || calculatedBounds;
+    }
+
+    function commitDirectDragOverlayBounds(session, item) {
+        if (!session || !isOurs(item) || !session.overlayCurrentMainBounds) return false;
+        const groupName = session.groupName;
+        const calculated = calculatedPlushScreenBounds(window.Player, item);
+        const calculatedMain = screenBoundsToMainBounds(calculated);
+        const direct = cloneBounds(session.overlayCurrentMainBounds);
+        if (!calculatedMain || !direct) return false;
+
+        const correctionX = direct.centerX - calculatedMain.centerX;
+        const correctionY = direct.centerY - calculatedMain.centerY;
+        const draw = characterChatRoomDraw(window.Player);
+        const transform = readActivePlushLayerTransform(item);
+
+        directDragOverlayBoundsByGroup.set(groupName, {
+            bounds: direct,
+            correctionX,
+            correctionY,
+            transformSignature: plushTransformSignature(item),
+            drawZoom: Number(draw?.zoom) || 1,
+            at: Date.now(),
+        });
+
+        // Learn only the residual of the fallback projection. Native Layering
+        // changes after an Easy Drag can then reuse this empirical correction.
+        if (transform) {
+            const previous = directDragOverlayErrorByGroup.get(groupName) || {};
+            const next = { ...previous };
+            const tx = Number(transform.TranslationX) || 0;
+            const ty = Number(transform.TranslationY) || 0;
+            if (Math.abs(tx) >= 8 && Math.abs(correctionX) >= 0.5) {
+                next.errorPerTranslationX = correctionX / tx;
+            }
+            if (Math.abs(ty) >= 8 && Math.abs(correctionY) >= 0.5) {
+                next.errorPerTranslationY = correctionY / ty;
+            }
+            next.at = Date.now();
+            directDragOverlayErrorByGroup.set(groupName, next);
+        }
+        return true;
+    }
+
+    function layerTranslationHeightRatio(C) {
+        const ratio = Number(C?.HeightRatio);
+        return Number.isFinite(ratio) && ratio > 0.01 ? ratio : 1;
+    }
+
+    function layerTranslationMainCanvasDelta(C, originX, originY, translationX, translationY) {
+        const origin = characterPointToMainCanvas(C, originX, originY);
+        const unitX = characterPointToMainCanvas(C, originX + 1, originY);
+        const unitY = characterPointToMainCanvas(C, originX, originY + 1);
+        if (!origin || !unitX || !unitY) return null;
+
+        // R132 LayerTranslationX/Y are applied after the character-height scale.
+        // Normal character-point projection includes HeightRatio, so remove that
+        // factor from the translation basis only.
+        const ratio = layerTranslationHeightRatio(C);
+        const tx = Number(translationX) || 0;
+        const ty = Number(translationY) || 0;
+        return {
+            x: ((unitX.x - origin.x) * tx + (unitY.x - origin.x) * ty) / ratio,
+            y: ((unitX.y - origin.y) * tx + (unitY.y - origin.y) * ty) / ratio,
+        };
+    }
+
+    function layerTranslationScreenDelta(C, originX, originY, translationX, translationY) {
+        const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
+        const rect = canvas?.getBoundingClientRect?.();
+        if (!canvas || !rect || rect.width <= 0 || rect.height <= 0) return null;
+
+        const delta = layerTranslationMainCanvasDelta(C, originX, originY, translationX, translationY);
+        if (!delta) return null;
+
+        const logicalWidth = Number(canvas.width) || 2000;
+        const logicalHeight = Number(canvas.height) || 1000;
+        return {
+            x: delta.x * rect.width / logicalWidth,
+            y: delta.y * rect.height / logicalHeight,
+        };
+    }
+
+    function calculatedPlushScreenBounds(C, item) {
+        if (!C || !isOurs(item)) return null;
+        const transform = readActivePlushLayerTransform(item);
+        if (!transform) return null;
+
+        const scaleX = Math.max(0.05, Math.abs(Number(transform.ScaleX) || 1));
+        const scaleY = Math.max(0.05, Math.abs(Number(transform.ScaleY) || 1));
+        const halfWidth = PLUSH_RENDER.Width * scaleX / 2;
+        const halfHeight = PLUSH_RENDER.Height * scaleY / 2;
+
+        // Project the un-translated layer through the normal character pipeline.
+        // LayerTranslation is added separately because BC applies it after
+        // HeightRatio scaling.
+        const baseCenterX = PLUSH_RENDER.Left + PLUSH_RENDER.Width / 2;
+        const baseCenterY = PLUSH_RENDER.Top + PLUSH_RENDER.Height / 2;
+        const radians = (Number(transform.Rotation) || 0) * Math.PI / 180;
+        const cos = Math.cos(radians);
+        const sin = Math.sin(radians);
+
+        const translation = layerTranslationScreenDelta(
+            C,
+            baseCenterX,
+            baseCenterY,
+            Number(transform.TranslationX) || 0,
+            Number(transform.TranslationY) || 0
+        );
+        if (!translation) return null;
+
+        const localCorners = [
+            [-halfWidth, -halfHeight],
+            [halfWidth, -halfHeight],
+            [halfWidth, halfHeight],
+            [-halfWidth, halfHeight],
+        ];
+
+        const points = [];
+        for (const [localX, localY] of localCorners) {
+            const characterX = baseCenterX + localX * cos - localY * sin;
+            const characterY = baseCenterY + localX * sin + localY * cos;
+            const point = characterPointToScreen(C, characterX, characterY);
+            if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+            points.push({
+                x: point.x + translation.x,
+                y: point.y + translation.y,
+            });
+        }
+
+        const xs = points.map(point => point.x);
+        const ys = points.map(point => point.y);
+        const left = Math.min(...xs);
+        const right = Math.max(...xs);
+        const top = Math.min(...ys);
+        const bottom = Math.max(...ys);
+
+        return {
+            left,
+            right,
+            top,
+            bottom,
+            width: Math.max(0, right - left),
+            height: Math.max(0, bottom - top),
+            centerX: (left + right) / 2,
+            centerY: (top + bottom) / 2,
+            points,
+        };
+    }
+
+    function plushScreenBounds(C, item) {
+        if (!C || !isOurs(item)) return null;
+
+        const groupName = item?.Asset?.Group?.Name || GROUP;
+
+        // While Easy Drag is active, move the overlay by exactly the same
+        // MainCanvas pointer delta as the drag gesture.
+        if (C === window.Player &&
+            dragSession?.groupName === groupName &&
+            dragSession.overlayCurrentMainBounds) {
+            const activeDragBounds = mainBoundsToScreenBounds(dragSession.overlayCurrentMainBounds);
+            if (activeDragBounds) return activeDragBounds;
+        }
+
+        // If a pet suit / arm restraint forces our manual visible-plush render,
+        // use that exact drawn rectangle.
+        const manual = manualPlushScreenBounds(C, item);
+        if (manual) return manual;
+
+        // Preserve the exact final correction from Easy Drag after release.
+        const direct = dragOverlayBoundsForItem(C, item);
+        if (direct) return direct;
+
+        // Native projection is now only a fallback.
+        const calculated = calculatedPlushScreenBounds(C, item);
+        return applyLearnedOverlayError(C, item, calculated);
+    }
+
+    function speechBubbleTargetItem() {
+        if (dragSession?.groupName) {
+            const dragged = getInventoryItem(window.Player, dragSession.groupName);
+            if (isOurs(dragged)) return dragged;
+        }
+
+        if (speechBubbleGroupName) {
+            const owned = getInventoryItem(window.Player, speechBubbleGroupName);
+            if (isOurs(owned)) return owned;
+        }
+
+        const selected = getDragTargetItem();
+        if (isOurs(selected)) return selected;
+
+        return getHeld(window.Player);
+    }
+
+    function statusOverlayTargetItem() {
+        if (dragSession?.groupName) {
+            const dragged = getInventoryItem(window.Player, dragSession.groupName);
+            if (isOurs(dragged)) return dragged;
+        }
+
+        const selected = getDragTargetItem();
+        if (isOurs(selected)) return selected;
+
+        return getHeld(window.Player);
+    }
+
     function positionSpeechBubble() {
         if (!speechBubbleElement?.isConnected) return false;
-        const item = getHeld(window.Player);
-        const bounds = currentPlushCanvasBounds(item);
+        const item = speechBubbleTargetItem();
+        const bounds = plushScreenBounds(window.Player, item);
         if (!bounds) return false;
 
-        const visualTop = Number.isFinite(bounds.visualTop) ? bounds.visualTop : bounds.top + 12;
-        const screen = playerCharacterPointToScreen(bounds.centerX, visualTop - 8);
-        if (!screen) return false;
-        speechBubbleElement.style.left = `${Math.round(screen.x)}px`;
-        speechBubbleElement.style.top = `${Math.round(screen.y + SPEECH_BUBBLE_Y_OFFSET_CSS_PX - 5)}px`;
+        speechBubbleElement.style.left = `${Math.round(bounds.centerX)}px`;
+        speechBubbleElement.style.top = `${Math.round(bounds.top + SPEECH_BUBBLE_Y_OFFSET_CSS_PX - 5)}px`;
         return true;
     }
 
     function showSpeechBubble(text = null, { force = false, durationMs = SPEECH_BUBBLE_DURATION_MS } = {}) {
         if (!force && !getFeatureSettings().speechBubbles) return false;
-        if (!isOurs(getHeld(window.Player)) || window.CurrentScreen !== "ChatRoom") return false;
+        const bubbleItem = dragSession?.groupName
+            ? getInventoryItem(window.Player, dragSession.groupName)
+            : (isOurs(getDragTargetItem()) ? getDragTargetItem() : getHeld(window.Player));
+        if (!isOurs(bubbleItem) || window.CurrentScreen !== "ChatRoom") return false;
         removeSpeechBubble();
+        speechBubbleGroupName = PLUSH_GROUPS.includes(bubbleItem?.Asset?.Group?.Name)
+            ? bubbleItem.Asset.Group.Name
+            : GROUP;
         const bubble = document.createElement("div");
         bubble.className = "SubbysPlushiesSpeechBubble";
         bubble.textContent = String(text || randomPlushSpeech()).slice(0, 90);
@@ -2573,18 +3149,21 @@
         document.body.appendChild(bubble);
         speechBubbleElement = bubble;
         positionSpeechBubble();
-        recordStat("speech", 1, { plushName: currentPlushName() });
+        recordStat("speech", 1, { plushName: plushNameForItem(bubbleItem) });
         speechBubbleTimer = window.setTimeout(removeSpeechBubble, Math.max(250, Number(durationMs) || SPEECH_BUBBLE_DURATION_MS));
         return true;
     }
 
-    function plushStatusDescriptor() {
+    function plushStatusDescriptor(item = statusOverlayTargetItem()) {
         const now = Date.now();
         if (manualPlushEmote && Number(manualPlushEmote.until) > now) return manualPlushEmote;
         if (manualPlushEmote && Number(manualPlushEmote.until) <= now) manualPlushEmote = null;
         if (activeProtectSession) return { type: "protective", symbol: "!", color: "#FFD166" };
-        if (isPlushSleepy()) return { type: "sleepy", symbol: "zZ", color: "#D8C8FF" };
-        const score = getPlushMoodRecord().score;
+
+        const plushName = isOurs(item) ? plushNameForItem(item) : currentPlushName();
+        if (isPlushSleepy(plushName)) return { type: "sleepy", symbol: "zZ", color: "#D8C8FF" };
+
+        const score = getPlushMoodRecord(plushName).score;
         if (score <= 38) return { type: "sulky", symbol: "…", color: "#C8B9C8" };
         if (score >= 66) return { type: "happy", symbol: "♥", color: "#FF8FC7" };
         return null;
@@ -2598,15 +3177,11 @@
 
     function positionPlushStatusIcon() {
         if (!plushStatusIconElement?.isConnected) return false;
-        const item = getHeld(window.Player);
-        const bounds = currentPlushCanvasBounds(item);
+        const item = statusOverlayTargetItem();
+        const bounds = plushScreenBounds(window.Player, item);
         if (!bounds) return false;
-        const anchorX = Number.isFinite(bounds.visualRight) ? bounds.visualRight + 3 : bounds.right;
-        const anchorY = Number.isFinite(bounds.visualTop) ? bounds.visualTop + 10 : bounds.top + 10;
-        const screen = playerCharacterPointToScreen(anchorX, anchorY);
-        if (!screen) return false;
-        plushStatusIconElement.style.left = `${Math.round(screen.x)}px`;
-        plushStatusIconElement.style.top = `${Math.round(screen.y)}px`;
+        plushStatusIconElement.style.left = `${Math.round(bounds.right + 3)}px`;
+        plushStatusIconElement.style.top = `${Math.round(bounds.top + 10)}px`;
         return true;
     }
 
@@ -2617,17 +3192,18 @@
             if (speechBubbleElement?.isConnected) positionSpeechBubble();
             if (plushStatusIconElement?.isConnected) positionPlushStatusIcon();
             if (dragToggleButton?.isConnected) refreshDragToggleButton();
-            const item = getHeld(window.Player);
+            const item = statusOverlayTargetItem();
             if (isOurs(item)) localOverlayPositionSignature = plushOverlayPositionSignature(window.Player, item);
         });
     }
 
     function refreshPlushStatusIcon() {
-        if (window.CurrentScreen !== "ChatRoom" || !isOurs(getHeld(window.Player))) {
+        const targetItem = statusOverlayTargetItem();
+        if (window.CurrentScreen !== "ChatRoom" || !isOurs(targetItem)) {
             removePlushStatusIcon();
             return false;
         }
-        const descriptor = plushStatusDescriptor();
+        const descriptor = plushStatusDescriptor(targetItem);
         if (!descriptor?.symbol) {
             removePlushStatusIcon();
             return false;
@@ -2728,6 +3304,11 @@
         for (const member of [...remotePlushEmotes.keys()]) removeRemotePlushEmote(member);
         clearPetSuitPlushOverlays();
         lastCharacterChatRoomDraw.clear();
+        exactCharacterCanvasProjection.clear();
+        try {
+            const mainCanvas = window.MainCanvas?.canvas || document.getElementById("MainCanvas");
+            if (mainCanvas) trackedPlushCanvasMarks.delete(mainCanvas);
+        } catch (_) {}
     }
 
     function positionRemotePlushEmote(memberNumber) {
@@ -2923,11 +3504,16 @@
         const session = activeIdleAnimationSession;
         activeIdleAnimationSession = null;
         if (session) {
-            const current = getHeld(window.Player);
-            if (isOurs(current) && getActivePlushLayerName(current) === session.layerName) {
-                setPlushLayerTransform(current, session.layerName, session.base);
-                rebuildCharacterCanvas(window.Player, "idle animation cancel");
+            const entries = Array.isArray(session.entries)
+                ? session.entries
+                : [{ groupName: GROUP, layerName: session.layerName, base: session.base }];
+            let changed = false;
+            for (const entry of entries) {
+                const current = getInventoryItem(window.Player, entry.groupName || GROUP);
+                if (!isOurs(current) || getActivePlushLayerName(current) !== entry.layerName || !entry.base) continue;
+                if (setPlushLayerTransform(current, entry.layerName, entry.base)) changed = true;
             }
+            if (changed) rebuildCharacterCanvas(window.Player, "idle animation cancel");
         }
         if (reschedule && getFeatureSettings().idleAnimations) scheduleNextIdleAnimation();
         return true;
@@ -2935,14 +3521,24 @@
 
     function runIdleAnimation() {
         const settings = getFeatureSettings();
-        const item = getHeld(window.Player);
-        if (!settings.idleAnimations || isLowCpuMode() || !isOurs(item) || window.CurrentScreen !== "ChatRoom" || dragSession || nativeLayeringVisible() ||
-            activeBalanceHeadSession || activeHideBehindSession || activeProtectSession || activeIdleAnimationSession || isPlushSleepy()) return false;
-        const layerName = getActivePlushLayerName(item);
-        const base = readActivePlushLayerTransform(item);
-        if (!layerName || !base) return false;
+        if (!settings.idleAnimations || isLowCpuMode() || window.CurrentScreen !== "ChatRoom" || dragSession || nativeLayeringVisible() || activeIdleAnimationSession) return false;
+
+        const temporaryHandPose = !!(activeBalanceHeadSession || activeHideBehindSession || activeProtectSession);
+        const entries = [];
+        for (const item of getEquippedPlushItems(window.Player)) {
+            const groupName = item?.Asset?.Group?.Name || GROUP;
+            if (temporaryHandPose && groupName === GROUP) continue;
+            const plushName = plushNameForItem(item);
+            if (isPlushSleepy(plushName)) continue;
+            const layerName = getActivePlushLayerName(item);
+            const base = readActivePlushLayerTransform(item);
+            if (!layerName || !base) continue;
+            entries.push({ groupName, layerName, plushName, base: { ...base } });
+        }
+        if (!entries.length) return false;
+
         const generation = ++idleAnimationGeneration;
-        activeIdleAnimationSession = { generation, layerName, base: { ...base } };
+        activeIdleAnimationSession = { generation, entries };
         const direction = Math.random() < 0.5 ? -1 : 1;
         const frames = IDLE_ANIMATION_FRAMES.map(frame => ({
             delay: frame.delayMs,
@@ -2950,23 +3546,35 @@
             rot: frame.rotationMultiplier * direction,
             restore: !!frame.restore,
         }));
+
         for (const frame of frames) {
             window.setTimeout(() => {
                 const session = activeIdleAnimationSession;
                 if (!session || session.generation !== generation) return;
-                const current = getHeld(window.Player);
-                if (!isOurs(current) || getActivePlushLayerName(current) !== layerName) return;
-                setPlushLayerTransform(current, layerName, {
-                    TranslationY: base.TranslationY + frame.dy,
-                    Rotation: base.Rotation + frame.rot,
-                });
-                rebuildCharacterCanvas(window.Player, "idle plush animation");
-                scheduleLocalOverlayReposition();
+                let changed = false;
+
+                for (const entry of session.entries) {
+                    const current = getInventoryItem(window.Player, entry.groupName);
+                    if (!isOurs(current) || getActivePlushLayerName(current) !== entry.layerName) continue;
+                    const nextTransform = frame.restore
+                        ? entry.base
+                        : {
+                            ...entry.base,
+                            TranslationY: entry.base.TranslationY + frame.dy,
+                            Rotation: entry.base.Rotation + frame.rot,
+                        };
+                    if (setPlushLayerTransform(current, entry.layerName, nextTransform)) changed = true;
+                }
+
+                if (changed) {
+                    rebuildCharacterCanvas(window.Player, frame.restore ? "idle plush animation restore" : "idle plush animation");
+                    scheduleLocalOverlayReposition();
+                }
+
                 if (frame.restore) {
-                    setPlushLayerTransform(current, layerName, base);
+                    const finished = session.entries.slice();
                     activeIdleAnimationSession = null;
-                    rebuildCharacterCanvas(window.Player, "idle plush animation restore");
-                    recordStat("idle", 1, { plushName: currentPlushName() });
+                    for (const entry of finished) recordStat("idle", 1, { plushName: entry.plushName });
                     if (settings.speechBubbles && Math.random() < SPEECH_IDLE_CHANCE) showSpeechBubble();
                 }
             }, frame.delay);
@@ -2991,7 +3599,9 @@
         const lore = getPlushLore(name) || { title: "Plushie", text: "Lore is not available yet. The addon will use the validated Git copy when it is online or cached." };
         const mood = getPlushMoodRecord(name);
         const relationship = relationshipStatus(name);
-        const mascot = roomMascotState?.name ? `Room mascot: ${roomMascotState.name}` : "Room mascot: none";
+        const mascot = roomMascotState?.name
+            ? `Room mascot: ${roomMascotState.name}${normalizeLoreLookupKey(roomMascotState.name) === normalizeLoreLookupKey(name) ? ` • +${ROOM_MASCOT_AFFECTION_MODIFIER} affection modifier` : ""}`
+            : "Room mascot: none";
         appendLocalInfoBox(`${name} — ${lore.title}`, [
             lore.text,
             `Mood: ${moodLabel(mood.score)} (${mood.score}/100) • interactions: ${mood.interactions}`,
@@ -3966,9 +4576,19 @@
         }
 
         if (fileName === "protect.json") {
-            const keywords = gitDataStringArray(payload.keywords, PROTECT_KEYWORDS, 100, 40).map(value => value.toLowerCase());
-            const verbs = gitDataStringArray(payload.renderVerbs, keywords, 100, 40).map(value => value.toLowerCase());
-            const jealous = gitDataStringArray(payload.jealousActivityKeywords, JEALOUS_ACTIVITY_KEYWORDS, 100, 40).map(value => value.toLowerCase());
+            const keywords = gitDataStringArray(payload.keywords, PROTECT_KEYWORDS, 100, 40)
+                .map(value => value.toLowerCase())
+                .filter(value => !/^pokes?$/.test(value));
+            for (const required of ["boop", "bap"]) if (!keywords.includes(required)) keywords.push(required);
+
+            const verbs = gitDataStringArray(payload.renderVerbs, keywords, 100, 40)
+                .map(value => value.toLowerCase())
+                .filter(value => !/^pokes?$/.test(value));
+            for (const required of ["boop", "bap"]) if (!verbs.includes(required)) verbs.push(required);
+
+            const jealous = gitDataStringArray(payload.jealousActivityKeywords, JEALOUS_ACTIVITY_KEYWORDS, 100, 40)
+                .map(value => value.toLowerCase());
+            if (!jealous.includes("poke")) jealous.push("poke");
             const transform = gitDataPlainObject(payload.transform) ? Object.freeze({
                 TranslationX: gitDataFinite(payload.transform.TranslationX, PROTECT_TRANSFORM.TranslationX, -1000, 1000),
                 TranslationY: gitDataFinite(payload.transform.TranslationY, PROTECT_TRANSFORM.TranslationY, -1000, 1000),
@@ -4026,9 +4646,9 @@
             MOOD_DEFAULT_SCORE = normalized.defaultScore;
             MOOD_MIN_SCORE = normalized.minimumScore;
             MOOD_MAX_SCORE = normalized.maximumScore;
-            MOOD_DRIFT_TARGET = 29;
+            MOOD_DRIFT_TARGET = 0;
             MOOD_DRIFT_STEP = 1;
-            MOOD_DRIFT_EVERY_MS = 15 * 60 * 1000;
+            MOOD_DRIFT_EVERY_MS = 8 * 60 * 60 * 1000;
             MOOD_LABELS = normalized.labels;
             MOOD_DELTAS = normalized.deltas;
         } else if (fileName === "achievements.json") {
@@ -4412,11 +5032,15 @@
         const known = PLUSH_NAMES.find(entry => String(entry || "").toLowerCase() === name.trim().toLowerCase());
         if (!known) return null;
         const member = Number(raw?.memberNumber);
+        const nextCycleAt = Number(raw?.nextCycleAt);
+        const affectionModifier = Number(raw?.affectionModifier);
         return {
             name: known,
             setBy: typeof raw?.setBy === "string" && raw.setBy.trim() ? raw.setBy.trim() : "room admin",
             memberNumber: Number.isFinite(member) ? member : null,
             at: typeof raw?.at === "string" ? raw.at : null,
+            nextCycleAt: Number.isFinite(nextCycleAt) ? nextCycleAt : null,
+            affectionModifier: Number.isFinite(affectionModifier) ? affectionModifier : ROOM_MASCOT_AFFECTION_MODIFIER,
             shared: true,
         };
     }
@@ -4494,6 +5118,8 @@
                 setBy: state.setBy || getCharacterDisplayName(window.Player) || "room admin",
                 memberNumber: Number(window.Player?.MemberNumber) || null,
                 at: state.at || new Date().toISOString(),
+                nextCycleAt: Number.isFinite(Number(state.nextCycleAt)) ? Number(state.nextCycleAt) : Date.now() + ROOM_MASCOT_CYCLE_MS,
+                affectionModifier: Number.isFinite(Number(state.affectionModifier)) ? Number(state.affectionModifier) : ROOM_MASCOT_AFFECTION_MODIFIER,
             };
         } else {
             delete currentCustom[ROOM_MASCOT_CUSTOM_KEY];
@@ -4551,6 +5177,73 @@
         if (window.CurrentScreen === "ChatAdmin") return true;
         if (roomMascotMapPublishUnsafe()) return queueRoomMascotSharedState(state);
         return publishRoomMascotSharedStateNow(state);
+    }
+
+    function roomMascotCycleAdminMembers() {
+        pruneAddonPresence();
+        const admins = new Set(roomAdminMembers());
+        const members = new Set();
+        const playerMember = Number(window.Player?.MemberNumber);
+        if (Number.isFinite(playerMember) && admins.has(playerMember)) members.add(playerMember);
+        for (const C of Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : []) {
+            const member = Number(C?.MemberNumber);
+            if (!Number.isFinite(member) || !admins.has(member) || !characterHasAddonPresence(C)) continue;
+            members.add(member);
+        }
+        return [...members].sort((a, b) => a - b);
+    }
+
+    function playerIsRoomMascotCycleLeader() {
+        if (!canSetRoomMascot()) return false;
+        const playerMember = Number(window.Player?.MemberNumber);
+        if (!Number.isFinite(playerMember)) return false;
+        const candidates = roomMascotCycleAdminMembers();
+        return candidates.length > 0 && candidates[0] === playerMember;
+    }
+
+    function roomMascotCycleDueAt(state = roomMascotState) {
+        const explicit = Number(state?.nextCycleAt);
+        if (Number.isFinite(explicit) && explicit > 0) return explicit;
+        const setAt = Date.parse(String(state?.at || ""));
+        return Number.isFinite(setAt) ? setAt + ROOM_MASCOT_CYCLE_MS : 0;
+    }
+
+    function maybeCycleRoomMascotHourly() {
+        if (!getFeatureSettings().hourlyMascotCycle || window.CurrentScreen !== "ChatRoom") return false;
+        const now = Date.now();
+        if (now < roomMascotCycleEligibleAt || now < roomMascotCyclePendingUntil) return false;
+        if (!playerIsRoomMascotCycleLeader()) return false;
+
+        const shared = roomMascotFromSharedRoomData();
+        if (shared) roomMascotState = shared;
+        const dueAt = roomMascotCycleDueAt(shared || roomMascotState);
+        if (dueAt > now) return false;
+
+        roomMascotCyclePendingUntil = now + 12000;
+        return pickRandomRoomMascot({
+            hourlyCycle: true,
+            excludeName: roomMascotState?.name || null,
+            nextCycleAt: now + ROOM_MASCOT_CYCLE_MS,
+        });
+    }
+
+    function stopRoomMascotCycleMonitor() {
+        if (roomMascotCycleTimer != null) window.clearInterval(roomMascotCycleTimer);
+        roomMascotCycleTimer = null;
+        roomMascotCyclePendingUntil = 0;
+        return true;
+    }
+
+    function startRoomMascotCycleMonitor() {
+        if (!getFeatureSettings().hourlyMascotCycle) return false;
+        if (roomMascotCycleTimer != null) return true;
+        roomMascotCycleEligibleAt = Date.now() + ROOM_MASCOT_CYCLE_SETTLE_MS;
+        roomMascotCycleTimer = window.setInterval(
+            maybeCycleRoomMascotHourly,
+            performanceInterval(ROOM_MASCOT_CYCLE_CHECK_MS, ROOM_MASCOT_CYCLE_CHECK_MS * 3)
+        );
+        window.setTimeout(maybeCycleRoomMascotHourly, ROOM_MASCOT_CYCLE_SETTLE_MS + 250);
+        return true;
     }
 
     function mascotRenderIndex(name) {
@@ -4759,27 +5452,41 @@
             return false;
         }
         const randomPick = !!options?.randomPick;
+        const hourlyCycle = !!options?.hourlyCycle;
+        const nextCycleAt = Number(options?.nextCycleAt);
         const source = getCharacterDisplayName(window.Player) || "Someone";
         if (window.CurrentScreen === "ChatAdmin" && !roomMascotAdminDirty) {
             roomMascotAdminSnapshot = roomMascotFromSharedRoomData();
         }
-        roomMascotState = { name: known, setBy: source, memberNumber: Number(window.Player?.MemberNumber) || null, at: new Date().toISOString(), shared: true };
+        roomMascotState = {
+            name: known,
+            setBy: source,
+            memberNumber: Number(window.Player?.MemberNumber) || null,
+            at: new Date().toISOString(),
+            nextCycleAt: Number.isFinite(nextCycleAt) ? nextCycleAt : Date.now() + ROOM_MASCOT_CYCLE_MS,
+            affectionModifier: ROOM_MASCOT_AFFECTION_MODIFIER,
+            shared: true,
+        };
         cacheRoomMascotState(roomMascotState);
         refreshRoomMascotOverlay();
         if (window.CurrentScreen === "ChatAdmin") {
             roomMascotAdminDirty = true;
-            roomMascotAdminPendingAction = { type: "set", source, name: known, randomPick };
+            roomMascotAdminPendingAction = { type: "set", source, name: known, randomPick, hourlyCycle };
             appendLocalInfoBox("Room mascot", [
-                randomPick
-                    ? `${known} was chosen randomly. Use the room Save button to publish it.`
-                    : `${known} selected. Use the room Save button to publish it.`,
+                hourlyCycle
+                    ? `${known} was chosen by the hourly mascot cycle. Use the room Save button to publish it.`
+                    : (randomPick
+                        ? `${known} was chosen randomly. Use the room Save button to publish it.`
+                        : `${known} selected. Use the room Save button to publish it.`),
             ]);
             return true;
         }
         const persisted = publishRoomMascotSharedState(roomMascotState);
-        sendStandaloneActionMessage(randomPick
-            ? `${known} was chosen randomly as the room mascot plushie.`
-            : `${source} sets ${known} as the room mascot plushie.`);
+        sendStandaloneActionMessage(hourlyCycle
+            ? `${known} was chosen randomly as the room mascot plushie by the hourly cycle.`
+            : (randomPick
+                ? `${known} was chosen randomly as the room mascot plushie.`
+                : `${source} sets ${known} as the room mascot plushie.`));
         if (!persisted) appendLocalInfoBox("Room mascot", ["Mascot was set locally, but the shared room-state update could not be sent."]);
         recordStat("mascot", 1, { plushName: known });
         return true;
@@ -4792,7 +5499,7 @@
         return setRoomMascotByName(PLUSH_NAMES[wire], options);
     }
 
-    function pickRandomRoomMascot() {
+    function pickRandomRoomMascot(options = null) {
         if (!canSetRoomMascot()) {
             appendLocalInfoBox("Room mascot", ["Only a verified room admin can set the shared mascot."]);
             return false;
@@ -4804,12 +5511,20 @@
             const name = PLUSH_NAMES[wire];
             if (name) available.push({ option, name });
         }
-        if (!available.length) {
+        const exclude = normalizeLoreLookupKey(options?.excludeName);
+        const choices = exclude && available.length > 1
+            ? available.filter(entry => normalizeLoreLookupKey(entry.name) !== exclude)
+            : available;
+        if (!choices.length) {
             appendLocalInfoBox("Room mascot", ["No plushies are available to choose from."]);
             return false;
         }
-        const selected = available[Math.floor(Math.random() * available.length)];
-        return setRoomMascotByOption(selected.option, { randomPick: true });
+        const selected = choices[Math.floor(Math.random() * choices.length)];
+        return setRoomMascotByOption(selected.option, {
+            randomPick: true,
+            hourlyCycle: !!options?.hourlyCycle,
+            nextCycleAt: Number(options?.nextCycleAt),
+        });
     }
 
     function closeRoomMascotPicker() {
@@ -5046,6 +5761,8 @@
                 setBy: getCharacterDisplayName(sender) || "room admin",
                 memberNumber: senderMember,
                 at: new Date().toISOString(),
+                nextCycleAt: Date.now() + ROOM_MASCOT_CYCLE_MS,
+                affectionModifier: ROOM_MASCOT_AFFECTION_MODIFIER,
                 shared: true,
             };
             cacheRoomMascotState(roomMascotState);
@@ -5056,7 +5773,15 @@
         if (!set) return false;
         const renderedName = String(set[2] || "").trim();
         const known = PLUSH_NAMES.find(name => name.toLowerCase() === renderedName.toLowerCase()) || renderedName;
-        roomMascotState = { name: known, setBy: String(set[1] || "Someone").trim(), memberNumber: senderMember, at: new Date().toISOString(), shared: true };
+        roomMascotState = {
+            name: known,
+            setBy: String(set[1] || "Someone").trim(),
+            memberNumber: senderMember,
+            at: new Date().toISOString(),
+            nextCycleAt: Date.now() + ROOM_MASCOT_CYCLE_MS,
+            affectionModifier: ROOM_MASCOT_AFFECTION_MODIFIER,
+            shared: true,
+        };
         cacheRoomMascotState(roomMascotState);
         refreshRoomMascotOverlay();
         return true;
@@ -5067,8 +5792,13 @@
             appendLocalInfoBox("Room mascot", ["No shared mascot is currently stored for this room."]);
             return null;
         }
+        const dueAt = roomMascotCycleDueAt(roomMascotState);
         appendLocalInfoBox("Room mascot", [
             `${roomMascotState.name} • set by ${roomMascotState.setBy || "room admin"}${roomMascotState.cached ? " • cached" : ""}`,
+            `Mascot affection modifier: +${Number(roomMascotState.affectionModifier ?? ROOM_MASCOT_AFFECTION_MODIFIER) || 0}`,
+            getFeatureSettings().hourlyMascotCycle && dueAt
+                ? `Next hourly cycle: ${new Date(dueAt).toLocaleTimeString()}`
+                : `Hourly mascot cycle: ${getFeatureSettings().hourlyMascotCycle ? "waiting for an addon room admin" : "off"}`,
             `Picture: ${getFeatureSettings().showRoomMascot ? "visible" : "hidden locally"}`,
         ]);
         return { ...roomMascotState };
@@ -5149,7 +5879,8 @@
         if (activeBalanceHeadSession) restoreActiveBalanceHead("manual snap");
         if (activeHideBehindSession) restoreActiveHideBehind("manual snap");
         if (activeProtectSession) restoreActiveProtect("manual snap");
-        setPlushLayerTransform(item, layerName, { TranslationX: snap.TranslationX, TranslationY: snap.TranslationY });
+        const currentTransform = readActivePlushLayerTransform(item) || { ...DEFAULT_TRANSFORM };
+        setPlushLayerTransform(item, layerName, { ...currentTransform, TranslationX: snap.TranslationX, TranslationY: snap.TranslationY });
         compactPlushLayerTransformsToActive(item, readActivePlushLayerTransform(item));
         rememberCharacterPlushState(window.Player, item);
         rebuildCharacterCanvas(window.Player, `snap ${snap.name}`);
@@ -5200,6 +5931,13 @@
         if (dragSession) finishDirectDrag(true);
         dragTargetGroupState = normalized;
         writeLocalJSON(DRAG_TARGET_GROUP_STORAGE_KEY, { group: normalized });
+
+        if (speechBubbleElement?.isConnected) {
+            speechBubbleGroupName = normalized;
+            positionSpeechBubble();
+        }
+        if (plushStatusIconElement?.isConnected) positionPlushStatusIcon();
+
         refreshDragToggleButton();
         renderDragUi();
         return true;
@@ -5255,6 +5993,19 @@
         }, { active: dragModeEnabled });
         mode.style.width = "100%";
 
+        const dragButtonVisible = !!getFeatureSettings().showDragButton;
+        const addDragButton = makeExtensionsButton(
+            dragButtonVisible ? "Hide Drag Button" : "Show Drag Button",
+            () => {
+                setFeatureSetting("showDragButton", !getFeatureSettings().showDragButton);
+                refreshDragToggleButton();
+                renderDragUi();
+            },
+            { active: dragButtonVisible }
+        );
+        addDragButton.style.width = "100%";
+        addDragButton.style.marginTop = "8px";
+
         const status = document.createElement("div");
         const targetItem = getDragTargetItem();
         status.textContent = isOurs(targetItem)
@@ -5262,7 +6013,7 @@
             : "Equip a handheld or Body-slot plushie to use Easy Drag.";
         Object.assign(status.style, { color: style.muted, fontSize: "12px", marginTop: "9px", lineHeight: "1.35" });
 
-        dragUiElement.append(header, hint, targetTitle, targets, mode, status);
+        dragUiElement.append(header, hint, targetTitle, targets, mode, addDragButton, status);
         return true;
     }
 
@@ -5301,18 +6052,29 @@
         if (!isOurs(current) || getActivePlushLayerName(current) !== session.layerName) return;
         const dx = point.x - session.startX;
         const dy = point.y - session.startY;
+        const layerRatio = layerTranslationHeightRatio(window.Player);
         setPlushLayerTransform(current, session.layerName, {
-            TranslationX: session.base.TranslationX + dx,
-            TranslationY: session.base.TranslationY + dy,
+            ...session.base,
+            TranslationX: session.base.TranslationX + dx * layerRatio,
+            TranslationY: session.base.TranslationY + dy * layerRatio,
         });
+
+        if (session.overlayStartMainBounds &&
+            Number.isFinite(point.mainX) && Number.isFinite(point.mainY)) {
+            session.overlayCurrentMainBounds = translateMainBounds(
+                session.overlayStartMainBounds,
+                point.mainX - session.startMainX,
+                point.mainY - session.startMainY
+            );
+        }
+
         rebuildCharacterCanvas(window.Player, "direct plush drag");
-        if (speechBubbleElement) positionSpeechBubble();
+        scheduleLocalOverlayReposition();
         session.lastPoint = point;
     }
 
     function finishDirectDrag(cancelled = false) {
         const session = dragSession;
-        dragSession = null;
         if (dragFrameRequest != null) {
             cancelAnimationFrame(dragFrameRequest);
             dragFrameRequest = null;
@@ -5320,21 +6082,58 @@
         if (!session) return false;
 
         const current = getInventoryItem(window.Player, session.groupName);
-        if (!isOurs(current) || getActivePlushLayerName(current) !== session.layerName) return false;
+        if (!isOurs(current) || getActivePlushLayerName(current) !== session.layerName) {
+            dragSession = null;
+            return false;
+        }
+
         if (cancelled) {
-            setPlushLayerTransform(current, session.layerName, {
-                TranslationX: session.base.TranslationX,
-                TranslationY: session.base.TranslationY,
-            });
+            setPlushLayerTransform(current, session.layerName, { ...session.base });
+            session.overlayCurrentMainBounds = cloneBounds(session.overlayStartMainBounds);
         } else {
-            const transform = readActivePlushLayerTransform(current);
-            const nearest = transform ? nearestPlushSnap(transform) : null;
+            const beforeSnap = readActivePlushLayerTransform(current);
+            const nearest = beforeSnap ? nearestPlushSnap(beforeSnap) : null;
+
             if (nearest) {
                 setPlushLayerTransform(current, session.layerName, {
+                    ...beforeSnap,
                     TranslationX: nearest.snap.TranslationX,
                     TranslationY: nearest.snap.TranslationY,
                 });
-                lastDragSnap = { name: nearest.snap.name, distance: nearest.distance, at: new Date().toISOString() };
+
+                // Keep the small snap adjustment in the same empirically observed
+                // movement space as the drag itself.
+                const finalTransform = readActivePlushLayerTransform(current);
+                const last = session.lastPoint;
+                if (session.overlayCurrentMainBounds && beforeSnap && finalTransform && last) {
+                    let snapMainX = 0;
+                    let snapMainY = 0;
+                    const observedTX = Number(beforeSnap.TranslationX) - Number(session.base.TranslationX);
+                    const observedTY = Number(beforeSnap.TranslationY) - Number(session.base.TranslationY);
+                    const observedMainX = Number(last.mainX) - Number(session.startMainX);
+                    const observedMainY = Number(last.mainY) - Number(session.startMainY);
+
+                    if (Math.abs(observedTX) >= 1 && Number.isFinite(observedMainX)) {
+                        snapMainX = (Number(finalTransform.TranslationX) - Number(beforeSnap.TranslationX)) *
+                            (observedMainX / observedTX);
+                    }
+                    if (Math.abs(observedTY) >= 1 && Number.isFinite(observedMainY)) {
+                        snapMainY = (Number(finalTransform.TranslationY) - Number(beforeSnap.TranslationY)) *
+                            (observedMainY / observedTY);
+                    }
+
+                    session.overlayCurrentMainBounds = translateMainBounds(
+                        session.overlayCurrentMainBounds,
+                        snapMainX,
+                        snapMainY
+                    );
+                }
+
+                lastDragSnap = {
+                    name: nearest.snap.name,
+                    distance: nearest.distance,
+                    at: new Date().toISOString(),
+                };
             } else {
                 lastDragSnap = { name: null, at: new Date().toISOString() };
             }
@@ -5343,7 +6142,26 @@
         compactPlushLayerTransformsToActive(current, readActivePlushLayerTransform(current));
         resetGenericNativeTransform(current);
         rememberCharacterPlushState(window.Player, current);
-        rebuildCharacterCanvas(window.Player, cancelled ? "direct plush drag cancel" : "direct plush drag commit");
+
+        if (!cancelled) commitDirectDragOverlayBounds(session, current);
+        else directDragOverlayBoundsByGroup.delete(session.groupName);
+
+        // Keep the active drag geometry available until the final correction is
+        // committed, then clear the session.
+        dragSession = null;
+
+        rebuildCharacterCanvas(
+            window.Player,
+            cancelled ? "direct plush drag cancel" : "direct plush drag commit"
+        );
+
+        if (speechBubbleElement?.isConnected) {
+            speechBubbleGroupName = session.groupName;
+            positionSpeechBubble();
+        }
+        if (plushStatusIconElement?.isConnected) positionPlushStatusIcon();
+        scheduleLocalOverlayReposition();
+
         if (!cancelled && typeof ChatRoomCharacterUpdate === "function") {
             try { ChatRoomCharacterUpdate(window.Player); } catch (_) {}
         }
@@ -5511,6 +6329,9 @@
             const base = readActivePlushLayerTransform(item);
             if (!layerName || !base) return;
 
+            const overlayStartScreenBounds = plushScreenBounds(window.Player, item);
+            const overlayStartMainBounds = screenBoundsToMainBounds(overlayStartScreenBounds);
+
             dragSession = {
                 pointerId: event.pointerId,
                 groupName,
@@ -5518,8 +6339,13 @@
                 base: { ...base },
                 startX: point.x,
                 startY: point.y,
+                startMainX: point.mainX,
+                startMainY: point.mainY,
+                overlayStartMainBounds,
+                overlayCurrentMainBounds: cloneBounds(overlayStartMainBounds),
                 lastPoint: point,
             };
+            if (speechBubbleElement?.isConnected) speechBubbleGroupName = groupName;
             try { point.canvas.setPointerCapture?.(event.pointerId); } catch (_) {}
             event.preventDefault();
             event.stopPropagation();
@@ -5577,6 +6403,7 @@
         const unlocked = Object.keys(getStatsStore().achievements || {}).length;
         return {
             version: VERSION,
+            buildDate: BUILD_DATE,
             state: failed ? "FAILED" : (ready ? "Ready" : "Loading"),
             hookBackend,
             held: ours ? currentPlushName() : "Not holding a Subby's Plushies plushie",
@@ -5590,6 +6417,7 @@
             easyDragTarget: dragTargetLabel(getDragTargetGroup()),
             mascotPicture: settings.showRoomMascot,
             mascot: roomMascotState?.name || "None announced in this room",
+            hourlyMascotCycle: settings.hourlyMascotCycle,
             idleAnimations: settings.idleAnimations,
             speechBubbles: settings.speechBubbles,
             autoUpdateChecks: settings.autoUpdateChecks,
@@ -5864,6 +6692,7 @@
         const status = extensionsStatusSnapshot();
         const section = makeExtensionsSection("Addon status");
         appendExtensionsKeyValue(section, "Version", status.version);
+        appendExtensionsKeyValue(section, "Build date", status.buildDate);
         appendExtensionsKeyValue(section, "State", status.state);
         appendExtensionsKeyValue(section, "Held plushie", status.held);
         appendExtensionsKeyValue(section, "Current mood", status.mood);
@@ -5882,6 +6711,7 @@
         appendExtensionsKeyValue(enabled, "Easy Drag", status.easyDrag ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Easy Drag target", status.easyDragTarget);
         appendExtensionsKeyValue(enabled, "Mascot picture", status.mascotPicture ? "Visible" : "Hidden");
+        appendExtensionsKeyValue(enabled, "Hourly mascot cycle", status.hourlyMascotCycle ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Idle animations", status.idleAnimations ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Speech bubbles", status.speechBubbles ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Automatic update checks", status.autoUpdateChecks ? "ON" : "Off");
@@ -5908,6 +6738,7 @@
             extensionsSettingRow("Easy Drag", "Drag anywhere on the character side to reposition the held plushie.", dragModeEnabled, () => toggleDragMode()),
             extensionsSettingRow("Hide Plushie Drag Button", "Hide the movable mouse button without disabling Easy Drag itself.", !settings.showDragButton, () => setFeatureSetting("showDragButton", !getFeatureSettings().showDragButton)),
             extensionsSettingRow("Room Mascot Picture", "Show the room mascot picture locally in the chat area.", settings.showRoomMascot, () => setRoomMascotOverlayVisible(!getFeatureSettings().showRoomMascot)),
+            extensionsSettingRow("Hourly Mascot Cycle", "Once per hour, one elected addon room admin picks the next random mascot for everyone.", settings.hourlyMascotCycle, () => toggleFeatureSetting("hourlyMascotCycle")),
             extensionsSettingRow("Idle Animation", "Occasional lightweight local plush wiggles.", settings.idleAnimations, () => toggleFeatureSetting("idleAnimations")),
             extensionsSettingRow("Speech Bubbles", "Allow local mood-based plush speech bubbles.", settings.speechBubbles, () => toggleFeatureSetting("speechBubbles")),
             extensionsSettingRow("Automatic Update Checks", "Check the repository manifest at most once per day.", settings.autoUpdateChecks, () => toggleFeatureSetting("autoUpdateChecks"))
@@ -6424,50 +7255,40 @@
     }
 
     function commandGroupsForDisplay() {
-        const groups = (Array.isArray(EXTENSIONS_COMMAND_GROUPS) ? EXTENSIONS_COMMAND_GROUPS : []).map(group => ({
-            title: group?.title || "Commands",
-            commands: Array.isArray(group?.commands) ? [...group.commands] : [],
-        }));
-        const required = [
-            ["General", [
-                { command: "/help plushie", description: "Show the full Subby's Plushies command reference in chat." },
-                { command: "/plushiebalance", description: "Open the Balance on Head minigame directly." },
-                { command: "/plushieaddon", description: "Wear Subby's Plushies in ItemAddon (the same Body slot as Ceiling Rope)." },
-            ]],
-            ["Plushies & Relationships", [
-                { command: "/plushieplushies", description: "Open the Plushies tab with relationship, favorites, emotes, and saved poses." },
-                { command: "/plushiefavorite", description: "Toggle the held plushie as a favorite." },
-                { command: "/plushieemote happy|angry|sleepy|protective|sulky", description: "Show a 15-second room-synced plushie emote and mood symbol." },
-                { command: "/plushieposes", description: "Open the Plushies tab at the saved-pose controls." },
-                { command: "/plushieposesave <1|2|3>", description: "Save the held plushie's current position, scale, and rotation to a pose slot." },
-                { command: "/plushieposeload <1|2|3>", description: "Apply a saved pose for the held plushie." },
-                { command: "/plushieposeclear <1|2|3>", description: "Clear a saved pose slot for the held plushie." },
-            ]],
-            ["Room Mascot", [
-                { command: "/plushiemascot picker", description: "Open the room mascot picker (room admin only)." },
-            ]],
-            ["History & Performance", [
-                { command: "/plushiehistory", description: "Open mood and battle history." },
-                { command: "/plushieperformance normal|low", description: "Switch between Normal and Low CPU performance modes." },
-            ]],
-            ["Backup / Restore", [
-                { command: "/plushiebackup", description: "Open the Backup / Restore tab." },
-                { command: "/plushieexport", description: "Export a portable Subby's Plushies JSON backup." },
-                { command: "/plushieimport", description: "Choose and restore a Subby's Plushies JSON backup." },
-            ]],
-        ];
-        const existing = new Set();
+        const cloneGroups = source => (Array.isArray(source) ? source : []).map(group => ({
+            title: String(group?.title || "Commands"),
+            commands: (Array.isArray(group?.commands) ? group.commands : [])
+                .map(entry => ({
+                    command: String(Array.isArray(entry) ? entry[0] : entry?.command || "").trim(),
+                    description: String(Array.isArray(entry) ? entry[1] : entry?.description || "").trim(),
+                }))
+                .filter(entry => entry.command.startsWith("/") && entry.description),
+        })).filter(group => group.commands.length);
+
+        const groups = cloneGroups(CURRENT_COMMAND_GROUPS);
+        const documentedBases = new Set();
+        const commandBase = command => String(command || "").trim().toLowerCase().split(/\s+/)[0];
         for (const group of groups) for (const entry of group.commands) {
-            const command = Array.isArray(entry) ? entry[0] : entry?.command;
-            if (command) existing.add(String(command).split(/\s+/)[0].toLowerCase());
+            const base = commandBase(entry.command);
+            if (base) documentedBases.add(base);
         }
-        for (const [title, entries] of required) {
-            const missing = entries.filter(entry => !existing.has(entry.command.split(/\s+/)[0].toLowerCase()));
-            if (!missing.length) continue;
-            let target = groups.find(group => group.title === title);
-            if (!target) { target = { title, commands: [] }; groups.push(target); }
-            target.commands.push(...missing);
-            for (const entry of missing) existing.add(entry.command.split(/\s+/)[0].toLowerCase());
+
+        // commands.json is allowed to contribute documentation for genuinely new
+        // command bases, but it cannot replace or duplicate this build's commands.
+        for (const externalGroup of cloneGroups(EXTENSIONS_COMMAND_GROUPS)) {
+            const additions = externalGroup.commands.filter(entry => {
+                const base = commandBase(entry.command);
+                if (!base || documentedBases.has(base)) return false;
+                documentedBases.add(base);
+                return true;
+            });
+            if (!additions.length) continue;
+            let target = groups.find(group => group.title === externalGroup.title);
+            if (!target) {
+                target = { title: externalGroup.title, commands: [] };
+                groups.push(target);
+            }
+            target.commands.push(...additions);
         }
         return groups;
     }
@@ -6812,7 +7633,7 @@
             ["/plushieemote ", ["happy", "angry", "sleepy", "protective", "sulky"]],
             ["/plushieperformance ", ["normal", "low"]],
             ["/plushiedrag ", ["on", "off"]],
-            ["/plushiemascot ", ["set", "random", "picker", "clear", "show", "hide"]],
+            ["/plushiemascot ", ["info", "set", "random", "picker", "clear", "show", "hide"]],
             ["/plushieposesave ", ["1", "2", "3"]],
             ["/plushieposeload ", ["1", "2", "3"]],
             ["/plushieposeclear ", ["1", "2", "3"]],
@@ -7085,7 +7906,7 @@
                     `Protect Me: ${settings.protectMe ? "ON" : "off"}`,
                     `Jealous Plushie: ${settings.jealousPlushie ? "ON" : "off"}`,
                     `Easy Drag: ${dragModeEnabled ? "ON" : "off"}`,
-                    `Room mascot: ${roomMascotState?.name || "none"} (${settings.showRoomMascot ? "picture visible" : "picture hidden"})`,
+                    `Room mascot: ${roomMascotState?.name || "none"} (${settings.showRoomMascot ? "picture visible" : "picture hidden"}; hourly cycle ${settings.hourlyMascotCycle ? "ON" : "off"})`,
                     `Automatic update checks: ${settings.autoUpdateChecks ? "ON" : "off"}`,
                     `Idle animations: ${settings.idleAnimations ? "ON" : "off"}`,
                     `Speech bubbles: ${settings.speechBubbles ? "ON" : "off"}`,
@@ -7403,7 +8224,7 @@
         const namedPlush = String(plushName || currentPlushName() || "plushie");
         let template = self ? spec.selfText : (spec.otherText || spec.selfText);
         template = template
-            .replaceAll("the plushie", `${sourcePronouns.possessive} ${namedPlush} plushie`)
+            .replaceAll("the plushie", `the ${namedPlush} plushie`)
             .replaceAll("their", ownerPronouns.possessive)
             .replaceAll("themself", ownerPronouns.reflexive)
             .replaceAll("{Source}", sourceName || "Someone")
@@ -9123,11 +9944,11 @@
                 if (movePlushToHeadTemporarily()) {
                     handleLocalPlushInteraction("balanceHead");
                     appendLocalInfoBox("Balance Plushie", ["Success — balanced for 8 seconds!"], { compact: true });
-                    sendStandaloneActionMessage(`${source} manages to balance the plushie on their head for 8 seconds.`);
+                    sendStandaloneActionMessage(`${source} manages to balance the ${currentPlushName()} plushie on their head for 8 seconds.`);
                 }
             } else if (attempted) {
                 appendLocalInfoBox("Balance Plushie", ["Wobble — missed the target. Try again!"], { compact: true });
-                sendStandaloneActionMessage(`${source} tries to balance the plushie, but it wobbles off.`);
+                sendStandaloneActionMessage(`${source} tries to balance the ${currentPlushName()} plushie, but it wobbles off.`);
             }
         };
         const animate = now => {
@@ -9613,7 +10434,7 @@
                 Type: "Action",
                 Dictionary: [
                     { Tag: "Beep", Text: "msg" },
-                    { Tag: "msg", Text: `${sourceName} hugs ${characterPronouns(window.Player).possessive} ${currentPlushName()} plushie tightly.` },
+                    { Tag: "msg", Text: `${sourceName} hugs the ${currentPlushName()} plushie tightly.` },
                     { Tag: HUG_TIGHTLY_MARKER_TAG, Text: token },
                 ],
             },
@@ -10100,7 +10921,15 @@
         return `${members.length}|${members.join("|")}`;
     }
 
+    function protectEquippedPlushMoodDecayClocks() {
+        for (const item of getEquippedPlushItems(window.Player)) {
+            getPlushMoodRecord(plushNameForItem(item));
+        }
+        return true;
+    }
+
     function checkRoomRosterChange(reason = "watchdog") {
+        protectEquippedPlushMoodDecayClocks();
         const signature = currentRoomRosterSignature();
 
         if (signature == null) {
@@ -10168,6 +10997,7 @@
 
         if (installHook("ChatRoomLeave", 10000, (args, next) => {
             cacheRoomMascotState(roomMascotState);
+            stopRoomMascotCycleMonitor();
             const result = next(args);
             roomRosterSignature = null;
             roomMascotState = null;
@@ -10187,6 +11017,8 @@
                 scheduleRoomRosterEventCheck(reason, 0);
                 window.setTimeout(() => recoverRoomMascotState({ allowCache: true }), 0);
                 window.setTimeout(() => sendAddonPresence(true), 450);
+                stopRoomMascotCycleMonitor();
+                if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
             };
             if (result && typeof result.then === "function") {
                 void result.then(
@@ -10198,6 +11030,8 @@
                     scheduleRoomRosterEventCheck("ChatRoomSync", 0);
                     recoverRoomMascotState({ allowCache: true });
                     sendAddonPresence(true);
+                    stopRoomMascotCycleMonitor();
+                    if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
                 }, 450);
             }
             return result;
@@ -10244,6 +11078,7 @@
         const hooked = installRoomRosterEventHooks();
         window.setTimeout(() => recoverRoomMascotState({ allowCache: true }), 250);
         window.setTimeout(() => sendAddonPresence(true), 700);
+        if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
 
         roomRosterWatchdog = window.setInterval(
             () => checkRoomRosterChange(isLowCpuMode() ? "120-second watchdog" : "60-second watchdog"),
@@ -10367,15 +11202,27 @@
                 }
             }
 
-            const result = next(args);
-
+            let result;
             if (C && window.CurrentScreen === "ChatRoom") {
-                if (isOurs(getHandheldItem(C)) || petSuitRenderStates.has(petSuitOverlayKey(C))) drawPetSuitPlushCanvasOverlay(C);
-                drawAddonPresenceIcon(C);
+                const previousCharacter = activeDrawCharacter;
+                const previousKey = activeDrawCharacterKey;
+                activeDrawCharacter = C;
+                activeDrawCharacterKey = characterProjectionKey(C);
+                try {
+                    result = captureExactCharacterProjection(C, () => next(args));
+                    if (isOurs(getHandheldItem(C)) || petSuitRenderStates.has(petSuitOverlayKey(C))) drawPetSuitPlushCanvasOverlay(C);
+                    drawAddonPresenceIcon(C);
+                } finally {
+                    activeDrawCharacter = previousCharacter;
+                    activeDrawCharacterKey = previousKey;
+                }
+            } else {
+                result = next(args);
             }
 
             if (samePlayer && (speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected)) {
-                const signature = plushOverlayPositionSignature(C, getHeld(C));
+                const signatureItem = isOurs(getDragTargetItem()) ? getDragTargetItem() : getHeld(C);
+                const signature = plushOverlayPositionSignature(C, signatureItem);
                 if (signature && signature !== localOverlayPositionSignature) {
                     localOverlayPositionSignature = signature;
                     scheduleLocalOverlayReposition();
@@ -10607,6 +11454,8 @@
                         setBy: roomMascotState.setBy || getCharacterDisplayName(window.Player) || "room admin",
                         memberNumber: Number(window.Player?.MemberNumber) || null,
                         at: roomMascotState.at || new Date().toISOString(),
+                        nextCycleAt: Number.isFinite(Number(roomMascotState.nextCycleAt)) ? Number(roomMascotState.nextCycleAt) : Date.now() + ROOM_MASCOT_CYCLE_MS,
+                        affectionModifier: Number.isFinite(Number(roomMascotState.affectionModifier)) ? Number(roomMascotState.affectionModifier) : ROOM_MASCOT_AFFECTION_MODIFIER,
                     };
                 } else if (roomMascotAdminDirty) {
                     delete custom[ROOM_MASCOT_CUSTOM_KEY];
@@ -10623,9 +11472,11 @@
                     lastRoomMascotSharedSyncAt = Date.now();
                     if (pendingAction?.type === "set" && pendingAction.name) {
                         window.setTimeout(() => {
-                            sendStandaloneActionMessage(pendingAction.randomPick
-                                ? `${pendingAction.name} was chosen randomly as the room mascot plushie.`
-                                : `${pendingAction.source || "Someone"} sets ${pendingAction.name} as the room mascot plushie.`);
+                            sendStandaloneActionMessage(pendingAction.hourlyCycle
+                                ? `${pendingAction.name} was chosen randomly as the room mascot plushie by the hourly cycle.`
+                                : (pendingAction.randomPick
+                                    ? `${pendingAction.name} was chosen randomly as the room mascot plushie.`
+                                    : `${pendingAction.source || "Someone"} sets ${pendingAction.name} as the room mascot plushie.`));
                             recordStat("mascot", 1, { plushName: pendingAction.name });
                         }, 0);
                     } else if (pendingAction?.type === "clear") {
@@ -11621,6 +12472,433 @@
         return value;
     }
 
+    function plushImageRequestMetadata(source) {
+        if (typeof source !== "string" || !source) return null;
+        if (!source.includes(ASSET_NAME) && !source.includes("SubbysPlushies") && !source.includes("subbysplushies")) return null;
+
+        const normalized = normalizeAssetImagePath(source);
+        if (typeof normalized !== "string" || normalized.startsWith("data:") || normalized.startsWith("blob:")) return null;
+
+        let groupName = null;
+        for (const group of PLUSH_GROUPS) {
+            if (normalized.includes(`/${group}/`)) {
+                groupName = group;
+                break;
+            }
+        }
+
+        let option = null;
+        const typeMatch = normalized.match(/(?:^|[_/])p(\d+)(?:[_./]|$)/i);
+        if (typeMatch) option = Number(typeMatch[1]);
+
+        if (!Number.isInteger(option)) {
+            const layerMatch = normalized.match(/(?:^|[_/])Plush(\d+)(?:[_./]|$)/i);
+            if (layerMatch) option = Number(layerMatch[1]) - 1;
+        }
+
+        if (!Number.isInteger(option) || !validPlushOption(option)) option = null;
+        return { groupName, option, source: normalized };
+    }
+
+    function tagPlushImageElement(image, source) {
+        if (!image || (typeof image !== "object" && typeof image !== "function")) return null;
+        const meta = plushImageRequestMetadata(source);
+        if (!meta) return null;
+        try { plushImageRenderMeta.set(image, meta); } catch (_) {}
+        return meta;
+    }
+
+    function fallbackPlushImageMetadata(source) {
+        if (!source || (typeof source !== "object" && typeof source !== "function")) return null;
+
+        let meta = null;
+        try { meta = plushImageRenderMeta.get(source) || null; } catch (_) {}
+        if (meta) return meta;
+
+        const src = typeof source.currentSrc === "string" && source.currentSrc
+            ? source.currentSrc
+            : (typeof source.src === "string" ? source.src : "");
+        if (!src || !src.startsWith("data:")) return null;
+
+        const option = renderImages.findIndex(value => value === src);
+        if (option < 0) return null;
+
+        // If only one equipped plushie uses this image, infer the group as well.
+        let groupName = null;
+        const player = window.Player;
+        if (player) {
+            const matching = PLUSH_GROUPS.filter(group => {
+                const item = getInventoryItem(player, group);
+                return isOurs(item) && canonicalWirePlushOption(getItemPlushOption(item)) === option;
+            });
+            if (matching.length === 1) groupName = matching[0];
+        }
+
+        meta = { groupName, option, source: "render-image" };
+        try { plushImageRenderMeta.set(source, meta); } catch (_) {}
+        return meta;
+    }
+
+    function canvasPointThroughDrawProjection(point, projection) {
+        if (!point || !projection) return null;
+        const sw = Number(projection.sw);
+        const sh = Number(projection.sh);
+        if (!Number.isFinite(sw) || !Number.isFinite(sh) || Math.abs(sw) < 1e-8 || Math.abs(sh) < 1e-8) return null;
+
+        const unitX = (Number(point.x) - projection.sx) / sw;
+        const unitY = (Number(point.y) - projection.sy) / sh;
+        const x = projection.dx + unitX * projection.dw;
+        const y = projection.dy + unitY * projection.dh;
+        const matrix = projection.matrix;
+
+        if (!matrix) return { x, y };
+        return {
+            x: matrix.a * x + matrix.c * y + matrix.e,
+            y: matrix.b * x + matrix.d * y + matrix.f,
+        };
+    }
+
+    function destinationCornersFromDrawProjection(projection) {
+        if (!projection) return null;
+        const matrix = projection.matrix;
+        const raw = [
+            { x: projection.dx, y: projection.dy },
+            { x: projection.dx + projection.dw, y: projection.dy },
+            { x: projection.dx + projection.dw, y: projection.dy + projection.dh },
+            { x: projection.dx, y: projection.dy + projection.dh },
+        ];
+        return raw.map(point => {
+            if (!matrix) return point;
+            return {
+                x: matrix.a * point.x + matrix.c * point.y + matrix.e,
+                y: matrix.b * point.x + matrix.d * point.y + matrix.f,
+            };
+        });
+    }
+
+    function boundsFromCanvasPoints(points) {
+        if (!Array.isArray(points) || !points.length) return null;
+        const valid = points.filter(point => Number.isFinite(point?.x) && Number.isFinite(point?.y));
+        if (!valid.length) return null;
+        const xs = valid.map(point => point.x);
+        const ys = valid.map(point => point.y);
+        const left = Math.min(...xs);
+        const right = Math.max(...xs);
+        const top = Math.min(...ys);
+        const bottom = Math.max(...ys);
+        return {
+            left, right, top, bottom,
+            width: Math.max(0, right - left),
+            height: Math.max(0, bottom - top),
+            centerX: (left + right) / 2,
+            centerY: (top + bottom) / 2,
+            points: valid.map(point => ({ x: point.x, y: point.y })),
+        };
+    }
+
+    function plushTransformSignature(item) {
+        if (!isOurs(item)) return "";
+        const transform = readActivePlushLayerTransform(item);
+        if (!transform) return "";
+        return [
+            item?.Asset?.Group?.Name || "",
+            canonicalWirePlushOption(getItemPlushOption(item)),
+            transform.TranslationX,
+            transform.TranslationY,
+            transform.ScaleX,
+            transform.ScaleY,
+            transform.Rotation,
+        ].join("|");
+    }
+
+    function trackedMarkKey(ownerKey, groupName, option) {
+        return `${ownerKey || "*"}|${groupName || "*"}|${Number.isInteger(option) ? option : "*"}`;
+    }
+
+    function storeTrackedPlushMark(canvas, mark) {
+        if (!canvas || !mark?.bounds) return false;
+        let marks = trackedPlushCanvasMarks.get(canvas);
+        if (!marks) {
+            marks = new Map();
+            trackedPlushCanvasMarks.set(canvas, marks);
+        }
+
+        const mainCanvas = window.MainCanvas?.canvas || document.getElementById("MainCanvas");
+        const onMainCanvas = canvas === mainCanvas;
+
+        let ownerKey = mark.ownerKey || null;
+        let transformSignature = mark.transformSignature || null;
+
+        if (onMainCanvas && activeDrawCharacter) {
+            ownerKey = activeDrawCharacterKey || characterProjectionKey(activeDrawCharacter);
+            if (mark.groupName) {
+                const item = getInventoryItem(activeDrawCharacter, mark.groupName);
+                if (isOurs(item)) transformSignature = plushTransformSignature(item);
+            }
+        }
+
+        const stored = {
+            ...mark,
+            ownerKey,
+            transformSignature,
+            at: Date.now(),
+        };
+
+        marks.set(trackedMarkKey(ownerKey, stored.groupName, stored.option), stored);
+
+        // Keep this extremely small; canvas drawing is hot code.
+        if (marks.size > 12) {
+            const ordered = [...marks.entries()].sort((a, b) => Number(a[1]?.at || 0) - Number(b[1]?.at || 0));
+            while (ordered.length > 12) {
+                const [key] = ordered.shift();
+                marks.delete(key);
+            }
+        }
+        return true;
+    }
+
+    function propagateTrackedPlushMarks(ctx, args, projection, directMeta = null) {
+        const destinationCanvas = ctx?.canvas;
+        const source = args?.[0];
+        if (!destinationCanvas || !source || !projection) return false;
+
+        let changed = false;
+
+        // A native plush image being drawn: capture the destination rectangle directly.
+        if (directMeta) {
+            const points = destinationCornersFromDrawProjection(projection);
+            const bounds = boundsFromCanvasPoints(points);
+            if (bounds) {
+                changed = storeTrackedPlushMark(destinationCanvas, {
+                    groupName: directMeta.groupName || null,
+                    option: Number.isInteger(directMeta.option) ? directMeta.option : null,
+                    bounds,
+                }) || changed;
+            }
+        }
+
+        // A canvas that already contains a plushie being composited into another
+        // canvas: carry the exact rectangle through the same drawImage transform.
+        const sourceMarks = trackedPlushCanvasMarks.get(source);
+        if (sourceMarks?.size) {
+            for (const sourceMark of sourceMarks.values()) {
+                if (!sourceMark?.bounds?.points?.length) continue;
+                const points = sourceMark.bounds.points
+                    .map(point => canvasPointThroughDrawProjection(point, projection))
+                    .filter(Boolean);
+                const bounds = boundsFromCanvasPoints(points);
+                if (!bounds) continue;
+                changed = storeTrackedPlushMark(destinationCanvas, {
+                    groupName: sourceMark.groupName || null,
+                    option: Number.isInteger(sourceMark.option) ? sourceMark.option : null,
+                    ownerKey: sourceMark.ownerKey || null,
+                    transformSignature: sourceMark.transformSignature || null,
+                    bounds,
+                }) || changed;
+            }
+        }
+
+        return changed;
+    }
+
+    function cloneTrackedPlushMarks(source, target) {
+        if (!source || !target) return false;
+        const marks = trackedPlushCanvasMarks.get(source);
+        if (!marks?.size) return false;
+
+        const copy = new Map();
+        for (const [key, mark] of marks) {
+            if (!mark?.bounds) continue;
+            copy.set(key, {
+                ...mark,
+                bounds: {
+                    ...mark.bounds,
+                    points: Array.isArray(mark.bounds.points)
+                        ? mark.bounds.points.map(point => ({ x: point.x, y: point.y }))
+                        : [],
+                },
+            });
+        }
+        if (!copy.size) return false;
+        trackedPlushCanvasMarks.set(target, copy);
+        return true;
+    }
+
+    function installPlushTrackingOnContextPrototype(proto, label) {
+        if (!proto || typeof proto.drawImage !== "function") return false;
+
+        let installed = false;
+        const currentDrawImage = proto.drawImage;
+
+        if (!currentDrawImage.__SubbysPlushiesTrackedDrawImage) {
+            const originalDrawImage = currentDrawImage;
+            const wrappedDrawImage = function (...args) {
+                const result = originalDrawImage.apply(this, args);
+
+                try {
+                    const source = args?.[0];
+                    const directMeta = fallbackPlushImageMetadata(source);
+                    const sourceMarks = source && (typeof source === "object" || typeof source === "function")
+                        ? trackedPlushCanvasMarks.get(source)
+                        : null;
+
+                    if (directMeta || sourceMarks?.size) {
+                        const projection = normalizeDrawImageProjection(source, args, matrixSnapshotFromContext(this));
+                        if (projection) propagateTrackedPlushMarks(this, args, projection, directMeta);
+                    }
+                } catch (_) {}
+
+                return result;
+            };
+
+            try {
+                Object.defineProperty(wrappedDrawImage, "__SubbysPlushiesTrackedDrawImage", { value: true });
+                Object.defineProperty(wrappedDrawImage, "__SubbysPlushiesTrackingLabel", { value: label });
+                proto.drawImage = wrappedDrawImage;
+                installed = true;
+            } catch (e) {
+                warn(`Could not install plush draw tracking on ${label}:`, e);
+            }
+        } else {
+            installed = true;
+        }
+
+        const currentClearRect = proto.clearRect;
+        if (typeof currentClearRect === "function" && !currentClearRect.__SubbysPlushiesTrackedClearRect) {
+            const originalClearRect = currentClearRect;
+            const wrappedClearRect = function (...args) {
+                try {
+                    if (this?.canvas && trackedPlushCanvasMarks.has(this.canvas)) {
+                        trackedPlushCanvasMarks.delete(this.canvas);
+                    }
+                } catch (_) {}
+                return originalClearRect.apply(this, args);
+            };
+            try {
+                Object.defineProperty(wrappedClearRect, "__SubbysPlushiesTrackedClearRect", { value: true });
+                proto.clearRect = wrappedClearRect;
+            } catch (_) {}
+        }
+
+        return installed;
+    }
+
+    function installPlushBitmapTracking() {
+        let installed = false;
+
+        const offscreenProto = window.OffscreenCanvas?.prototype;
+        if (offscreenProto && typeof offscreenProto.transferToImageBitmap === "function") {
+            const current = offscreenProto.transferToImageBitmap;
+            if (!current.__SubbysPlushiesTrackedBitmapTransfer) {
+                const original = current;
+                const wrapped = function (...args) {
+                    const bitmap = original.apply(this, args);
+                    try { cloneTrackedPlushMarks(this, bitmap); } catch (_) {}
+                    return bitmap;
+                };
+                try {
+                    Object.defineProperty(wrapped, "__SubbysPlushiesTrackedBitmapTransfer", { value: true });
+                    offscreenProto.transferToImageBitmap = wrapped;
+                    installed = true;
+                } catch (_) {}
+            } else {
+                installed = true;
+            }
+        }
+
+        if (typeof window.createImageBitmap === "function" &&
+            !window.createImageBitmap.__SubbysPlushiesTrackedCreateImageBitmap) {
+            const originalCreateImageBitmap = window.createImageBitmap;
+            const wrappedCreateImageBitmap = function (source, ...args) {
+                const result = originalCreateImageBitmap.call(this, source, ...args);
+                if (!result || typeof result.then !== "function") return result;
+                return result.then(bitmap => {
+                    try { cloneTrackedPlushMarks(source, bitmap); } catch (_) {}
+                    return bitmap;
+                });
+            };
+            try {
+                Object.defineProperty(wrappedCreateImageBitmap, "__SubbysPlushiesTrackedCreateImageBitmap", { value: true });
+                window.createImageBitmap = wrappedCreateImageBitmap;
+                installed = true;
+            } catch (_) {}
+        } else if (typeof window.createImageBitmap === "function") {
+            installed = true;
+        }
+
+        return installed;
+    }
+
+    function installPlushCanvasTracking() {
+        if (plushCanvasTrackingInstalled) return true;
+
+        const backends = [];
+        if (installPlushTrackingOnContextPrototype(window.CanvasRenderingContext2D?.prototype, "CanvasRenderingContext2D")) {
+            backends.push("canvas");
+        }
+        if (installPlushTrackingOnContextPrototype(window.OffscreenCanvasRenderingContext2D?.prototype, "OffscreenCanvasRenderingContext2D")) {
+            backends.push("offscreen");
+        }
+        if (installPlushBitmapTracking()) backends.push("bitmap");
+
+        plushCanvasTrackingInstalled = backends.length > 0;
+        if (plushCanvasTrackingInstalled) {
+            log(`Installed exact plush canvas-position tracker (${backends.join(", ")}).`);
+        } else {
+            warn("No compatible canvas backend was available for exact plush position tracking.");
+        }
+        return plushCanvasTrackingInstalled;
+    }
+
+    function trackedPlushScreenBounds(C, item) {
+        if (!C || !isOurs(item)) return null;
+        const ctx = window.MainCanvas;
+        const canvas = ctx?.canvas || document.getElementById("MainCanvas");
+        const rect = canvas?.getBoundingClientRect?.();
+        if (!canvas || !rect || rect.width <= 0 || rect.height <= 0) return null;
+
+        const marks = trackedPlushCanvasMarks.get(canvas);
+        if (!marks?.size) return null;
+
+        const ownerKey = characterProjectionKey(C);
+        const groupName = item?.Asset?.Group?.Name || null;
+        const option = canonicalWirePlushOption(getItemPlushOption(item));
+        const signature = plushTransformSignature(item);
+        const now = Date.now();
+
+        const candidates = [...marks.values()]
+            .filter(mark => {
+                if (!mark?.bounds) return false;
+                if (mark.ownerKey && mark.ownerKey !== ownerKey) return false;
+                if (mark.groupName && groupName && mark.groupName !== groupName) return false;
+                if (Number.isInteger(mark.option) && validPlushOption(option) && mark.option !== option) return false;
+                return now - Number(mark.at || 0) < 5000;
+            })
+            .sort((a, b) => {
+                const exactGroupA = a.groupName === groupName ? 1 : 0;
+                const exactGroupB = b.groupName === groupName ? 1 : 0;
+                if (exactGroupA !== exactGroupB) return exactGroupB - exactGroupA;
+                const exactOptionA = a.option === option ? 1 : 0;
+                const exactOptionB = b.option === option ? 1 : 0;
+                if (exactOptionA !== exactOptionB) return exactOptionB - exactOptionA;
+                const exactTransformA = a.transformSignature === signature ? 1 : 0;
+                const exactTransformB = b.transformSignature === signature ? 1 : 0;
+                if (exactTransformA !== exactTransformB) return exactTransformB - exactTransformA;
+                return Number(b.at || 0) - Number(a.at || 0);
+            });
+
+        const mark = candidates[0];
+        if (!mark) return null;
+
+        const logicalWidth = Number(canvas.width) || 2000;
+        const logicalHeight = Number(canvas.height) || 1000;
+        const screenPoints = mark.bounds.points.map(point => ({
+            x: rect.left + (point.x / logicalWidth) * rect.width,
+            y: rect.top + (point.y / logicalHeight) * rect.height,
+        }));
+        return boundsFromCanvasPoints(screenPoints);
+    }
+
     function mapImageSource(source) {
         if (typeof source !== "string" || !imageMappings) return source;
 
@@ -11711,6 +12989,7 @@
                 if (!value.includes("SubbysPlushies") && !value.includes("subbysplushies")) {
                     return originalSet.call(this, value);
                 }
+                tagPlushImageElement(this, value);
                 return originalSet.call(this, mapImageSource(value));
             };
 
@@ -11738,6 +13017,7 @@
             const wrappedSetAttribute = function (name, value) {
                 if ((name === "src" || name === "SRC") && typeof value === "string" &&
                     (value.includes("SubbysPlushies") || value.includes("subbysplushies"))) {
+                    tagPlushImageElement(this, value);
                     return originalSetAttribute.call(this, name, mapImageSource(value));
                 }
                 return originalSetAttribute.call(this, name, value);
@@ -11762,6 +13042,9 @@
     function installImageMappingHooks() {
         const nativeImageHook = installNativeImageElementHook();
 
+        // Do not globally wrap Canvas/OffscreenCanvas drawImage here.
+        // Native layer translation has different height-scaling semantics and is
+        // handled explicitly by the overlay projection helpers below.
         let fallbackHook = null;
         if (!nativeImageHook) {
             const candidates = [
@@ -13457,4 +14740,128 @@
 
         error("STARTUP FAILED:", e);
     });
+}
+
+(() => {
+    "use strict";
+
+    const BOOT_TAG = "[Subby's Plushies bootstrap]";
+    const VERSION = "2.3.7.13";
+    const BRIDGE_ATTR = "data-subbys-plushies-page-bridge";
+    const BRIDGE_VALUE = `v${VERSION}`;
+
+    function pageGlobalsVisible(target = window) {
+        try {
+            return typeof target.AssetGet === "function" &&
+                typeof target.InventoryWear === "function" &&
+                Array.isArray(target.AssetGroup);
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function runDirect() {
+        try {
+            console.log(BOOT_TAG, "Bondage Club page globals are visible; running directly.");
+            SubbysPlushiesPageMain();
+            return true;
+        } catch (e) {
+            console.error(BOOT_TAG, "Direct startup threw before main() could handle it:", e);
+            return false;
+        }
+    }
+
+    function pageCode() {
+        const mainSource = SubbysPlushiesPageMain.toString();
+        return `(() => {\n` +
+            `  try { document.documentElement?.setAttribute(${JSON.stringify(BRIDGE_ATTR)}, ${JSON.stringify(BRIDGE_VALUE)}); } catch (_) {}\n` +
+            `  try { (${mainSource})(); } catch (e) { console.error(${JSON.stringify(BOOT_TAG)}, "Page-context startup threw:", e); }\n` +
+            `})();\n//# sourceURL=SubbysPlushies.page.js`;
+    }
+
+    function bridgeConfirmed() {
+        try { return document.documentElement?.getAttribute(BRIDGE_ATTR) === BRIDGE_VALUE; }
+        catch (_) { return false; }
+    }
+
+    function tryUnsafeWindowBridge(code) {
+        try {
+            if (typeof unsafeWindow === "undefined" || !unsafeWindow || unsafeWindow === window) return false;
+            if (typeof unsafeWindow.eval === "function") {
+                unsafeWindow.eval(code);
+                if (bridgeConfirmed()) {
+                    console.log(BOOT_TAG, "Entered the Bondage Club page context through unsafeWindow.");
+                    return true;
+                }
+            }
+            if (typeof unsafeWindow.Function === "function") {
+                unsafeWindow.Function(code)();
+                if (bridgeConfirmed()) {
+                    console.log(BOOT_TAG, "Entered the Bondage Club page context through the page Function constructor.");
+                    return true;
+                }
+            }
+        } catch (e) {
+            console.warn(BOOT_TAG, "unsafeWindow page bridge was unavailable:", e);
+        }
+        return false;
+    }
+
+    function tryScriptBridge(code) {
+        const root = document.documentElement || document.head || document.body;
+        if (!root) return false;
+
+        const script = document.createElement("script");
+        script.type = "text/javascript";
+        script.dataset.subbysPlushiesBootstrap = VERSION;
+
+        // Reuse a page nonce when one exists so strict CSP configurations do not
+        // block the bridge merely because the userscript manager uses isolation.
+        try {
+            const nonceSource = document.querySelector("script[nonce]");
+            const nonce = nonceSource?.nonce || nonceSource?.getAttribute?.("nonce");
+            if (nonce) script.setAttribute("nonce", nonce);
+        } catch (_) {}
+
+        script.textContent = code;
+        try {
+            root.appendChild(script);
+        } catch (e) {
+            console.error(BOOT_TAG, "Could not append the page-context bridge:", e);
+            return false;
+        } finally {
+            try { script.remove(); } catch (_) {}
+        }
+
+        if (bridgeConfirmed()) {
+            console.log(BOOT_TAG, "Entered the Bondage Club page context through a DOM script bridge.");
+            return true;
+        }
+
+        console.error(
+            BOOT_TAG,
+            "Opera/userscript isolation was detected, but the page bridge did not execute. " +
+            "Check the console for a Content Security Policy or userscript-manager error."
+        );
+        return false;
+    }
+
+    async function bootstrap() {
+        // At document-end the game is normally already available. Give slower
+        // Opera/BC loads a short chance to expose the globals before assuming
+        // this userscript is running in an isolated JavaScript world.
+        for (let attempt = 0; attempt < 20; attempt++) {
+            if (pageGlobalsVisible(window)) {
+                runDirect();
+                return;
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        const code = pageCode();
+        if (tryUnsafeWindowBridge(code)) return;
+        tryScriptBridge(code);
+    }
+
+    void bootstrap();
 })();

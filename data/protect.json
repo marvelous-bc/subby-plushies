@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "pluginVersion": "2.3.7.13",
   "durationMs": 2800,
   "transform": {
     "TranslationX": 0,
@@ -13,7 +14,8 @@
     "punch",
     "kick",
     "bonk",
-    "poke",
+    "boop",
+    "bap",
     "tickle",
     "bite",
     "pinch",
@@ -31,7 +33,8 @@
     "punch",
     "kick",
     "bonk",
-    "poke",
+    "boop",
+    "bap",
     "tickle",
     "bite",
     "pinch",
@@ -51,6 +54,7 @@
     "snuggle",
     "pet",
     "lick",
-    "smooch"
+    "smooch",
+    "poke"
   ]
 }

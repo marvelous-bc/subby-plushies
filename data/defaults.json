@@ -1,24 +1,29 @@
 {
   "schemaVersion": 1,
+  "pluginVersion": "2.3.7.13",
   "featureDefaults": {
     "protectMe": false,
     "jealousPlushie": false,
     "showRoomMascot": true,
+    "hourlyMascotCycle": true,
     "autoUpdateChecks": true,
     "idleAnimations": true,
-    "speechBubbles": true
+    "speechBubbles": true,
+    "showDragButton": true
   },
   "timings": {
-    "idleMinDelayMs": 52000,
-    "idleMaxDelayMs": 148000,
+    "idleMinDelayMs": 22000,
+    "idleMaxDelayMs": 48000,
     "speechBubbleDurationMs": 3400,
-    "battleChallengeTtlMs": 90000,
-    "activityMonitorMs": 3000,
-    "activityIntegrityMs": 30000,
+    "activityMonitorMs": 5000,
+    "activityIntegrityMs": 60000,
     "roomRosterWatchdogMs": 60000,
-    "chatObserverMonitorMs": 5000,
+    "chatObserverMonitorMs": 10000,
     "layeringBridgeMonitorMs": 1000,
-    "updateCheckIntervalMs": 86400000
+    "updateCheckIntervalMs": 86400000,
+    "roomMascotCycleMs": 3600000,
+    "roomMascotCycleCheckMs": 30000,
+    "roomMascotCycleSettleMs": 15000
   },
   "repository": {
     "rawRoot": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main",

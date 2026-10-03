@@ -1,0 +1,5 @@
+Name: Subby's Plushies Loader
+
+Paste the following entire line into the bookmark URL/Location field:
+
+javascript:(async()=>{const U='https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js';try{if(!/(^|\.)(bondageprojects\.elementfx\.com|bondageeurope\.com|bondage-europe\.com|bondage-asia\.com)$/i.test(location.hostname)){alert("Open Bondage Club first, then click the Subby's Plushies bookmark.");return}const r=await fetch(U+'?cb='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const c=await r.text();(0,eval)(c+'\n//# sourceURL=SubbysPlushies.user.js');console.log("[Subby's Plushies bookmark] Latest build loaded.");}catch(e){console.error("[Subby's Plushies bookmark] Load failed:",e);alert("Subby's Plushies failed to load. Open the browser console for the error.");}})();

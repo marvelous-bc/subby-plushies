@@ -1,203 +1,183 @@
 # Subby's Plushies v2
 
-A standalone Bondage Club R132 plushie companion addon with modular plush artwork, activities, moods, relationships, synchronized emotes, room mascots, battles, saved poses, themes, stats, achievements, history, and a native **Preferences → Extensions** control center.
+**Current release:** `2.3.7.13`  
+**Release date:** 2026-10-03  
+**Target:** Bondage Club R132
+
+Subby's Plushies is a standalone Bondage Club companion addon built around native modular plushie items. It includes plushie activities, mood/affection, relationships, synchronized emotes, two wearable plushie slots, room mascots, battles, saved poses, themes, stats, achievements, backups, Easy Drag, and a native Preferences → Extensions control center.
+
+## What's current in 2.3.7.13
+
+- Main handheld plushie in `ItemHandheld` plus an optional second plushie in `ItemAddon`.
+- Passive affection loss is **-1 per 8 hours** for plushies that are not equipped; equipped plushies do not decay.
+- Room mascot supports manual set, random selection, admin picker, local movement, and a shared hourly cycle designed so clients converge on one room update.
+- Room mascot grants the configured positive-affection modifier to matching plushie interactions.
+- Protect Me reacts to `boop` and `bap`; `poke` belongs to Jealous Plushie instead of Protect Me.
+- Idle wiggle/rotation applies to equipped plushies, including the ItemAddon/ceiling-style second plushie.
+- Easy Drag and native Move/Resize preserve the current transform instead of resetting unrelated resize/rotation values.
+- Action text can include the actual plushie name and uses BC character information rather than hardcoded generic pronouns where supported.
+- 15-second plushie emotes synchronize to other room users running the addon.
+- Opera/userscript isolation handling is built into the full script: it can bridge itself into the Bondage Club page context when necessary.
+- The Commands tab always starts from the command list compiled into the current build; `data/commands.json` may add documentation but cannot hide newer built-in commands.
 
 ## Installation
 
-Choose **one** installation method:
 
-- **`SubbysPlushies.user.js`** — 
-- **`SubbysPlushies-Launcher.user.js`** — recommended if you want automatic release pickup. The launcher checks `version.json` on every Bondage Club load, downloads the production build only when the release version changes, and keeps the last working release cached as a fallback.
+### Launcher
 
-Do not enable the launcher and a full build at the same time. The addon intentionally has a duplicate-instance guard.
+`SubbysPlushies-Launcher.user.js` is a thin userscript that `@require`s the matching full build from this repository. The full build itself handles the page-context/browser compatibility logic.
 
-## v2 command integration
+For Opera/Chromium userscript managers, make sure the extension is allowed to run user scripts on the Bondage Club site. In Opera this may require enabling **Developer mode** and **Allow user scripts** for the userscript extension.
 
-All addon commands use the `/plushie...` namespace.
+### Firefox bookmark
 
-- `/help` keeps Bondage Club's normal help and adds a compact Subby's Plushies command summary.
-- `/help plushie` (or `/help plushies`) shows the full plushie command reference with descriptions.
-- Press **Tab** while typing `/plu...` in chat to complete and cycle matching commands.
-- Tab completion also supports common arguments for emotes, performance mode, Easy Drag, mascot actions, pose slots, and snap points.
-- Typing `/help p...` and pressing Tab completes the plushie help command.
-- The same reference is available in **Preferences → Extensions → Subby's Plushies → Commands**.
+`SubbysPlushies-Firefox-Bookmarklet.txt` contains a bookmarklet. Create a bookmark, paste the full `javascript:...` line into its URL/Location field, open Bondage Club, then click the bookmark to fetch the latest full build.
 
 ## Main features
 
-- 18 public plushie variants in one native modular `ItemHandheld` asset.
-- Native per-layer Move/Resize, Easy Drag, and named snap positions.
-- Plush activities including cuddle, nuzzle, pat, pet, hide, kiss, bonk, head balance, offer, show, whisper, squeeze cheeks, wave, Hug Tightly + purr, Protect Me, and more.
-- Per-plush happiness with passive **-1 every 15 minutes** until 29.
-- Per-plush mood history and relationships: **Stranger → Familiar → Friend → Bestie → Bonded**.
-- Relationship milestone celebration bubbles.
-- Favorites, sleepy state, and three saved pose slots per plush.
-- 15-second room-synchronized plushie emotes.
-- `zZ`, `…`, `♥`, `!`, and temporary emote symbols follow the plush's transformed position through Move/Resize, Easy Drag, scale, rotation, temporary poses, and saved poses.
-- Persistent room mascot in synchronized room custom data, recoverable by later joiners.
-- Multiplayer plushie battles, battle history, stats, and achievements.
-- Searchable/paginated lo-fi Use menu with Favorites, Emotes, Mascot, Settings, Presets, Extension Menu, and Battle.
-- Lo-fi Extensions UI with independent color customization, layout settings, and themes including Pink.
-- Normal / Low CPU performance modes.
-- Backup/restore with tamper-evident sealing for progression values.
-- Validated Git-backed JSON with local last-known-good caching and built-in safe fallbacks.
-- Public `window.SubbysPlushies` API for other addons; developer API details stay out of the user-facing Extensions menu.
+- 18 public plushie variants plus the internal Subbycat wire alias.
+- Native `ItemHandheld` and `ItemAddon` integration.
+- Native per-layer Move/Resize plus Easy Drag and named snap points.
+- Plush activities: Rub Against Face, Cuddle to Chest, Nuzzle, Pat, Pet, Hide Behind, Kiss, Kiss With Plushie, Nose Boop, Rest Cheek, Forehead Bump, Snuggle, Bonk, Balance on Head, Offer, Show, Whisper, Squeeze Cheeks, Wave, and Hug Tightly/purr support.
+- Per-plush mood, relationship progression, favorites, sleepy state, and three saved pose slots.
+- Relationship levels: Stranger → Familiar → Friend → Bestie → Bonded.
+- Relationship milestone bubbles and achievements.
+- Synchronized room emotes and addon-presence indicator.
+- Shared room mascot with local display/movement controls and hourly cycling.
+- Multiplayer plushie battles with per-account battle stats/history.
+- Searchable Use menu and native Extensions control center.
+- Normal and Low CPU performance modes.
+- Portable backup/restore with progression integrity sealing.
+- Validated Git-backed configuration with local last-known-good caching and built-in fallbacks.
+- Public `window.SubbysPlushies` integration API.
 
-## Mood, relationships, and sleep
+## Mood and affection
 
-Each plush keeps its own mood, relationship interaction count, favorite state, sleep timing, pose slots, and mood history. Positive/negative activities alter happiness while passive decay only moves downward to 29. Relationship milestones can unlock speech/achievements and trigger a brief local celebration bubble.
+Each plushie has its own happiness score. Positive and negative interactions adjust that score. A plushie that is **not currently equipped** loses 1 point for each completed 8-hour block. Plushies equipped in either supported plushie slot are protected from decay, and the decay clock is kept current so removing a plushie does not immediately apply hidden accumulated losses.
 
-## Emotes
+## Protect / Jealous behavior
 
-Manual emotes last **15 seconds** and synchronize to other room users running Subby's Plushies:
-
-```text
-/plushieemote happy
-/plushieemote angry
-/plushieemote sleepy
-/plushieemote protective
-/plushieemote sulky
-```
+Protect Me watches hostile/rough action verbs such as slap, spank, hit, punch, kick, bonk, **boop**, **bap**, tickle, bite, pinch, whip, shock, zap, attack, smack, and swat. `poke` is intentionally excluded from Protect Me and included in Jealous Plushie detection.
 
 ## Room mascot
 
-Room admins can set/clear the mascot. The current mascot is stored in synchronized room `Custom` data, so players who join after it was set can still recover it. Each player may hide/show the mascot overlay locally without changing room state.
+Room admins can set the held plushie as mascot, choose a random mascot, open the mascot picker, or clear it. The synchronized room state lets later joiners recover the current mascot. Each user can move/hide/show the mascot overlay locally without changing room state. Hourly cycling is enabled by default.
 
-## Performance and v2 cleanup
+## Commands
 
-**Normal** keeps optional visuals enabled. **Low CPU** pauses optional idle/petting animations and stretches safety-monitor intervals while preserving core actions, Easy Drag, battles, synchronized emotes, room mascot sync, and commands.
-
-v2 consolidates local speech-bubble/status-symbol position work into one animation-frame scheduler and reduces safety polling where event-driven hooks already provide immediate updates.
-
-## Always-latest launcher
-
-The launcher uses fixed raw URLs from this repository. On every Bondage Club load it:
-
-1. fetches `version.json` with cache-busting;
-2. compares the release version with its cached version;
-3. fetches `SubbysPlushies.min.user.js` only when the release changes;
-4. caches the successfully started release;
-5. falls back to the cached release if GitHub is temporarily unavailable.
-
-The launcher itself has userscript `@updateURL` / `@downloadURL` metadata so launcher fixes can also be updated by the userscript manager. Because the launcher intentionally executes the production script from this repository, only use it if you trust releases published here.
-
-## Command reference
+`/help` keeps Bondage Club's normal help and adds a plushie summary. `/help plushie` and `/help plushies` show the full addon command reference. Tab completion is available for plushie commands and common arguments.
 
 ### General
 
 | Command | Description |
-| --- | --- |
-| `/help plushie` | Show Subby's Plushies commands with descriptions. Plain /help also includes a plushie command summary. |
-| `/plushie` | Equip Subby's Plushies. |
-| `/plushieuse` | Open the plushie selector/use menu. |
-| `/plushieextensions` | Open the Subby's Plushies Extensions control center. |
-| `/plushiecommands` | Open the Commands tab directly. |
-| `/plushiecommand` | Alias for /plushiecommands. |
+|---|---|
+| `/help plushie` | Show the complete Subby's Plushies command reference in chat. |
+| `/help plushies` | Alias for /help plushie. |
+| `/plushie` | Equip Subby's Plushies in ItemHandheld. |
+| `/plushieuse` | Open the plushie selector / Use menu. |
+| `/plushieaddon` | Wear a second Subby's Plushies plushie in ItemAddon (Body slot). |
+| `/plushieremove` | Remove the held Subby's Plushies item. |
+| `/plushierecover` | Run the plush recovery helper. |
+| `/plushiefeatures` | Show the current feature-toggle status. |
+
+### Extensions Tabs
+
+| Command | Description |
+|---|---|
+| `/plushieextensions` | Open the Subby's Plushies Extensions control center on Settings. |
 | `/plushiestatus` | Open the Status tab. |
 | `/plushiesettings` | Open the Settings tab. |
 | `/plushielayout` | Open the Layout customization tab. |
-| `/plushieremove` | Remove the held Subby's Plushies item. |
-| `/plushierecover` | Run the plush recovery helper. |
+| `/plushieplushies` | Open the Plushies tab with relationships, favorites, emotes, and saved poses. |
+| `/plushiehistory` | Open the History tab for mood and plushie battles. |
+| `/plushiebackup` | Open the Backup / Restore tab. |
+| `/plushiecommands` | Open the Commands tab directly. |
+| `/plushiecommand` | Alias for /plushiecommands. |
 
-### Positioning
-
-| Command | Description |
-| --- | --- |
-| `/plushieposition` | Open BC's native Move / Resize editor. |
-| `/plushiemove` | Alias for Move / Resize. |
-| `/plushieresize` | Alias for Move / Resize. |
-| `/plushiehands` | Reset the plush to its default hands position. |
-| `/plushiecenter` | Alias for resetting the plush position. |
-| `/plushiedrag [on\|off]` | Toggle Easy Drag, or explicitly turn it on/off. |
-| `/plushiesnap <point>` | Snap to a named point such as head, face, chest, hands, left shoulder, or right shoulder. |
-
-### Features
+### Positioning & Poses
 
 | Command | Description |
-| --- | --- |
-| `/plushiemood` | Show the current plushie's mood and quick info. |
+|---|---|
+| `/plushieposition` | Open BC's native Move / Resize editor for the plushie. |
+| `/plushiemove` | Alias for /plushieposition. |
+| `/plushieresize` | Alias for /plushieposition. |
+| `/plushiehands` | Reset the plushie to its default hands position. |
+| `/plushiecenter` | Alias for /plushiehands. |
+| `/plushiedrag [on|off]` | Toggle Easy Drag, or explicitly turn it on/off. |
+| `/plushiesnap <point>` | Snap to hands, chest, face, head, left shoulder, or right shoulder. |
+| `/plushiebalance` | Open the Balance on Head minigame directly. |
+| `/plushieposes` | Open the Plushies tab at the saved-pose controls. |
+| `/plushieposesave <1|2|3>` | Save the current plushie's X/Y position, scale, and rotation to a pose slot. |
+| `/plushieposeload <1|2|3>` | Apply a saved pose for the held plushie. |
+| `/plushieposeclear <1|2|3>` | Clear a saved pose slot for the held plushie. |
+
+### Mood & Interactions
+
+| Command | Description |
+|---|---|
+| `/plushiemood` | Show the held plushie's mood, relationship, and quick info. |
+| `/plushieinfo` | Alias for /plushiemood. |
 | `/plushielore` | Open the Lore browser on the held plushie. |
-| `/plushieinfo` | Show the current plushie's mood and quick info. |
+| `/plushiefavorite` | Toggle the held plushie as a favorite. |
+| `/plushieemote <happy|angry|sleepy|protective|sulky>` | Show a 15-second room-synced plushie emote and bubble. |
 | `/plushieprotect` | Toggle Protect Me mode. |
 | `/plushiejealous` | Toggle Jealous Plushie mode. |
-| `/plushieidle` | Toggle idle plush animations. |
-| `/plushiespeech` | Toggle local speech bubbles. |
-| `/plushiespeak` | Force one local plush speech bubble. |
+| `/plushieidle` | Toggle idle plushie wiggle animations. |
+| `/plushiespeech` | Toggle local automatic speech bubbles. |
+| `/plushiespeak` | Force one local plushie speech bubble. |
 | `/plushiebubble` | Alias for /plushiespeak. |
-| `/plushiepurr` | Play the plush purr sound locally. |
-| `/plushiefeatures` | Show the current feature-toggle status. |
-| `/plushiehistory` | Open the History tab with recent mood changes and the last 20 plushie battles. |
-| `/plushieperformance normal\|low` | Switch between Normal and Low CPU mode. Low CPU pauses optional animations and reduces background refresh/watchdog frequency. |
+| `/plushiepurr` | Play the plushie purr sound locally. |
+| `/plushieperformance [normal|low]` | Show or change the performance mode. |
 
 ### Room Mascot
 
 | Command | Description |
-| --- | --- |
-| `/plushiemascot set` | Set your held plush as the room mascot (room admin only). |
-| `/plushiemascot clear` | Clear the room mascot (room admin only). |
-| `/plushiemascot show` | Show mascot information / restore the mascot picture. |
+|---|---|
+| `/plushiemascot` | Show current room mascot information. |
+| `/plushiemascot set` | Set your held plushie as the shared room mascot (room admin only). |
+| `/plushiemascot random` | Pick and publish a random shared room mascot (room admin only). |
+| `/plushiemascot picker` | Open the room mascot picker (room admin only; aliases: pick, open, choose). |
+| `/plushiemascot clear` | Clear the shared room mascot (room admin only; alias: remove). |
+| `/plushiemascot show` | Restore the mascot picture locally (alias: unhide). |
 | `/plushiemascot hide` | Hide the mascot picture locally. |
-| `/plushiemascotshow` | Shortcut to show the mascot picture. |
-| `/plushiemascothide` | Shortcut to hide the mascot picture. |
+| `/plushiemascotshow` | Shortcut for /plushiemascot show. |
+| `/plushiemascothide` | Shortcut for /plushiemascot hide. |
 
 ### Battle, Stats & Achievements
 
 | Command | Description |
-| --- | --- |
-| `/plushiebattle <member/name>` | Challenge another player to a plushie battle. With no argument, uses the focused character when possible. |
+|---|---|
+| `/plushiebattle [member/name]` | Challenge another player to a plushie battle; with no target, use the focused character when possible. |
 | `/plushiestats` | Open the detailed Stats tab. |
 | `/plushieachievements` | Open the detailed Achievements tab. |
-| `/plushieach` | Open the detailed Achievements tab. |
-
-### Updates & Diagnostics
-
-| Command | Description |
-| --- | --- |
-| `/plushieupdate` | Check the GitHub version manifest for an update. |
-| `/plushieupdateopen` | Open the latest update/download page. |
-| `/plushiedebug` | Print detailed plugin diagnostics to the browser console. |
-| `/plushiedata` | Show Git-backed data source/cache status. |
-| `/plushiedatareload` | Force-refresh validated data files from GitHub. |
-
-### Plushies & Relationships
-
-| Command | Description |
-| --- | --- |
-| `/plushieplushies` | Open the Plushies tab with relationship, favorites, emotes, and saved poses. |
-| `/plushiefavorite` | Toggle the held plushie as a favorite. |
-| `/plushieemote happy\|angry\|sleepy\|protective\|sulky` | Show a 15-second room-synced plushie emote and mood symbol to other Subby's Plushies users in the room. |
-| `/plushieposes` | Open the Plushies tab at the saved-pose controls. |
-| `/plushieposesave <1\|2\|3>` | Save the held plushie current X/Y, scale, and rotation. |
-| `/plushieposeload <1\|2\|3>` | Apply a saved pose for the held plushie. |
-| `/plushieposeclear <1\|2\|3>` | Clear a saved pose slot for the held plushie. |
+| `/plushieach` | Short alias for /plushieachievements. |
 
 ### Backup / Restore
 
 | Command | Description |
-| --- | --- |
-| `/plushiebackup` | Open the Backup / Restore tab. |
+|---|---|
 | `/plushieexport` | Export a portable Subby's Plushies JSON backup. |
 | `/plushieimport` | Choose and restore a Subby's Plushies JSON backup. |
 
+### Updates & Diagnostics
+
+| Command | Description |
+|---|---|
+| `/plushieupdate` | Check the GitHub version manifest for an update. |
+| `/plushieupdateopen` | Open the latest update / download page. |
+| `/plushiedata` | Show Git-backed data source and cache status. |
+| `/plushiedatareload` | Force-refresh validated data files from GitHub. |
+| `/plushiedebug` | Print detailed addon diagnostics to the browser console. |
+
+## Data files
+
+The main script validates remotely fetched JSON before applying it. Startup-critical behavior always has built-in fallbacks. This repo refresh aligns the runtime JSON with the current build so remote configuration does not silently reintroduce older values.
+
 ## Public addon API
 
-`window.SubbysPlushies` exposes the stable public integration surface. Current useful methods include `getHeld()`, `getMood()`, `getMoodHistory()`, `getRelationship()`, `getBattleHistory()`, `showEmote()`, `getPerformanceMode()`, `setPerformanceMode()`, `on()`, `off()`, and `once()`. Other addons should use this API rather than hook Subby's Plushies internals.
-
-## Repository layout
-
-```text
-SubbysPlushies.user.js           # commented/source build
-SubbysPlushies.min.user.js       # production/comment-free build
-SubbysPlushies-Launcher.user.js  # version-aware launcher
-assets/plushies/                  # plush artwork
-assets/sfx/                       # sound effects
-data/                             # validated configuration JSON
-version.json                      # updater + launcher manifest
-README.md
-CHANGELOG.md
-```
+Other addons should use `window.SubbysPlushies` instead of reaching into internal functions. The API exposes status/version information and helpers such as held plush lookup, mood/relationship data, battle history, emotes, performance mode, and event subscriptions.
 
 ## Support
 
-Repository: https://github.com/marvelous-bc/subby-plushies
-
+Repository: https://github.com/marvelous-bc/subby-plushies  
 Issues: https://github.com/marvelous-bc/subby-plushies/issues

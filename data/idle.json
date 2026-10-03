@@ -1,22 +1,26 @@
 {
   "schemaVersion": 1,
-  "minDelayMs": 52000,
-  "maxDelayMs": 148000,
+  "pluginVersion": "2.3.7.13",
+  "minDelayMs": 22000,
+  "maxDelayMs": 48000,
   "frames": [
     {
       "delayMs": 0,
       "deltaY": -2,
-      "rotationMultiplier": 2
+      "rotationMultiplier": 2,
+      "restore": false
     },
     {
       "delayMs": 160,
       "deltaY": -5,
-      "rotationMultiplier": -3
+      "rotationMultiplier": -3,
+      "restore": false
     },
     {
       "delayMs": 340,
       "deltaY": -2,
-      "rotationMultiplier": 2
+      "rotationMultiplier": 2,
+      "restore": false
     },
     {
       "delayMs": 520,
@@ -29,5 +33,6 @@
     -1,
     1
   ],
-  "speechChanceAfterAnimation": 0.32
+  "speechChanceAfterAnimation": 0.32,
+  "appliesToAllEquippedPlushies": true
 }

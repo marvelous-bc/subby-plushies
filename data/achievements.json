@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "pluginVersion": "2.3.7.13",
   "affectionActionKeys": [
     "rubFace",
     "cuddleChest",
@@ -8,6 +9,10 @@
     "pet",
     "kissPlushie",
     "kissWith",
+    "noseBoop",
+    "cheekRest",
+    "foreheadBump",
+    "snugglePlushie",
     "whisper",
     "hugTightly"
   ],

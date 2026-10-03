@@ -1,32 +1,51 @@
 {
   "schemaVersion": 1,
+  "pluginVersion": "2.3.7.13",
+  "generatedFrom": "CURRENT_COMMAND_GROUPS in SubbysPlushies.user.js",
   "groups": [
     {
       "title": "General",
       "commands": [
         {
           "command": "/help plushie",
-          "description": "Show Subby's Plushies commands with descriptions. Plain /help also includes a plushie command summary."
+          "description": "Show the complete Subby's Plushies command reference in chat."
+        },
+        {
+          "command": "/help plushies",
+          "description": "Alias for /help plushie."
         },
         {
           "command": "/plushie",
-          "description": "Equip Subby's Plushies."
+          "description": "Equip Subby's Plushies in ItemHandheld."
         },
         {
           "command": "/plushieuse",
-          "description": "Open the plushie selector/use menu."
+          "description": "Open the plushie selector / Use menu."
         },
+        {
+          "command": "/plushieaddon",
+          "description": "Wear a second Subby's Plushies plushie in ItemAddon (Body slot)."
+        },
+        {
+          "command": "/plushieremove",
+          "description": "Remove the held Subby's Plushies item."
+        },
+        {
+          "command": "/plushierecover",
+          "description": "Run the plush recovery helper."
+        },
+        {
+          "command": "/plushiefeatures",
+          "description": "Show the current feature-toggle status."
+        }
+      ]
+    },
+    {
+      "title": "Extensions Tabs",
+      "commands": [
         {
           "command": "/plushieextensions",
-          "description": "Open the Subby's Plushies Extensions control center."
-        },
-        {
-          "command": "/plushiecommands",
-          "description": "Open the Commands tab directly."
-        },
-        {
-          "command": "/plushiecommand",
-          "description": "Alias for /plushiecommands."
+          "description": "Open the Subby's Plushies Extensions control center on Settings."
         },
         {
           "command": "/plushiestatus",
@@ -41,37 +60,49 @@
           "description": "Open the Layout customization tab."
         },
         {
-          "command": "/plushieremove",
-          "description": "Remove the held Subby's Plushies item."
+          "command": "/plushieplushies",
+          "description": "Open the Plushies tab with relationships, favorites, emotes, and saved poses."
         },
         {
-          "command": "/plushierecover",
-          "description": "Run the plush recovery helper."
+          "command": "/plushiehistory",
+          "description": "Open the History tab for mood and plushie battles."
+        },
+        {
+          "command": "/plushiebackup",
+          "description": "Open the Backup / Restore tab."
+        },
+        {
+          "command": "/plushiecommands",
+          "description": "Open the Commands tab directly."
+        },
+        {
+          "command": "/plushiecommand",
+          "description": "Alias for /plushiecommands."
         }
       ]
     },
     {
-      "title": "Positioning",
+      "title": "Positioning & Poses",
       "commands": [
         {
           "command": "/plushieposition",
-          "description": "Open BC's native Move / Resize editor."
+          "description": "Open BC's native Move / Resize editor for the plushie."
         },
         {
           "command": "/plushiemove",
-          "description": "Alias for Move / Resize."
+          "description": "Alias for /plushieposition."
         },
         {
           "command": "/plushieresize",
-          "description": "Alias for Move / Resize."
+          "description": "Alias for /plushieposition."
         },
         {
           "command": "/plushiehands",
-          "description": "Reset the plush to its default hands position."
+          "description": "Reset the plushie to its default hands position."
         },
         {
           "command": "/plushiecenter",
-          "description": "Alias for resetting the plush position."
+          "description": "Alias for /plushiehands."
         },
         {
           "command": "/plushiedrag [on|off]",
@@ -79,156 +110,11 @@
         },
         {
           "command": "/plushiesnap <point>",
-          "description": "Snap to a named point such as head, face, chest, hands, left shoulder, or right shoulder."
-        }
-      ]
-    },
-    {
-      "title": "Features",
-      "commands": [
-        {
-          "command": "/plushiemood",
-          "description": "Show the current plushie's mood and quick info."
+          "description": "Snap to hands, chest, face, head, left shoulder, or right shoulder."
         },
         {
-          "command": "/plushielore",
-          "description": "Open the Lore browser on the held plushie."
-        },
-        {
-          "command": "/plushieinfo",
-          "description": "Show the current plushie's mood and quick info."
-        },
-        {
-          "command": "/plushieprotect",
-          "description": "Toggle Protect Me mode."
-        },
-        {
-          "command": "/plushiejealous",
-          "description": "Toggle Jealous Plushie mode."
-        },
-        {
-          "command": "/plushieidle",
-          "description": "Toggle idle plush animations."
-        },
-        {
-          "command": "/plushiespeech",
-          "description": "Toggle local speech bubbles."
-        },
-        {
-          "command": "/plushiespeak",
-          "description": "Force one local plush speech bubble."
-        },
-        {
-          "command": "/plushiebubble",
-          "description": "Alias for /plushiespeak."
-        },
-        {
-          "command": "/plushiepurr",
-          "description": "Play the plush purr sound locally."
-        },
-        {
-          "command": "/plushiefeatures",
-          "description": "Show the current feature-toggle status."
-        },
-        {
-          "command": "/plushiehistory",
-          "description": "Open the History tab with recent mood changes and the last 20 plushie battles."
-        },
-        {
-          "command": "/plushieperformance normal|low",
-          "description": "Switch between Normal and Low CPU mode. Low CPU pauses optional animations and reduces background refresh/watchdog frequency."
-        }
-      ]
-    },
-    {
-      "title": "Room Mascot",
-      "commands": [
-        {
-          "command": "/plushiemascot set",
-          "description": "Set your held plush as the room mascot (room admin only)."
-        },
-        {
-          "command": "/plushiemascot clear",
-          "description": "Clear the room mascot (room admin only)."
-        },
-        {
-          "command": "/plushiemascot show",
-          "description": "Show mascot information / restore the mascot picture."
-        },
-        {
-          "command": "/plushiemascot hide",
-          "description": "Hide the mascot picture locally."
-        },
-        {
-          "command": "/plushiemascotshow",
-          "description": "Shortcut to show the mascot picture."
-        },
-        {
-          "command": "/plushiemascothide",
-          "description": "Shortcut to hide the mascot picture."
-        }
-      ]
-    },
-    {
-      "title": "Battle, Stats & Achievements",
-      "commands": [
-        {
-          "command": "/plushiebattle <member/name>",
-          "description": "Challenge another player to a plushie battle. With no argument, uses the focused character when possible."
-        },
-        {
-          "command": "/plushiestats",
-          "description": "Open the detailed Stats tab."
-        },
-        {
-          "command": "/plushieachievements",
-          "description": "Open the detailed Achievements tab."
-        },
-        {
-          "command": "/plushieach",
-          "description": "Open the detailed Achievements tab."
-        }
-      ]
-    },
-    {
-      "title": "Updates & Diagnostics",
-      "commands": [
-        {
-          "command": "/plushieupdate",
-          "description": "Check the GitHub version manifest for an update."
-        },
-        {
-          "command": "/plushieupdateopen",
-          "description": "Open the latest update/download page."
-        },
-        {
-          "command": "/plushiedebug",
-          "description": "Print detailed plugin diagnostics to the browser console."
-        },
-        {
-          "command": "/plushiedata",
-          "description": "Show Git-backed data source/cache status."
-        },
-        {
-          "command": "/plushiedatareload",
-          "description": "Force-refresh validated data files from GitHub."
-        }
-      ]
-    },
-    {
-      "title": "Plushies & Relationships",
-      "commands": [
-        {
-          "command": "/plushieplushies",
-          "description": "Open the Plushies tab with relationship, favorites, emotes, and saved poses."
-        },
-        {
-          "command": "/plushiefavorite",
-          "description": "Toggle the held plushie as a favorite."
-        },
-        {
-          "command": "/plushieemote happy|angry|sleepy|protective|sulky",
-          "description": "Show a 15-second room-synced plushie emote and mood symbol to other Subby's Plushies users in the room."
+          "command": "/plushiebalance",
+          "description": "Open the Balance on Head minigame directly."
         },
         {
           "command": "/plushieposes",
@@ -236,7 +122,7 @@
         },
         {
           "command": "/plushieposesave <1|2|3>",
-          "description": "Save the held plushie current X/Y, scale, and rotation."
+          "description": "Save the current plushie's X/Y position, scale, and rotation to a pose slot."
         },
         {
           "command": "/plushieposeload <1|2|3>",
@@ -249,12 +135,127 @@
       ]
     },
     {
-      "title": "Backup / Restore",
+      "title": "Mood & Interactions",
       "commands": [
         {
-          "command": "/plushiebackup",
-          "description": "Open the Backup / Restore tab."
+          "command": "/plushiemood",
+          "description": "Show the held plushie's mood, relationship, and quick info."
         },
+        {
+          "command": "/plushieinfo",
+          "description": "Alias for /plushiemood."
+        },
+        {
+          "command": "/plushielore",
+          "description": "Open the Lore browser on the held plushie."
+        },
+        {
+          "command": "/plushiefavorite",
+          "description": "Toggle the held plushie as a favorite."
+        },
+        {
+          "command": "/plushieemote <happy|angry|sleepy|protective|sulky>",
+          "description": "Show a 15-second room-synced plushie emote and bubble."
+        },
+        {
+          "command": "/plushieprotect",
+          "description": "Toggle Protect Me mode."
+        },
+        {
+          "command": "/plushiejealous",
+          "description": "Toggle Jealous Plushie mode."
+        },
+        {
+          "command": "/plushieidle",
+          "description": "Toggle idle plushie wiggle animations."
+        },
+        {
+          "command": "/plushiespeech",
+          "description": "Toggle local automatic speech bubbles."
+        },
+        {
+          "command": "/plushiespeak",
+          "description": "Force one local plushie speech bubble."
+        },
+        {
+          "command": "/plushiebubble",
+          "description": "Alias for /plushiespeak."
+        },
+        {
+          "command": "/plushiepurr",
+          "description": "Play the plushie purr sound locally."
+        },
+        {
+          "command": "/plushieperformance [normal|low]",
+          "description": "Show or change the performance mode."
+        }
+      ]
+    },
+    {
+      "title": "Room Mascot",
+      "commands": [
+        {
+          "command": "/plushiemascot",
+          "description": "Show current room mascot information."
+        },
+        {
+          "command": "/plushiemascot set",
+          "description": "Set your held plushie as the shared room mascot (room admin only)."
+        },
+        {
+          "command": "/plushiemascot random",
+          "description": "Pick and publish a random shared room mascot (room admin only)."
+        },
+        {
+          "command": "/plushiemascot picker",
+          "description": "Open the room mascot picker (room admin only; aliases: pick, open, choose)."
+        },
+        {
+          "command": "/plushiemascot clear",
+          "description": "Clear the shared room mascot (room admin only; alias: remove)."
+        },
+        {
+          "command": "/plushiemascot show",
+          "description": "Restore the mascot picture locally (alias: unhide)."
+        },
+        {
+          "command": "/plushiemascot hide",
+          "description": "Hide the mascot picture locally."
+        },
+        {
+          "command": "/plushiemascotshow",
+          "description": "Shortcut for /plushiemascot show."
+        },
+        {
+          "command": "/plushiemascothide",
+          "description": "Shortcut for /plushiemascot hide."
+        }
+      ]
+    },
+    {
+      "title": "Battle, Stats & Achievements",
+      "commands": [
+        {
+          "command": "/plushiebattle [member/name]",
+          "description": "Challenge another player to a plushie battle; with no target, use the focused character when possible."
+        },
+        {
+          "command": "/plushiestats",
+          "description": "Open the detailed Stats tab."
+        },
+        {
+          "command": "/plushieachievements",
+          "description": "Open the detailed Achievements tab."
+        },
+        {
+          "command": "/plushieach",
+          "description": "Short alias for /plushieachievements."
+        }
+      ]
+    },
+    {
+      "title": "Backup / Restore",
+      "commands": [
         {
           "command": "/plushieexport",
           "description": "Export a portable Subby's Plushies JSON backup."
@@ -262,6 +263,31 @@
         {
           "command": "/plushieimport",
           "description": "Choose and restore a Subby's Plushies JSON backup."
+        }
+      ]
+    },
+    {
+      "title": "Updates & Diagnostics",
+      "commands": [
+        {
+          "command": "/plushieupdate",
+          "description": "Check the GitHub version manifest for an update."
+        },
+        {
+          "command": "/plushieupdateopen",
+          "description": "Open the latest update / download page."
+        },
+        {
+          "command": "/plushiedata",
+          "description": "Show Git-backed data source and cache status."
+        },
+        {
+          "command": "/plushiedatareload",
+          "description": "Force-refresh validated data files from GitHub."
+        },
+        {
+          "command": "/plushiedebug",
+          "description": "Print detailed addon diagnostics to the browser console."
         }
       ]
     }

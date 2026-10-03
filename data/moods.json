@@ -1,11 +1,13 @@
 {
   "schemaVersion": 1,
+  "pluginVersion": "2.3.7.13",
   "defaultScore": 60,
   "minimumScore": 0,
   "maximumScore": 100,
-  "driftTarget": 29,
+  "driftTarget": 0,
   "driftStep": 1,
-  "driftEveryMinutes": 15,
+  "driftEveryMinutes": 480,
+  "equippedPlushiesDoNotDecay": true,
   "labels": [
     {
       "maxScore": 18,
@@ -41,6 +43,10 @@
     "hideBehind": 1,
     "kissPlushie": 6,
     "kissWith": 3,
+    "noseBoop": 3,
+    "cheekRest": 4,
+    "foreheadBump": 2,
+    "snugglePlushie": 5,
     "bonk": -8,
     "balanceHead": 2,
     "show": 2,

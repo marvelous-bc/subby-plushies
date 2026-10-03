@@ -1,6 +1,8 @@
 {
   "schemaVersion": 1,
+  "pluginVersion": "2.3.7.13",
   "storageKey": "SubbysPlushies:stats:v1",
+  "battleStorage": "per-account",
   "fields": {
     "totalInteractions": "number",
     "actions": "object<string,number>",
@@ -10,13 +12,13 @@
     "mascotSets": "number",
     "drags": "number",
     "offers": "number",
-    "battles": {
-      "played": "number",
-      "wins": "number",
-      "losses": "number",
-      "draws": "number"
-    },
     "achievements": "object<achievementId,timestampMs>"
   },
-  "note": "Per-user stats remain in localStorage. This file documents the structure only; it is not user data."
+  "battleFields": {
+    "played": "number",
+    "wins": "number",
+    "losses": "number",
+    "draws": "number"
+  },
+  "note": "General stats remain local. Battle stats/history are stored per Bondage Club account member number."
 }
