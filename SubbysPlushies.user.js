@@ -6611,40 +6611,67 @@
             return fail("Could not identify the sender's member number.");
         }
 
-        const existing = getHeld(window.Player);
-        if (existing) {
+        if (getHeld(window.Player)) {
             return fail("Your hands are occupied. Free your ItemHandheld slot and press Accept again.");
         }
 
-        const snapshot = cachedSnapshot || captureOfferedPlushSnapshot(sourceMember);
-        if (!snapshot || snapshot.assetName !== ASSET_NAME || snapshot.groupName !== GROUP) {
+        const sourceCharacter = getRoomCharacterByMember(sourceMember);
+        if (!sourceCharacter) {
+            return fail("The sender is no longer available in the room.");
+        }
+
+        const sourceItem = getHeld(sourceCharacter);
+        const liveSnapshot = snapshotPlushItem(sourceItem);
+        const snapshot = liveSnapshot || cachedSnapshot;
+        if (!liveSnapshot || !snapshot || snapshot.assetName !== ASSET_NAME || snapshot.groupName !== GROUP) {
             return fail("The offered plushie is no longer in the sender's hand.");
         }
 
         try {
-            InventoryWear(window.Player, ASSET_NAME, GROUP);
-        } catch (e) {
-            return fail(`BC could not equip the transferred plushie: ${String(e)}`);
-        }
+            InventoryRemove(sourceCharacter, GROUP, false);
 
-        const received = getHeld(window.Player);
-        if (!isOurs(received)) {
-            return fail("BC did not equip Subby's Plushies into your ItemHandheld slot.");
-        }
+            const received = InventoryWear(
+                window.Player,
+                ASSET_NAME,
+                GROUP,
+                cloneTransferValue(snapshot.color),
+                Number.isFinite(snapshot.difficulty) ? snapshot.difficulty : undefined,
+                sourceMember,
+                cloneTransferValue(snapshot.craft),
+                false
+            );
 
-        try {
-            if (snapshot.color !== undefined) received.Color = cloneTransferValue(snapshot.color);
-            if (Number.isFinite(snapshot.difficulty)) received.Difficulty = snapshot.difficulty;
-            received.Property = cloneTransferValue(snapshot.property || {});
-            if (snapshot.craft != null) received.Craft = cloneTransferValue(snapshot.craft);
-            else if (Object.prototype.hasOwnProperty.call(received, "Craft")) delete received.Craft;
+            if (!isOurs(received || getHeld(window.Player))) {
+                throw new Error("BC did not equip Subby's Plushies into your ItemHandheld slot.");
+            }
 
-            setItemPlushState(received, snapshot.option);
-            ensureNativeTransform(received);
-            rememberCharacterPlushState(window.Player, received);
+            const heldReceived = received || getHeld(window.Player);
+            heldReceived.Property = cloneTransferValue(snapshot.property || {});
+            if (snapshot.craft != null) heldReceived.Craft = cloneTransferValue(snapshot.craft);
+            else if (Object.prototype.hasOwnProperty.call(heldReceived, "Craft")) delete heldReceived.Craft;
+
+            setItemPlushState(heldReceived, snapshot.option);
+            ensureNativeTransform(heldReceived);
+            rememberCharacterPlushState(window.Player, heldReceived);
+            refresh(sourceCharacter, true);
             refresh(window.Player, true);
             schedulePlushStabilization(snapshot.option);
             syncHugTightlyActivityAvailability("Offer Plushie received");
+
+            window.setTimeout(() => {
+                try {
+                    if (typeof window.ChatRoomCharacterUpdate === "function") window.ChatRoomCharacterUpdate(sourceCharacter);
+                } catch (e) {
+                    warn("Offer Plushie could not publish sender CharacterUpdate:", e);
+                }
+            }, 0);
+            window.setTimeout(() => {
+                try {
+                    if (typeof window.ChatRoomCharacterUpdate === "function") window.ChatRoomCharacterUpdate(window.Player);
+                } catch (e) {
+                    warn("Offer Plushie could not publish recipient CharacterUpdate:", e);
+                }
+            }, 0);
 
             offerTransfersReceived++;
             lastOfferTransferReceived = {
@@ -6652,16 +6679,35 @@
                 sourceName: sourceName || null,
                 option: snapshot.option,
                 craftPreserved: snapshot.craft != null,
+                transferStrategy: "LSCG-style two-character ItemHandheld transfer",
                 at: new Date().toISOString(),
             };
-            log(`Received offered plushie from #${sourceMember}.`, lastOfferTransferReceived);
+            log(`Received offered plushie from #${sourceMember} using LSCG-style ItemHandheld transfer.`, lastOfferTransferReceived);
             return { ok: true, snapshot };
         } catch (e) {
             try {
-                if (isOurs(getHeld(window.Player))) InventoryRemove(window.Player, GROUP);
-                refresh(window.Player, true);
+                if (!isOurs(getHeld(sourceCharacter))) {
+                    const restored = InventoryWear(
+                        sourceCharacter,
+                        ASSET_NAME,
+                        GROUP,
+                        cloneTransferValue(snapshot.color),
+                        Number.isFinite(snapshot.difficulty) ? snapshot.difficulty : undefined,
+                        sourceMember,
+                        cloneTransferValue(snapshot.craft),
+                        false
+                    );
+                    if (restored) restored.Property = cloneTransferValue(snapshot.property || {});
+                    refresh(sourceCharacter, true);
+                }
+                if (isOurs(getHeld(window.Player))) {
+                    suppressLocalPlushRepair("failed Offer Plushie rollback", 1200);
+                    clearRememberedLocalPlushState();
+                    InventoryRemove(window.Player, GROUP, false);
+                    refresh(window.Player, true);
+                }
             } catch (_) {}
-            return fail(`Could not apply the offered plushie state: ${String(e)}`);
+            return fail(`Could not transfer the offered plushie: ${String(e)}`);
         }
     }
 
@@ -6750,15 +6796,15 @@
 
         const held = getHeld(window.Player);
         if (!isOurs(held)) {
-            offerTransferSenderRemovalFailures++;
-            lastOfferTransferFailure = {
-                side: "sender",
-                reason: "The sender no longer has Subby's Plushies in ItemHandheld, so nothing was removed.",
-                actorMember: parsed.actorMember,
+            lastOfferSenderRemoval = {
+                recipientMember: parsed.actorMember,
+                option: pending.option,
                 triggerSource,
+                alreadyRemovedByRecipientTransfer: true,
                 at: new Date().toISOString(),
             };
-            return false;
+            log(`Transferred plushie away to #${parsed.actorMember}; sender copy was already removed by the recipient transfer (${triggerSource}).`);
+            return true;
         }
 
         const currentOption = canonicalWirePlushOption(getItemPlushOption(held));
@@ -6785,9 +6831,6 @@
             if (activeHideBehindSession) restoreActiveHideBehind("Offer Plushie transferred away");
             if (activeProtectSession) restoreActiveProtect("Offer Plushie transferred away");
 
-            // EBC can synchronously enter CharacterRefresh/CharacterUpdate while
-            // InventoryRemove is still unwinding. Suppress repair first so the
-            // outgoing plush cannot be reconstructed during that window.
             suppressLocalPlushRepair("Offer Plushie transferred away", 2500);
             clearRememberedLocalPlushState();
             InventoryRemove(window.Player, GROUP);
@@ -8316,8 +8359,6 @@
     }
 
     function repairPlushState(item, preferredOption = lastPlushOption, reason = "refresh", C = window.Player) {
-        // Remote characters are server-authoritative. Rewriting their appearance can
-        // resurrect stale plushie state on EBC/ModSDK after room updates.
         if (!isLocalPlayerCharacter(C)) return false;
         if (localPlushRepairSuppressed(C)) return false;
         if (!isOurs(item)) return false;
@@ -8428,8 +8469,6 @@
     }
 
     function captureVisiblePlushStates() {
-        // Only persist the local player's plush state. Remote appearance is
-        // authoritative from the server and must never be repaired from a cache.
         const player = window.Player;
         if (player && !localPlushRepairSuppressed(player)) rememberCharacterPlushState(player);
     }
@@ -10256,9 +10295,6 @@
         try {
             window.AssetCurrentGroup = runtimeGroup;
 
-            // R132 uses AssetAdd(Group, A, ExtendedConfig). ModSDK wraps global
-            // functions with a variadic router, so inspecting window.AssetAdd.length
-            // directly incorrectly makes it look like a one-argument function.
             if (arity === 3 && (!params.length || params.every(name => name.length <= 2))) {
                 assetAddStrategy = "AssetAdd(runtimeGroup, definition, extendedConfig) [R132/ModSDK]";
                 add(runtimeGroup, definition, extendedConfig);
@@ -10284,7 +10320,6 @@
                 }
                 if (name === "extended" || name === "extend") return true;
 
-                // Known R132 positional signature: (Group, A, ExtendedConfig).
                 if (arity === 3) {
                     if (index === 0) return runtimeGroup;
                     if (index === 1) return definition;
@@ -10298,8 +10333,6 @@
             const recognizedRequired = args.slice(0, requiredCount).every(value => value !== undefined);
 
             if (!recognizedRequired) {
-                // Safe compatibility fallback for current BC releases. Passing an
-                // extra third argument is harmless for two-argument JS functions.
                 if (requiredCount >= 2 && requiredCount <= 3) {
                     assetAddStrategy = "AssetAdd(runtimeGroup, definition, extendedConfig) [compat fallback]";
                     add(runtimeGroup, definition, extendedConfig);
