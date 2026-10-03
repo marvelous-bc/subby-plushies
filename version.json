@@ -1,6 +1,6 @@
 {
-  "version": "2.0.0",
+  "version": "2.1.1",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
   "launcherUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js",
-  "notes": "v2 release: /help integration and Tab autocomplete, corrected transformed mood/emote icon anchoring, release cleanup/performance tuning, two distributable builds, and an always-latest launcher."
+  "notes": "v2.1.1: mascot room-customisation updates now stage until Bondage Club's normal Save action, map-room mascot publishing waits for map initialization, and cancelling room edits restores the previous mascot state."
 }
