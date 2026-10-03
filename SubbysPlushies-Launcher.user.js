@@ -3,7 +3,7 @@
 // @namespace    subbycat.subbysplushies.launcher
 // @author       Marvelous
 // @version      2.0.0
-// @description  Lightweight Subby's Plushies launcher that checks GitHub for the latest v2 release on every Bondage Club load
+// @description  Universal Subby's Plushies v2 launcher for Electron-BC and browser userscript managers
 // @homepageURL  https://github.com/marvelous-bc/subby-plushies
 // @supportURL   https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL    https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js
@@ -13,6 +13,7 @@
 // @match        https://www.bondage-europe.com/*/BondageClub/
 // @match        https://www.bondage-asia.com/club/*/
 // @run-at       document-start
+// @sandbox      raw
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -26,24 +27,105 @@
     const MANIFEST_URL = "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/version.json";
     const DEFAULT_SCRIPT_URL = "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js";
     const TRUSTED_RAW_PREFIX = "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/";
+
     const CACHE_VERSION_KEY = "SubbysPlushiesLauncher:version";
     const CACHE_SCRIPT_KEY = "SubbysPlushiesLauncher:script";
     const CACHE_URL_KEY = "SubbysPlushiesLauncher:url";
     const TAG = "[Subby's Plushies Launcher]";
 
-    const requestText = url => new Promise((resolve, reject) => {
-        GM_xmlhttpRequest({
-            method: "GET",
-            url: `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`,
-            headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
-            timeout: 15000,
-            onload: response => response.status >= 200 && response.status < 300
-                ? resolve(String(response.responseText || ""))
-                : reject(new Error(`HTTP ${response.status} while fetching ${url}`)),
-            onerror: () => reject(new Error(`Network request failed for ${url}`)),
-            ontimeout: () => reject(new Error(`Network request timed out for ${url}`)),
+    // Electron-BC generally executes userscripts directly in the page context.
+    // Tampermonkey-style managers may expose the page through unsafeWindow.
+    const PAGE = typeof unsafeWindow !== "undefined" && unsafeWindow
+        ? unsafeWindow
+        : window;
+
+    function cacheBust(url) {
+        return `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
+    }
+
+    function storageGet(key, fallback = "") {
+        try {
+            if (typeof GM_getValue === "function") {
+                const value = GM_getValue(key, fallback);
+                return value == null ? fallback : value;
+            }
+        } catch (error) {
+            console.warn(TAG, "GM_getValue failed; using localStorage fallback.", error);
+        }
+
+        try {
+            const value = PAGE.localStorage?.getItem(key);
+            return value == null ? fallback : value;
+        } catch (_) {
+            return fallback;
+        }
+    }
+
+    function storageSet(key, value) {
+        try {
+            if (typeof GM_setValue === "function") {
+                GM_setValue(key, value);
+                return true;
+            }
+        } catch (error) {
+            console.warn(TAG, "GM_setValue failed; using localStorage fallback.", error);
+        }
+
+        try {
+            PAGE.localStorage?.setItem(key, String(value));
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function requestWithGM(url) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: "GET",
+                url: cacheBust(url),
+                headers: {
+                    "Cache-Control": "no-cache",
+                    Pragma: "no-cache",
+                },
+                timeout: 15000,
+                onload: response => response.status >= 200 && response.status < 300
+                    ? resolve(String(response.responseText || ""))
+                    : reject(new Error(`HTTP ${response.status} while fetching ${url}`)),
+                onerror: () => reject(new Error(`Network request failed for ${url}`)),
+                ontimeout: () => reject(new Error(`Network request timed out for ${url}`)),
+            });
         });
-    });
+    }
+
+    async function requestWithFetch(url) {
+        const fetchFn = typeof PAGE.fetch === "function"
+            ? PAGE.fetch.bind(PAGE)
+            : typeof fetch === "function"
+                ? fetch.bind(globalThis)
+                : null;
+
+        if (!fetchFn) throw new Error("Neither GM_xmlhttpRequest nor fetch is available.");
+
+        const response = await fetchFn(cacheBust(url), {
+            method: "GET",
+            cache: "no-store",
+            credentials: "omit",
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status} while fetching ${url}`);
+        }
+
+        return String(await response.text());
+    }
+
+    function requestText(url) {
+        if (typeof GM_xmlhttpRequest === "function") {
+            return requestWithGM(url);
+        }
+        return requestWithFetch(url);
+    }
 
     function manifestScriptUrl(manifest) {
         const candidate = String(manifest?.downloadUrl || "").trim();
@@ -55,7 +137,7 @@
     }
 
     function pluginStarted() {
-        return !!unsafeWindow.__SUBBYS_PLUSHIES_ACTIVE__ || !!unsafeWindow.SubbysPlushies;
+        return !!PAGE.__SUBBYS_PLUSHIES_ACTIVE__ || !!PAGE.SubbysPlushies;
     }
 
     function executeLatest(code, version) {
@@ -63,21 +145,26 @@
             throw new Error("Downloaded script did not look like Subby's Plushies.");
         }
 
+        if (pluginStarted()) return "already-loaded";
+
         const source = `${code}\n//# sourceURL=SubbysPlushies-${String(version || "latest")}.user.js`;
         const failures = [];
 
+        // Best path for Electron-BC and raw/page-context userscript execution.
         try {
-            unsafeWindow.eval(source);
+            if (typeof PAGE.eval !== "function") throw new Error("Page eval is unavailable.");
+            PAGE.eval(source);
             if (pluginStarted()) return "eval";
             failures.push(new Error("Page eval completed but the addon did not start."));
         } catch (error) {
             failures.push(error);
         }
 
+        // Works in page contexts where eval is restricted but Function is available.
         if (!pluginStarted()) {
             try {
-                const PageFunction = unsafeWindow.Function;
-                if (typeof PageFunction !== "function") throw new Error("unsafeWindow.Function is unavailable.");
+                const PageFunction = PAGE.Function;
+                if (typeof PageFunction !== "function") throw new Error("Page Function constructor is unavailable.");
                 PageFunction(source)();
                 if (pluginStarted()) {
                     console.warn(TAG, "Page eval was unavailable; used Function fallback.", failures[0]);
@@ -89,9 +176,10 @@
             }
         }
 
+        // Final fallback for userscript managers that isolate the launcher itself.
         if (!pluginStarted()) {
             try {
-                const doc = unsafeWindow.document;
+                const doc = PAGE.document || document;
                 const script = doc.createElement("script");
                 script.textContent = source;
                 const parent = doc.head || doc.documentElement;
@@ -108,13 +196,13 @@
             }
         }
 
-        throw failures[0] || new Error("Browser security settings blocked launcher execution.");
+        throw failures[0] || new Error("Launcher execution was blocked by the userscript environment.");
     }
 
     function cacheRelease(code, version, scriptUrl) {
-        GM_setValue(CACHE_SCRIPT_KEY, code);
-        GM_setValue(CACHE_VERSION_KEY, version);
-        GM_setValue(CACHE_URL_KEY, scriptUrl);
+        storageSet(CACHE_SCRIPT_KEY, code);
+        storageSet(CACHE_VERSION_KEY, version);
+        storageSet(CACHE_URL_KEY, scriptUrl);
     }
 
     async function downloadAndStart(version, scriptUrl) {
@@ -130,13 +218,12 @@
             return;
         }
 
-        const cachedVersion = String(GM_getValue(CACHE_VERSION_KEY, "") || "");
-        const cachedScript = String(GM_getValue(CACHE_SCRIPT_KEY, "") || "");
-        const cachedUrl = String(GM_getValue(CACHE_URL_KEY, "") || "");
+        const cachedVersion = String(storageGet(CACHE_VERSION_KEY, "") || "");
+        const cachedScript = String(storageGet(CACHE_SCRIPT_KEY, "") || "");
+        const cachedUrl = String(storageGet(CACHE_URL_KEY, "") || "");
 
         try {
-            const manifestText = await requestText(MANIFEST_URL);
-            const manifest = JSON.parse(manifestText);
+            const manifest = JSON.parse(await requestText(MANIFEST_URL));
             const latestVersion = String(manifest?.version || "").trim();
             if (!latestVersion) throw new Error("version.json did not contain a version.");
 
@@ -170,6 +257,7 @@
                     return;
                 }
             }
+
             console.error(TAG, "Could not download Subby's Plushies and no working cached release exists.", error);
         }
     }
