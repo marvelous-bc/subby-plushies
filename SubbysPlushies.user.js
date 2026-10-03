@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.3.3
+// @version      2.3.7
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, emotes, battles, mascot, themes, poses, stats, achievements, and more
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -20,7 +20,7 @@
 (() => {
     "use strict";
 
-    const VERSION = "2.3.3";
+    const VERSION = "2.3.7";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -279,6 +279,7 @@
     const ROOM_MASCOT_CACHE_STORAGE_KEY = "SubbysPlushies:room-mascots:v1";
     const ROOM_MASCOT_POSITION_STORAGE_KEY = "SubbysPlushies:room-mascot-position:v1";
     const DRAG_TOGGLE_POSITION_STORAGE_KEY = "SubbysPlushies:drag-toggle-position:v1";
+    const DRAG_TARGET_GROUP_STORAGE_KEY = "SubbysPlushies:drag-target-group:v1";
     const PLUSH_EMOTE_SYNC_CONTENT_PREFIX = "SubbysPlushiesEmote:";
     const PLUSH_EMOTE_SYNC_TAG = "SubbysPlushiesEmote";
     const PLUSH_EMOTE_DURATION_MS = 15000;
@@ -297,6 +298,7 @@
         autoUpdateChecks: true,
         idleAnimations: true,
         speechBubbles: true,
+        showDragButton: true,
     });
     let IDLE_MIN_DELAY_MS = 22000;
     let IDLE_MAX_DELAY_MS = 48000;
@@ -418,6 +420,7 @@
     ]);
     let DRAG_SNAP_RADIUS = 34;
     const ROOM_MASCOT_SET_RE = /(.+?)\s+sets\s+(.+?)\s+as\s+the\s+room\s+mascot\s+plushie\.?/i;
+    const ROOM_MASCOT_RANDOM_RE = /(.+?)\s+was\s+chosen\s+randomly\s+as\s+the\s+room\s+mascot\s+plushie\.?/i;
     const ROOM_MASCOT_CLEAR_RE = /(.+?)\s+clears\s+the\s+room\s+mascot\s+plushie\.?/i;
 
     const ACTIVE_GUARD = "__SUBBYS_PLUSHIES_ACTIVE__";
@@ -816,6 +819,10 @@
                                 "description": "Set your held plush as the room mascot (room admin only)."
                         },
                         {
+                                "command": "/plushiemascot random",
+                                "description": "Pick a random plushie as the room mascot and announce it in chat (room admin only)."
+                        },
+                        {
                                 "command": "/plushiemascot clear",
                                 "description": "Clear the room mascot (room admin only)."
                         },
@@ -1010,6 +1017,8 @@
     let dragToggleUiTimer = null;
     let dragTogglePositionState = null;
     let dragToggleMoveSession = null;
+    let dragTargetGroupState = null;
+    let dragUiElement = null;
     let roomMascotState = null;
     let roomMascotCacheState = null;
     let roomMascotPositionState = null;
@@ -1218,6 +1227,7 @@
             autoUpdateChecks: storedBoolean("autoUpdateChecks"),
             idleAnimations: storedBoolean("idleAnimations"),
             speechBubbles: storedBoolean("speechBubbles"),
+            showDragButton: storedBoolean("showDragButton"),
             performanceMode: String(stored.performanceMode || "normal").toLowerCase() === "low" ? "low" : "normal",
         };
         return featureSettingsState;
@@ -1233,6 +1243,10 @@
             else cancelIdleAnimation(false);
         }
         if (key === "speechBubbles" && !settings[key]) removeSpeechBubble();
+        if (key === "showDragButton") {
+            if (settings[key]) refreshDragToggleButton();
+            else removeDragToggleButton();
+        }
         return settings[key];
     }
 
@@ -2386,7 +2400,7 @@
             const current = petSuitRenderStates.get(key);
             if (current) current.restorePending = false;
             if (window.CurrentScreen !== "ChatRoom" || characterPetSuitItem(C)) return;
-            const item = getHeld(C);
+            const item = getHandheldItem(C);
             if (!isOurs(item)) return;
             try {
                 if (typeof CharacterLoadCanvas === "function") CharacterLoadCanvas(C);
@@ -2409,7 +2423,7 @@
     function syncPetSuitPlushOverlay(C) {
         if (!C) return false;
         const key = petSuitOverlayKey(C);
-        const item = getHeld(C);
+        const item = getHandheldItem(C);
         const previous = petSuitRenderStates.get(key);
         if (!isOurs(item)) {
             if (previous?.active) previous.active = false;
@@ -2420,13 +2434,15 @@
         const wasActive = !!renderState.active;
         renderState.active = suitActive;
         renderState.character = C;
+        renderState.group = GROUP;
+        renderState.option = canonicalWirePlushOption(getItemPlushOption(item));
         renderState.lastSeenAt = Date.now();
         petSuitRenderStates.set(key, renderState);
         if (window.CurrentScreen === "ChatRoom" && wasActive && !suitActive) schedulePetSuitNativeRestore(C, key);
         return window.CurrentScreen === "ChatRoom" && suitActive;
     }
 
-    function getCanvasOverlayImage(source) {
+    function getCanvasOverlayImage(source, onReady = null) {
         if (typeof source !== "string" || !source) return null;
         try {
             if (typeof window.DrawGetImage === "function") {
@@ -2437,17 +2453,29 @@
         let image = canvasOverlayImageCache.get(source);
         if (!image) {
             image = new Image();
-            image.src = source;
             canvasOverlayImageCache.set(source, image);
+            image.src = source;
         }
-        return image.complete && (Number(image.naturalWidth) > 0 || Number(image.width) > 0) ? image : null;
+        const ready = image.complete && (Number(image.naturalWidth) > 0 || Number(image.width) > 0);
+        if (!ready && typeof onReady === "function" && !image.__SubbysPlushiesReadyHooked) {
+            image.__SubbysPlushiesReadyHooked = true;
+            image.addEventListener("load", () => {
+                image.__SubbysPlushiesReadyHooked = false;
+                try { onReady(); } catch (_) {}
+            }, { once: true });
+        }
+        return ready ? image : null;
     }
 
     function drawPetSuitPlushCanvasOverlay(C) {
         if (!syncPetSuitPlushOverlay(C)) return false;
-        const item = getHeld(C);
+        const item = getHandheldItem(C);
         const source = petSuitPlushOverlaySource(item);
-        const image = getCanvasOverlayImage(source);
+        const image = getCanvasOverlayImage(source, () => {
+            if (window.CurrentScreen === "ChatRoom" && characterPetSuitItem(C) && isOurs(getHandheldItem(C))) {
+                rebuildCharacterCanvas(C, "arm-restraint handheld plush overlay ready");
+            }
+        });
         const transform = readActivePlushLayerTransform(item);
         const ctx = window.MainCanvas;
         if (!image || !transform || !ctx || typeof ctx.drawImage !== "function") return false;
@@ -4722,7 +4750,7 @@
         return enabled;
     }
 
-    function setRoomMascotByName(name) {
+    function setRoomMascotByName(name, options = null) {
         const wanted = String(name || "").trim();
         const known = PLUSH_NAMES.slice(0, PUBLIC_PLUSH_COUNT).find(entry => String(entry || "").toLowerCase() === wanted.toLowerCase());
         if (!known) return false;
@@ -4730,6 +4758,7 @@
             appendLocalInfoBox("Room mascot", ["Only a verified room admin can set the shared mascot."]);
             return false;
         }
+        const randomPick = !!options?.randomPick;
         const source = getCharacterDisplayName(window.Player) || "Someone";
         if (window.CurrentScreen === "ChatAdmin" && !roomMascotAdminDirty) {
             roomMascotAdminSnapshot = roomMascotFromSharedRoomData();
@@ -4739,22 +4768,48 @@
         refreshRoomMascotOverlay();
         if (window.CurrentScreen === "ChatAdmin") {
             roomMascotAdminDirty = true;
-            roomMascotAdminPendingAction = { type: "set", source, name: known };
-            appendLocalInfoBox("Room mascot", [`${known} selected. Use the room Save button to publish it.`]);
+            roomMascotAdminPendingAction = { type: "set", source, name: known, randomPick };
+            appendLocalInfoBox("Room mascot", [
+                randomPick
+                    ? `${known} was chosen randomly. Use the room Save button to publish it.`
+                    : `${known} selected. Use the room Save button to publish it.`,
+            ]);
             return true;
         }
         const persisted = publishRoomMascotSharedState(roomMascotState);
-        sendStandaloneActionMessage(`${source} sets ${known} as the room mascot plushie.`);
+        sendStandaloneActionMessage(randomPick
+            ? `${known} was chosen randomly as the room mascot plushie.`
+            : `${source} sets ${known} as the room mascot plushie.`);
         if (!persisted) appendLocalInfoBox("Room mascot", ["Mascot was set locally, but the shared room-state update could not be sent."]);
         recordStat("mascot", 1, { plushName: known });
         return true;
     }
 
-    function setRoomMascotByOption(option) {
+    function setRoomMascotByOption(option, options = null) {
         const publicOption = Number(option);
         if (!validPublicPlushOption(publicOption)) return false;
         const wire = publicToWirePlushOption(publicOption);
-        return setRoomMascotByName(PLUSH_NAMES[wire]);
+        return setRoomMascotByName(PLUSH_NAMES[wire], options);
+    }
+
+    function pickRandomRoomMascot() {
+        if (!canSetRoomMascot()) {
+            appendLocalInfoBox("Room mascot", ["Only a verified room admin can set the shared mascot."]);
+            return false;
+        }
+        const available = [];
+        for (let option = 0; option < PUBLIC_PLUSH_COUNT; option++) {
+            if (!validPublicPlushOption(option)) continue;
+            const wire = publicToWirePlushOption(option);
+            const name = PLUSH_NAMES[wire];
+            if (name) available.push({ option, name });
+        }
+        if (!available.length) {
+            appendLocalInfoBox("Room mascot", ["No plushies are available to choose from."]);
+            return false;
+        }
+        const selected = available[Math.floor(Math.random() * available.length)];
+        return setRoomMascotByOption(selected.option, { randomPick: true });
     }
 
     function closeRoomMascotPicker() {
@@ -4834,18 +4889,26 @@
         }
         const controls = document.createElement("div");
         Object.assign(controls.style, { display: "flex", justifyContent: "center", gap: "10px", marginTop: "14px", flexWrap: "wrap" });
+        const random = document.createElement("button");
+        random.type = "button";
+        random.textContent = "Pick Random Mascot";
         const clear = document.createElement("button");
         clear.type = "button";
         clear.textContent = "Clear Mascot";
         const cancel = document.createElement("button");
         cancel.type = "button";
         cancel.textContent = "Cancel";
-        for (const button of [clear, cancel]) Object.assign(button.style, { font: "14px Arial, sans-serif", padding: "8px 16px", cursor: "pointer" });
+        for (const button of [random, clear, cancel]) Object.assign(button.style, { font: "14px Arial, sans-serif", padding: "8px 16px", cursor: "pointer" });
+        random.addEventListener("click", event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (pickRandomRoomMascot()) closeRoomMascotPicker();
+        });
         clear.addEventListener("click", event => { event.preventDefault(); if (clearRoomMascot()) closeRoomMascotPicker(); });
         cancel.addEventListener("click", event => { event.preventDefault(); closeRoomMascotPicker(); });
         root.addEventListener("pointerdown", event => { if (event.target === root) closeRoomMascotPicker(); });
         panel.addEventListener("pointerdown", event => event.stopPropagation());
-        controls.append(clear, cancel);
+        controls.append(random, clear, cancel);
         panel.append(title, grid, controls);
         root.appendChild(panel);
         document.body.appendChild(root);
@@ -4973,6 +5036,22 @@
             removeRoomMascotOverlay();
             return true;
         }
+        const random = text.match(ROOM_MASCOT_RANDOM_RE);
+        if (random) {
+            const renderedName = String(random[1] || "").trim();
+            const known = PLUSH_NAMES.find(name => name.toLowerCase() === renderedName.toLowerCase()) || renderedName;
+            const sender = getRoomCharacterByMember(senderMember);
+            roomMascotState = {
+                name: known,
+                setBy: getCharacterDisplayName(sender) || "room admin",
+                memberNumber: senderMember,
+                at: new Date().toISOString(),
+                shared: true,
+            };
+            cacheRoomMascotState(roomMascotState);
+            refreshRoomMascotOverlay();
+            return true;
+        }
         const set = text.match(ROOM_MASCOT_SET_RE);
         if (!set) return false;
         const renderedName = String(set[2] || "").trim();
@@ -4998,6 +5077,7 @@
     function handleRoomMascotCommand(command) {
         const arg = String(command || "").split(/\s+/)[1] || "info";
         if (arg === "set") return setCurrentPlushAsRoomMascot();
+        if (arg === "random") return pickRandomRoomMascot();
         if (arg === "clear" || arg === "remove") return clearRoomMascot();
         if (arg === "hide") return setRoomMascotOverlayVisible(false);
         if (arg === "show" || arg === "unhide") return setRoomMascotOverlayVisible(true);
@@ -5078,10 +5158,146 @@
         return true;
     }
 
+    function plushNameForItem(item) {
+        if (!isOurs(item)) return "Plushie";
+        const option = canonicalWirePlushOption(getItemPlushOption(item));
+        return validPlushOption(option) ? (PLUSH_NAMES[option] || "Plushie") : "Plushie";
+    }
+
+    function dragTargetLabel(groupName = getDragTargetGroup()) {
+        const item = getInventoryItem(window.Player, groupName);
+        const slot = groupName === ADDON_GROUP ? "Body (Ceiling Rope slot)" : "Handheld";
+        return isOurs(item) ? `${slot} — ${plushNameForItem(item)}` : `${slot} — not equipped`;
+    }
+
+    function getDragTargetGroup() {
+        if (!dragTargetGroupState) {
+            const stored = readLocalJSON(DRAG_TARGET_GROUP_STORAGE_KEY, {});
+            const storedGroup = String(stored?.group || "");
+            dragTargetGroupState = PLUSH_GROUPS.includes(storedGroup) ? storedGroup : GROUP;
+        }
+
+        const preferred = getInventoryItem(window.Player, dragTargetGroupState);
+        if (isOurs(preferred)) return dragTargetGroupState;
+
+        const fallback = PLUSH_GROUPS.find(groupName => isOurs(getInventoryItem(window.Player, groupName)));
+        if (fallback && fallback !== dragTargetGroupState) {
+            dragTargetGroupState = fallback;
+            writeLocalJSON(DRAG_TARGET_GROUP_STORAGE_KEY, { group: fallback });
+        }
+        return dragTargetGroupState;
+    }
+
+    function getDragTargetItem() {
+        return getInventoryItem(window.Player, getDragTargetGroup());
+    }
+
+    function setDragTargetGroup(groupName) {
+        const normalized = String(groupName || "");
+        if (!PLUSH_GROUPS.includes(normalized)) return false;
+        const item = getInventoryItem(window.Player, normalized);
+        if (!isOurs(item)) return false;
+        if (dragSession) finishDirectDrag(true);
+        dragTargetGroupState = normalized;
+        writeLocalJSON(DRAG_TARGET_GROUP_STORAGE_KEY, { group: normalized });
+        refreshDragToggleButton();
+        renderDragUi();
+        return true;
+    }
+
+    function closeDragUi() {
+        try { dragUiElement?.remove?.(); } catch (_) {}
+        dragUiElement = null;
+        return true;
+    }
+
+    function renderDragUi() {
+        if (!dragUiElement?.isConnected) return false;
+        const style = getExtensionsStyle();
+        dragUiElement.replaceChildren();
+
+        const header = document.createElement("div");
+        Object.assign(header.style, { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "10px" });
+        const title = document.createElement("strong");
+        title.textContent = "Drag UI";
+        Object.assign(title.style, { fontSize: "20px", color: style.accent });
+        const close = makeExtensionsButton("Close", closeDragUi);
+        header.append(title, close);
+
+        const hint = document.createElement("div");
+        hint.textContent = "Choose which equipped plushie Easy Drag controls, then enable or disable dragging.";
+        Object.assign(hint.style, { color: style.muted, fontSize: "12px", lineHeight: "1.4", marginBottom: "12px" });
+
+        const targetTitle = document.createElement("div");
+        targetTitle.textContent = "Drag target";
+        Object.assign(targetTitle.style, { fontWeight: "bold", color: style.text, marginBottom: "7px" });
+
+        const targets = document.createElement("div");
+        Object.assign(targets.style, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" });
+        const selectedGroup = getDragTargetGroup();
+        for (const groupName of PLUSH_GROUPS) {
+            const item = getInventoryItem(window.Player, groupName);
+            const available = isOurs(item);
+            const button = makeExtensionsButton(dragTargetLabel(groupName), () => {
+                if (available) setDragTargetGroup(groupName);
+            }, { active: available && selectedGroup === groupName });
+            button.disabled = !available;
+            if (!available) {
+                button.style.opacity = "0.48";
+                button.style.cursor = "not-allowed";
+            }
+            targets.appendChild(button);
+        }
+
+        const mode = makeExtensionsButton(dragModeEnabled ? "Disable Easy Drag" : "Enable Easy Drag", () => {
+            setDragMode(!dragModeEnabled);
+            renderDragUi();
+        }, { active: dragModeEnabled });
+        mode.style.width = "100%";
+
+        const status = document.createElement("div");
+        const targetItem = getDragTargetItem();
+        status.textContent = isOurs(targetItem)
+            ? `Current target: ${dragTargetLabel(getDragTargetGroup())} • Easy Drag ${dragModeEnabled ? "ON" : "off"}`
+            : "Equip a handheld or Body-slot plushie to use Easy Drag.";
+        Object.assign(status.style, { color: style.muted, fontSize: "12px", marginTop: "9px", lineHeight: "1.35" });
+
+        dragUiElement.append(header, hint, targetTitle, targets, mode, status);
+        return true;
+    }
+
+    function openDragUi() {
+        closeDragUi();
+        const root = document.createElement("div");
+        root.className = "SubbysPlushiesDragUi";
+        const style = getExtensionsStyle();
+        Object.assign(root.style, {
+            position: "fixed",
+            zIndex: "2147483450",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "min(520px, calc(100vw - 28px))",
+            boxSizing: "border-box",
+            padding: "14px",
+            border: `2px solid ${style.border}`,
+            borderRadius: "12px",
+            background: style.background,
+            color: style.text,
+            boxShadow: `7px 9px 0 ${style.shadow}, 0 14px 34px rgba(0,0,0,0.44)`,
+            font: `${extensionsLayoutMetrics().fontSize}px Arial, sans-serif`,
+        });
+        root.addEventListener("pointerdown", event => event.stopPropagation());
+        document.body.appendChild(root);
+        dragUiElement = root;
+        renderDragUi();
+        return true;
+    }
+
     function applyDragFrame(point) {
         const session = dragSession;
         if (!session || !point) return;
-        const current = getHeld(window.Player);
+        const current = getInventoryItem(window.Player, session.groupName);
         if (!isOurs(current) || getActivePlushLayerName(current) !== session.layerName) return;
         const dx = point.x - session.startX;
         const dy = point.y - session.startY;
@@ -5103,7 +5319,7 @@
         }
         if (!session) return false;
 
-        const current = getHeld(window.Player);
+        const current = getInventoryItem(window.Player, session.groupName);
         if (!isOurs(current) || getActivePlushLayerName(current) !== session.layerName) return false;
         if (cancelled) {
             setPlushLayerTransform(current, session.layerName, {
@@ -5131,7 +5347,7 @@
         if (!cancelled && typeof ChatRoomCharacterUpdate === "function") {
             try { ChatRoomCharacterUpdate(window.Player); } catch (_) {}
         }
-        if (!cancelled) recordStat("drag", 1, { plushName: currentPlushName() });
+        if (!cancelled) recordStat("drag", 1, { plushName: plushNameForItem(current) });
         return true;
     }
 
@@ -5160,8 +5376,8 @@
 
     function refreshDragToggleButton() {
         const inRoom = window.CurrentScreen === "ChatRoom";
-        const item = getHeld(window.Player);
-        if (!inRoom || !isOurs(item) || nativeLayeringVisible()) {
+        const item = getDragTargetItem();
+        if (!getFeatureSettings().showDragButton || !inRoom || !isOurs(item) || nativeLayeringVisible()) {
             removeDragToggleButton();
             return false;
         }
@@ -5238,8 +5454,9 @@
         dragToggleButton.style.left = `${Math.round(left)}px`;
         dragToggleButton.style.top = `${Math.round(top)}px`;
         dragToggleButton.textContent = "🖱️";
-        dragToggleButton.setAttribute("aria-label", dragModeEnabled ? "Disable Easy Drag" : "Enable Easy Drag");
-        dragToggleButton.title = dragModeEnabled ? "Easy Drag is ON — click to disable; drag this button to move it." : "Easy Drag is OFF — click to enable; drag this button to move it.";
+        const targetLabel = dragTargetLabel(getDragTargetGroup());
+        dragToggleButton.setAttribute("aria-label", `${dragModeEnabled ? "Disable" : "Enable"} Easy Drag for ${targetLabel}`);
+        dragToggleButton.title = `${targetLabel}. Easy Drag is ${dragModeEnabled ? "ON" : "OFF"} — click to ${dragModeEnabled ? "disable" : "enable"}; drag this button to move it.`;
         dragToggleButton.style.background = dragModeEnabled ? "rgba(72, 170, 105, 0.96)" : "rgba(28, 28, 32, 0.82)";
         dragToggleButton.style.opacity = dragModeEnabled ? "1" : "0.90";
         return true;
@@ -5254,7 +5471,7 @@
 
     function setDragMode(enabled) {
         const next = !!enabled;
-        if (next && !isOurs(getHeld(window.Player))) {
+        if (next && !isOurs(getDragTargetItem())) {
             dragModeEnabled = false;
             refreshDragToggleButton();
             return false;
@@ -5283,7 +5500,8 @@
             if (activeHideBehindSession) restoreActiveHideBehind("Easy Drag started");
             if (activeProtectSession) restoreActiveProtect("Easy Drag started");
 
-            const item = getHeld(window.Player);
+            const groupName = getDragTargetGroup();
+            const item = getInventoryItem(window.Player, groupName);
             if (!isOurs(item)) {
                 setDragMode(false);
                 return;
@@ -5295,6 +5513,7 @@
 
             dragSession = {
                 pointerId: event.pointerId,
+                groupName,
                 layerName,
                 base: { ...base },
                 startX: point.x,
@@ -5368,6 +5587,7 @@
             protectMe: settings.protectMe,
             jealousPlushie: settings.jealousPlushie,
             easyDrag: dragModeEnabled,
+            easyDragTarget: dragTargetLabel(getDragTargetGroup()),
             mascotPicture: settings.showRoomMascot,
             mascot: roomMascotState?.name || "None announced in this room",
             idleAnimations: settings.idleAnimations,
@@ -5660,6 +5880,7 @@
         appendExtensionsKeyValue(enabled, "Protect Me", status.protectMe ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Jealous Plushie", status.jealousPlushie ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Easy Drag", status.easyDrag ? "ON" : "Off");
+        appendExtensionsKeyValue(enabled, "Easy Drag target", status.easyDragTarget);
         appendExtensionsKeyValue(enabled, "Mascot picture", status.mascotPicture ? "Visible" : "Hidden");
         appendExtensionsKeyValue(enabled, "Idle animations", status.idleAnimations ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Speech bubbles", status.speechBubbles ? "ON" : "Off");
@@ -5685,12 +5906,23 @@
             extensionsSettingRow("Protect Me", "The held plush reacts to selected incoming actions.", settings.protectMe, () => toggleFeatureSetting("protectMe")),
             extensionsSettingRow("Jealous Plushie", "Playful jealous reactions when you show affection to someone else.", settings.jealousPlushie, () => toggleFeatureSetting("jealousPlushie")),
             extensionsSettingRow("Easy Drag", "Drag anywhere on the character side to reposition the held plushie.", dragModeEnabled, () => toggleDragMode()),
+            extensionsSettingRow("Hide Plushie Drag Button", "Hide the movable mouse button without disabling Easy Drag itself.", !settings.showDragButton, () => setFeatureSetting("showDragButton", !getFeatureSettings().showDragButton)),
             extensionsSettingRow("Room Mascot Picture", "Show the room mascot picture locally in the chat area.", settings.showRoomMascot, () => setRoomMascotOverlayVisible(!getFeatureSettings().showRoomMascot)),
             extensionsSettingRow("Idle Animation", "Occasional lightweight local plush wiggles.", settings.idleAnimations, () => toggleFeatureSetting("idleAnimations")),
             extensionsSettingRow("Speech Bubbles", "Allow local mood-based plush speech bubbles.", settings.speechBubbles, () => toggleFeatureSetting("speechBubbles")),
             extensionsSettingRow("Automatic Update Checks", "Check the repository manifest at most once per day.", settings.autoUpdateChecks, () => toggleFeatureSetting("autoUpdateChecks"))
         );
         container.appendChild(section);
+
+        const dragUi = makeExtensionsSection("Drag UI");
+        const dragUiHint = document.createElement("div");
+        dragUiHint.textContent = `Current target: ${dragTargetLabel(getDragTargetGroup())}. Open Drag UI to switch between your handheld and Body-slot plushie and enable Easy Drag.`;
+        Object.assign(dragUiHint.style, { color: getExtensionsStyle().muted, fontSize: "12px", marginBottom: "9px", lineHeight: "1.4" });
+        dragUi.append(
+            dragUiHint,
+            makeExtensionsButton("Open Drag UI", openDragUi, { active: dragModeEnabled })
+        );
+        container.appendChild(dragUi);
 
         const performance = makeExtensionsSection("Performance mode");
         const performanceHint = document.createElement("div");
@@ -6351,6 +6583,7 @@
     }
 
     function destroyExtensionsPanel() {
+        closeDragUi();
         try { extensionsPanelElement?.remove?.(); } catch (_) {}
         extensionsPanelElement = null;
         extensionsPanelContent = null;
@@ -6579,7 +6812,7 @@
             ["/plushieemote ", ["happy", "angry", "sleepy", "protective", "sulky"]],
             ["/plushieperformance ", ["normal", "low"]],
             ["/plushiedrag ", ["on", "off"]],
-            ["/plushiemascot ", ["set", "clear", "show", "hide"]],
+            ["/plushiemascot ", ["set", "random", "picker", "clear", "show", "hide"]],
             ["/plushieposesave ", ["1", "2", "3"]],
             ["/plushieposeload ", ["1", "2", "3"]],
             ["/plushieposeclear ", ["1", "2", "3"]],
@@ -7700,7 +7933,7 @@
             ensureNativeTransform(heldReceived);
             rememberCharacterPlushState(window.Player, heldReceived);
             refresh(window.Player, false);
-            schedulePlushStabilization(snapshot.option);
+            schedulePlushStabilization(snapshot.option, heldReceived);
             syncHugTightlyActivityAvailability("Offer Plushie received");
 
             window.setTimeout(publishTransfer, 0);
@@ -9402,6 +9635,15 @@
         return isOurs(item) ? item : null;
     }
 
+    function getEquippedPlushItems(C = window.Player) {
+        const items = [];
+        for (const groupName of PLUSH_GROUPS) {
+            const item = getInventoryItem(C, groupName);
+            if (isOurs(item)) items.push(item);
+        }
+        return items;
+    }
+
     function getHeld(C = window.Player) {
         const hand = getHandheldItem(C);
         if (isOurs(hand)) return hand;
@@ -9564,8 +9806,11 @@
     }
 
     function clearRememberedLocalPlushState() {
-        const key = getCharacterStateKey(window.Player);
-        if (key) plushStateByCharacter.delete(key);
+        const baseKey = getCharacterStateKey(window.Player);
+        if (!baseKey) return true;
+        for (const key of [...plushStateByCharacter.keys()]) {
+            if (key === baseKey || key.startsWith(`${baseKey}|`)) plushStateByCharacter.delete(key);
+        }
         return true;
     }
 
@@ -9576,10 +9821,19 @@
         return null;
     }
 
+    function getPlushStateKey(C, itemOrGroup = null) {
+        const baseKey = getCharacterStateKey(C);
+        if (!baseKey) return null;
+        const groupName = typeof itemOrGroup === "string"
+            ? itemOrGroup
+            : itemOrGroup?.Asset?.Group?.Name;
+        return `${baseKey}|${PLUSH_GROUPS.includes(groupName) ? groupName : GROUP}`;
+    }
+
     function rememberCharacterPlushState(C, item = getHeld(C)) {
         if (!C || !isOurs(item)) return null;
 
-        const key = getCharacterStateKey(C);
+        const key = getPlushStateKey(C, item);
         if (!key) return null;
 
         const previous = plushStateByCharacter.get(key) || {
@@ -9621,24 +9875,25 @@
     }
 
     function pruneRememberedPlushStates(includeRoomCharacters = true) {
-        const keep = new Set();
+        const keepBases = new Set();
         const playerKey = getCharacterStateKey(window.Player);
-        if (playerKey) keep.add(playerKey);
+        if (playerKey) keepBases.add(playerKey);
 
         if (includeRoomCharacters && Array.isArray(window.ChatRoomCharacter)) {
             for (const C of window.ChatRoomCharacter) {
                 const key = getCharacterStateKey(C);
-                if (key) keep.add(key);
+                if (key) keepBases.add(key);
             }
         }
 
-        for (const key of plushStateByCharacter.keys()) {
-            if (!keep.has(key)) plushStateByCharacter.delete(key);
+        for (const key of [...plushStateByCharacter.keys()]) {
+            const baseKey = String(key).split("|")[0];
+            if (!keepBases.has(baseKey)) plushStateByCharacter.delete(key);
         }
     }
 
-    function rememberedPlushOption(C, fallback = 0) {
-        const key = getCharacterStateKey(C);
+    function rememberedPlushOption(C, fallback = 0, item = getHeld(C)) {
+        const key = getPlushStateKey(C, item);
         const remembered = key ? plushStateByCharacter.get(key) : null;
         if (validPlushOption(remembered?.option)) return canonicalWirePlushOption(remembered.option);
         if (C === window.Player && validPlushOption(lastPlushOption)) return canonicalWirePlushOption(lastPlushOption);
@@ -9657,7 +9912,7 @@
         const property = getProperty(item);
         if (!property) return false;
 
-        const key = getCharacterStateKey(C);
+        const key = getPlushStateKey(C, item);
         const remembered = key ? plushStateByCharacter.get(key) : null;
 
         let option = canonicalWirePlushOption(getItemPlushOption(item));
@@ -9735,8 +9990,12 @@
         return option;
     }
 
-    function schedulePlushStabilization(optionIndex) {
+    function schedulePlushStabilization(optionIndex, itemOrGroup = getHeld(window.Player)) {
         if (!validPlushOption(optionIndex)) return;
+        const groupName = typeof itemOrGroup === "string"
+            ? itemOrGroup
+            : itemOrGroup?.Asset?.Group?.Name;
+        if (!PLUSH_GROUPS.includes(groupName)) return;
 
         const generation = ++stabilizerGeneration;
         const delays = [80, 350, 1200];
@@ -9745,7 +10004,7 @@
             setTimeout(() => {
                 if (generation !== stabilizerGeneration) return;
 
-                const item = getHeld(window.Player);
+                const item = getInventoryItem(window.Player, groupName);
                 if (!isOurs(item)) return;
 
                 const changed = repairPlushState(item, optionIndex, `stabilizer ${delay}ms`, window.Player);
@@ -9756,7 +10015,8 @@
 
     function captureVisiblePlushStates() {
         const player = window.Player;
-        if (player && !localPlushRepairSuppressed(player)) rememberCharacterPlushState(player);
+        if (!player || localPlushRepairSuppressed(player)) return;
+        for (const item of getEquippedPlushItems(player)) rememberCharacterPlushState(player, item);
     }
 
     function rebuildCharacterCanvas(C, reason = "plush repair") {
@@ -9784,11 +10044,10 @@
         const player = window.Player;
         if (!player || localPlushRepairSuppressed(player)) return affected;
 
-        const item = getHeld(player);
-        if (!isOurs(item)) return affected;
-
-        const preferred = rememberedPlushOption(player, lastPlushOption);
-        affected.push({ C: player, changed: repairPlushState(item, preferred, reason, player) });
+        for (const item of getEquippedPlushItems(player)) {
+            const preferred = rememberedPlushOption(player, lastPlushOption, item);
+            affected.push({ C: player, item, changed: repairPlushState(item, preferred, reason, player) });
+        }
         return affected;
     }
 
@@ -10111,7 +10370,7 @@
             const result = next(args);
 
             if (C && window.CurrentScreen === "ChatRoom") {
-                if (isOurs(held) || petSuitRenderStates.has(petSuitOverlayKey(C))) drawPetSuitPlushCanvasOverlay(C);
+                if (isOurs(getHandheldItem(C)) || petSuitRenderStates.has(petSuitOverlayKey(C))) drawPetSuitPlushCanvasOverlay(C);
                 drawAddonPresenceIcon(C);
             }
 
@@ -10192,18 +10451,25 @@
             const C = args?.[0];
             if (!C || !isLocalPlayerCharacter(C) || localPlushRepairSuppressed(C)) return next(args);
 
-            let item = getHeld(C);
-            if (!isOurs(item)) return next(args);
+            const beforeItems = getEquippedPlushItems(C);
+            if (!beforeItems.length) return next(args);
 
-            const preferred = rememberedPlushOption(C, lastPlushOption);
-            repairPlushState(item, preferred, "CharacterRefresh pre", C);
+            for (const plushItem of beforeItems) {
+                const preferred = rememberedPlushOption(C, lastPlushOption, plushItem);
+                repairPlushState(plushItem, preferred, "CharacterRefresh pre", C);
+            }
 
             const result = next(args);
 
             if (window.CurrentScreen === "ChatRoom") syncPetSuitPlushOverlay(C);
-            item = getHeld(C);
+            const afterItems = getEquippedPlushItems(C);
+            let item = getHeld(C);
             if (isOurs(item)) {
-                const changedAfter = repairPlushState(item, preferred, "CharacterRefresh post", C);
+                let changedAfter = false;
+                for (const plushItem of afterItems) {
+                    const preferred = rememberedPlushOption(C, lastPlushOption, plushItem);
+                    if (repairPlushState(plushItem, preferred, "CharacterRefresh post", C)) changedAfter = true;
+                }
                 let balanceReapplied = false;
 
                 if (C === window.Player && activeBalanceHeadSession) {
@@ -10255,11 +10521,13 @@
         const updateHooked = installHook("ChatRoomCharacterUpdate", 10000, (args, next) => {
             const C = args?.[0] || window.Player;
             if (!isLocalPlayerCharacter(C) || localPlushRepairSuppressed(C)) return next(args);
+            const items = getEquippedPlushItems(C);
+            for (const plushItem of items) {
+                const preferred = rememberedPlushOption(C, lastPlushOption, plushItem);
+                repairPlushState(plushItem, preferred, "ChatRoomCharacterUpdate", C);
+            }
             const item = getHeld(C);
             if (isOurs(item)) {
-                const preferred = rememberedPlushOption(C, lastPlushOption);
-                repairPlushState(item, preferred, "ChatRoomCharacterUpdate", C);
-
                 if (C === window.Player && activeBalanceHeadSession) {
                     const session = activeBalanceHeadSession;
                     if (getActivePlushLayerName(item) === session.layerName) {
@@ -10355,7 +10623,9 @@
                     lastRoomMascotSharedSyncAt = Date.now();
                     if (pendingAction?.type === "set" && pendingAction.name) {
                         window.setTimeout(() => {
-                            sendStandaloneActionMessage(`${pendingAction.source || "Someone"} sets ${pendingAction.name} as the room mascot plushie.`);
+                            sendStandaloneActionMessage(pendingAction.randomPick
+                                ? `${pendingAction.name} was chosen randomly as the room mascot plushie.`
+                                : `${pendingAction.source || "Someone"} sets ${pendingAction.name} as the room mascot plushie.`);
                             recordStat("mascot", 1, { plushName: pendingAction.name });
                         }, 0);
                     } else if (pendingAction?.type === "clear") {
@@ -12095,7 +12365,7 @@
             drawButton(FEATURE_MENU.EmotesSettings, "Emotes");
             drawButton(FEATURE_MENU.Protect, `Protect Me: ${settings.protectMe ? "ON" : "off"}`, settings.protectMe);
             drawButton(FEATURE_MENU.Jealous, `Jealous: ${settings.jealousPlushie ? "ON" : "off"}`, settings.jealousPlushie);
-            drawButton(FEATURE_MENU.Drag, `Easy Drag: ${dragModeEnabled ? "ON" : "off"}`, dragModeEnabled);
+            drawButton(FEATURE_MENU.Drag, `Drag UI: ${dragModeEnabled ? "ON" : "off"}`, dragModeEnabled);
             drawButton(FEATURE_MENU.MascotVisible, `Mascot Picture: ${settings.showRoomMascot ? "ON" : "hidden"}`, settings.showRoomMascot);
             drawButton(FEATURE_MENU.AutoUpdate, `Auto Update Check: ${settings.autoUpdateChecks ? "ON" : "off"}`, settings.autoUpdateChecks);
             drawButton(FEATURE_MENU.Update, "Check Update Now");
@@ -12191,7 +12461,7 @@
             }
             if (mouseInRect(FEATURE_MENU.Protect)) { toggleFeatureSetting("protectMe"); return true; }
             if (mouseInRect(FEATURE_MENU.Jealous)) { toggleFeatureSetting("jealousPlushie"); return true; }
-            if (mouseInRect(FEATURE_MENU.Drag)) { toggleDragMode(); return true; }
+            if (mouseInRect(FEATURE_MENU.Drag)) { openDragUi(); return true; }
             if (mouseInRect(FEATURE_MENU.MascotVisible)) {
                 const settings = getFeatureSettings();
                 setRoomMascotOverlayVisible(!settings.showRoomMascot);
@@ -12430,7 +12700,7 @@
         compactPlushLayerTransformsToActive(item, previousState?.layerTransform || null);
         rememberCharacterPlushState(C, item);
         refresh(C, true);
-        schedulePlushStabilization(wireOption);
+        schedulePlushStabilization(wireOption, item);
 
         if (previousOption !== optionIndex) {
             publishPlushSwapAction(C, PLUSH_NAMES[wireOption]);
@@ -12592,7 +12862,7 @@
         ensureNativeTransform(held);
         refresh(window.Player, true);
         syncHugTightlyActivityAvailability("explicit equip");
-        schedulePlushStabilization(option);
+        schedulePlushStabilization(option, held);
         recordPlushSelection(currentPlushName());
         touchPlushRelationship(currentPlushName(), { increment: 0, wake: true });
         refreshDragToggleButton();
@@ -12629,7 +12899,7 @@
         ensureNativeTransform(item);
         refresh(window.Player, true);
         syncHugTightlyActivityAvailability("explicit ItemAddon equip");
-        schedulePlushStabilization(option);
+        schedulePlushStabilization(option, item);
         recordPlushSelection(currentPlushName());
         touchPlushRelationship(currentPlushName(), { increment: 0, wake: true });
         refreshDragToggleButton();
