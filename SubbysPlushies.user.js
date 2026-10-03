@@ -812,7 +812,7 @@
                         },
                         {
                                 "command": "/plushiedebug",
-                                "description": "Print detailed plugin diagnostics to the browser console."
+                                "description": "Print detailed addon diagnostics to the browser console."
                         },
                         {
                                 "command": "/plushiedata",
@@ -1059,11 +1059,11 @@
                 fullName: DISPLAY_NAME,
                 version: VERSION,
             });
-            hookBackend = "ModSDK";
+            hookBackend = "SDK";
         } catch (e) {
             modApi = null;
             hookBackend = "direct";
-            warn("ModSDK registration was unavailable; using local wrappers instead:", e);
+            warn("Hook registration was unavailable; using local wrappers instead:", e);
         }
     }
 
@@ -2508,7 +2508,7 @@
 
     function showCurrentPlushInfo() {
         const name = currentPlushName();
-        const lore = getPlushLore(name) || { title: "Plushie", text: "Lore is not available yet. The plugin will use the validated Git copy when it is online or cached." };
+        const lore = getPlushLore(name) || { title: "Plushie", text: "Lore is not available yet. The addon will use the validated Git copy when it is online or cached." };
         const mood = getPlushMoodRecord(name);
         const relationship = relationshipStatus(name);
         const mascot = roomMascotState?.name ? `Room mascot: ${roomMascotState.name}` : "Room mascot: none";
@@ -3625,7 +3625,7 @@
                 gitDataState = { ...gitDataState, lastError: String(e) };
                 try { window.localStorage?.setItem(GIT_DATA_LAST_CHECK_KEY, String(Date.now())); } catch (_) {}
                 warn("Git data refresh failed; keeping validated cache/built-in fallbacks:", e);
-                if (!silent) appendLocalInfoBox("Git data", ["Refresh failed; the plugin kept its last-known-good cache/built-in fallbacks.", String(e)]);
+                if (!silent) appendLocalInfoBox("Git data", ["Refresh failed; the addon kept its last-known-good cache/built-in fallbacks.", String(e)]);
                 return { ...gitDataState };
             } finally {
                 gitDataRefreshPromise = null;
@@ -3639,7 +3639,7 @@
         const cached = gitDataState.cachedAt ? new Date(gitDataState.cachedAt).toLocaleString() : "None";
         appendLocalInfoBox("Git-backed data", [
             `Source: ${gitDataStatusText()}`,
-            `Index plugin version: ${gitDataState.indexPluginVersion || "Unknown"}`,
+            `Index release version: ${gitDataState.indexPluginVersion || "Unknown"}`,
             `Last live refresh: ${refreshed}`,
             `Last-known-good cache: ${cached}`,
             gitDataState.lastError ? `Note: ${gitDataState.lastError}` : "Validation: OK",
@@ -4508,7 +4508,7 @@
             performanceMode: settings.performanceMode,
             activities: `${hugTightlyActivityRegistration || "inactive"} / ${customActivitiesRegistration || "inactive"}`,
             offer: {
-                transferStrategy: "LSCG-style recipient remove/wear plus dual CharacterUpdate; sender self-removal fallback",
+                transferStrategy: "recipient remove/wear plus dual character update; sender self-removal fallback",
                 playerMember: Number.isFinite(Number(window.Player?.MemberNumber)) ? Number(window.Player.MemberNumber) : null,
                 currentHeldAsset: getHeld(window.Player)?.Asset?.Name || null,
                 currentHeldGroup: getHeld(window.Player)?.Asset?.Group?.Name || null,
@@ -4993,7 +4993,7 @@
         appendExtensionsKeyValue(section, "Interface", "Layouts, themes, feature settings");
         appendExtensionsKeyValue(section, "Personal data", "Nicknames and saved poses");
         const note = document.createElement("div");
-        note.textContent = "This backup contains only this plugin's localStorage data. It does not export your Bondage Club account, wardrobe, credentials, or room data.";
+        note.textContent = "This backup contains only this addon's localStorage data. It does not export your Bondage Club account, wardrobe, credentials, or room data.";
         Object.assign(note.style, { color: getExtensionsStyle().muted, fontSize: "12px", margin: "10px 0" });
         const buttons = document.createElement("div");
         Object.assign(buttons.style, { display: "flex", flexWrap: "wrap", gap: "9px" });
@@ -6807,10 +6807,10 @@
                 craftPreserved: originalCraft != null,
                 sourceRemovedLocally: !isOurs(getHeld(sourceCharacter)),
                 recipientEquippedLocally: isOurs(getHeld(window.Player)),
-                transferStrategy: "LSCG-style recipient remove/wear plus dual CharacterUpdate",
+                transferStrategy: "recipient remove/wear plus dual character update",
                 at: new Date().toISOString(),
             };
-            log(`Received offered plushie from #${sourceMember} using LSCG-style ItemHandheld transfer.`, lastOfferTransferReceived);
+            log(`Received offered plushie from #${sourceMember} using ItemHandheld transfer.`, lastOfferTransferReceived);
             return { ok: true, snapshot };
         } catch (e) {
             try {
@@ -10501,7 +10501,7 @@
             window.AssetCurrentGroup = runtimeGroup;
 
             if (arity === 3 && (!params.length || params.every(name => name.length <= 2))) {
-                assetAddStrategy = "AssetAdd(runtimeGroup, definition, extendedConfig) [R132/ModSDK]";
+                assetAddStrategy = "AssetAdd(runtimeGroup, definition, extendedConfig) [R132 compatibility]";
                 add(runtimeGroup, definition, extendedConfig);
                 return;
             }
