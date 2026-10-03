@@ -1,6 +1,6 @@
 {
-  "version": "2.1.1",
+  "version": "2.3.1",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
   "launcherUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js",
-  "notes": "v2.1.1: mascot room-customisation updates now stage until Bondage Club's normal Save action, map-room mascot publishing waits for map initialization, and cancelling room edits restores the previous mascot state."
+  "notes": "v2.3.1 stabilized: restores pet-suit plush rendering with cuddle-safe canvas transforms, adds a reliable character-top addon icon, removes per-action mood-history writes for performance, makes Easy Drag movable, corrects plush mood-marker positioning, makes room mascots draggable/responsive, and names plushies with character-gender-aware pronouns in action text."
 }
