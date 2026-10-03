@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.2.0
+// @version      2.3.1
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, emotes, battles, mascot, themes, poses, stats, achievements, and more
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -20,7 +20,7 @@
 (() => {
     "use strict";
 
-    const VERSION = "2.2.0";
+    const VERSION = "2.3.1";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -29,6 +29,8 @@
     const ASSET_NAME = "SubbysPlushies";
     const MODULE_KEY = "p";
     const PET_SUIT_ASSET_NAMES = new Set(["BitchSuit", "ShinyPetSuit", "PetCrawler"]);
+    const ADDON_PRESENCE_CONTENT = "SubbysPlushiesPresence";
+    const ADDON_PRESENCE_TAG = "SubbysPlushiesPresence";
 
     const HUG_TIGHTLY_ACTIVITY_NAME = "SubbysPlushiesHugTightlyItem";
     const HUG_TIGHTLY_ACTIVITY_LABEL = "Hug Tightly";
@@ -272,6 +274,7 @@
     const BACKUP_PROGRESS_SEAL_KEY = ["Subbys", "Plushies", "portable", "progress", "v3", "89413"].join("|");
     const ROOM_MASCOT_CUSTOM_KEY = "SubbysPlushiesMascot";
     const ROOM_MASCOT_CACHE_STORAGE_KEY = "SubbysPlushies:room-mascots:v1";
+    const DRAG_TOGGLE_POSITION_STORAGE_KEY = "SubbysPlushies:drag-toggle-position:v1";
     const PLUSH_EMOTE_SYNC_CONTENT_PREFIX = "SubbysPlushiesEmote:";
     const PLUSH_EMOTE_SYNC_TAG = "SubbysPlushiesEmote";
     const PLUSH_EMOTE_DURATION_MS = 15000;
@@ -328,6 +331,7 @@
     let MOOD_DRIFT_TARGET = 29;
     let MOOD_DRIFT_STEP = 1;
     let MOOD_DRIFT_EVERY_MS = 15 * 60 * 1000;
+    const MOOD_MAX_IDLE_DECAY_LOSS = 10;
     let MOOD_LABELS = Object.freeze([
         Object.freeze({ maxScore: 18, label: "Grumpy" }),
         Object.freeze({ maxScore: 38, label: "Sulky" }),
@@ -994,6 +998,8 @@
     let dragHandlersInstalled = false;
     let dragToggleButton = null;
     let dragToggleUiTimer = null;
+    let dragTogglePositionState = null;
+    let dragToggleMoveSession = null;
     let roomMascotState = null;
     let roomMascotCacheState = null;
     let lastRoomMascotSharedSyncAt = 0;
@@ -1008,6 +1014,7 @@
     let roomMascotAdminDirty = false;
     let roomMascotAdminSnapshot = null;
     let roomMascotAdminPendingAction = null;
+    let roomMascotDragSession = null;
     let queuedRoomMascotPublish = null;
     let queuedRoomMascotPublishTimer = null;
     let lastUpdateInfo = null;
@@ -1025,7 +1032,10 @@
     let manualPlushEmote = null;
     let manualPlushEmoteTimer = null;
     const remotePlushEmotes = new Map();
-    const petSuitPlushOverlays = new Map();
+    const addonPresenceMembers = new Map();
+    let lastAddonPresenceBroadcastAt = 0;
+    const petSuitRenderStates = new Map();
+    const canvasOverlayImageCache = new Map();
     const lastCharacterChatRoomDraw = new Map();
     let backupImportInput = null;
     let lastPlayerChatRoomDraw = null;
@@ -1073,6 +1083,7 @@
     let purrPlayCount = 0;
     let lastPurrPlay = null;
     let lastPurrStartedAt = 0;
+    let purrAttemptInFlightUntil = 0;
     let hugTightlyEventSequence = 0;
     let pendingLocalHugTightlyUntil = 0;
     const recentPurrTokens = new Map();
@@ -1237,7 +1248,7 @@
             roomMascotUiSafetyTimer = window.setInterval(() => {
                 if (roomMascotState?.name || roomMascotOverlay?.isConnected) refreshRoomMascotOverlay();
                 refreshRoomMascotAdminButton();
-            }, performanceInterval(2500, 8000));
+            }, performanceInterval(5000, 15000));
         }
         if (offerChatObserverMonitor != null) {
             window.clearInterval(offerChatObserverMonitor);
@@ -1478,8 +1489,8 @@
 
     function getMoodHistoryStore() {
         if (moodHistoryState) return moodHistoryState;
-        const stored = readLocalJSON(MOOD_HISTORY_STORAGE_KEY, {});
-        moodHistoryState = stored && typeof stored === "object" ? stored : {};
+        try { window.localStorage?.removeItem(MOOD_HISTORY_STORAGE_KEY); } catch (_) {}
+        moodHistoryState = {};
         return moodHistoryState;
     }
 
@@ -1499,28 +1510,12 @@
         return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, char => char.toUpperCase());
     }
 
-    function recordMoodHistory(name, delta, reason, score, at = Date.now()) {
-        const plushName = String(name || currentPlushName() || "Subbycat");
-        const numericDelta = Math.round(Number(delta) || 0);
-        if (!numericDelta) return null;
-        const store = getMoodHistoryStore();
-        const list = Array.isArray(store[plushName]) ? store[plushName] : [];
-        const entry = {
-            at: Number(at) || Date.now(),
-            delta: numericDelta,
-            reason: moodReasonLabel(reason),
-            score: clampMood(score),
-        };
-        list.push(entry);
-        store[plushName] = list.slice(-40);
-        writeLocalJSON(MOOD_HISTORY_STORAGE_KEY, store);
-        return { ...entry };
+    function recordMoodHistory() {
+        return null;
     }
 
-    function moodHistoryFor(name = currentPlushName(), limit = 40) {
-        const plushName = String(name || currentPlushName());
-        const list = getMoodHistoryStore()[plushName];
-        return Array.isArray(list) ? list.slice(-Math.max(1, Math.min(40, Number(limit) || 40))).map(entry => ({ ...entry })) : [];
+    function moodHistoryFor() {
+        return [];
     }
 
     function getBattleHistoryStore() {
@@ -1953,7 +1948,7 @@
         const now = Date.now();
         let record = store[name];
         if (!record || typeof record !== "object") {
-            record = { score: MOOD_DEFAULT_SCORE, interactions: 0, updatedAt: now };
+            record = { score: MOOD_DEFAULT_SCORE, interactions: 0, updatedAt: now, decayBaseScore: MOOD_DEFAULT_SCORE };
             store[name] = record;
             writeLocalJSON(MOOD_STORAGE_KEY, store);
             return record;
@@ -1961,15 +1956,15 @@
 
         record.score = clampMood(Number.isFinite(Number(record.score)) ? Number(record.score) : MOOD_DEFAULT_SCORE);
         record.interactions = Math.max(0, Math.floor(Number(record.interactions) || 0));
+        if (!Number.isFinite(Number(record.decayBaseScore))) record.decayBaseScore = record.score;
+        record.decayBaseScore = clampMood(record.decayBaseScore);
         const last = Number(record.updatedAt) || now;
-
-        const passiveFloor = 29;
-        const passiveEveryMs = 15 * 60 * 1000;
-        const steps = Math.floor(Math.max(0, now - last) / passiveEveryMs);
+        const steps = Math.floor(Math.max(0, now - last) / MOOD_DRIFT_EVERY_MS);
         if (steps > 0) {
             const beforeScore = record.score;
-            if (record.score > passiveFloor) {
-                record.score = clampMood(Math.max(passiveFloor, record.score - steps));
+            const decayFloor = Math.max(MOOD_DRIFT_TARGET, record.decayBaseScore - MOOD_MAX_IDLE_DECAY_LOSS);
+            if (record.score > decayFloor) {
+                record.score = clampMood(Math.max(decayFloor, record.score - steps * MOOD_DRIFT_STEP));
             }
             record.updatedAt = now;
             writeLocalJSON(MOOD_STORAGE_KEY, store);
@@ -1990,6 +1985,7 @@
         const record = getPlushMoodRecord(name);
         record.score = clampMood(record.score + delta);
         record.interactions = Math.max(0, Math.floor(Number(record.interactions) || 0)) + 1;
+        record.decayBaseScore = record.score;
         record.updatedAt = Date.now();
         store[name] = record;
         writeLocalJSON(MOOD_STORAGE_KEY, store);
@@ -2163,49 +2159,120 @@
         return Number.isFinite(member) ? lastCharacterChatRoomDraw.get(member) || null : null;
     }
 
+    function currentCanvasTransformSnapshot() {
+        const ctx = window.MainCanvas;
+        if (!ctx || typeof ctx.getTransform !== "function") return null;
+        try {
+            const matrix = ctx.getTransform();
+            const values = [matrix?.a, matrix?.b, matrix?.c, matrix?.d, matrix?.e, matrix?.f].map(Number);
+            if (!values.every(Number.isFinite)) return null;
+            return { a: values[0], b: values[1], c: values[2], d: values[3], e: values[4], f: values[5] };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function applyDrawMatrix(draw, x, y) {
+        const matrix = draw?.matrix;
+        if (!matrix) return { x, y };
+        return {
+            x: matrix.a * x + matrix.c * y + matrix.e,
+            y: matrix.b * x + matrix.d * y + matrix.f,
+        };
+    }
+
+    function invertDrawMatrix(draw, x, y) {
+        const matrix = draw?.matrix;
+        if (!matrix) return { x, y };
+        const det = matrix.a * matrix.d - matrix.b * matrix.c;
+        if (!Number.isFinite(det) || Math.abs(det) < 1e-8) return null;
+        const px = x - matrix.e;
+        const py = y - matrix.f;
+        return {
+            x: (matrix.d * px - matrix.c * py) / det,
+            y: (-matrix.b * px + matrix.a * py) / det,
+        };
+    }
+
+    function characterDrawMetrics(C, draw) {
+        if (!draw || !Number.isFinite(draw.x) || !Number.isFinite(draw.y) || !Number.isFinite(draw.zoom)) return null;
+        let heightRatio = Number(C?.HeightRatio);
+        if (!Number.isFinite(heightRatio) || heightRatio <= 0) heightRatio = 1;
+
+        let xOffset = 0;
+        let yOffset = 0;
+        try {
+            if (typeof CharacterAppearanceXOffset === "function") xOffset = Number(CharacterAppearanceXOffset(C, heightRatio)) || 0;
+            else xOffset = 500 * (1 - heightRatio) / 2;
+        } catch (_) {
+            xOffset = 500 * (1 - heightRatio) / 2;
+        }
+        try {
+            if (typeof CharacterAppearanceYOffset === "function") {
+                yOffset = Number(CharacterAppearanceYOffset(C, heightRatio)) || 0;
+            } else {
+                const proportion = Number.isFinite(Number(C?.HeightRatioProportion)) ? Number(C.HeightRatioProportion) : 1;
+                const modifier = Number(C?.HeightModifier) || 0;
+                yOffset = 1000 * (1 - heightRatio) * proportion - modifier * heightRatio;
+            }
+        } catch (_) {
+            yOffset = 0;
+        }
+
+        const scale = draw.zoom * heightRatio;
+        if (!Number.isFinite(scale) || Math.abs(scale) < 1e-8) return null;
+        return { heightRatio, xOffset, yOffset, scale };
+    }
+
+    function characterPointToMainCanvas(C, characterX, characterY) {
+        const draw = characterChatRoomDraw(C);
+        let mainX = Number(characterX);
+        let mainY = Number(characterY);
+        if (!Number.isFinite(mainX) || !Number.isFinite(mainY)) return null;
+        const metrics = characterDrawMetrics(C, draw);
+        if (metrics) {
+            mainX = draw.x + draw.zoom * metrics.xOffset + mainX * metrics.scale;
+            mainY = draw.y + draw.zoom * metrics.yOffset + mainY * metrics.scale;
+        }
+        const transformed = applyDrawMatrix(draw, mainX, mainY);
+        if (!Number.isFinite(transformed.x) || !Number.isFinite(transformed.y)) return null;
+        return transformed;
+    }
+
     function characterPointToScreen(C, characterX, characterY) {
         const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
         const rect = canvas?.getBoundingClientRect?.();
         if (!canvas || !rect || rect.width <= 0 || rect.height <= 0) return null;
-
         const logicalWidth = Number(canvas.width) || 2000;
         const logicalHeight = Number(canvas.height) || 1000;
-        const draw = characterChatRoomDraw(C);
-
-        let mainX = characterX;
-        let mainY = characterY;
-        if (draw && Number.isFinite(draw.x) && Number.isFinite(draw.y) && Number.isFinite(draw.zoom)) {
-            let heightRatio = Number(C?.HeightRatio);
-            if (!Number.isFinite(heightRatio) || heightRatio <= 0) heightRatio = 1;
-
-            let xOffset = 0;
-            let yOffset = 0;
-            try {
-                if (typeof CharacterAppearanceXOffset === "function") xOffset = Number(CharacterAppearanceXOffset(C, heightRatio)) || 0;
-                else xOffset = 500 * (1 - heightRatio) / 2;
-            } catch (_) {
-                xOffset = 500 * (1 - heightRatio) / 2;
-            }
-            try {
-                if (typeof CharacterAppearanceYOffset === "function") {
-                    yOffset = Number(CharacterAppearanceYOffset(C, heightRatio)) || 0;
-                } else {
-                    const proportion = Number.isFinite(Number(C?.HeightRatioProportion)) ? Number(C.HeightRatioProportion) : 1;
-                    const modifier = Number(C?.HeightModifier) || 0;
-                    yOffset = 1000 * (1 - heightRatio) * proportion - modifier * heightRatio;
-                }
-            } catch (_) {
-                yOffset = 0;
-            }
-
-            const scale = draw.zoom * heightRatio;
-            mainX = draw.x + draw.zoom * xOffset + characterX * scale;
-            mainY = draw.y + draw.zoom * yOffset + characterY * scale;
-        }
-
+        const point = characterPointToMainCanvas(C, characterX, characterY);
+        if (!point) return null;
         return {
-            x: rect.left + (mainX / logicalWidth) * rect.width,
-            y: rect.top + (mainY / logicalHeight) * rect.height,
+            x: rect.left + (point.x / logicalWidth) * rect.width,
+            y: rect.top + (point.y / logicalHeight) * rect.height,
+        };
+    }
+
+    function characterCanvasCoordinates(C, event) {
+        const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
+        if (!canvas || event?.target !== canvas) return null;
+        const rect = canvas.getBoundingClientRect?.();
+        if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+        const logicalWidth = Number(canvas.width) || 2000;
+        const logicalHeight = Number(canvas.height) || 1000;
+        const mainX = (event.clientX - rect.left) * logicalWidth / rect.width;
+        const mainY = (event.clientY - rect.top) * logicalHeight / rect.height;
+        const draw = characterChatRoomDraw(C);
+        const untransformed = invertDrawMatrix(draw, mainX, mainY);
+        if (!untransformed) return null;
+        const metrics = characterDrawMetrics(C, draw);
+        if (!metrics) return { canvas, x: untransformed.x, y: untransformed.y, mainX, mainY };
+        return {
+            canvas,
+            x: (untransformed.x - draw.x - draw.zoom * metrics.xOffset) / metrics.scale,
+            y: (untransformed.y - draw.y - draw.zoom * metrics.yOffset) / metrics.scale,
+            mainX,
+            mainY,
         };
     }
 
@@ -2226,17 +2293,31 @@
         }) || null;
     }
 
-    function removePetSuitPlushOverlay(C) {
-        const key = typeof C === "string" ? C : petSuitOverlayKey(C);
-        const state = petSuitPlushOverlays.get(key);
-        if (!state) return false;
-        try { state.element?.remove?.(); } catch (_) {}
-        petSuitPlushOverlays.delete(key);
-        return true;
+    function clearPetSuitPlushOverlays() {
+        petSuitRenderStates.clear();
     }
 
-    function clearPetSuitPlushOverlays() {
-        for (const key of [...petSuitPlushOverlays.keys()]) removePetSuitPlushOverlay(key);
+    function schedulePetSuitNativeRestore(C, key) {
+        const state = petSuitRenderStates.get(key) || {};
+        if (state.restorePending) return false;
+        state.restorePending = true;
+        state.character = C;
+        petSuitRenderStates.set(key, state);
+        window.setTimeout(() => {
+            const current = petSuitRenderStates.get(key);
+            if (current) current.restorePending = false;
+            if (window.CurrentScreen !== "ChatRoom" || characterPetSuitItem(C)) return;
+            const item = getHeld(C);
+            if (!isOurs(item)) return;
+            try {
+                if (typeof CharacterLoadCanvas === "function") CharacterLoadCanvas(C);
+                else if (typeof CharacterRefresh === "function") CharacterRefresh(C);
+            } catch (e) {
+                warn("Could not restore plush render after restraint pose ended:", e);
+            }
+            if (C === window.Player) scheduleLocalOverlayReposition();
+        }, 0);
+        return true;
     }
 
     function petSuitPlushOverlaySource(item) {
@@ -2246,95 +2327,96 @@
         return renderImages[option] || PLUSH_IMAGES[option] || PLUSH_FALLBACK_IMAGE || null;
     }
 
-    function positionPetSuitPlushOverlay(C, element, item) {
-        const transform = readActivePlushLayerTransform(item);
-        if (!transform) return false;
-        const scaleX = Number(transform.ScaleX) || 1;
-        const scaleY = Number(transform.ScaleY) || 1;
-        const imageWidth = PLUSH_RENDER.Width * Math.max(0.05, Math.abs(scaleX));
-        const imageHeight = PLUSH_RENDER.Height * Math.max(0.05, Math.abs(scaleY));
-        const centerX = PLUSH_RENDER.Left + PLUSH_RENDER.Width / 2 + (Number(transform.TranslationX) || 0);
-        const centerY = PLUSH_RENDER.Top + PLUSH_RENDER.Height / 2 + (Number(transform.TranslationY) || 0);
-        const center = characterPointToScreen(C, centerX, centerY);
-        const left = characterPointToScreen(C, centerX - imageWidth / 2, centerY);
-        const right = characterPointToScreen(C, centerX + imageWidth / 2, centerY);
-        const top = characterPointToScreen(C, centerX, centerY - imageHeight / 2);
-        const bottom = characterPointToScreen(C, centerX, centerY + imageHeight / 2);
-        if (!center || !left || !right || !top || !bottom) return false;
-        const width = Math.max(8, Math.abs(right.x - left.x));
-        const height = Math.max(8, Math.abs(bottom.y - top.y));
-        const rotation = Number(transform.Rotation) || 0;
-        const flipX = scaleX < 0 ? -1 : 1;
-        const flipY = scaleY < 0 ? -1 : 1;
-        Object.assign(element.style, {
-            left: `${Math.round(center.x)}px`,
-            top: `${Math.round(center.y)}px`,
-            width: `${Math.round(width)}px`,
-            height: `${Math.round(height)}px`,
-            transform: `translate(-50%, -50%) rotate(${rotation}deg) scale(${flipX}, ${flipY})`,
-        });
-        return true;
-    }
-
     function syncPetSuitPlushOverlay(C) {
         if (!C) return false;
         const key = petSuitOverlayKey(C);
         const item = getHeld(C);
-        if (window.CurrentScreen !== "ChatRoom" || !characterPetSuitItem(C) || !isOurs(item)) {
-            removePetSuitPlushOverlay(key);
+        const previous = petSuitRenderStates.get(key);
+        if (!isOurs(item)) {
+            if (previous?.active) previous.active = false;
             return false;
         }
+        const suitActive = !!characterPetSuitItem(C);
+        const renderState = previous || { active: false, restorePending: false };
+        const wasActive = !!renderState.active;
+        renderState.active = suitActive;
+        renderState.character = C;
+        renderState.lastSeenAt = Date.now();
+        petSuitRenderStates.set(key, renderState);
+        if (window.CurrentScreen === "ChatRoom" && wasActive && !suitActive) schedulePetSuitNativeRestore(C, key);
+        return window.CurrentScreen === "ChatRoom" && suitActive;
+    }
+
+    function getCanvasOverlayImage(source) {
+        if (typeof source !== "string" || !source) return null;
+        try {
+            if (typeof window.DrawGetImage === "function") {
+                const image = window.DrawGetImage(source);
+                if (image?.complete && (Number(image.naturalWidth) > 0 || Number(image.width) > 0)) return image;
+            }
+        } catch (_) {}
+        let image = canvasOverlayImageCache.get(source);
+        if (!image) {
+            image = new Image();
+            image.src = source;
+            canvasOverlayImageCache.set(source, image);
+        }
+        return image.complete && (Number(image.naturalWidth) > 0 || Number(image.width) > 0) ? image : null;
+    }
+
+    function drawPetSuitPlushCanvasOverlay(C) {
+        if (!syncPetSuitPlushOverlay(C)) return false;
+        const item = getHeld(C);
         const source = petSuitPlushOverlaySource(item);
-        if (!source) {
-            removePetSuitPlushOverlay(key);
+        const image = getCanvasOverlayImage(source);
+        const transform = readActivePlushLayerTransform(item);
+        const ctx = window.MainCanvas;
+        if (!image || !transform || !ctx || typeof ctx.drawImage !== "function") return false;
+        const scaleX = Number(transform.ScaleX) || 1;
+        const scaleY = Number(transform.ScaleY) || 1;
+        const halfWidth = PLUSH_RENDER.Width * Math.max(0.05, Math.abs(scaleX)) / 2;
+        const halfHeight = PLUSH_RENDER.Height * Math.max(0.05, Math.abs(scaleY)) / 2;
+        const centerX = PLUSH_RENDER.Left + PLUSH_RENDER.Width / 2 + (Number(transform.TranslationX) || 0);
+        const centerY = PLUSH_RENDER.Top + PLUSH_RENDER.Height / 2 + (Number(transform.TranslationY) || 0);
+        const rotation = (Number(transform.Rotation) || 0) * Math.PI / 180;
+        const center = characterPointToMainCanvas(C, centerX, centerY);
+        const xPoint = characterPointToMainCanvas(C, centerX + Math.cos(rotation) * halfWidth, centerY + Math.sin(rotation) * halfWidth);
+        const yPoint = characterPointToMainCanvas(C, centerX - Math.sin(rotation) * halfHeight, centerY + Math.cos(rotation) * halfHeight);
+        if (!center || !xPoint || !yPoint) return false;
+        const xVec = { x: xPoint.x - center.x, y: xPoint.y - center.y };
+        const yVec = { x: yPoint.x - center.x, y: yPoint.y - center.y };
+        const width = Math.max(8, Math.hypot(xVec.x, xVec.y) * 2);
+        const height = Math.max(8, Math.hypot(yVec.x, yVec.y) * 2);
+        const angle = Math.atan2(xVec.y, xVec.x);
+        try {
+            ctx.save();
+            if (typeof ctx.setTransform === "function") ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.translate(center.x, center.y);
+            ctx.rotate(angle);
+            ctx.scale(scaleX < 0 ? -1 : 1, scaleY < 0 ? -1 : 1);
+            ctx.drawImage(image, -width / 2, -height / 2, width, height);
+            ctx.restore();
+            return true;
+        } catch (_) {
+            try { ctx.restore(); } catch (_) {}
             return false;
         }
-        let state = petSuitPlushOverlays.get(key);
-        if (!state?.element?.isConnected) {
-            const element = document.createElement("img");
-            element.className = "SubbysPlushiesPetSuitOverlay";
-            element.alt = "";
-            Object.assign(element.style, {
-                position: "fixed",
-                zIndex: "2147481800",
-                pointerEvents: "none",
-                objectFit: "contain",
-                transformOrigin: "center center",
-                userSelect: "none",
-            });
-            document.body.appendChild(element);
-            state = { element, source: null };
-            petSuitPlushOverlays.set(key, state);
-        }
-        if (state.source !== source) {
-            state.source = source;
-            state.element.src = source;
-        }
-        if (!positionPetSuitPlushOverlay(C, state.element, item)) {
-            removePetSuitPlushOverlay(key);
-            return false;
-        }
-        return true;
     }
 
     function prunePetSuitPlushOverlays() {
         const present = new Set();
         if (window.CurrentScreen === "ChatRoom") {
             const characters = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
-            for (const C of characters) {
-                const key = petSuitOverlayKey(C);
-                present.add(key);
-                syncPetSuitPlushOverlay(C);
-            }
-            if (window.Player && !characters.includes(window.Player)) {
-                const key = petSuitOverlayKey(window.Player);
-                present.add(key);
-                syncPetSuitPlushOverlay(window.Player);
-            }
+            for (const C of characters) present.add(petSuitOverlayKey(C));
+            if (window.Player && !characters.includes(window.Player)) present.add(petSuitOverlayKey(window.Player));
         }
-        for (const key of [...petSuitPlushOverlays.keys()]) {
-            if (!present.has(key)) removePetSuitPlushOverlay(key);
+        for (const key of [...petSuitRenderStates.keys()]) {
+            if (!present.has(key)) petSuitRenderStates.delete(key);
         }
+    }
+
+    function startPetSuitOverlaySweep() {
+        return true;
     }
 
     function playerCharacterPointToScreen(characterX, characterY) {
@@ -2348,6 +2430,7 @@
         if (!transform) return "";
         return [
             draw?.x ?? "", draw?.y ?? "", draw?.zoom ?? "", Number(C?.HeightRatio) || 1,
+            draw?.matrix?.a ?? "", draw?.matrix?.b ?? "", draw?.matrix?.c ?? "", draw?.matrix?.d ?? "", draw?.matrix?.e ?? "", draw?.matrix?.f ?? "",
             transform.TranslationX, transform.TranslationY, transform.ScaleX, transform.ScaleY, transform.Rotation,
         ].join("|");
     }
@@ -2411,7 +2494,9 @@
         const item = getHeld(window.Player);
         const bounds = currentPlushCanvasBounds(item);
         if (!bounds) return false;
-        const screen = playerCharacterPointToScreen(bounds.visualRight + 6, bounds.visualTop + 4);
+        const anchorX = Number.isFinite(bounds.visualRight) ? bounds.visualRight + 3 : bounds.right;
+        const anchorY = Number.isFinite(bounds.visualTop) ? bounds.visualTop + 10 : bounds.top + 10;
+        const screen = playerCharacterPointToScreen(anchorX, anchorY);
         if (!screen) return false;
         plushStatusIconElement.style.left = `${Math.round(screen.x)}px`;
         plushStatusIconElement.style.top = `${Math.round(screen.y)}px`;
@@ -2424,6 +2509,7 @@
             localOverlayRepositionFrame = null;
             if (speechBubbleElement?.isConnected) positionSpeechBubble();
             if (plushStatusIconElement?.isConnected) positionPlushStatusIcon();
+            if (dragToggleButton?.isConnected) refreshDragToggleButton();
             const item = getHeld(window.Player);
             if (isOurs(item)) localOverlayPositionSignature = plushOverlayPositionSignature(window.Player, item);
         });
@@ -2445,7 +2531,7 @@
             Object.assign(icon.style, {
                 position: "fixed",
                 zIndex: "2147482880",
-                transform: "translate(-50%, -100%)",
+                transform: "translate(0, -100%)",
                 pointerEvents: "none",
                 userSelect: "none",
                 font: "bold 11px Arial, sans-serif",
@@ -2551,7 +2637,7 @@
         const bounds = currentPlushCanvasBounds(item);
         if (!bounds) return false;
 
-        const iconPoint = characterPointToScreen(C, bounds.visualRight - 3, bounds.visualTop + 3);
+        const iconPoint = characterPointToScreen(C, bounds.visualRight + 3, bounds.visualTop + 10);
         const bubblePoint = characterPointToScreen(C, bounds.centerX, bounds.visualTop - 8);
         if (iconPoint && state.icon?.isConnected) {
             state.icon.style.left = `${Math.round(iconPoint.x)}px`;
@@ -2577,7 +2663,7 @@
         icon.className = "SubbysPlushiesRemoteMoodVisual";
         icon.textContent = selected.symbol;
         Object.assign(icon.style, {
-            position: "fixed", zIndex: "2147482878", transform: "translate(-50%, -100%)",
+            position: "fixed", zIndex: "2147482878", transform: "translate(0, -100%)",
             pointerEvents: "none", userSelect: "none", font: "bold 11px Arial, sans-serif",
             lineHeight: "1", textShadow: "0 1px 2px rgba(0,0,0,.85)", whiteSpace: "nowrap",
             color: selected.color || "#FFFFFF",
@@ -2614,6 +2700,96 @@
         const sender = Number(data?.Sender);
         if (!type || !Number.isFinite(sender)) return false;
         return showRemotePlushEmote(sender, type);
+    }
+
+    function rememberAddonPresence(memberNumber, version = "") {
+        const member = Number(memberNumber);
+        if (!Number.isFinite(member)) return false;
+        addonPresenceMembers.set(member, { version: String(version || ""), at: Date.now() });
+        return true;
+    }
+
+    function sendAddonPresence(force = false) {
+        if (window.CurrentScreen !== "ChatRoom" || typeof window.ServerSend !== "function") return false;
+        const now = Date.now();
+        if (!force && now - lastAddonPresenceBroadcastAt < 900) return false;
+        const member = Number(window.Player?.MemberNumber);
+        if (Number.isFinite(member)) rememberAddonPresence(member, VERSION);
+        try {
+            window.ServerSend("ChatRoomChat", {
+                Content: ADDON_PRESENCE_CONTENT,
+                Type: "Hidden",
+                Dictionary: [{ Tag: ADDON_PRESENCE_TAG, Text: VERSION }],
+            });
+            lastAddonPresenceBroadcastAt = now;
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function processAddonPresencePacket(data) {
+        if (!data || data.Type !== "Hidden" || data.Content !== ADDON_PRESENCE_CONTENT) return false;
+        const sender = Number(data.Sender);
+        if (!Number.isFinite(sender)) return false;
+        rememberAddonPresence(sender, getDictionaryText(data, ADDON_PRESENCE_TAG) || "");
+        return true;
+    }
+
+    function pruneAddonPresence() {
+        const present = new Set((Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [])
+            .map(C => Number(C?.MemberNumber))
+            .filter(Number.isFinite));
+        const playerMember = Number(window.Player?.MemberNumber);
+        if (Number.isFinite(playerMember)) present.add(playerMember);
+        for (const member of [...addonPresenceMembers.keys()]) {
+            if (!present.has(member)) addonPresenceMembers.delete(member);
+        }
+    }
+
+    function characterHasAddonPresence(C) {
+        if (!C) return false;
+        const member = Number(C.MemberNumber);
+        const playerMember = Number(window.Player?.MemberNumber);
+        if (C === window.Player || (Number.isFinite(member) && member === playerMember)) return true;
+        return Number.isFinite(member) && addonPresenceMembers.has(member);
+    }
+
+    function drawAddonPresenceIcon(C) {
+        if (window.CurrentScreen !== "ChatRoom" || !characterHasAddonPresence(C)) return false;
+        if (typeof window.ChatRoomHideIconState === "number" && window.ChatRoomHideIconState !== 0) return false;
+        const member = Number(C?.MemberNumber);
+        if (Number.isFinite(member) && Array.isArray(window.Player?.GhostList) && window.Player.GhostList.includes(member)) return false;
+        const ctx = window.MainCanvas;
+        const image = getCanvasOverlayImage(renderImages[0] || PLUSH_FALLBACK_IMAGE);
+        if (!ctx || typeof ctx.drawImage !== "function") return false;
+        const center = characterPointToMainCanvas(C, 315, 20);
+        const sizePoint = characterPointToMainCanvas(C, 349, 20);
+        if (!center || !sizePoint) return false;
+        const size = Math.max(22, Math.min(44, Math.hypot(sizePoint.x - center.x, sizePoint.y - center.y)));
+        try {
+            ctx.save();
+            if (typeof ctx.setTransform === "function") ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.globalAlpha = 0.96;
+            ctx.fillStyle = "rgba(31,16,45,.88)";
+            ctx.strokeStyle = "rgba(177,94,255,.98)";
+            ctx.lineWidth = Math.max(1, size * 0.06);
+            ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
+            ctx.strokeRect(center.x - size / 2, center.y - size / 2, size, size);
+            if (image) ctx.drawImage(image, center.x - size * 0.42, center.y - size * 0.42, size * 0.84, size * 0.84);
+            else {
+                ctx.fillStyle = "white";
+                ctx.font = `bold ${Math.max(11, size * 0.48)}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("P", center.x, center.y + 1);
+            }
+            ctx.restore();
+            return true;
+        } catch (_) {
+            try { ctx.restore(); } catch (_) {}
+            return false;
+        }
     }
 
     function triggerPlushEmote(type) {
@@ -4099,11 +4275,15 @@
         const known = PLUSH_NAMES.find(entry => String(entry || "").toLowerCase() === name.trim().toLowerCase());
         if (!known) return null;
         const member = Number(raw?.memberNumber);
+        const x = Number(raw?.x);
+        const y = Number(raw?.y);
         return {
             name: known,
             setBy: typeof raw?.setBy === "string" && raw.setBy.trim() ? raw.setBy.trim() : "room admin",
             memberNumber: Number.isFinite(member) ? member : null,
             at: typeof raw?.at === "string" ? raw.at : null,
+            x: Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0.94,
+            y: Number.isFinite(y) ? Math.max(0, Math.min(1, y)) : 0.16,
             shared: true,
         };
     }
@@ -4181,6 +4361,8 @@
                 setBy: state.setBy || getCharacterDisplayName(window.Player) || "room admin",
                 memberNumber: Number(window.Player?.MemberNumber) || null,
                 at: state.at || new Date().toISOString(),
+                x: Number.isFinite(Number(state.x)) ? Math.max(0, Math.min(1, Number(state.x))) : 0.94,
+                y: Number.isFinite(Number(state.y)) ? Math.max(0, Math.min(1, Number(state.y))) : 0.16,
             };
         } else {
             delete currentCustom[ROOM_MASCOT_CUSTOM_KEY];
@@ -4301,119 +4483,128 @@
             removeRoomMascotOverlay();
             return false;
         }
-
         if (roomMascotShouldYieldToMenus()) {
             if (roomMascotOverlay?.isConnected) roomMascotOverlay.style.display = "none";
             return false;
         }
-
-        const chatRoot = getOfferChatRoot();
-        if (!chatRoot?.isConnected) {
+        const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
+        const rect = canvas?.getBoundingClientRect?.();
+        if (!canvas || !rect || rect.width <= 0 || rect.height <= 0) {
             removeRoomMascotOverlay();
             return false;
         }
-
-        let chatRect = null;
-        try { chatRect = chatRoot.getBoundingClientRect?.() || null; } catch (_) {}
-        if (!chatRect || chatRect.width <= 0 || chatRect.height <= 0) {
-            removeRoomMascotOverlay();
-            return false;
-        }
-
-        if (roomMascotOverlay?.isConnected && roomMascotOverlay.parentElement !== document.body) {
-            removeRoomMascotOverlay();
-        }
-
+        if (!Number.isFinite(Number(roomMascotState.x))) roomMascotState.x = 0.94;
+        if (!Number.isFinite(Number(roomMascotState.y))) roomMascotState.y = 0.16;
+        roomMascotState.x = Math.max(0, Math.min(1, Number(roomMascotState.x)));
+        roomMascotState.y = Math.max(0, Math.min(1, Number(roomMascotState.y)));
+        if (roomMascotOverlay?.isConnected && roomMascotOverlay.parentElement !== document.body) removeRoomMascotOverlay();
         if (!roomMascotOverlay?.isConnected) {
             const root = document.createElement("div");
             root.className = "SubbysPlushiesRoomMascot";
             Object.assign(root.style, {
                 position: "fixed",
-                zIndex: "2147483000",
-                width: "72px",
+                zIndex: "2147482600",
                 boxSizing: "border-box",
-                padding: "6px",
                 border: "1px solid currentColor",
                 borderRadius: "8px",
                 background: "rgba(20, 20, 20, 0.72)",
                 color: "white",
                 textAlign: "center",
-                font: "13px Arial, sans-serif",
-                lineHeight: "1.25",
+                fontFamily: "Arial, sans-serif",
+                lineHeight: "1.2",
                 userSelect: "none",
-                cursor: "pointer",
+                cursor: canSetRoomMascot() ? "move" : "pointer",
                 pointerEvents: "auto",
+                touchAction: "none",
             });
-            root.title = "Room mascot — click for info. Visibility can be changed in Plush Settings.";
-
             const image = document.createElement("img");
             image.alt = "Room mascot plushie";
-            Object.assign(image.style, {
-                display: "block",
-                width: "60px",
-                height: "60px",
-                objectFit: "contain",
-                margin: "0 auto 4px",
-                pointerEvents: "none",
-            });
-
+            Object.assign(image.style, { display: "block", objectFit: "contain", margin: "0 auto", pointerEvents: "none" });
             const label = document.createElement("div");
-            Object.assign(label.style, {
-                pointerEvents: "none",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "1px",
-            });
-
-            root.addEventListener("click", event => {
+            Object.assign(label.style, { pointerEvents: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: "1px" });
+            root.addEventListener("pointerdown", event => {
+                if (event.button !== 0) return;
                 event.preventDefault();
                 event.stopPropagation();
-                showRoomMascot();
+                const canDrag = canSetRoomMascot();
+                roomMascotDragSession = {
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    moved: false,
+                    canDrag,
+                };
+                try { root.setPointerCapture?.(event.pointerId); } catch (_) {}
             });
+            root.addEventListener("pointermove", event => {
+                const session = roomMascotDragSession;
+                if (!session || session.pointerId !== event.pointerId || !session.canDrag) return;
+                const dx = event.clientX - session.startX;
+                const dy = event.clientY - session.startY;
+                if (!session.moved && Math.hypot(dx, dy) < 4) return;
+                session.moved = true;
+                const liveRect = (document.getElementById("MainCanvas") || document.querySelector("canvas"))?.getBoundingClientRect?.();
+                if (!liveRect || liveRect.width <= 0 || liveRect.height <= 0) return;
+                roomMascotState.x = Math.max(0, Math.min(1, (event.clientX - liveRect.left) / liveRect.width));
+                roomMascotState.y = Math.max(0, Math.min(1, (event.clientY - liveRect.top) / liveRect.height));
+                refreshRoomMascotOverlay();
+            });
+            const finishMascotDrag = event => {
+                const session = roomMascotDragSession;
+                if (!session || session.pointerId !== event.pointerId) return;
+                roomMascotDragSession = null;
+                try { root.releasePointerCapture?.(event.pointerId); } catch (_) {}
+                if (!session.moved) {
+                    showRoomMascot();
+                    return;
+                }
+                cacheRoomMascotState(roomMascotState);
+                if (session.canDrag) publishRoomMascotSharedState(roomMascotState);
+            };
+            root.addEventListener("pointerup", finishMascotDrag);
+            root.addEventListener("pointercancel", finishMascotDrag);
             root.append(image, label);
             document.body.appendChild(root);
             roomMascotOverlay = root;
             roomMascotOverlayImage = image;
             roomMascotOverlayLabel = label;
         }
-
-        if (roomMascotOverlay) {
-            const overlayWidth = 72;
-            const left = Math.max(0, Math.round(chatRect.right - overlayWidth - 8));
-            const top = Math.max(0, Math.round(chatRect.top + 28));
-            roomMascotOverlay.style.left = `${left}px`;
-            roomMascotOverlay.style.top = `${top}px`;
-            roomMascotOverlay.style.right = "auto";
-            roomMascotOverlay.style.display = "block";
-        }
-
+        const viewportScale = Math.max(0.52, Math.min(1, Math.min(rect.width / 1000, rect.height / 760)));
+        const overlayWidth = Math.round(72 * viewportScale);
+        const padding = Math.max(3, Math.round(6 * viewportScale));
+        const imageSize = Math.max(30, overlayWidth - padding * 2);
+        const fontSize = Math.max(9, Math.round(13 * viewportScale));
+        const rawLeft = rect.left + roomMascotState.x * rect.width - overlayWidth / 2;
+        const estimatedHeight = overlayWidth + Math.max(18, Math.round(31 * viewportScale));
+        const rawTop = rect.top + roomMascotState.y * rect.height - estimatedHeight / 2;
+        const left = Math.max(rect.left + 2, Math.min(rect.right - overlayWidth - 2, rawLeft));
+        const top = Math.max(rect.top + 2, Math.min(rect.bottom - estimatedHeight - 2, rawTop));
+        Object.assign(roomMascotOverlay.style, {
+            left: `${Math.round(left)}px`,
+            top: `${Math.round(top)}px`,
+            right: "auto",
+            display: "block",
+            width: `${overlayWidth}px`,
+            padding: `${padding}px`,
+            fontSize: `${fontSize}px`,
+            cursor: canSetRoomMascot() ? "move" : "pointer",
+        });
+        Object.assign(roomMascotOverlayImage.style, {
+            width: `${imageSize}px`,
+            height: `${imageSize}px`,
+            marginBottom: `${Math.max(2, Math.round(4 * viewportScale))}px`,
+        });
         const index = mascotRenderIndex(roomMascotState.name);
-        const imageSource = index >= 0
-            ? (renderImages[index] || PLUSH_IMAGES[index] || PLUSH_FALLBACK_IMAGE)
-            : (renderImages[0] || PLUSH_FALLBACK_IMAGE);
-        if (roomMascotOverlayImage && roomMascotOverlayImage.src !== imageSource) {
-            roomMascotOverlayImage.src = imageSource;
-        }
+        const imageSource = index >= 0 ? (renderImages[index] || PLUSH_IMAGES[index] || PLUSH_FALLBACK_IMAGE) : (renderImages[0] || PLUSH_FALLBACK_IMAGE);
+        if (roomMascotOverlayImage && roomMascotOverlayImage.src !== imageSource) roomMascotOverlayImage.src = imageSource;
         if (roomMascotOverlayLabel) {
             roomMascotOverlayLabel.innerHTML = "";
             const titleLine = document.createElement("div");
             titleLine.textContent = "Room Mascot";
-            Object.assign(titleLine.style, {
-                fontWeight: "bold",
-                whiteSpace: "nowrap",
-                maxWidth: "100%",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-            });
+            Object.assign(titleLine.style, { fontWeight: "bold", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" });
             const nameLine = document.createElement("div");
             nameLine.textContent = roomMascotState.name;
-            Object.assign(nameLine.style, {
-                whiteSpace: "nowrap",
-                maxWidth: "100%",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-            });
+            Object.assign(nameLine.style, { whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" });
             roomMascotOverlayLabel.append(titleLine, nameLine);
         }
         return true;
@@ -4441,7 +4632,8 @@
         if (window.CurrentScreen === "ChatAdmin" && !roomMascotAdminDirty) {
             roomMascotAdminSnapshot = roomMascotFromSharedRoomData();
         }
-        roomMascotState = { name: known, setBy: source, memberNumber: Number(window.Player?.MemberNumber) || null, at: new Date().toISOString(), shared: true };
+        const previousPosition = roomMascotState && Number.isFinite(Number(roomMascotState.x)) && Number.isFinite(Number(roomMascotState.y)) ? { x: Number(roomMascotState.x), y: Number(roomMascotState.y) } : { x: 0.94, y: 0.16 };
+        roomMascotState = { name: known, setBy: source, memberNumber: Number(window.Player?.MemberNumber) || null, at: new Date().toISOString(), x: previousPosition.x, y: previousPosition.y, shared: true };
         cacheRoomMascotState(roomMascotState);
         refreshRoomMascotOverlay();
         if (window.CurrentScreen === "ChatAdmin") {
@@ -4581,13 +4773,8 @@
                 position: "fixed",
                 zIndex: "2147483500",
                 boxSizing: "border-box",
-                font: "bold 14px Arial, sans-serif",
                 borderRadius: "8px",
                 cursor: "pointer",
-                right: "18px",
-                bottom: "18px",
-                width: "190px",
-                height: "42px",
             });
             button.addEventListener("click", event => {
                 event.preventDefault();
@@ -4597,6 +4784,14 @@
             document.body.appendChild(button);
             roomMascotAdminButton = button;
         }
+        const scale = Math.max(0.58, Math.min(1, Math.min(window.innerWidth / 1200, window.innerHeight / 800)));
+        Object.assign(roomMascotAdminButton.style, {
+            right: `${Math.max(8, Math.round(18 * scale))}px`,
+            bottom: `${Math.max(8, Math.round(18 * scale))}px`,
+            width: `${Math.round(190 * scale)}px`,
+            height: `${Math.round(42 * scale)}px`,
+            font: `bold ${Math.max(10, Math.round(14 * scale))}px Arial, sans-serif`,
+        });
         return true;
     }
 
@@ -4681,7 +4876,8 @@
         if (!set) return false;
         const renderedName = String(set[2] || "").trim();
         const known = PLUSH_NAMES.find(name => name.toLowerCase() === renderedName.toLowerCase()) || renderedName;
-        roomMascotState = { name: known, setBy: String(set[1] || "Someone").trim(), memberNumber: senderMember, at: new Date().toISOString(), shared: true };
+        const previous = roomMascotState;
+        roomMascotState = { name: known, setBy: String(set[1] || "Someone").trim(), memberNumber: senderMember, at: new Date().toISOString(), x: Number.isFinite(Number(previous?.x)) ? Number(previous.x) : 0.94, y: Number.isFinite(Number(previous?.y)) ? Number(previous.y) : 0.16, shared: true };
         cacheRoomMascotState(roomMascotState);
         refreshRoomMascotOverlay();
         return true;
@@ -4707,20 +4903,6 @@
         if (arg === "show" || arg === "unhide") return setRoomMascotOverlayVisible(true);
         if (arg === "picker" || arg === "pick" || arg === "open" || arg === "choose") return openRoomMascotPicker();
         return showRoomMascot();
-    }
-
-    function mainCanvasCoordinates(event) {
-        const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
-        if (!canvas || event?.target !== canvas) return null;
-        const rect = canvas.getBoundingClientRect?.();
-        if (!rect || rect.width <= 0 || rect.height <= 0) return null;
-        const width = Number(canvas.width) || 2000;
-        const height = Number(canvas.height) || 1000;
-        return {
-            canvas,
-            x: (event.clientX - rect.left) * width / rect.width,
-            y: (event.clientY - rect.top) * height / rect.height,
-        };
     }
 
     function currentPlushCanvasBounds(item) {
@@ -4853,9 +5035,27 @@
         return true;
     }
 
+    function getDragTogglePosition() {
+        if (dragTogglePositionState) return dragTogglePositionState;
+        const stored = readLocalJSON(DRAG_TOGGLE_POSITION_STORAGE_KEY, {});
+        const x = Number(stored?.x);
+        const y = Number(stored?.y);
+        dragTogglePositionState = {
+            x: Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0.92,
+            y: Number.isFinite(y) ? Math.max(0, Math.min(1, y)) : 0.90,
+        };
+        return dragTogglePositionState;
+    }
+
+    function saveDragTogglePosition() {
+        if (!dragTogglePositionState) return false;
+        return writeLocalJSON(DRAG_TOGGLE_POSITION_STORAGE_KEY, dragTogglePositionState);
+    }
+
     function removeDragToggleButton() {
         try { dragToggleButton?.remove?.(); } catch (_) {}
         dragToggleButton = null;
+        dragToggleMoveSession = null;
     }
 
     function refreshDragToggleButton() {
@@ -4865,76 +5065,89 @@
             removeDragToggleButton();
             return false;
         }
-
-        const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
-        const rect = canvas?.getBoundingClientRect?.();
-        if (!canvas || !rect || rect.width <= 0 || rect.height <= 0) {
-            removeDragToggleButton();
-            return false;
-        }
-
         if (!dragToggleButton?.isConnected) {
             const button = document.createElement("button");
             button.type = "button";
             button.className = "SubbysPlushiesDragToggle";
             Object.assign(button.style, {
                 position: "fixed",
-                zIndex: "2147482990",
-                width: "28px",
-                height: "28px",
+                zIndex: "2147482500",
+                width: "32px",
+                height: "32px",
                 padding: "0",
                 border: "1px solid rgba(255,255,255,0.72)",
                 borderRadius: "9px",
                 color: "white",
-                font: "15px/1 sans-serif",
+                font: "16px/1 sans-serif",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                cursor: "pointer",
+                cursor: "move",
                 userSelect: "none",
+                touchAction: "none",
                 pointerEvents: "auto",
                 boxShadow: "0 2px 6px rgba(0,0,0,0.30)",
             });
             button.addEventListener("pointerdown", event => {
+                if (event.button !== 0) return;
                 event.preventDefault();
                 event.stopPropagation();
                 event.stopImmediatePropagation();
+                dragToggleMoveSession = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
+                try { button.setPointerCapture?.(event.pointerId); } catch (_) {}
             });
-            button.addEventListener("click", event => {
+            button.addEventListener("pointermove", event => {
+                const session = dragToggleMoveSession;
+                if (!session || session.pointerId !== event.pointerId) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const dx = event.clientX - session.startX;
+                const dy = event.clientY - session.startY;
+                if (!session.moved && Math.hypot(dx, dy) < 4) return;
+                session.moved = true;
+                const pos = getDragTogglePosition();
+                pos.x = Math.max(0, Math.min(1, event.clientX / Math.max(1, window.innerWidth)));
+                pos.y = Math.max(0, Math.min(1, event.clientY / Math.max(1, window.innerHeight)));
+                refreshDragToggleButton();
+            });
+            const finish = event => {
+                const session = dragToggleMoveSession;
+                if (!session || session.pointerId !== event.pointerId) return;
                 event.preventDefault();
                 event.stopPropagation();
                 event.stopImmediatePropagation();
-                setDragMode(!dragModeEnabled);
+                dragToggleMoveSession = null;
+                try { button.releasePointerCapture?.(event.pointerId); } catch (_) {}
+                if (session.moved) saveDragTogglePosition();
+                else setDragMode(!dragModeEnabled);
+            };
+            button.addEventListener("pointerup", finish);
+            button.addEventListener("pointercancel", event => {
+                const session = dragToggleMoveSession;
+                if (!session || session.pointerId !== event.pointerId) return;
+                dragToggleMoveSession = null;
+                saveDragTogglePosition();
             });
             document.body.appendChild(button);
             dragToggleButton = button;
         }
-
-        const buttonSize = 28;
-        const logicalWidth = Number(canvas.width) || 2000;
-        const characterFraction = Math.max(0.1, Math.min(0.9, 1000 / logicalWidth));
-        const characterRight = rect.left + rect.width * characterFraction;
-        const left = Math.max(rect.left + 2, characterRight - buttonSize - 3);
-        const top = Math.max(rect.top + 2, rect.bottom - buttonSize - 3);
+        const buttonSize = 32;
+        const pos = getDragTogglePosition();
+        const left = Math.max(2, Math.min(window.innerWidth - buttonSize - 2, pos.x * window.innerWidth - buttonSize / 2));
+        const top = Math.max(2, Math.min(window.innerHeight - buttonSize - 2, pos.y * window.innerHeight - buttonSize / 2));
         dragToggleButton.style.left = `${Math.round(left)}px`;
         dragToggleButton.style.top = `${Math.round(top)}px`;
         dragToggleButton.textContent = "🖱️";
         dragToggleButton.setAttribute("aria-label", dragModeEnabled ? "Disable Easy Drag" : "Enable Easy Drag");
-        dragToggleButton.title = dragModeEnabled
-            ? "Easy Drag is ON — click to disable it."
-            : "Easy Drag is OFF — click to enable it.";
-        dragToggleButton.style.background = dragModeEnabled
-            ? "rgba(72, 170, 105, 0.96)"
-            : "rgba(28, 28, 32, 0.82)";
+        dragToggleButton.title = dragModeEnabled ? "Easy Drag is ON — click to disable; drag this button to move it." : "Easy Drag is OFF — click to enable; drag this button to move it.";
+        dragToggleButton.style.background = dragModeEnabled ? "rgba(72, 170, 105, 0.96)" : "rgba(28, 28, 32, 0.82)";
         dragToggleButton.style.opacity = dragModeEnabled ? "1" : "0.90";
         return true;
     }
 
     function installDragToggleUi() {
         refreshDragToggleButton();
-        if (dragToggleUiTimer == null) {
-            dragToggleUiTimer = window.setInterval(refreshDragToggleButton, performanceInterval(2500, 8000));
-        }
+        if (dragToggleUiTimer == null) dragToggleUiTimer = window.setInterval(refreshDragToggleButton, performanceInterval(5000, 15000));
         window.addEventListener("resize", refreshDragToggleButton, { passive: true });
         return true;
     }
@@ -4962,7 +5175,7 @@
 
         document.addEventListener("pointerdown", event => {
             if (!dragModeEnabled || event.button !== 0 || nativeLayeringVisible()) return;
-            const point = mainCanvasCoordinates(event);
+            const point = characterCanvasCoordinates(window.Player, event);
             if (!point || point.x >= 1000 || point.y < 0 || point.y > 1000) return;
 
             if (activeIdleAnimationSession) cancelIdleAnimation();
@@ -4996,7 +5209,7 @@
 
         document.addEventListener("pointermove", event => {
             if (!dragSession || event.pointerId !== dragSession.pointerId) return;
-            const point = mainCanvasCoordinates(event);
+            const point = characterCanvasCoordinates(window.Player, event);
             if (!point) return;
             dragSession.lastPoint = point;
             if (dragFrameRequest == null) {
@@ -5010,7 +5223,7 @@
 
         document.addEventListener("pointerup", event => {
             if (!dragSession || event.pointerId !== dragSession.pointerId) return;
-            const point = mainCanvasCoordinates(event);
+            const point = characterCanvasCoordinates(window.Player, event);
             if (point) applyDragFrame(point);
             finishDirectDrag(false);
             event.preventDefault();
@@ -5766,44 +5979,14 @@
     function renderExtensionsHistory(container) {
         const plushName = currentPlushName();
         const mood = getPlushMoodRecord(plushName);
-        const moodEntries = moodHistoryFor(plushName, 40);
-        const moodSection = makeExtensionsSection(`Mood history — ${plushName}`);
+        const moodSection = makeExtensionsSection(`Mood — ${plushName}`);
         const moodSummary = document.createElement("div");
-        moodSummary.textContent = `${moodLabel(mood.score)} • ${mood.score}/100 • last ${Math.min(20, moodEntries.length)} shown`;
+        moodSummary.textContent = `${moodLabel(mood.score)} • ${mood.score}/100`;
         Object.assign(moodSummary.style, { color: getExtensionsStyle().muted, fontSize: "12px", marginBottom: "9px" });
-        moodSection.appendChild(moodSummary);
-
-        if (!moodEntries.length) {
-            const empty = document.createElement("div");
-            empty.textContent = "No mood changes recorded yet.";
-            empty.style.color = getExtensionsStyle().muted;
-            moodSection.appendChild(empty);
-        } else {
-            const recent = moodEntries.slice(-20).reverse();
-            for (const entry of recent) {
-                const row = document.createElement("div");
-                Object.assign(row.style, {
-                    display: "grid", gridTemplateColumns: "72px 1fr auto", gap: "10px", alignItems: "center",
-                    padding: extensionsLayoutMetrics().rowPadding, borderBottom: `1px solid ${getExtensionsStyle().border}55`,
-                });
-                const delta = document.createElement("strong");
-                delta.textContent = `${entry.delta > 0 ? "+" : ""}${entry.delta}`;
-                delta.style.color = entry.delta > 0 ? getExtensionsStyle().accent : getExtensionsStyle().muted;
-                const detail = document.createElement("div");
-                const reason = document.createElement("div");
-                reason.textContent = entry.reason || "Mood change";
-                reason.style.color = getExtensionsStyle().text;
-                const when = document.createElement("div");
-                when.textContent = new Date(Number(entry.at) || Date.now()).toLocaleString();
-                Object.assign(when.style, { color: getExtensionsStyle().muted, fontSize: "11px", marginTop: "2px" });
-                detail.append(reason, when);
-                const score = document.createElement("div");
-                score.textContent = `${entry.score}/100`;
-                Object.assign(score.style, { color: getExtensionsStyle().muted, fontWeight: "bold" });
-                row.append(delta, detail, score);
-                moodSection.appendChild(row);
-            }
-        }
+        const historyDisabled = document.createElement("div");
+        historyDisabled.textContent = "Per-action mood history is disabled to reduce localStorage writes and keep the addon light.";
+        historyDisabled.style.color = getExtensionsStyle().muted;
+        moodSection.append(moodSummary, historyDisabled);
         container.appendChild(moodSection);
 
         const battles = battleHistory(20).reverse();
@@ -6856,11 +7039,19 @@
         return identifyCustomActivity(data);
     }
 
-    function activityTemplate(spec, self, sourceName, targetName) {
-        const template = self ? spec.selfText : (spec.otherText || spec.selfText);
-        return template
+    function activityTemplate(spec, self, sourceCharacter, targetCharacter, sourceName, targetName, plushName) {
+        const sourcePronouns = characterPronouns(sourceCharacter);
+        const targetPronouns = characterPronouns(targetCharacter);
+        const ownerPronouns = self ? sourcePronouns : targetPronouns;
+        const namedPlush = String(plushName || currentPlushName() || "plushie");
+        let template = self ? spec.selfText : (spec.otherText || spec.selfText);
+        template = template
+            .replaceAll("the plushie", `${sourcePronouns.possessive} ${namedPlush} plushie`)
+            .replaceAll("their", ownerPronouns.possessive)
+            .replaceAll("themself", ownerPronouns.reflexive)
             .replaceAll("{Source}", sourceName || "Someone")
             .replaceAll("{Target}", targetName || "someone");
+        return template;
     }
 
     function getActionCharacterContext(data, fallbackTarget = null) {
@@ -6965,6 +7156,20 @@
             if (typeof CharacterNickname === "function") return CharacterNickname(C);
         } catch (_) {}
         return C.Nickname || C.Name || null;
+    }
+
+    function characterPronouns(C) {
+        if (!C) return { subject: "they", object: "them", possessive: "their", reflexive: "themself" };
+        const gender = String(C?.Gender || C?.gender || "").trim().toLowerCase();
+        const preference = String(C?.Pronoun || C?.Pronouns || C?.pronoun || "").trim().toLowerCase();
+        const value = `${gender} ${preference}`;
+        if (/\b(m|male|man|masculine|he|him|hehim)\b/.test(value)) {
+            return { subject: "he", object: "him", possessive: "his", reflexive: "himself" };
+        }
+        if (/\b(f|female|woman|feminine|she|her|sheher)\b/.test(value)) {
+            return { subject: "she", object: "her", possessive: "her", reflexive: "herself" };
+        }
+        return { subject: "they", object: "them", possessive: "their", reflexive: "themself" };
     }
 
     function looksLikeCharacter(value) {
@@ -7080,7 +7285,9 @@
             fallbackTarget === window.Player;
 
         const token = `${playerMember ?? "local"}:${Date.now()}:${++customActivityEventSequence}:${spec.key}`;
-        const message = activityTemplate(spec, isSelf, playerName, targetName);
+        const sourceCharacter = window.Player;
+        const targetCharacter = Number.isFinite(targetMember) ? getRoomCharacterByMember(targetMember) : fallbackTarget;
+        const message = activityTemplate(spec, isSelf, sourceCharacter, targetCharacter, playerName, targetName, currentPlushName());
 
         const preserved = Array.isArray(originalData?.Dictionary)
             ? originalData.Dictionary.filter(entry => {
@@ -9004,18 +9211,22 @@
         const now = Date.now();
         prunePurrTokens(now);
 
+        if (now < purrAttemptInFlightUntil) return false;
         if (now - lastPurrStartedAt < 350) return false;
         if (token && recentPurrTokens.has(token)) return false;
         if (token) recentPurrTokens.set(token, now);
+        purrAttemptInFlightUntil = now + 2500;
 
         try {
             const played = await playHostedPurrSfx() || await playGeneratedPurrFallback();
             if (!played) {
+                purrAttemptInFlightUntil = 0;
                 warn("Could not play the plush purr SFX from assets/sfx or the local fallback.");
                 return false;
             }
 
             lastPurrStartedAt = Date.now();
+            purrAttemptInFlightUntil = lastPurrStartedAt + 1800;
             purrPlayCount++;
             lastPurrPlay = {
                 token,
@@ -9025,6 +9236,7 @@
             };
             return true;
         } catch (e) {
+            purrAttemptInFlightUntil = 0;
             warn("Could not play plush purr SFX:", e);
             return false;
         }
@@ -9044,7 +9256,7 @@
                 Type: "Action",
                 Dictionary: [
                     { Tag: "Beep", Text: "msg" },
-                    { Tag: "msg", Text: `${sourceName} hugs the plushie tightly.` },
+                    { Tag: "msg", Text: `${sourceName} hugs ${characterPronouns(window.Player).possessive} ${currentPlushName()} plushie tightly.` },
                     { Tag: HUG_TIGHTLY_MARKER_TAG, Text: token },
                 ],
             },
@@ -9505,7 +9717,9 @@
             roomRosterSignature = signature;
             captureVisiblePlushStates();
             pruneRememberedPlushStates(true);
+            pruneAddonPresence();
             checkAchievements(true);
+            window.setTimeout(() => sendAddonPresence(false), 250);
             return;
         }
 
@@ -9516,7 +9730,9 @@
 
         captureVisiblePlushStates();
         pruneRememberedPlushStates(true);
+        pruneAddonPresence();
         checkAchievements(true);
+        window.setTimeout(() => sendAddonPresence(false), 250);
 
         roomRosterRecoveryCount++;
         lastRoomRosterRecovery = {
@@ -9562,6 +9778,7 @@
             roomMascotState = null;
             removeRoomMascotOverlay();
             clearRemotePlushEmotes();
+            addonPresenceMembers.clear();
             clearPetSuitPlushOverlays();
             pruneRememberedPlushStates(false);
             return result;
@@ -9574,6 +9791,7 @@
             const afterSync = reason => {
                 scheduleRoomRosterEventCheck(reason, 0);
                 window.setTimeout(() => recoverRoomMascotState({ allowCache: true }), 0);
+                window.setTimeout(() => sendAddonPresence(true), 450);
             };
             if (result && typeof result.then === "function") {
                 void result.then(
@@ -9584,7 +9802,8 @@
                 window.setTimeout(() => {
                     scheduleRoomRosterEventCheck("ChatRoomSync", 0);
                     recoverRoomMascotState({ allowCache: true });
-                }, 100);
+                    sendAddonPresence(true);
+                }, 450);
             }
             return result;
         })) hooked++;
@@ -9619,6 +9838,7 @@
         for (const member of [...remotePlushEmotes.keys()]) {
             if (!present.has(member)) removeRemotePlushEmote(member);
         }
+        pruneAddonPresence();
         prunePetSuitPlushOverlays();
     }
 
@@ -9628,6 +9848,7 @@
         roomRosterSignature = currentRoomRosterSignature();
         const hooked = installRoomRosterEventHooks();
         window.setTimeout(() => recoverRoomMascotState({ allowCache: true }), 250);
+        window.setTimeout(() => sendAddonPresence(true), 700);
 
         roomRosterWatchdog = window.setInterval(
             () => checkRoomRosterChange(isLowCpuMode() ? "120-second watchdog" : "60-second watchdog"),
@@ -9736,13 +9957,16 @@
             const samePlayer = C === window.Player ||
                 (Number.isFinite(playerMember) && member === playerMember);
 
+            let held = null;
             if (C && window.CurrentScreen === "ChatRoom") {
+                held = getHeld(C);
                 const x = Number(args?.[1]);
                 const y = Number(args?.[2]);
                 const zoomArg = args?.[3] == null ? 1 : Number(args[3]);
                 const zoom = Number.isFinite(zoomArg) && zoomArg > 0 ? zoomArg : 1;
                 if (Number.isFinite(x) && Number.isFinite(y)) {
-                    const placement = { x, y, zoom, at: Date.now() };
+                    const needsMatrix = samePlayer || isOurs(held) || remotePlushEmotes.has(member) || characterHasAddonPresence(C);
+                    const placement = { x, y, zoom, matrix: needsMatrix ? currentCanvasTransformSnapshot() : null, at: Date.now() };
                     if (samePlayer) lastPlayerChatRoomDraw = placement;
                     if (Number.isFinite(member)) lastCharacterChatRoomDraw.set(member, placement);
                 }
@@ -9750,7 +9974,10 @@
 
             const result = next(args);
 
-            if (C) syncPetSuitPlushOverlay(C);
+            if (C && window.CurrentScreen === "ChatRoom") {
+                if (isOurs(held) || petSuitRenderStates.has(petSuitOverlayKey(C))) drawPetSuitPlushCanvasOverlay(C);
+                drawAddonPresenceIcon(C);
+            }
 
             if (samePlayer && (speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected)) {
                 const signature = plushOverlayPositionSignature(C, getHeld(C));
@@ -9772,11 +9999,16 @@
             return result;
         });
 
+        const characterOverlayHooked = false;
+
         const activityRunHooked = installHook("ActivityRun", 10000, (args, next) => {
             if (!hugTightlyActivityEnabled && customActivityObjects.size === 0) return next(args);
 
             const activityRunInfo = inspectActivityRunFast(args);
-            if (activityRunInfo.hugTightly) pendingLocalHugTightlyUntil = Date.now() + 1500;
+            if (activityRunInfo.hugTightly) {
+                pendingLocalHugTightlyUntil = Date.now() + 1500;
+                void playPurrSfx(`local-hug:${Date.now()}:${++hugTightlyEventSequence}`, "local Hug Tightly activity");
+            }
 
             const customSpec = activityRunInfo.customSpec;
             const jealousEnabled = getFeatureSettings().jealousPlushie;
@@ -9832,6 +10064,7 @@
 
             const result = next(args);
 
+            if (window.CurrentScreen === "ChatRoom") syncPetSuitPlushOverlay(C);
             item = getHeld(C);
             if (isOurs(item)) {
                 const changedAfter = repairPlushState(item, preferred, "CharacterRefresh post", C);
@@ -9917,6 +10150,7 @@
 
         const actionMessageHooked = installHook("ChatRoomMessage", 10000, (args, next) => {
             const data = args?.[0];
+            if (processAddonPresencePacket(data)) return next(args);
             if (processOfferDecisionSignal(data)) return next(args);
 
             const hiddenBattleData = data?.Type === "Hidden" ? battleDataFromAction(data) : null;
@@ -9969,6 +10203,8 @@
                         setBy: roomMascotState.setBy || getCharacterDisplayName(window.Player) || "room admin",
                         memberNumber: Number(window.Player?.MemberNumber) || null,
                         at: roomMascotState.at || new Date().toISOString(),
+                        x: Number.isFinite(Number(roomMascotState.x)) ? Math.max(0, Math.min(1, Number(roomMascotState.x))) : 0.94,
+                        y: Number.isFinite(Number(roomMascotState.y)) ? Math.max(0, Math.min(1, Number(roomMascotState.y))) : 0.16,
                     };
                 } else if (roomMascotAdminDirty) {
                     delete custom[ROOM_MASCOT_CUSTOM_KEY];
@@ -10062,10 +10298,11 @@
 
         captureVisiblePlushStates();
         startRoomRosterMonitor();
+        startPetSuitOverlaySweep();
 
         log(
             `Installed plush-state persistence hooks: ActivityAllowedForGroup=${activityOrderHooked}, ` +
-            `DrawCharacter=${drawCharacterHooked}, ActivityRun=${activityRunHooked}, CharacterRefresh=${refreshHooked}, ` +
+            `DrawCharacter=${drawCharacterHooked}, CharacterOverlay=${characterOverlayHooked}, ActivityRun=${activityRunHooked}, CharacterRefresh=${refreshHooked}, ` +
             `ChatRoomCharacterUpdate=${updateHooked}, ` +
             `ChatRoomMessage=${actionMessageHooked}, ServerSend=${serverSendHooked}, ` +
             `RoomRosterEvents=${roomRosterEventHookCount}, watchdog=60s (no forced Action refresh).`
@@ -12380,7 +12617,7 @@
             render: {
                 ...PLUSH_RENDER,
                 priority: PLUSH_DRAW_PRIORITY,
-                petSuitOverlayCount: petSuitPlushOverlays.size,
+                petSuitCanvasFallbackActive: [...petSuitRenderStates.values()].filter(state => !!state?.active).length,
                 petSuitAssets: [...PET_SUIT_ASSET_NAMES],
                 prepared: renderImages.every(image => typeof image === "string"),
                 mappingProbe: mapImageSource(renderProbe),
