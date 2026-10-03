@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.3.2
+// @version      2.3.3
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, emotes, battles, mascot, themes, poses, stats, achievements, and more
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -20,14 +20,14 @@
 (() => {
     "use strict";
 
-    const VERSION = "2.3.2";
+    const VERSION = "2.3.3";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
     const FAMILY = "Female3DCG";
     const GROUP = "ItemHandheld";
-    const NECK_GROUP = "ItemNeckRestraints";
-    const PLUSH_GROUPS = Object.freeze([GROUP, NECK_GROUP]);
+    const ADDON_GROUP = "ItemAddon";
+    const PLUSH_GROUPS = Object.freeze([GROUP, ADDON_GROUP]);
     const ASSET_NAME = "SubbysPlushies";
     const MODULE_KEY = "p";
     const PET_SUIT_ASSET_NAMES = new Set(["BitchSuit", "ShinyPetSuit", "PetCrawler"]);
@@ -6200,7 +6200,7 @@
             ["General", [
                 { command: "/help plushie", description: "Show the full Subby's Plushies command reference in chat." },
                 { command: "/plushiebalance", description: "Open the Balance on Head minigame directly." },
-                { command: "/plushieneck", description: "Wear Subby's Plushies in ItemNeckRestraints (the Ceiling Neck Cuff slot)." },
+                { command: "/plushieaddon", description: "Wear Subby's Plushies in ItemAddon (the same Body slot as Ceiling Rope)." },
             ]],
             ["Plushies & Relationships", [
                 { command: "/plushieplushies", description: "Open the Plushies tab with relationship, favorites, emotes, and saved poses." },
@@ -6871,8 +6871,8 @@
                 requireReady(useItem);
                 return true;
 
-            case "/plushieneck":
-                requireReady(equipNeck);
+            case "/plushieaddon":
+                requireReady(equipAddon);
                 return true;
 
             case "/plushieposition":
@@ -9397,16 +9397,16 @@
         return getInventoryItem(C, GROUP);
     }
 
-    function getNeckPlushItem(C = window.Player) {
-        const item = getInventoryItem(C, NECK_GROUP);
+    function getAddonPlushItem(C = window.Player) {
+        const item = getInventoryItem(C, ADDON_GROUP);
         return isOurs(item) ? item : null;
     }
 
     function getHeld(C = window.Player) {
         const hand = getHandheldItem(C);
         if (isOurs(hand)) return hand;
-        const neck = getNeckPlushItem(C);
-        if (neck) return neck;
+        const addon = getAddonPlushItem(C);
+        if (addon) return addon;
         return hand;
     }
 
@@ -12481,20 +12481,20 @@
             }
         }
 
-        const neckAsset = AssetGet(FAMILY, NECK_GROUP, ASSET_NAME);
-        if (!neckAsset) {
-            problems.push(`AssetGet returned null for ${NECK_GROUP}.`);
+        const addonAsset = AssetGet(FAMILY, ADDON_GROUP, ASSET_NAME);
+        if (!addonAsset) {
+            problems.push(`AssetGet returned null for ${ADDON_GROUP}.`);
         } else {
-            if (!Array.isArray(neckAsset.Layer) || neckAsset.Layer.length !== PLUSHES.length) {
-                problems.push(`Expected ${PLUSHES.length} neck-slot plush layers.`);
+            if (!Array.isArray(addonAsset.Layer) || addonAsset.Layer.length !== PLUSHES.length) {
+                problems.push(`Expected ${PLUSHES.length} ItemAddon plush layers.`);
             }
-            if (!neckAsset.Extended) problems.push("Neck-slot plush asset is not marked Extended.");
+            if (!addonAsset.Extended) problems.push("ItemAddon plush asset is not marked Extended.");
             if (typeof ExtendedItemGetData === "function") {
                 try {
-                    const extendedData = ExtendedItemGetData(neckAsset, neckAsset.Archetype);
-                    if (!extendedData || typeof extendedData !== "object") problems.push("Neck-slot modular lookup did not register SubbysPlushies.");
+                    const extendedData = ExtendedItemGetData(addonAsset, addonAsset.Archetype);
+                    if (!extendedData || typeof extendedData !== "object") problems.push("ItemAddon modular lookup did not register SubbysPlushies.");
                 } catch (e) {
-                    problems.push(`Neck-slot ExtendedItem modular lookup failed: ${String(e)}`);
+                    problems.push(`ItemAddon ExtendedItem modular lookup failed: ${String(e)}`);
                 }
             }
         }
@@ -12600,35 +12600,35 @@
         scheduleNextIdleAnimation(2500);
     }
 
-    function equipNeck() {
+    function equipAddon() {
         if (!ready) {
             warn("Not ready yet.");
             return false;
         }
 
-        const currentNeck = getInventoryItem(window.Player, NECK_GROUP);
-        if (currentNeck && itemHasActiveLock(currentNeck)) {
-            appendLocalInfoBox("Neck restraint locked", ["Unlock your current neck-restraint item before wearing a plushie there."], { compact: true });
+        const currentAddon = getInventoryItem(window.Player, ADDON_GROUP);
+        if (currentAddon && itemHasActiveLock(currentAddon)) {
+            appendLocalInfoBox("Body slot item locked", ["Unlock your current ItemAddon item before wearing a plushie there."], { compact: true });
             return false;
         }
 
         try {
-            InventoryWear(window.Player, ASSET_NAME, NECK_GROUP);
+            InventoryWear(window.Player, ASSET_NAME, ADDON_GROUP);
         } catch (e) {
-            error("InventoryWear neck-slot plushie failed:", e);
+            error("InventoryWear ItemAddon plushie failed:", e);
             return false;
         }
 
-        const item = getInventoryItem(window.Player, NECK_GROUP);
+        const item = getInventoryItem(window.Player, ADDON_GROUP);
         if (!isOurs(item)) {
-            error("BC did not equip Subby's Plushies in ItemNeckRestraints.", item);
+            error("BC did not equip Subby's Plushies in ItemAddon.", item);
             return false;
         }
 
         const option = normalizePlushState(item);
         ensureNativeTransform(item);
         refresh(window.Player, true);
-        syncHugTightlyActivityAvailability("explicit neck equip");
+        syncHugTightlyActivityAvailability("explicit ItemAddon equip");
         schedulePlushStabilization(option);
         recordPlushSelection(currentPlushName());
         touchPlushRelationship(currentPlushName(), { increment: 0, wake: true });
