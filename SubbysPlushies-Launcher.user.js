@@ -2,8 +2,8 @@
 // @name         BC - Subby's Plushies Launcher
 // @namespace    subbycat.subbysplushies.launcher
 // @author       Marvelous
-// @version      2.1.1
-// @description  Always-load-latest launcher for Subby's Plushies
+// @version      2.2.0
+// @description  Always-load-latest launcher with verified startup and last-known-good fallback
 // @homepageURL  https://github.com/marvelous-bc/subby-plushies
 // @supportURL   https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL    https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js
@@ -20,19 +20,33 @@
 (() => {
     "use strict";
 
-    const SCRIPT_URL = "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js";
-    const MANIFEST_URL = "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/version.json";
     const TAG = "[Subby's Plushies Launcher]";
+    const LAUNCHER_VERSION = "2.2.0";
 
-    // New cache namespace on purpose: never reuse the old v2.0 launcher cache.
-    const CACHE_PREFIX = "SubbysPlushiesLauncher:v2:";
-    const CACHE_VERSION_KEY = `${CACHE_PREFIX}version`;
-    const CACHE_SCRIPT_KEY = `${CACHE_PREFIX}script`;
-    const CACHE_URL_KEY = `${CACHE_PREFIX}url`;
+    const PRIMARY_SCRIPT_URL =
+        "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js";
+    const MIRROR_SCRIPT_URL =
+        "https://cdn.jsdelivr.net/gh/marvelous-bc/subby-plushies@main/SubbysPlushies.user.js";
+
+    // New verified cache. This is written ONLY after the addon reports ready=true.
+    const GOOD_SCRIPT_KEY = "SubbysPlushiesLauncher:last-good:script";
+    const GOOD_VERSION_KEY = "SubbysPlushiesLauncher:last-good:version";
+    const GOOD_URL_KEY = "SubbysPlushiesLauncher:last-good:url";
+
+    // Existing launcher caches are intentionally still readable as fallbacks.
+    const LEGACY_SCRIPT_KEY = "SubbysPlushiesLauncher:script";
+    const LEGACY_VERSION_KEY = "SubbysPlushiesLauncher:version";
+    const OLD_V2_SCRIPT_KEY = "SubbysPlushiesLauncher:v2:script";
+    const OLD_V2_VERSION_KEY = "SubbysPlushiesLauncher:v2:version";
+
+    const FORCE_FALLBACK_SESSION_KEY = "SubbysPlushiesLauncher:force-fallback-once";
+    const STARTUP_TIMEOUT_MS = 135000;
+
+    const sleep = ms => new Promise(resolve => window.setTimeout(resolve, ms));
 
     function cacheBust(url) {
         const separator = url.includes("?") ? "&" : "?";
-        return `${url}${separator}_=${Date.now()}`;
+        return `${url}${separator}_=${Date.now()}_${Math.random().toString(36).slice(2)}`;
     }
 
     function storageGet(key, fallback = "") {
@@ -49,20 +63,53 @@
             window.localStorage?.setItem(key, String(value));
             return true;
         } catch (error) {
-            console.warn(TAG, `Could not cache ${key}.`, error);
+            console.warn(TAG, `Could not write launcher cache key ${key}.`, error);
             return false;
         }
     }
 
-    function activePluginVersion() {
-        const guard = window.__SUBBYS_PLUSHIES_ACTIVE__;
-        if (guard != null && guard !== false) return String(guard);
-        const apiVersion = window.SubbysPlushies?.version ?? window.SubbysPlushies?.VERSION;
-        return apiVersion == null ? "" : String(apiVersion);
+    function sessionGet(key, fallback = "") {
+        try {
+            const value = window.sessionStorage?.getItem(key);
+            return value == null ? fallback : value;
+        } catch (_) {
+            return fallback;
+        }
     }
 
-    function pluginStarted() {
-        return !!window.__SUBBYS_PLUSHIES_ACTIVE__ || !!window.SubbysPlushies;
+    function sessionSet(key, value) {
+        try {
+            window.sessionStorage?.setItem(key, String(value));
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function sessionRemove(key) {
+        try {
+            window.sessionStorage?.removeItem(key);
+        } catch (_) {}
+    }
+
+    function pluginApi() {
+        return window.SubbysPlushies && typeof window.SubbysPlushies === "object"
+            ? window.SubbysPlushies
+            : null;
+    }
+
+    function pluginGuardVersion() {
+        const value = window.__SUBBYS_PLUSHIES_ACTIVE__;
+        return value == null || value === false ? "" : String(value);
+    }
+
+    function pluginFootprintExists() {
+        return !!pluginApi() || !!pluginGuardVersion();
+    }
+
+    function activePluginVersion() {
+        const api = pluginApi();
+        return String(api?.version || api?.VERSION || pluginGuardVersion() || "").trim();
     }
 
     function scriptVersion(code) {
@@ -76,165 +123,381 @@
 
     function validatePluginCode(code) {
         const text = String(code || "");
-        if (text.length < 1000) throw new Error("Downloaded plugin was unexpectedly small.");
-        if (!text.includes("__SUBBYS_PLUSHIES_ACTIVE__") || !text.includes("SubbysPlushies")) {
-            throw new Error("Downloaded file did not look like Subby's Plushies.");
+        if (text.length < 1000) {
+            throw new Error("Downloaded/cached plugin was empty or unexpectedly small.");
         }
+        if (!text.includes("SubbysPlushies") || !text.includes("__SUBBYS_PLUSHIES_ACTIVE__")) {
+            throw new Error("Downloaded/cached file did not look like Subby's Plushies.");
+        }
+
         const version = scriptVersion(text);
-        if (!version) throw new Error("Downloaded plugin did not contain a version.");
+        if (!version) throw new Error("Plugin file did not contain a readable version.");
+
         return { code: text, version };
     }
 
     async function requestText(url, timeoutMs = 15000) {
-        if (typeof window.fetch !== "function") throw new Error("fetch is unavailable in this client.");
+        if (typeof window.fetch !== "function") {
+            throw new Error("fetch is unavailable in this Bondage Club client.");
+        }
 
         const controller = typeof AbortController === "function" ? new AbortController() : null;
         const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
 
         try {
+            // Deliberately no custom request headers here. Custom Cache-Control/Pragma
+            // headers can trigger a CORS preflight in some Electron/browser builds.
             const response = await window.fetch(cacheBust(url), {
                 method: "GET",
                 cache: "no-store",
                 credentials: "omit",
-                headers: {
-                    "Cache-Control": "no-cache, no-store, must-revalidate",
-                    "Pragma": "no-cache",
-                },
                 ...(controller ? { signal: controller.signal } : {}),
             });
 
-            if (!response.ok) throw new Error(`HTTP ${response.status} while fetching ${url}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status} while fetching ${url}`);
+            }
+
             return String(await response.text());
         } catch (error) {
-            if (error?.name === "AbortError") throw new Error(`Timed out while fetching ${url}`);
+            if (error?.name === "AbortError") {
+                throw new Error(`Network request timed out for ${url}`);
+            }
             throw error;
         } finally {
             if (timer != null) window.clearTimeout(timer);
         }
     }
 
-    function executePlugin(code, version) {
-        if (pluginStarted()) {
-            const active = activePluginVersion() || "unknown";
-            throw new Error(
-                `Subby's Plushies v${active} was already loaded before the launcher. ` +
-                `Disable the separately installed SubbysPlushies.user.js copy and leave only the launcher enabled.`
-            );
-        }
+    async function downloadCurrentPlugin() {
+        const failures = [];
 
-        const source = `${code}\n//# sourceURL=SubbysPlushies-${version}.user.js`;
-        const errors = [];
-
-        try {
-            window.eval(source);
-            if (pluginStarted()) return "eval";
-            errors.push(new Error("eval completed but the plugin did not start."));
-        } catch (error) {
-            errors.push(error);
-        }
-
-        if (!pluginStarted()) {
+        for (const url of [PRIMARY_SCRIPT_URL, MIRROR_SCRIPT_URL]) {
             try {
-                window.Function(source)();
-                if (pluginStarted()) return "Function";
-                errors.push(new Error("Function completed but the plugin did not start."));
+                const downloaded = validatePluginCode(await requestText(url));
+                return { ...downloaded, url };
             } catch (error) {
-                errors.push(error);
+                failures.push(`${url}: ${String(error?.message || error)}`);
+                console.warn(TAG, `Download source failed: ${url}`, error);
             }
         }
 
-        if (!pluginStarted()) {
+        throw new Error(`All online sources failed. ${failures.join(" | ")}`);
+    }
+
+    function cachedCandidates() {
+        const raw = [
+            {
+                label: "verified last-known-good cache",
+                code: storageGet(GOOD_SCRIPT_KEY, ""),
+                version: storageGet(GOOD_VERSION_KEY, ""),
+            },
+            {
+                label: "legacy launcher cache",
+                code: storageGet(LEGACY_SCRIPT_KEY, ""),
+                version: storageGet(LEGACY_VERSION_KEY, ""),
+            },
+            {
+                label: "v2.1 launcher cache",
+                code: storageGet(OLD_V2_SCRIPT_KEY, ""),
+                version: storageGet(OLD_V2_VERSION_KEY, ""),
+            },
+        ];
+
+        const seen = new Set();
+        const result = [];
+
+        for (const candidate of raw) {
+            if (!candidate.code || seen.has(candidate.code)) continue;
+            try {
+                const validated = validatePluginCode(candidate.code);
+                seen.add(candidate.code);
+                result.push({
+                    label: candidate.label,
+                    code: validated.code,
+                    version: validated.version || candidate.version || "cached",
+                });
+            } catch (error) {
+                console.warn(TAG, `Ignoring invalid ${candidate.label}.`, error);
+            }
+        }
+
+        return result;
+    }
+
+    function saveVerifiedRelease(code, version, url) {
+        // This function is called ONLY after waitForPluginReady() confirms ready=true.
+        storageSet(GOOD_SCRIPT_KEY, code);
+        storageSet(GOOD_VERSION_KEY, version);
+        storageSet(GOOD_URL_KEY, url || PRIMARY_SCRIPT_URL);
+
+        // Keep the original cache keys current too, so older launcher copies still
+        // have a usable fallback if someone temporarily rolls back the launcher.
+        storageSet(LEGACY_SCRIPT_KEY, code);
+        storageSet(LEGACY_VERSION_KEY, version);
+        storageSet(OLD_V2_SCRIPT_KEY, code);
+        storageSet(OLD_V2_VERSION_KEY, version);
+    }
+
+    function executeSource(code, version) {
+        if (pluginFootprintExists()) {
+            throw new Error(
+                `A Subby's Plushies instance (v${activePluginVersion() || "unknown"}) already exists before execution.`
+            );
+        }
+
+        const source = `${code}\n//# sourceURL=SubbysPlushies-${String(version || "latest")}.user.js`;
+        const failures = [];
+
+        try {
+            window.eval(source);
+            if (pluginFootprintExists()) return "eval";
+            failures.push(new Error("eval returned without creating a plugin instance."));
+        } catch (error) {
+            failures.push(error);
+            if (pluginFootprintExists()) return "eval-partial";
+        }
+
+        if (!pluginFootprintExists()) {
+            try {
+                window.Function(source)();
+                if (pluginFootprintExists()) return "Function";
+                failures.push(new Error("Function returned without creating a plugin instance."));
+            } catch (error) {
+                failures.push(error);
+                if (pluginFootprintExists()) return "Function-partial";
+            }
+        }
+
+        if (!pluginFootprintExists()) {
             try {
                 const script = document.createElement("script");
                 script.textContent = source;
                 const parent = document.head || document.documentElement;
-                if (!parent) throw new Error("No document element available for script injection.");
+                if (!parent) throw new Error("No document element was available for script injection.");
                 parent.appendChild(script);
                 script.remove();
-                if (pluginStarted()) return "script";
-                errors.push(new Error("Script injection completed but the plugin did not start."));
+
+                if (pluginFootprintExists()) return "script";
+                failures.push(new Error("Script injection returned without creating a plugin instance."));
             } catch (error) {
-                errors.push(error);
+                failures.push(error);
+                if (pluginFootprintExists()) return "script-partial";
             }
         }
 
-        throw errors[0] || new Error("Plugin execution was blocked.");
+        throw failures[0] || new Error("Launcher could not execute the plugin.");
     }
 
-    async function readManifestForDiagnostics() {
+    async function waitForPluginReady(expectedVersion, timeoutMs = STARTUP_TIMEOUT_MS) {
+        const startedAt = Date.now();
+        let sawFootprint = pluginFootprintExists();
+
+        while (Date.now() - startedAt < timeoutMs) {
+            const api = pluginApi();
+            const guardVersion = pluginGuardVersion();
+            if (api || guardVersion) sawFootprint = true;
+
+            if (api?.ready === true) {
+                return {
+                    version: String(api.version || guardVersion || expectedVersion || "unknown"),
+                    legacyReady: false,
+                };
+            }
+
+            if (api?.failed === true) {
+                const startupError = api.startupError || "";
+                throw new Error(
+                    `Subby's Plushies reported startup failure${startupError ? `: ${startupError}` : "."}`
+                );
+            }
+
+            // Older cached builds may not expose ready/failed. In that case require
+            // the plugin footprint to stay alive for several seconds before accepting it.
+            if (
+                api &&
+                typeof api.ready !== "boolean" &&
+                typeof api.failed !== "boolean" &&
+                Date.now() - startedAt >= 5000
+            ) {
+                return {
+                    version: String(api.version || guardVersion || expectedVersion || "cached"),
+                    legacyReady: true,
+                };
+            }
+
+            if (
+                !api &&
+                guardVersion &&
+                Date.now() - startedAt >= 5000
+            ) {
+                return {
+                    version: String(guardVersion || expectedVersion || "cached"),
+                    legacyReady: true,
+                };
+            }
+
+            if (sawFootprint && !api && !guardVersion) {
+                throw new Error("Subby's Plushies disappeared during startup.");
+            }
+
+            await sleep(100);
+        }
+
+        throw new Error(
+            `Timed out after ${Math.round(timeoutMs / 1000)}s waiting for Subby's Plushies to become ready.`
+        );
+    }
+
+    async function startCode(code, version, sourceLabel) {
+        const method = executeSource(code, version);
+        console.log(TAG, `Started executing ${sourceLabel} v${version} using ${method}; waiting for READY...`);
+
+        const ready = await waitForPluginReady(version);
+        console.log(
+            TAG,
+            `${sourceLabel} v${ready.version} is READY${ready.legacyReady ? " (legacy readiness check)" : ""}.`
+        );
+        return { method, ...ready };
+    }
+
+    function consumeForcedFallback() {
+        const value = sessionGet(FORCE_FALLBACK_SESSION_KEY, "");
+        if (!value) return null;
+        sessionRemove(FORCE_FALLBACK_SESSION_KEY);
+
         try {
-            const manifest = JSON.parse(await requestText(MANIFEST_URL, 8000));
-            return manifest && typeof manifest === "object" ? manifest : null;
-        } catch (error) {
-            console.warn(TAG, "version.json could not be read; continuing with the canonical script.", error);
-            return null;
+            return JSON.parse(value);
+        } catch (_) {
+            return { reason: value };
         }
     }
 
-    function cacheRelease(code, version) {
-        storageSet(CACHE_SCRIPT_KEY, code);
-        storageSet(CACHE_VERSION_KEY, version);
-        storageSet(CACHE_URL_KEY, SCRIPT_URL);
+    function scheduleCleanFallbackReload(reason) {
+        const candidates = cachedCandidates();
+        if (!candidates.length) return false;
+
+        const payload = JSON.stringify({
+            at: Date.now(),
+            reason: String(reason?.message || reason || "online startup failed"),
+        });
+
+        if (!sessionSet(FORCE_FALLBACK_SESSION_KEY, payload)) return false;
+
+        console.warn(
+            TAG,
+            "The newest plugin partially started but did not become READY. Reloading once to start the cached last-known-good build on a clean page.",
+            reason
+        );
+
+        window.setTimeout(() => window.location.reload(), 50);
+        return true;
+    }
+
+    async function startFallback(reason = "online release unavailable") {
+        const candidates = cachedCandidates();
+
+        if (!candidates.length) {
+            console.error(
+                TAG,
+                "No cached fallback exists. The launcher needs one successful online startup before it can create a verified fallback.",
+                reason
+            );
+            return false;
+        }
+
+        const candidate = candidates[0];
+
+        if (pluginFootprintExists()) {
+            console.error(
+                TAG,
+                "A failed/partial plugin instance is still present, so fallback cannot safely start on this page.",
+                reason
+            );
+            return false;
+        }
+
+        try {
+            const result = await startCode(candidate.code, candidate.version, candidate.label);
+            console.warn(
+                TAG,
+                `FALLBACK ACTIVE: ${candidate.label} v${result.version} started because the current online release was unavailable or failed.`
+            );
+            return true;
+        } catch (error) {
+            console.error(TAG, `${candidate.label} also failed to start.`, error);
+            return false;
+        }
     }
 
     async function load() {
-        console.log(TAG, "Launcher v2.1.1 starting.");
+        console.log(TAG, `Launcher v${LAUNCHER_VERSION} starting.`);
 
-        if (pluginStarted()) {
-            const active = activePluginVersion() || "unknown";
+        const forcedFallback = consumeForcedFallback();
+        if (forcedFallback) {
+            console.warn(
+                TAG,
+                "Clean-page fallback requested after the previous online startup failed.",
+                forcedFallback
+            );
+            await startFallback(forcedFallback.reason || "previous online startup failed");
+            return;
+        }
+
+        if (pluginFootprintExists()) {
             console.error(
                 TAG,
-                `Subby's Plushies v${active} is already running before the launcher. ` +
-                `Disable the standalone plugin/userscript so the launcher can control the version.`
+                `Subby's Plushies v${activePluginVersion() || "unknown"} already exists before the launcher can start it. ` +
+                "Disable any separately installed standalone SubbysPlushies.user.js copy and leave only the launcher enabled."
             );
             return;
         }
 
-        const cachedCode = storageGet(CACHE_SCRIPT_KEY, "");
-        const cachedVersion = storageGet(CACHE_VERSION_KEY, "");
+        let downloaded;
 
         try {
-            // The canonical script is ALWAYS authoritative.
-            // version.json is never used to choose or redirect the download.
-            const rawCode = await requestText(SCRIPT_URL);
-            const downloaded = validatePluginCode(rawCode);
-            const manifest = await readManifestForDiagnostics();
-            const manifestVersion = String(manifest?.version || "").trim();
+            downloaded = await downloadCurrentPlugin();
+            console.log(
+                TAG,
+                `Downloaded current plugin v${downloaded.version} from ${downloaded.url}.`
+            );
+        } catch (downloadError) {
+            console.warn(TAG, "Could not download the current release; trying cached fallback.", downloadError);
+            await startFallback(downloadError);
+            return;
+        }
 
-            if (manifestVersion && manifestVersion !== downloaded.version) {
-                console.warn(
-                    TAG,
-                    `Publishing mismatch: version.json says v${manifestVersion}, ` +
-                    `but SubbysPlushies.user.js is v${downloaded.version}. Loading v${downloaded.version}.`
-                );
-            }
+        try {
+            const result = await startCode(
+                downloaded.code,
+                downloaded.version,
+                "current online release"
+            );
 
-            const method = executePlugin(downloaded.code, downloaded.version);
-            cacheRelease(downloaded.code, downloaded.version);
+            // Critical: cache only after READY has been confirmed.
+            saveVerifiedRelease(downloaded.code, result.version, downloaded.url);
 
             console.log(
                 TAG,
-                `Downloaded and started CURRENT GitHub plugin v${downloaded.version} using ${method}.`
+                `SUCCESS: current online release v${result.version} is READY and is now the verified fallback cache.`
             );
-            return;
-        } catch (onlineError) {
-            console.warn(TAG, "Could not start the current GitHub copy.", onlineError);
+        } catch (startupError) {
+            console.error(TAG, "The downloaded release did not finish starting.", startupError);
 
-            if (!cachedCode || pluginStarted()) {
-                console.error(TAG, "No usable launcher cache is available.");
+            if (pluginFootprintExists()) {
+                // Running another build on top of partially installed hooks/assets is unsafe.
+                // Reload a clean page once, then use the cached fallback.
+                if (scheduleCleanFallbackReload(startupError)) return;
+
+                console.error(
+                    TAG,
+                    "No cached fallback is available for a clean reload. Fix the current plugin build or restore a known-good cache."
+                );
                 return;
             }
 
-            try {
-                const cached = validatePluginCode(cachedCode);
-                const method = executePlugin(cached.code, cached.version || cachedVersion || "cached");
-                console.warn(
-                    TAG,
-                    `OFFLINE FALLBACK: started cached v${cached.version || cachedVersion || "unknown"} using ${method}.`
-                );
-            } catch (cacheError) {
-                console.error(TAG, "Both GitHub and the launcher cache failed.", cacheError);
-            }
+            // No partial plugin state exists, so a same-page fallback is safe.
+            await startFallback(startupError);
         }
     }
 
