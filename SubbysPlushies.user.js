@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.3.1
+// @version      2.3.2
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, emotes, battles, mascot, themes, poses, stats, achievements, and more
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -20,12 +20,14 @@
 (() => {
     "use strict";
 
-    const VERSION = "2.3.1";
+    const VERSION = "2.3.2";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
     const FAMILY = "Female3DCG";
     const GROUP = "ItemHandheld";
+    const NECK_GROUP = "ItemNeckRestraints";
+    const PLUSH_GROUPS = Object.freeze([GROUP, NECK_GROUP]);
     const ASSET_NAME = "SubbysPlushies";
     const MODULE_KEY = "p";
     const PET_SUIT_ASSET_NAMES = new Set(["BitchSuit", "ShinyPetSuit", "PetCrawler"]);
@@ -263,17 +265,19 @@
     const LAYOUT_SETTINGS_STORAGE_KEY = "SubbysPlushies:layout-settings:v1";
     const MOOD_STORAGE_KEY = "SubbysPlushies:moods:v1";
     const MOOD_HISTORY_STORAGE_KEY = "SubbysPlushies:mood-history:v1";
-    const BATTLE_HISTORY_STORAGE_KEY = "SubbysPlushies:battle-history:v1";
+    const BATTLE_HISTORY_STORAGE_KEY_PREFIX = "SubbysPlushies:battle-history:v2:";
+    const BATTLE_STATS_STORAGE_KEY_PREFIX = "SubbysPlushies:battle-stats:v2:";
     const STATS_STORAGE_KEY = "SubbysPlushies:stats:v1";
     const RELATIONSHIP_STORAGE_KEY = "SubbysPlushies:relationships:v1";
     const FAVORITES_STORAGE_KEY = "SubbysPlushies:favorites:v1";
     const SAVED_POSES_STORAGE_KEY = "SubbysPlushies:saved-poses:v1";
     const NICKNAME_STORAGE_KEY = "SubbysPlushies:nicknames:v1";
-    const BACKUP_SCHEMA_VERSION = 3;
-    const BACKUP_PROGRESS_SEAL_VERSION = 1;
-    const BACKUP_PROGRESS_SEAL_KEY = ["Subbys", "Plushies", "portable", "progress", "v3", "89413"].join("|");
+    const BACKUP_SCHEMA_VERSION = 4;
+    const BACKUP_PROGRESS_SEAL_VERSION = 2;
+    const BACKUP_PROGRESS_SEAL_KEY = ["Subbys", "Plushies", "portable", "progress", "v4", "89413"].join("|");
     const ROOM_MASCOT_CUSTOM_KEY = "SubbysPlushiesMascot";
     const ROOM_MASCOT_CACHE_STORAGE_KEY = "SubbysPlushies:room-mascots:v1";
+    const ROOM_MASCOT_POSITION_STORAGE_KEY = "SubbysPlushies:room-mascot-position:v1";
     const DRAG_TOGGLE_POSITION_STORAGE_KEY = "SubbysPlushies:drag-toggle-position:v1";
     const PLUSH_EMOTE_SYNC_CONTENT_PREFIX = "SubbysPlushiesEmote:";
     const PLUSH_EMOTE_SYNC_TAG = "SubbysPlushiesEmote";
@@ -882,8 +886,11 @@
 ];
 
     const SIZE_TOKENS = Object.freeze(["Normal", "Small", "Large", "XLarge"]);
-    const ASSET_BASE = `Assets/${FAMILY}/${GROUP}/${ASSET_NAME}`;
-    const EXTENDED_PREFIX = `Inventory${GROUP}${ASSET_NAME}`;
+    const assetBaseForGroup = groupName => `Assets/${FAMILY}/${groupName}/${ASSET_NAME}`;
+    const extendedPrefixForGroup = groupName => `Inventory${groupName}${ASSET_NAME}`;
+    const ASSET_BASE = assetBaseForGroup(GROUP);
+    const EXTENDED_PREFIX = extendedPrefixForGroup(GROUP);
+    const EXTENSIONS_ICON_PATH = `${ASSET_BASE}.png`;
 
     const renderImages = new Array(PLUSHES.length);
     let hugTightlyIconImage = null;
@@ -981,6 +988,9 @@
     let moodState = null;
     let moodHistoryState = null;
     let battleHistoryState = null;
+    let battleHistoryStateMember = null;
+    let battleStatsState = null;
+    let battleStatsStateMember = null;
     let relationshipState = null;
     let favoritesState = null;
     let savedPosesState = null;
@@ -1002,6 +1012,7 @@
     let dragToggleMoveSession = null;
     let roomMascotState = null;
     let roomMascotCacheState = null;
+    let roomMascotPositionState = null;
     let lastRoomMascotSharedSyncAt = 0;
     let roomMascotOverlay = null;
     let roomMascotOverlayImage = null;
@@ -1518,10 +1529,43 @@
         return [];
     }
 
+    function currentAccountMemberNumber() {
+        const member = Number(window.Player?.MemberNumber);
+        return Number.isFinite(member) && member > 0 ? Math.trunc(member) : null;
+    }
+
+    function accountStorageKey(prefix) {
+        const member = currentAccountMemberNumber();
+        return member == null ? null : `${prefix}${member}`;
+    }
+
+    function getBattleStatsStore() {
+        const member = currentAccountMemberNumber();
+        if (battleStatsState && battleStatsStateMember === member) return battleStatsState;
+        const key = accountStorageKey(BATTLE_STATS_STORAGE_KEY_PREFIX);
+        const stored = key ? readLocalJSON(key, {}) : {};
+        battleStatsStateMember = member;
+        battleStatsState = {
+            played: Math.max(0, Number(stored.played) || 0),
+            wins: Math.max(0, Number(stored.wins) || 0),
+            losses: Math.max(0, Number(stored.losses) || 0),
+            draws: Math.max(0, Number(stored.draws) || 0),
+        };
+        return battleStatsState;
+    }
+
+    function saveBattleStatsStore() {
+        const key = accountStorageKey(BATTLE_STATS_STORAGE_KEY_PREFIX);
+        return key ? writeLocalJSON(key, getBattleStatsStore()) : false;
+    }
+
     function getBattleHistoryStore() {
-        if (battleHistoryState) return battleHistoryState;
-        const stored = readLocalJSON(BATTLE_HISTORY_STORAGE_KEY, { entries: [] });
+        const member = currentAccountMemberNumber();
+        if (battleHistoryState && battleHistoryStateMember === member) return battleHistoryState;
+        const key = accountStorageKey(BATTLE_HISTORY_STORAGE_KEY_PREFIX);
+        const stored = key ? readLocalJSON(key, { entries: [] }) : { entries: [] };
         const entries = Array.isArray(stored?.entries) ? stored.entries.slice(-20) : [];
+        battleHistoryStateMember = member;
         battleHistoryState = { entries };
         return battleHistoryState;
     }
@@ -1544,7 +1588,8 @@
         };
         store.entries.push(normalized);
         store.entries = store.entries.slice(-20);
-        writeLocalJSON(BATTLE_HISTORY_STORAGE_KEY, store);
+        const key = accountStorageKey(BATTLE_HISTORY_STORAGE_KEY_PREFIX);
+        if (key) writeLocalJSON(key, store);
         return { ...normalized };
     }
 
@@ -1791,7 +1836,9 @@
 
     async function createBackupPayload() {
         const stats = cloneBackupValue(getStatsStore());
+        delete stats.battles;
         const layout = cloneBackupValue(getLayoutSettings());
+        const memberNumber = currentAccountMemberNumber();
         const progress = {
             stats,
             achievements: cloneBackupValue(stats.achievements || {}),
@@ -1803,12 +1850,17 @@
             plugin: MOD_NAME,
             version: VERSION,
             exportedAt: new Date().toISOString(),
+            account: { memberNumber },
             data: {
                 progress,
                 progressSeal,
+                accountBattle: {
+                    memberNumber,
+                    stats: cloneBackupValue(getBattleStatsStore()),
+                    history: cloneBackupValue(getBattleHistoryStore()),
+                },
                 moods: cloneBackupValue(getMoodStore()),
                 moodHistory: cloneBackupValue(getMoodHistoryStore()),
-                battleHistory: cloneBackupValue(getBattleHistoryStore()),
                 favorites: cloneBackupValue(getFavoritesStore()),
                 layouts: layout,
                 themes: {
@@ -1839,7 +1891,7 @@
 
     async function restorePlushBackup(payload) {
         if (!payload || typeof payload !== "object" || Number(payload.schemaVersion) !== BACKUP_SCHEMA_VERSION || !payload.data || typeof payload.data !== "object") {
-            throw new Error("Unsupported Subby's Plushies backup file.");
+            throw new Error("Unsupported Subby's Plushies backup file. This build only accepts the current backup format.");
         }
         const data = payload.data;
         const safeObject = value => value && typeof value === "object" && !Array.isArray(value) ? cloneBackupValue(value) : null;
@@ -1855,7 +1907,6 @@
         const writes = [
             [MOOD_STORAGE_KEY, safeObject(data.moods)],
             [MOOD_HISTORY_STORAGE_KEY, safeObject(data.moodHistory)],
-            [BATTLE_HISTORY_STORAGE_KEY, safeObject(data.battleHistory)],
             [FAVORITES_STORAGE_KEY, safeObject(data.favorites)],
             [LAYOUT_SETTINGS_STORAGE_KEY, layout],
             [FEATURE_SETTINGS_STORAGE_KEY, safeObject(data.featureSettings)],
@@ -1864,6 +1915,7 @@
         ];
         if (progressVerified) {
             const stats = safeObject(progress.stats) || {};
+            delete stats.battles;
             if (safeObject(progress.achievements)) stats.achievements = cloneBackupValue(progress.achievements);
             writes.unshift(
                 [STATS_STORAGE_KEY, stats],
@@ -1875,11 +1927,29 @@
             if (value) writeLocalJSON(key, value);
         }
 
+        const battle = safeObject(data.accountBattle);
+        const backupBattleMember = Number(battle?.memberNumber ?? payload.account?.memberNumber);
+        const currentMember = currentAccountMemberNumber();
+        const battleMatchesAccount = Number.isFinite(backupBattleMember) && currentMember != null && backupBattleMember === currentMember;
+        let battleRestored = false;
+        if (battleMatchesAccount && battle) {
+            const battleStats = safeObject(battle.stats) || { played: 0, wins: 0, losses: 0, draws: 0 };
+            const battleHistoryData = safeObject(battle.history) || { entries: [] };
+            const statsKey = accountStorageKey(BATTLE_STATS_STORAGE_KEY_PREFIX);
+            const historyKey = accountStorageKey(BATTLE_HISTORY_STORAGE_KEY_PREFIX);
+            if (statsKey) writeLocalJSON(statsKey, battleStats);
+            if (historyKey) writeLocalJSON(historyKey, battleHistoryData);
+            battleRestored = !!statsKey && !!historyKey;
+        }
+
         featureSettingsState = null;
         layoutSettingsState = null;
         moodState = null;
         moodHistoryState = null;
         battleHistoryState = null;
+        battleHistoryStateMember = null;
+        battleStatsState = null;
+        battleStatsStateMember = null;
         relationshipState = null;
         favoritesState = null;
         savedPosesState = null;
@@ -1890,7 +1960,14 @@
         scheduleNextIdleAnimation(1000);
         checkAchievements(false);
         if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
-        return { payload: await createBackupPayload(), progressVerified };
+        return {
+            payload: await createBackupPayload(),
+            progressVerified,
+            battleRestored,
+            battleMatchesAccount,
+            backupBattleMember: Number.isFinite(backupBattleMember) ? backupBattleMember : null,
+            currentMember,
+        };
     }
 
     function importPlushBackupFromFile() {
@@ -1908,10 +1985,13 @@
                     if (typeof window.confirm === "function" && !window.confirm("Restore this Subby's Plushies backup? Current local plush settings will be replaced. Progress is restored only when its integrity seal is valid.")) return;
                     const result = await restorePlushBackup(payload);
                     appendLocalInfoBox("Backup restored", [
-                        "Preferences, moods/history, battle history, favorites, layouts/themes, nicknames, and saved poses were restored.",
+                        "Preferences, moods/history, favorites, layouts/themes, nicknames, and saved poses were restored.",
                         result.progressVerified
                             ? "Progress seal verified: stats, achievements, and relationships were restored."
                             : "Progress seal did not verify: stats, achievements, and relationships were left unchanged.",
+                        result.battleRestored
+                            ? `Battle stats/history restored for account #${result.currentMember}.`
+                            : `Battle stats/history were not restored${result.backupBattleMember != null ? ` because this backup belongs to account #${result.backupBattleMember}` : " because the backup has no matching account battle data"}.`,
                     ]);
                 } catch (e) {
                     appendLocalInfoBox("Backup restore failed", [String(e?.message || e)]);
@@ -2032,26 +2112,29 @@
     }
 
     function getStatsStore() {
-        if (statsState) return statsState;
-        const stored = readLocalJSON(STATS_STORAGE_KEY, {});
-        statsState = {
-            totalInteractions: Math.max(0, Number(stored.totalInteractions) || 0),
-            actions: stored.actions && typeof stored.actions === "object" ? stored.actions : {},
-            plushesUsed: stored.plushesUsed && typeof stored.plushesUsed === "object" ? stored.plushesUsed : {},
-            speechBubbles: Math.max(0, Number(stored.speechBubbles) || 0),
-            idleAnimations: Math.max(0, Number(stored.idleAnimations) || 0),
-            mascotSets: Math.max(0, Number(stored.mascotSets) || 0),
-            drags: Math.max(0, Number(stored.drags) || 0),
-            offers: Math.max(0, Number(stored.offers) || 0),
-            battles: {
-                played: Math.max(0, Number(stored.battles?.played) || 0),
-                wins: Math.max(0, Number(stored.battles?.wins) || 0),
-                losses: Math.max(0, Number(stored.battles?.losses) || 0),
-                draws: Math.max(0, Number(stored.battles?.draws) || 0),
-            },
-            achievements: stored.achievements && typeof stored.achievements === "object" ? stored.achievements : {},
-        };
+        if (!statsState) {
+            const stored = readLocalJSON(STATS_STORAGE_KEY, {});
+            statsState = {
+                totalInteractions: Math.max(0, Number(stored.totalInteractions) || 0),
+                actions: stored.actions && typeof stored.actions === "object" ? stored.actions : {},
+                plushesUsed: stored.plushesUsed && typeof stored.plushesUsed === "object" ? stored.plushesUsed : {},
+                speechBubbles: Math.max(0, Number(stored.speechBubbles) || 0),
+                idleAnimations: Math.max(0, Number(stored.idleAnimations) || 0),
+                mascotSets: Math.max(0, Number(stored.mascotSets) || 0),
+                drags: Math.max(0, Number(stored.drags) || 0),
+                offers: Math.max(0, Number(stored.offers) || 0),
+                achievements: stored.achievements && typeof stored.achievements === "object" ? stored.achievements : {},
+            };
+        }
+        statsState.battles = getBattleStatsStore();
         return statsState;
+    }
+
+    function saveGeneralStatsStore() {
+        const stats = getStatsStore();
+        const portable = { ...stats };
+        delete portable.battles;
+        return writeLocalJSON(STATS_STORAGE_KEY, portable);
     }
 
     function statAffectionCount(stats = getStatsStore()) {
@@ -2070,7 +2153,7 @@
             unlocked.push(achievement);
         }
         if (unlocked.length) {
-            writeLocalJSON(STATS_STORAGE_KEY, stats);
+            saveGeneralStatsStore();
             if (showNew) {
                 for (const achievement of unlocked) {
                     appendLocalInfoBox(`Achievement unlocked: ${achievement.name}`, [achievement.description]);
@@ -2099,7 +2182,8 @@
         else if (kind === "battleDraw") stats.battles.draws += value;
         const plushName = detail?.plushName || currentPlushName();
         if (plushName) stats.plushesUsed[plushName] = (Number(stats.plushesUsed[plushName]) || 0) + (kind === "select" ? value : 0);
-        writeLocalJSON(STATS_STORAGE_KEY, stats);
+        if (kind.startsWith("battle")) saveBattleStatsStore();
+        else saveGeneralStatsStore();
         checkAchievements(true);
         return stats;
     }
@@ -2107,7 +2191,7 @@
     function recordPlushSelection(name = currentPlushName()) {
         const stats = getStatsStore();
         stats.plushesUsed[name] = (Number(stats.plushesUsed[name]) || 0) + 1;
-        writeLocalJSON(STATS_STORAGE_KEY, stats);
+        saveGeneralStatsStore();
         checkAchievements(true);
     }
 
@@ -2285,12 +2369,7 @@
 
     function characterPetSuitItem(C) {
         const appearance = Array.isArray(C?.Appearance) ? C.Appearance : [];
-        return appearance.find(item => {
-            if (item?.Asset?.Group?.Name !== "ItemArms") return false;
-            const name = String(item?.Asset?.Name || "");
-            const description = String(item?.Asset?.Description || "");
-            return PET_SUIT_ASSET_NAMES.has(name) || /pet.?suit|bitch.?suit|pet.?crawler/i.test(`${name} ${description}`);
-        }) || null;
+        return appearance.find(item => item?.Asset?.Group?.Name === "ItemArms") || null;
     }
 
     function clearPetSuitPlushOverlays() {
@@ -4257,6 +4336,36 @@
         return roomMascotCacheState;
     }
 
+    function getRoomMascotLocalPositionStore() {
+        if (roomMascotPositionState) return roomMascotPositionState;
+        const stored = readLocalJSON(ROOM_MASCOT_POSITION_STORAGE_KEY, {});
+        roomMascotPositionState = stored && typeof stored === "object" ? stored : {};
+        return roomMascotPositionState;
+    }
+
+    function getLocalRoomMascotPosition() {
+        const key = currentRoomMascotCacheKey();
+        const stored = key ? getRoomMascotLocalPositionStore()?.[key] : null;
+        const x = Number(stored?.x);
+        const y = Number(stored?.y);
+        return {
+            x: Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0.94,
+            y: Number.isFinite(y) ? Math.max(0, Math.min(1, y)) : 0.16,
+        };
+    }
+
+    function setLocalRoomMascotPosition(x, y) {
+        const key = currentRoomMascotCacheKey();
+        if (!key) return false;
+        const store = getRoomMascotLocalPositionStore();
+        store[key] = {
+            x: Math.max(0, Math.min(1, Number(x) || 0)),
+            y: Math.max(0, Math.min(1, Number(y) || 0)),
+        };
+        writeLocalJSON(ROOM_MASCOT_POSITION_STORAGE_KEY, store);
+        return true;
+    }
+
     function cacheRoomMascotState(state) {
         const key = currentRoomMascotCacheKey();
         if (!key) return false;
@@ -4275,15 +4384,11 @@
         const known = PLUSH_NAMES.find(entry => String(entry || "").toLowerCase() === name.trim().toLowerCase());
         if (!known) return null;
         const member = Number(raw?.memberNumber);
-        const x = Number(raw?.x);
-        const y = Number(raw?.y);
         return {
             name: known,
             setBy: typeof raw?.setBy === "string" && raw.setBy.trim() ? raw.setBy.trim() : "room admin",
             memberNumber: Number.isFinite(member) ? member : null,
             at: typeof raw?.at === "string" ? raw.at : null,
-            x: Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0.94,
-            y: Number.isFinite(y) ? Math.max(0, Math.min(1, y)) : 0.16,
             shared: true,
         };
     }
@@ -4361,8 +4466,6 @@
                 setBy: state.setBy || getCharacterDisplayName(window.Player) || "room admin",
                 memberNumber: Number(window.Player?.MemberNumber) || null,
                 at: state.at || new Date().toISOString(),
-                x: Number.isFinite(Number(state.x)) ? Math.max(0, Math.min(1, Number(state.x))) : 0.94,
-                y: Number.isFinite(Number(state.y)) ? Math.max(0, Math.min(1, Number(state.y))) : 0.16,
             };
         } else {
             delete currentCustom[ROOM_MASCOT_CUSTOM_KEY];
@@ -4493,10 +4596,7 @@
             removeRoomMascotOverlay();
             return false;
         }
-        if (!Number.isFinite(Number(roomMascotState.x))) roomMascotState.x = 0.94;
-        if (!Number.isFinite(Number(roomMascotState.y))) roomMascotState.y = 0.16;
-        roomMascotState.x = Math.max(0, Math.min(1, Number(roomMascotState.x)));
-        roomMascotState.y = Math.max(0, Math.min(1, Number(roomMascotState.y)));
+        const mascotPosition = getLocalRoomMascotPosition();
         if (roomMascotOverlay?.isConnected && roomMascotOverlay.parentElement !== document.body) removeRoomMascotOverlay();
         if (!roomMascotOverlay?.isConnected) {
             const root = document.createElement("div");
@@ -4513,7 +4613,7 @@
                 fontFamily: "Arial, sans-serif",
                 lineHeight: "1.2",
                 userSelect: "none",
-                cursor: canSetRoomMascot() ? "move" : "pointer",
+                cursor: "move",
                 pointerEvents: "auto",
                 touchAction: "none",
             });
@@ -4526,13 +4626,13 @@
                 if (event.button !== 0) return;
                 event.preventDefault();
                 event.stopPropagation();
-                const canDrag = canSetRoomMascot();
                 roomMascotDragSession = {
                     pointerId: event.pointerId,
                     startX: event.clientX,
                     startY: event.clientY,
                     moved: false,
-                    canDrag,
+                    canDrag: true,
+                    position: getLocalRoomMascotPosition(),
                 };
                 try { root.setPointerCapture?.(event.pointerId); } catch (_) {}
             });
@@ -4545,8 +4645,11 @@
                 session.moved = true;
                 const liveRect = (document.getElementById("MainCanvas") || document.querySelector("canvas"))?.getBoundingClientRect?.();
                 if (!liveRect || liveRect.width <= 0 || liveRect.height <= 0) return;
-                roomMascotState.x = Math.max(0, Math.min(1, (event.clientX - liveRect.left) / liveRect.width));
-                roomMascotState.y = Math.max(0, Math.min(1, (event.clientY - liveRect.top) / liveRect.height));
+                session.position = {
+                    x: Math.max(0, Math.min(1, (event.clientX - liveRect.left) / liveRect.width)),
+                    y: Math.max(0, Math.min(1, (event.clientY - liveRect.top) / liveRect.height)),
+                };
+                setLocalRoomMascotPosition(session.position.x, session.position.y);
                 refreshRoomMascotOverlay();
             });
             const finishMascotDrag = event => {
@@ -4558,8 +4661,7 @@
                     showRoomMascot();
                     return;
                 }
-                cacheRoomMascotState(roomMascotState);
-                if (session.canDrag) publishRoomMascotSharedState(roomMascotState);
+                if (session.position) setLocalRoomMascotPosition(session.position.x, session.position.y);
             };
             root.addEventListener("pointerup", finishMascotDrag);
             root.addEventListener("pointercancel", finishMascotDrag);
@@ -4574,9 +4676,9 @@
         const padding = Math.max(3, Math.round(6 * viewportScale));
         const imageSize = Math.max(30, overlayWidth - padding * 2);
         const fontSize = Math.max(9, Math.round(13 * viewportScale));
-        const rawLeft = rect.left + roomMascotState.x * rect.width - overlayWidth / 2;
+        const rawLeft = rect.left + mascotPosition.x * rect.width - overlayWidth / 2;
         const estimatedHeight = overlayWidth + Math.max(18, Math.round(31 * viewportScale));
-        const rawTop = rect.top + roomMascotState.y * rect.height - estimatedHeight / 2;
+        const rawTop = rect.top + mascotPosition.y * rect.height - estimatedHeight / 2;
         const left = Math.max(rect.left + 2, Math.min(rect.right - overlayWidth - 2, rawLeft));
         const top = Math.max(rect.top + 2, Math.min(rect.bottom - estimatedHeight - 2, rawTop));
         Object.assign(roomMascotOverlay.style, {
@@ -4587,7 +4689,7 @@
             width: `${overlayWidth}px`,
             padding: `${padding}px`,
             fontSize: `${fontSize}px`,
-            cursor: canSetRoomMascot() ? "move" : "pointer",
+            cursor: "move",
         });
         Object.assign(roomMascotOverlayImage.style, {
             width: `${imageSize}px`,
@@ -4632,8 +4734,7 @@
         if (window.CurrentScreen === "ChatAdmin" && !roomMascotAdminDirty) {
             roomMascotAdminSnapshot = roomMascotFromSharedRoomData();
         }
-        const previousPosition = roomMascotState && Number.isFinite(Number(roomMascotState.x)) && Number.isFinite(Number(roomMascotState.y)) ? { x: Number(roomMascotState.x), y: Number(roomMascotState.y) } : { x: 0.94, y: 0.16 };
-        roomMascotState = { name: known, setBy: source, memberNumber: Number(window.Player?.MemberNumber) || null, at: new Date().toISOString(), x: previousPosition.x, y: previousPosition.y, shared: true };
+        roomMascotState = { name: known, setBy: source, memberNumber: Number(window.Player?.MemberNumber) || null, at: new Date().toISOString(), shared: true };
         cacheRoomMascotState(roomMascotState);
         refreshRoomMascotOverlay();
         if (window.CurrentScreen === "ChatAdmin") {
@@ -4876,8 +4977,7 @@
         if (!set) return false;
         const renderedName = String(set[2] || "").trim();
         const known = PLUSH_NAMES.find(name => name.toLowerCase() === renderedName.toLowerCase()) || renderedName;
-        const previous = roomMascotState;
-        roomMascotState = { name: known, setBy: String(set[1] || "Someone").trim(), memberNumber: senderMember, at: new Date().toISOString(), x: Number.isFinite(Number(previous?.x)) ? Number(previous.x) : 0.94, y: Number.isFinite(Number(previous?.y)) ? Number(previous.y) : 0.16, shared: true };
+        roomMascotState = { name: known, setBy: String(set[1] || "Someone").trim(), memberNumber: senderMember, at: new Date().toISOString(), shared: true };
         cacheRoomMascotState(roomMascotState);
         refreshRoomMascotOverlay();
         return true;
@@ -6100,6 +6200,7 @@
             ["General", [
                 { command: "/help plushie", description: "Show the full Subby's Plushies command reference in chat." },
                 { command: "/plushiebalance", description: "Open the Balance on Head minigame directly." },
+                { command: "/plushieneck", description: "Wear Subby's Plushies in ItemNeckRestraints (the Ceiling Neck Cuff slot)." },
             ]],
             ["Plushies & Relationships", [
                 { command: "/plushieplushies", description: "Open the Plushies tab with relationship, favorites, emotes, and saved poses." },
@@ -6378,11 +6479,27 @@
         );
     }
 
+    function patchNativeExtensionsEntryIcon() {
+        const display = window.PreferenceExtensionsDisplay;
+        if (!Array.isArray(display)) return false;
+        const entry = display.find(candidate =>
+            String(candidate?.Identifier || "") === EXTENSIONS_IDENTIFIER ||
+            String(candidate?.Button || candidate?.ButtonText || "").trim() === EXTENSIONS_BUTTON_TEXT ||
+            String(candidate?.Button || candidate?.ButtonText || "").trim() === `${EXTENSIONS_BUTTON_TEXT} Settings`
+        );
+        if (!entry) return false;
+        entry.Image = EXTENSIONS_ICON_PATH;
+        entry.Icon = EXTENSIONS_ICON_PATH;
+        entry.ImagePath = EXTENSIONS_ICON_PATH;
+        return true;
+    }
+
     function installPreferencesExtensionsIntegration() {
         if (extensionsIntegrationInstalled || extensionsNativeRegistered) return true;
         if (typeof window.PreferenceRegisterExtensionSetting !== "function") return false;
 
         if (nativeExtensionsEntryAlreadyRegistered()) {
+            patchNativeExtensionsEntryIcon();
             extensionsNativeRegistered = true;
             extensionsIntegrationInstalled = true;
             return true;
@@ -6392,7 +6509,9 @@
             window.PreferenceRegisterExtensionSetting({
                 Identifier: EXTENSIONS_IDENTIFIER,
                 ButtonText: EXTENSIONS_BUTTON_TEXT,
-                Image: renderImages[0] || PLUSH_FALLBACK_IMAGE,
+                Image: EXTENSIONS_ICON_PATH,
+                Icon: EXTENSIONS_ICON_PATH,
+                ImagePath: EXTENSIONS_ICON_PATH,
                 load: () => {
                     extensionsOpenedFromNativePreference = true;
                     openExtensionsPanel("status", true);
@@ -6407,9 +6526,10 @@
                     destroyExtensionsPanel();
                 },
             });
+            patchNativeExtensionsEntryIcon();
             extensionsNativeRegistered = true;
             extensionsIntegrationInstalled = true;
-            log("Registered Subby's Plushies in BC's native Preferences > Extensions list.");
+            log("Registered Subby's Plushies in BC's native Preferences > Extensions list with mapped plushie icon.");
 
             if (extensionsIntegrationTimer != null) {
                 window.clearInterval(extensionsIntegrationTimer);
@@ -6749,6 +6869,10 @@
 
             case "/plushieuse":
                 requireReady(useItem);
+                return true;
+
+            case "/plushieneck":
+                requireReady(equipNeck);
                 return true;
 
             case "/plushieposition":
@@ -7362,7 +7486,7 @@
 
         return {
             assetName: ASSET_NAME,
-            groupName: GROUP,
+            groupName: item?.Asset?.Group?.Name || GROUP,
             option,
             color: cloneTransferValue(item.Color),
             difficulty: Number.isFinite(item.Difficulty) ? item.Difficulty : null,
@@ -7374,7 +7498,7 @@
     function captureOfferedPlushSnapshot(sourceMember) {
         const sourceCharacter = getRoomCharacterByMember(sourceMember);
         if (!sourceCharacter) return null;
-        return snapshotPlushItem(getHeld(sourceCharacter));
+        return snapshotPlushItem(getHandheldItem(sourceCharacter));
     }
 
     function prunePendingOutgoingPlushOffers(now = Date.now()) {
@@ -7387,7 +7511,7 @@
 
     function rememberOutgoingPlushOffer(targetMember, token) {
         if (!Number.isFinite(targetMember)) return false;
-        const held = getHeld(window.Player);
+        const held = getHandheldItem(window.Player);
         if (isOurs(held) && itemHasActiveLock(held)) {
             appendLocalInfoBox("Plushie locked", ["Unlock the plushie before offering it to someone else."], { compact: true });
             return false;
@@ -7502,12 +7626,12 @@
         };
 
         if (!Number.isFinite(sourceMember)) return fail("Could not identify the sender's member number.");
-        if (getHeld(window.Player)) return fail("Your hands are occupied. Free your ItemHandheld slot and press Accept again.");
+        if (getHandheldItem(window.Player)) return fail("Your hands are occupied. Free your ItemHandheld slot and press Accept again.");
 
         const sourceCharacter = getRoomCharacterByMember(sourceMember);
         if (!sourceCharacter) return fail("The sender is no longer available in the room.");
 
-        const sourceItem = getHeld(sourceCharacter);
+        const sourceItem = getHandheldItem(sourceCharacter);
         if (isOurs(sourceItem) && itemHasActiveLock(sourceItem)) return fail("The offered plushie is locked and cannot be transferred.");
         const liveSnapshot = snapshotPlushItem(sourceItem);
         const snapshot = liveSnapshot || cachedSnapshot;
@@ -7542,13 +7666,13 @@
         try {
             InventoryRemove(sourceCharacter, GROUP, false);
 
-            if (isOurs(getHeld(sourceCharacter)) && Array.isArray(sourceCharacter.Appearance)) {
+            if (isOurs(getHandheldItem(sourceCharacter)) && Array.isArray(sourceCharacter.Appearance)) {
                 sourceCharacter.Appearance = sourceCharacter.Appearance.filter(item => !(
                     item?.Asset?.Group?.Name === GROUP && item?.Asset?.Name === ASSET_NAME
                 ));
             }
 
-            if (isOurs(getHeld(sourceCharacter))) {
+            if (isOurs(getHandheldItem(sourceCharacter))) {
                 throw new Error("BC did not remove the sender's ItemHandheld plushie on the accepting client.");
             }
 
@@ -7563,11 +7687,11 @@
                 false
             );
 
-            if (!isOurs(received || getHeld(window.Player))) {
+            if (!isOurs(received || getHandheldItem(window.Player))) {
                 throw new Error("BC did not equip Subby's Plushies into your ItemHandheld slot.");
             }
 
-            const heldReceived = received || getHeld(window.Player);
+            const heldReceived = received || getHandheldItem(window.Player);
             heldReceived.Property = originalProperty;
             if (originalCraft != null) heldReceived.Craft = originalCraft;
             else if (Object.prototype.hasOwnProperty.call(heldReceived, "Craft")) delete heldReceived.Craft;
@@ -7589,8 +7713,8 @@
                 sourceName: sourceName || null,
                 option: snapshot.option,
                 craftPreserved: originalCraft != null,
-                sourceRemovedLocally: !isOurs(getHeld(sourceCharacter)),
-                recipientEquippedLocally: isOurs(getHeld(window.Player)),
+                sourceRemovedLocally: !isOurs(getHandheldItem(sourceCharacter)),
+                recipientEquippedLocally: isOurs(getHandheldItem(window.Player)),
                 transferStrategy: "recipient remove/wear plus dual character update",
                 at: new Date().toISOString(),
             };
@@ -7598,7 +7722,7 @@
             return { ok: true, snapshot };
         } catch (e) {
             try {
-                if (isOurs(getHeld(window.Player))) {
+                if (isOurs(getHandheldItem(window.Player))) {
                     suppressLocalPlushRepair("failed Offer Plushie rollback", 1500);
                     clearRememberedLocalPlushState();
                     InventoryRemove(window.Player, GROUP, false);
@@ -7606,7 +7730,7 @@
             } catch (_) {}
 
             try {
-                if (!getHeld(sourceCharacter)) {
+                if (!getHandheldItem(sourceCharacter)) {
                     const restored = InventoryWear(
                         sourceCharacter,
                         ASSET_NAME,
@@ -7684,7 +7808,7 @@
             lastRenderedOutgoingOfferCapture.targetMember === parsed.actorMember) {
             const age = now - Date.parse(lastRenderedOutgoingOfferCapture.at);
             if (Number.isFinite(age) && age >= 0 && age <= OFFER_TRANSFER_PENDING_MS) {
-                const heldNow = getHeld(window.Player);
+                const heldNow = getHandheldItem(window.Player);
                 const snap = snapshotPlushItem(heldNow);
                 if (snap) {
                     pending = {
@@ -7728,7 +7852,7 @@
         recentOfferDecisionTokens.set(decisionToken, now);
         if (parsed.decision !== "accepts") return true;
 
-        const held = getHeld(window.Player);
+        const held = getHandheldItem(window.Player);
         if (!isOurs(held)) {
             lastOfferSenderRemoval = {
                 recipientMember: parsed.actorMember,
@@ -7769,13 +7893,13 @@
             clearRememberedLocalPlushState();
             InventoryRemove(window.Player, GROUP, false);
 
-            if (isOurs(getHeld(window.Player)) && Array.isArray(window.Player?.Appearance)) {
+            if (isOurs(getHandheldItem(window.Player)) && Array.isArray(window.Player?.Appearance)) {
                 window.Player.Appearance = window.Player.Appearance.filter(item => !(
                     item?.Asset?.Group?.Name === GROUP && item?.Asset?.Name === ASSET_NAME
                 ));
             }
 
-            if (isOurs(getHeld(window.Player))) throw new Error("ItemHandheld still contained Subby's Plushies after removal.");
+            if (isOurs(getHandheldItem(window.Player))) throw new Error("ItemHandheld still contained Subby's Plushies after removal.");
 
             refresh(window.Player, false);
             const publishRemoval = () => {
@@ -9264,19 +9388,31 @@
         };
     }
 
-    function getHeld(C = window.Player) {
+    function getInventoryItem(C, groupName) {
         if (!C || typeof InventoryGet !== "function") return null;
+        try { return InventoryGet(C, groupName); } catch (_) { return null; }
+    }
 
-        try {
-            return InventoryGet(C, GROUP);
-        } catch (_) {
-            return null;
-        }
+    function getHandheldItem(C = window.Player) {
+        return getInventoryItem(C, GROUP);
+    }
+
+    function getNeckPlushItem(C = window.Player) {
+        const item = getInventoryItem(C, NECK_GROUP);
+        return isOurs(item) ? item : null;
+    }
+
+    function getHeld(C = window.Player) {
+        const hand = getHandheldItem(C);
+        if (isOurs(hand)) return hand;
+        const neck = getNeckPlushItem(C);
+        if (neck) return neck;
+        return hand;
     }
 
     function isOurs(item) {
         return (
-            item?.Asset?.Group?.Name === GROUP &&
+            PLUSH_GROUPS.includes(item?.Asset?.Group?.Name) &&
             item?.Asset?.Name === ASSET_NAME
         );
     }
@@ -10203,8 +10339,6 @@
                         setBy: roomMascotState.setBy || getCharacterDisplayName(window.Player) || "room admin",
                         memberNumber: Number(window.Player?.MemberNumber) || null,
                         at: roomMascotState.at || new Date().toISOString(),
-                        x: Number.isFinite(Number(roomMascotState.x)) ? Math.max(0, Math.min(1, Number(roomMascotState.x))) : 0.94,
-                        y: Number.isFinite(Number(roomMascotState.y)) ? Math.max(0, Math.min(1, Number(roomMascotState.y))) : 0.16,
                     };
                 } else if (roomMascotAdminDirty) {
                     delete custom[ROOM_MASCOT_CUSTOM_KEY];
@@ -11069,52 +11203,52 @@
     }
 
     function buildImageMappings() {
-        const mappings = {
-            [`${ASSET_BASE}.png`]: renderImages[0],
-            [`${ASSET_BASE.replace(`/${ASSET_NAME}`, `/Preview/${ASSET_NAME}`)}.png`]: renderImages[0],
-        };
+        const mappings = {};
 
-        for (const size of SIZE_TOKENS) {
-            mappings[`${ASSET_BASE}_${size}.png`] = renderImages[0];
-        }
-
-        PLUSHES.forEach((_, index) => {
-            const layerName = `Plush${index + 1}`;
-            const typeToken = `${MODULE_KEY}${index}`;
-            const image = renderImages[index];
-
-            mappings[`${ASSET_BASE}_${layerName}.png`] = image;
-
-            mappings[`${ASSET_BASE}_${typeToken}.png`] = image;
-            mappings[`${ASSET_BASE}_${typeToken}_${layerName}.png`] = image;
-            mappings[`${ASSET_BASE}_${layerName}_${typeToken}.png`] = image;
+        for (const groupName of PLUSH_GROUPS) {
+            const base = assetBaseForGroup(groupName);
+            mappings[`${base}.png`] = renderImages[0];
+            mappings[`${base.replace(`/${ASSET_NAME}`, `/Preview/${ASSET_NAME}`)}.png`] = renderImages[0];
 
             for (const size of SIZE_TOKENS) {
-                mappings[`${ASSET_BASE}_${size}_${layerName}.png`] = image;
-                mappings[`${ASSET_BASE}_${layerName}_${size}.png`] = image;
-                mappings[`${ASSET_BASE}_${size}_${typeToken}.png`] = image;
-                mappings[`${ASSET_BASE}_${typeToken}_${size}.png`] = image;
-                mappings[`${ASSET_BASE}_${size}_${typeToken}_${layerName}.png`] = image;
-                mappings[`${ASSET_BASE}_${typeToken}_${size}_${layerName}.png`] = image;
-                mappings[`${ASSET_BASE}_${size}_${layerName}_${typeToken}.png`] = image;
+                mappings[`${base}_${size}.png`] = renderImages[0];
             }
-        });
+
+            PLUSHES.forEach((_, index) => {
+                const layerName = `Plush${index + 1}`;
+                const typeToken = `${MODULE_KEY}${index}`;
+                const image = renderImages[index];
+
+                mappings[`${base}_${layerName}.png`] = image;
+                mappings[`${base}_${typeToken}.png`] = image;
+                mappings[`${base}_${typeToken}_${layerName}.png`] = image;
+                mappings[`${base}_${layerName}_${typeToken}.png`] = image;
+
+                for (const size of SIZE_TOKENS) {
+                    mappings[`${base}_${size}_${layerName}.png`] = image;
+                    mappings[`${base}_${layerName}_${size}.png`] = image;
+                    mappings[`${base}_${size}_${typeToken}.png`] = image;
+                    mappings[`${base}_${typeToken}_${size}.png`] = image;
+                    mappings[`${base}_${size}_${typeToken}_${layerName}.png`] = image;
+                    mappings[`${base}_${typeToken}_${size}_${layerName}.png`] = image;
+                    mappings[`${base}_${size}_${layerName}_${typeToken}.png`] = image;
+                }
+            });
+        }
 
         return mappings;
     }
 
     function buildNativeAssetTextMap() {
         const strings = makeAssetStrings().EN;
-        const prefix = `${GROUP}${ASSET_NAME}`;
+        const textMap = new Map();
 
-        const textMap = new Map([
-            [prefix, DISPLAY_NAME],
-            [`${GROUP}:${ASSET_NAME}`, DISPLAY_NAME],
-            [`${GROUP.toLowerCase()}:${ASSET_NAME.toLowerCase()}`, DISPLAY_NAME],
-        ]);
-
-        for (const [key, value] of Object.entries(strings)) {
-            textMap.set(`${prefix}${key}`, value);
+        for (const groupName of PLUSH_GROUPS) {
+            const prefix = `${groupName}${ASSET_NAME}`;
+            textMap.set(prefix, DISPLAY_NAME);
+            textMap.set(`${groupName}:${ASSET_NAME}`, DISPLAY_NAME);
+            textMap.set(`${groupName.toLowerCase()}:${ASSET_NAME.toLowerCase()}`, DISPLAY_NAME);
+            for (const [key, value] of Object.entries(strings)) textMap.set(`${prefix}${key}`, value);
         }
 
         return textMap;
@@ -11401,21 +11535,20 @@
         );
     }
 
-    function getExtendedRoot() {
+    function getExtendedRoot(groupName = GROUP) {
         const root = window.AssetFemale3DCGExtended;
         if (!root || typeof root !== "object") {
             throw new Error("AssetFemale3DCGExtended is unavailable.");
         }
-        if (!root[GROUP] || typeof root[GROUP] !== "object") root[GROUP] = {};
-        return root[GROUP];
+        if (!root[groupName] || typeof root[groupName] !== "object") root[groupName] = {};
+        return root[groupName];
     }
 
     function installExtendedConfig() {
-        const groupConfig = getExtendedRoot();
-        groupConfig[ASSET_NAME] = makeExtendedConfig();
+        for (const groupName of PLUSH_GROUPS) getExtendedRoot(groupName)[ASSET_NAME] = makeExtendedConfig();
     }
 
-    function registerNativeModularData(asset) {
+    function registerNativeModularData(asset, groupName = asset?.Group?.Name || GROUP) {
         if (!asset) throw new Error("Cannot register modular data without the runtime asset.");
 
         const createModularData = window.ModularItemCreateModularData;
@@ -11434,7 +11567,7 @@
             throw new Error(`Could not register native modular data: ${String(e)}`);
         }
 
-        const expectedKey = `${GROUP}${ASSET_NAME}`;
+        const expectedKey = `${groupName}${ASSET_NAME}`;
         if (!data || typeof data !== "object" || data.key !== expectedKey) {
             throw new Error(
                 `ModularItemCreateModularData returned an invalid registration for ${expectedKey}.`
@@ -11467,22 +11600,22 @@
         };
     }
 
-    function findRuntimeAssetGroup() {
+    function findRuntimeAssetGroup(groupName = GROUP) {
         return Array.isArray(window.AssetGroup)
             ? window.AssetGroup.find(group =>
-                group?.Name === GROUP && (!group?.Family || group.Family === FAMILY)
+                group?.Name === groupName && (!group?.Family || group.Family === FAMILY)
             ) || null
             : null;
     }
 
-    function findSourceAssetGroup() {
+    function findSourceAssetGroup(groupName = GROUP) {
         return Array.isArray(window.AssetFemale3DCG)
-            ? window.AssetFemale3DCG.find(group => group?.Group === GROUP) || null
+            ? window.AssetFemale3DCG.find(group => group?.Group === groupName) || null
             : null;
     }
 
-    function rememberNativeDefinition(definition) {
-        const sourceGroup = findSourceAssetGroup();
+    function rememberNativeDefinition(definition, groupName = GROUP) {
+        const sourceGroup = findSourceAssetGroup(groupName);
         if (!sourceGroup || !Array.isArray(sourceGroup.Asset)) return;
         if (sourceGroup.Asset.some(asset => asset?.Name === ASSET_NAME)) return;
         sourceGroup.Asset.push(definition);
@@ -11518,11 +11651,11 @@
         return add;
     }
 
-    function callAssetAdd(definition, runtimeGroup) {
+    function callAssetAdd(definition, runtimeGroup, groupName = runtimeGroup?.Name || GROUP) {
         const add = window.AssetAdd;
         if (typeof add !== "function") throw new Error("AssetAdd is unavailable.");
         if (!runtimeGroup || typeof runtimeGroup !== "object") {
-            throw new Error(`AssetAdd runtime group ${GROUP} is unavailable.`);
+            throw new Error(`AssetAdd runtime group ${groupName} is unavailable.`);
         }
         if (!definition || typeof definition !== "object" || !definition.Name) {
             throw new Error("AssetAdd received an invalid plushie asset definition.");
@@ -11533,7 +11666,7 @@
         const params = getParameterNames(signatureFunction);
         const arity = Math.max(Number(signatureFunction.length) || 0, params.length);
         const extendedConfig = makeExtendedConfig();
-        const sourceGroup = findSourceAssetGroup();
+        const sourceGroup = findSourceAssetGroup(groupName);
 
         try {
             window.AssetCurrentGroup = runtimeGroup;
@@ -11602,38 +11735,34 @@
         installHugTightlyTextHook();
         installImageMappingHooks();
 
-        const definition = makeNativeAssetDefinition();
-        const runtimeGroup = findRuntimeAssetGroup();
-        if (!runtimeGroup) throw new Error(`Could not find BC runtime asset group ${GROUP}.`);
+        let primaryAsset = null;
+        for (const groupName of PLUSH_GROUPS) {
+            const definition = makeNativeAssetDefinition();
+            const runtimeGroup = findRuntimeAssetGroup(groupName);
+            if (!runtimeGroup) throw new Error(`Could not find BC runtime asset group ${groupName}.`);
 
-        callAssetAdd(definition, runtimeGroup);
+            callAssetAdd(definition, runtimeGroup, groupName);
 
-        const asset = AssetGet(FAMILY, GROUP, ASSET_NAME);
-        if (!asset) {
-            throw new Error(
-                `Native AssetAdd completed but AssetGet(${FAMILY}, ${GROUP}, ${ASSET_NAME}) returned null.`
-            );
+            const asset = AssetGet(FAMILY, groupName, ASSET_NAME);
+            if (!asset) {
+                throw new Error(
+                    `Native AssetAdd completed but AssetGet(${FAMILY}, ${groupName}, ${ASSET_NAME}) returned null.`
+                );
+            }
+
+            rememberNativeDefinition(definition, groupName);
+            asset.Extended = true;
+            if (asset.Archetype == null) asset.Archetype = resolveModularArchetype();
+            if (asset.Description === ASSET_NAME || !asset.Description) asset.Description = DISPLAY_NAME;
+            registerNativeModularData(asset, groupName);
+            if (groupName === GROUP) primaryAsset = asset;
         }
 
-        rememberNativeDefinition(definition);
-
-        asset.Extended = true;
-        if (asset.Archetype == null) asset.Archetype = resolveModularArchetype();
-        if (asset.Description === ASSET_NAME || !asset.Description) asset.Description = DISPLAY_NAME;
-
-        registerNativeModularData(asset);
-
-        return asset;
+        return primaryAsset || AssetGet(FAMILY, GROUP, ASSET_NAME);
     }
 
     function ensureExtendedCallbacks() {
-        const initName = `${EXTENDED_PREFIX}Init`;
-        const loadName = `${EXTENDED_PREFIX}Load`;
-        const drawName = `${EXTENDED_PREFIX}Draw`;
-        const clickName = `${EXTENDED_PREFIX}Click`;
-
-        window[initName] = () => {};
-        window[loadName] = () => {
+        const load = () => {
             plushMenuPage = "characters";
             plushMenuReturnPage = "characters";
             plushMenuListPage = 0;
@@ -11641,10 +11770,17 @@
             installCustomMenu();
             window.setTimeout(refreshPlushSearchInput, 0);
         };
-        window[drawName] = () => drawCustomPlushMenu();
-        window[clickName] = () => {
+        const draw = () => drawCustomPlushMenu();
+        const click = () => {
             if (!nativeLayeringVisible()) clickCustomPlushMenu();
         };
+        for (const groupName of PLUSH_GROUPS) {
+            const prefix = extendedPrefixForGroup(groupName);
+            window[`${prefix}Init`] = () => {};
+            window[`${prefix}Load`] = load;
+            window[`${prefix}Draw`] = draw;
+            window[`${prefix}Click`] = click;
+        }
     }
 
     function searchResults() {
@@ -12345,6 +12481,24 @@
             }
         }
 
+        const neckAsset = AssetGet(FAMILY, NECK_GROUP, ASSET_NAME);
+        if (!neckAsset) {
+            problems.push(`AssetGet returned null for ${NECK_GROUP}.`);
+        } else {
+            if (!Array.isArray(neckAsset.Layer) || neckAsset.Layer.length !== PLUSHES.length) {
+                problems.push(`Expected ${PLUSHES.length} neck-slot plush layers.`);
+            }
+            if (!neckAsset.Extended) problems.push("Neck-slot plush asset is not marked Extended.");
+            if (typeof ExtendedItemGetData === "function") {
+                try {
+                    const extendedData = ExtendedItemGetData(neckAsset, neckAsset.Archetype);
+                    if (!extendedData || typeof extendedData !== "object") problems.push("Neck-slot modular lookup did not register SubbysPlushies.");
+                } catch (e) {
+                    problems.push(`Neck-slot ExtendedItem modular lookup failed: ${String(e)}`);
+                }
+            }
+        }
+
         const hugTightlyShouldBeActive = isOurs(getHeld(window.Player));
         if (hugTightlyShouldBeActive &&
             (!Array.isArray(window.ActivityFemale3DCG) ||
@@ -12386,9 +12540,12 @@
         ensureExtendedCallbacks();
         installCustomMenu();
 
-        for (const suffix of ["Init", "Load", "Draw", "Click"]) {
-            if (typeof window[`${EXTENDED_PREFIX}${suffix}`] !== "function") {
-                problems.push(`Missing standalone ExtendedItem callback: ${suffix}.`);
+        for (const groupName of PLUSH_GROUPS) {
+            const prefix = extendedPrefixForGroup(groupName);
+            for (const suffix of ["Init", "Load", "Draw", "Click"]) {
+                if (typeof window[`${prefix}${suffix}`] !== "function") {
+                    problems.push(`Missing standalone ExtendedItem callback for ${groupName}: ${suffix}.`);
+                }
             }
         }
 
@@ -12412,7 +12569,7 @@
             return false;
         }
 
-        const currentHeld = getHeld(window.Player);
+        const currentHeld = getHandheldItem(window.Player);
         if (currentHeld && itemHasActiveLock(currentHeld)) {
             appendLocalInfoBox("Handheld item locked", ["Unlock your current handheld item before equipping a plushie."], { compact: true });
             return false;
@@ -12443,6 +12600,44 @@
         scheduleNextIdleAnimation(2500);
     }
 
+    function equipNeck() {
+        if (!ready) {
+            warn("Not ready yet.");
+            return false;
+        }
+
+        const currentNeck = getInventoryItem(window.Player, NECK_GROUP);
+        if (currentNeck && itemHasActiveLock(currentNeck)) {
+            appendLocalInfoBox("Neck restraint locked", ["Unlock your current neck-restraint item before wearing a plushie there."], { compact: true });
+            return false;
+        }
+
+        try {
+            InventoryWear(window.Player, ASSET_NAME, NECK_GROUP);
+        } catch (e) {
+            error("InventoryWear neck-slot plushie failed:", e);
+            return false;
+        }
+
+        const item = getInventoryItem(window.Player, NECK_GROUP);
+        if (!isOurs(item)) {
+            error("BC did not equip Subby's Plushies in ItemNeckRestraints.", item);
+            return false;
+        }
+
+        const option = normalizePlushState(item);
+        ensureNativeTransform(item);
+        refresh(window.Player, true);
+        syncHugTightlyActivityAvailability("explicit neck equip");
+        schedulePlushStabilization(option);
+        recordPlushSelection(currentPlushName());
+        touchPlushRelationship(currentPlushName(), { increment: 0, wake: true });
+        refreshDragToggleButton();
+        refreshPlushStatusIcon();
+        scheduleNextIdleAnimation(2500);
+        return true;
+    }
+
     function useItem() {
         const item = getHeld(window.Player);
         if (!isOurs(item)) {
@@ -12458,7 +12653,8 @@
         ensureNativeTransform(item);
         installCustomMenu();
 
-        const loadFn = window[`${EXTENDED_PREFIX}Load`];
+        const focusedGroup = item?.Asset?.Group?.Name || GROUP;
+        const loadFn = window[`${extendedPrefixForGroup(focusedGroup)}Load`];
         if (typeof loadFn !== "function") {
             error("Standalone plush menu Load callback is unavailable.");
             return;
@@ -12493,7 +12689,7 @@
         try {
             suppressLocalPlushRepair("explicit remove", 1800);
             clearRememberedLocalPlushState();
-            InventoryRemove(window.Player, GROUP);
+            InventoryRemove(window.Player, held.Asset.Group.Name);
             refresh(window.Player, true);
             syncHugTightlyActivityAvailability("explicit remove");
         } catch (e) {
@@ -12524,9 +12720,9 @@
 
             window.Player.Appearance = appearance.filter(item => !isOurs(item));
 
-            try {
-                InventoryRemove(window.Player, GROUP);
-            } catch (_) {}
+            for (const groupName of PLUSH_GROUPS) {
+                try { InventoryRemove(window.Player, groupName); } catch (_) {}
+            }
 
             refresh(window.Player, true);
             syncHugTightlyActivityAvailability("explicit recover");
