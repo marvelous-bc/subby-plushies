@@ -1,6 +1,8 @@
 {
-  "version": "2.3.3",
-  "downloadUrl": "https://github.com/marvelous-bc/subby-plushies",
-  "notes": "v2.3.3: corrects the secondary plushie wearable slot to ItemAddon, the same Body slot used by Ceiling Rope. Removes the mistaken ItemNeckRestraints integration and /plushieneck command; use /plushieaddon. Keeps the v2.3.2 icon, local-only mascot movement, pet-suit/arm-restraint visibility.",
-  "sha256": "07960873667e203f752c591883d465209bbe6b0c7b410bcd9de36e7100e10f96"
+  "version": "2.3.7",
+  "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
+  "launcherVersion": "2.1.1",
+  "launcherUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js",
+  "sha256": "1f786cd8fc57b2951b1d093676a726590db593668f6a130610afd52ab1e1378a",
+  "notes": "v2.3.7 current release. Canonical downloadUrl points directly to SubbysPlushies.user.js."
 }
