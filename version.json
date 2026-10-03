@@ -1,6 +1,6 @@
 {
-  "version": "2.3.2",
+  "version": "2.3.3",
   "downloadUrl": "https://github.com/marvelous-bc/subby-plushies",
-  "notes": "v2.3.2: fixes the plugin icon registration, makes mascot dragging local-only, keeps plushies visible with pet suits/arm restraints, adds ItemNeckRestraints wear support, scopes battle stats/history per account, and updates backup import/export for account-scoped battle data with no migration/backward compatibility.",
-  "sha256": "dea128b5d06ab2aaf52b76adfa27a131dc0ae6c42b5ef3dacdab199e692c14af"
+  "notes": "v2.3.3: corrects the secondary plushie wearable slot to ItemAddon, the same Body slot used by Ceiling Rope. Removes the mistaken ItemNeckRestraints integration and /plushieneck command; use /plushieaddon. Keeps the v2.3.2 icon, local-only mascot movement, pet-suit/arm-restraint visibility.",
+  "sha256": "07960873667e203f752c591883d465209bbe6b0c7b410bcd9de36e7100e10f96"
 }
