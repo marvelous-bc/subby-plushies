@@ -4507,6 +4507,33 @@
             autoUpdateChecks: settings.autoUpdateChecks,
             performanceMode: settings.performanceMode,
             activities: `${hugTightlyActivityRegistration || "inactive"} / ${customActivitiesRegistration || "inactive"}`,
+            offer: {
+                transferStrategy: "LSCG-style recipient remove/wear plus dual CharacterUpdate; sender self-removal fallback",
+                playerMember: Number.isFinite(Number(window.Player?.MemberNumber)) ? Number(window.Player.MemberNumber) : null,
+                currentHeldAsset: getHeld(window.Player)?.Asset?.Name || null,
+                currentHeldGroup: getHeld(window.Player)?.Asset?.Group?.Name || null,
+                currentHeldIsPlushie: isOurs(getHeld(window.Player)),
+                promptActive: !!offerPromptElement?.isConnected,
+                promptToken: offerPromptElement?.getAttribute?.("data-subbys-plushies-offer") || null,
+                pendingOutgoingOffers: [...pendingOutgoingPlushOffers.values()].map(entry => ({ ...entry })),
+                pendingOutgoingRecipients: [...pendingOutgoingPlushOffers.keys()],
+                signalsReceived: offerSignalsReceived,
+                lastSignalReceived: lastOfferSignalReceived,
+                receiveAttempts: offerTransferReceiveAttempts,
+                received: offerTransfersReceived,
+                receiveFailures: offerTransferReceiveFailures,
+                senderRemovals: offerTransferSenderRemovals,
+                senderRemovalFailures: offerTransferSenderRemovalFailures,
+                lastReceived: lastOfferTransferReceived,
+                lastFailure: lastOfferTransferFailure,
+                lastSenderRemoval: lastOfferSenderRemoval,
+                lastDecisionSeen: lastOfferDecisionSeen,
+                hooks: {
+                    chatRoomMessage: installedHooks.has("ChatRoomMessage"),
+                    serverSend: installedHooks.has("ServerSend"),
+                    activityRun: installedHooks.has("ActivityRun"),
+                },
+            },
             imageMapping: bcImagePathHookInstalled || (imageElementSrcHookInstalled ? "HTMLImageElement.src fallback" : "not installed"),
             achievements: `${unlocked}/${ACHIEVEMENTS.length}`,
             latestVersion: lastUpdateInfo?.ok
@@ -6697,21 +6724,58 @@
         const sourceCharacter = getRoomCharacterByMember(sourceMember);
         if (!sourceCharacter) return fail("The sender is no longer available in the room.");
 
-        const liveSnapshot = snapshotPlushItem(getHeld(sourceCharacter));
+        const sourceItem = getHeld(sourceCharacter);
+        const liveSnapshot = snapshotPlushItem(sourceItem);
         const snapshot = liveSnapshot || cachedSnapshot;
         if (!liveSnapshot || !snapshot || snapshot.assetName !== ASSET_NAME || snapshot.groupName !== GROUP) {
             return fail("The offered plushie is no longer in the sender's hand.");
         }
 
+        const originalProperty = cloneTransferValue(sourceItem?.Property || snapshot.property || {});
+        const originalCraft = cloneTransferValue(sourceItem?.Craft ?? snapshot.craft);
+        const originalColor = cloneTransferValue(sourceItem?.Color ?? snapshot.color);
+        const originalDifficulty = Number.isFinite(sourceItem?.Difficulty)
+            ? sourceItem.Difficulty
+            : snapshot.difficulty;
+
+        const publishTransfer = () => {
+            try {
+                if (typeof window.ChatRoomCharacterUpdate === "function") {
+                    window.ChatRoomCharacterUpdate(sourceCharacter);
+                }
+            } catch (e) {
+                warn("Offer Plushie could not publish sender CharacterUpdate:", e);
+            }
+            try {
+                if (typeof window.ChatRoomCharacterUpdate === "function") {
+                    window.ChatRoomCharacterUpdate(window.Player);
+                }
+            } catch (e) {
+                warn("Offer Plushie could not publish recipient CharacterUpdate:", e);
+            }
+        };
+
         try {
+            InventoryRemove(sourceCharacter, GROUP, false);
+
+            if (isOurs(getHeld(sourceCharacter)) && Array.isArray(sourceCharacter.Appearance)) {
+                sourceCharacter.Appearance = sourceCharacter.Appearance.filter(item => !(
+                    item?.Asset?.Group?.Name === GROUP && item?.Asset?.Name === ASSET_NAME
+                ));
+            }
+
+            if (isOurs(getHeld(sourceCharacter))) {
+                throw new Error("BC did not remove the sender's ItemHandheld plushie on the accepting client.");
+            }
+
             const received = InventoryWear(
                 window.Player,
                 ASSET_NAME,
                 GROUP,
-                cloneTransferValue(snapshot.color),
-                Number.isFinite(snapshot.difficulty) ? snapshot.difficulty : undefined,
+                originalColor,
+                Number.isFinite(originalDifficulty) ? originalDifficulty : undefined,
                 sourceMember,
-                cloneTransferValue(snapshot.craft),
+                originalCraft,
                 false
             );
 
@@ -6720,8 +6784,8 @@
             }
 
             const heldReceived = received || getHeld(window.Player);
-            heldReceived.Property = cloneTransferValue(snapshot.property || {});
-            if (snapshot.craft != null) heldReceived.Craft = cloneTransferValue(snapshot.craft);
+            heldReceived.Property = originalProperty;
+            if (originalCraft != null) heldReceived.Craft = originalCraft;
             else if (Object.prototype.hasOwnProperty.call(heldReceived, "Craft")) delete heldReceived.Craft;
 
             setItemPlushState(heldReceived, snapshot.option);
@@ -6731,40 +6795,52 @@
             schedulePlushStabilization(snapshot.option);
             syncHugTightlyActivityAvailability("Offer Plushie received");
 
-            window.setTimeout(() => {
-                try {
-                    if (typeof window.ChatRoomCharacterItemUpdate === "function") {
-                        window.ChatRoomCharacterItemUpdate(window.Player, GROUP);
-                    } else if (typeof window.ChatRoomCharacterUpdate === "function") {
-                        window.ChatRoomCharacterUpdate(window.Player);
-                    }
-                } catch (e) {
-                    warn("Offer Plushie could not publish recipient ItemHandheld update:", e);
-                }
-            }, 0);
+            window.setTimeout(publishTransfer, 0);
+            window.setTimeout(publishTransfer, 250);
+            window.setTimeout(publishTransfer, 900);
 
             offerTransfersReceived++;
             lastOfferTransferReceived = {
                 sourceMember,
                 sourceName: sourceName || null,
                 option: snapshot.option,
-                craftPreserved: snapshot.craft != null,
-                transferStrategy: "recipient self-equip plus hidden sender self-removal",
+                craftPreserved: originalCraft != null,
+                sourceRemovedLocally: !isOurs(getHeld(sourceCharacter)),
+                recipientEquippedLocally: isOurs(getHeld(window.Player)),
+                transferStrategy: "LSCG-style recipient remove/wear plus dual CharacterUpdate",
                 at: new Date().toISOString(),
             };
-            log(`Received offered plushie from #${sourceMember}; waiting for sender self-removal sync.`, lastOfferTransferReceived);
+            log(`Received offered plushie from #${sourceMember} using LSCG-style ItemHandheld transfer.`, lastOfferTransferReceived);
             return { ok: true, snapshot };
         } catch (e) {
             try {
                 if (isOurs(getHeld(window.Player))) {
-                    suppressLocalPlushRepair("failed Offer Plushie rollback", 1200);
+                    suppressLocalPlushRepair("failed Offer Plushie rollback", 1500);
                     clearRememberedLocalPlushState();
                     InventoryRemove(window.Player, GROUP, false);
-                    refresh(window.Player, false);
-                    if (typeof window.ChatRoomCharacterItemUpdate === "function") window.ChatRoomCharacterItemUpdate(window.Player, GROUP);
-                    else if (typeof window.ChatRoomCharacterUpdate === "function") window.ChatRoomCharacterUpdate(window.Player);
                 }
             } catch (_) {}
+
+            try {
+                if (!getHeld(sourceCharacter)) {
+                    const restored = InventoryWear(
+                        sourceCharacter,
+                        ASSET_NAME,
+                        GROUP,
+                        originalColor,
+                        Number.isFinite(originalDifficulty) ? originalDifficulty : undefined,
+                        sourceMember,
+                        originalCraft,
+                        false
+                    );
+                    if (restored) {
+                        restored.Property = cloneTransferValue(originalProperty);
+                        if (originalCraft != null) restored.Craft = cloneTransferValue(originalCraft);
+                    }
+                }
+            } catch (_) {}
+
+            try { publishTransfer(); } catch (_) {}
             return fail(`Could not transfer the offered plushie: ${String(e)}`);
         }
     }
@@ -8952,6 +9028,13 @@
                     until: Date.now() + 2000,
                     target: focusedTarget,
                 };
+                if (
+                    customSpec.key === "offer" &&
+                    Number.isFinite(Number(focusedTarget?.MemberNumber)) &&
+                    Number(focusedTarget.MemberNumber) !== Number(window.Player?.MemberNumber)
+                ) {
+                    rememberOutgoingPlushOffer(Number(focusedTarget.MemberNumber), "");
+                }
             }
 
             let jealousReaction = null;
@@ -11723,6 +11806,7 @@
         extensions: tab => openExtensionsPanel(tab || "status"),
         settings: () => openExtensionsPanel("settings"),
         status: () => extensionsStatusSnapshot(),
+        offerStatus: () => extensionsStatusSnapshot().offer,
         dataStatus: () => ({ ...gitDataState, status: gitDataStatusText() }),
         reloadData: () => refreshGitDataFromGitHub({ force: true, silent: false }),
         debug,
