@@ -2,18 +2,25 @@
 // @name         BC - Subby's Plushies Launcher
 // @namespace    subbycat.subbysplushies.launcher
 // @author       Marvelous
-// @version      2.2.0
-// @description  Always-load-latest launcher with verified startup and last-known-good fallback
+// @version      2.3.7.9
+// @description  Hybrid Subby's Plushies launcher: Opera/browser-safe @require + Electron live loader
 // @homepageURL  https://github.com/marvelous-bc/subby-plushies
 // @supportURL   https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL    https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js
 // @downloadURL  https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js
+// @require      https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js?launcher=2.3.7.9
 // @match        https://www.bondageprojects.elementfx.com/R*
-// @match        https://www.bondageeurope.com/*/BondageClub/
-// @match        https://www.bondage-europe.com/*/BondageClub/
-// @match        https://www.bondage-asia.com/club/*/
+// @match        https://bondageprojects.elementfx.com/R*
+// @match        https://www.bondageeurope.com/*/BondageClub/*
+// @match        https://bondageeurope.com/*/BondageClub/*
+// @match        https://www.bondage-europe.com/*/BondageClub/*
+// @match        https://bondage-europe.com/*/BondageClub/*
+// @match        https://www.bondage-asia.com/club/*
+// @match        https://bondage-asia.com/club/*
 // @run-at       document-start
 // @sandbox      raw
+// @inject-into  page
+// @noframes
 // @grant        none
 // ==/UserScript==
 
@@ -21,7 +28,7 @@
     "use strict";
 
     const TAG = "[Subby's Plushies Launcher]";
-    const LAUNCHER_VERSION = "2.2.0";
+    const LAUNCHER_VERSION = "2.3.7.9";
 
     const PRIMARY_SCRIPT_URL =
         "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js";
@@ -43,6 +50,22 @@
     const STARTUP_TIMEOUT_MS = 135000;
 
     const sleep = ms => new Promise(resolve => window.setTimeout(resolve, ms));
+
+    function runningUnderUserscriptManager() {
+        try {
+            return typeof GM_info === "object" && !!GM_info;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function userscriptManagerName() {
+        try {
+            return String(GM_info?.scriptHandler || GM_info?.handler || "userscript manager");
+        } catch (_) {
+            return "userscript manager";
+        }
+    }
 
     function cacheBust(url) {
         const separator = url.includes("?") ? "&" : "?";
@@ -432,6 +455,51 @@
 
     async function load() {
         console.log(TAG, `Launcher v${LAUNCHER_VERSION} starting.`);
+
+        const browserManager = runningUnderUserscriptManager();
+
+        // In Opera/Chromium userscript managers, @require executes the plugin before
+        // this launcher body. That path intentionally avoids runtime eval/Function.
+        if (browserManager && pluginFootprintExists()) {
+            const manager = userscriptManagerName();
+            console.log(
+                TAG,
+                `Browser bootstrap active under ${manager}. ` +
+                `Subby's Plushies v${activePluginVersion() || "loading"} was supplied by @require.`
+            );
+
+            try {
+                const requiredReady = await waitForPluginReady(
+                    activePluginVersion() || "required",
+                    STARTUP_TIMEOUT_MS
+                );
+                console.log(
+                    TAG,
+                    `SUCCESS: Opera/browser @require build v${requiredReady.version} is READY.`
+                );
+            } catch (error) {
+                console.error(
+                    TAG,
+                    "The browser @require copy was loaded but did not become READY.",
+                    error
+                );
+            }
+            return;
+        }
+
+        // If a browser userscript manager reached this point, @require did not create
+        // the plugin at all. Do not attempt eval in the userscript sandbox; emit a
+        // precise diagnostic instead. The Electron/direct path below remains unchanged.
+        if (browserManager && !pluginFootprintExists()) {
+            console.error(
+                TAG,
+                `The ${userscriptManagerName()} @require bootstrap did not create Subby's Plushies. ` +
+                "Check that the userscript manager is allowed to run on this BC domain and that " +
+                "the launcher was updated from GitHub. Runtime eval is intentionally disabled " +
+                "for the Opera/browser path."
+            );
+            return;
+        }
 
         const forcedFallback = consumeForcedFallback();
         if (forcedFallback) {
