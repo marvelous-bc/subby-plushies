@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.3.7.16
+// @version      2.3.7.17
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @released     2026-10-03
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "2.3.7.16";
+    const VERSION = "2.3.7.17";
     const BUILD_DATE = "2026-10-03";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
@@ -259,10 +259,8 @@ function SubbysPlushiesPageMain() {
 
     let HIDE_BEHIND_DURATION_MS = 8000;
 
-    const ACTIVITY_MONITOR_INTERVAL_MS = 5000;
-    const ACTIVITY_INTEGRITY_INTERVAL_MS = 60000;
-    const ROOM_ROSTER_WATCHDOG_INTERVAL_MS = 60000;
-    const CHAT_OBSERVER_MONITOR_INTERVAL_MS = 10000;
+    const ACTIVITY_INTEGRITY_INTERVAL_MS = 60 * 1000;
+    const ROOM_ROSTER_WATCHDOG_INTERVAL_MS = 5 * 60 * 1000;
     const LAYERING_BRIDGE_MONITOR_INTERVAL_MS = 1000;
     let HIDE_BEHIND_FACE_TRANSFORM = Object.freeze({
         TranslationX: 0,
@@ -286,7 +284,6 @@ function SubbysPlushiesPageMain() {
     const BACKUP_PROGRESS_SEAL_KEY = ["Subbys", "Plushies", "portable", "progress", "v4", "89413"].join("|");
     const ROOM_MASCOT_CUSTOM_KEY = "SubbysPlushiesMascot";
     const ROOM_MASCOT_CYCLE_MS = 60 * 60 * 1000;
-    const ROOM_MASCOT_CYCLE_CHECK_MS = 30 * 1000;
     const ROOM_MASCOT_CYCLE_SETTLE_MS = 15 * 1000;
     const ROOM_MASCOT_AFFECTION_MODIFIER = 1;
     const ROOM_MASCOT_CACHE_STORAGE_KEY = "SubbysPlushies:room-mascots:v1";
@@ -843,6 +840,8 @@ function SubbysPlushiesPageMain() {
     const EXTENSIONS_ICON_PATH = `${ASSET_BASE}.png`;
 
     const renderImages = new Array(PLUSHES.length);
+    const renderImagePromises = new Map();
+    let renderFallbackImage = null;
     let hugTightlyIconImage = null;
     let imageMappings = null;
     let modularArchetype = null;
@@ -976,7 +975,6 @@ function SubbysPlushiesPageMain() {
     const directDragOverlayBoundsByGroup = new Map();
     const directDragOverlayErrorByGroup = new Map();
     let dragToggleButton = null;
-    let dragToggleUiTimer = null;
     let dragTogglePositionState = null;
     let dragToggleMoveSession = null;
     let dragTargetGroupState = null;
@@ -988,7 +986,6 @@ function SubbysPlushiesPageMain() {
     let roomMascotOverlay = null;
     let roomMascotOverlayImage = null;
     let roomMascotOverlayLabel = null;
-    let roomMascotUiSafetyTimer = null;
     let mascotUiHooksInstalled = false;
     let roomMascotAdminButton = null;
     let roomMascotPickerElement = null;
@@ -1033,13 +1030,6 @@ function SubbysPlushiesPageMain() {
     const lastCharacterChatRoomDraw = new Map();
     const exactCharacterCanvasProjection = new Map();
 
-    // Tracks the plushie's REAL canvas rectangle as BC/WCE render it.
-    // This deliberately does not reconstruct LayerTranslation math.
-    const plushImageRenderMeta = new WeakMap();
-    const trackedPlushCanvasMarks = new WeakMap();
-    let plushCanvasTrackingInstalled = false;
-    let activeDrawCharacter = null;
-    let activeDrawCharacterKey = null;
 
     let backupImportInput = null;
     let lastPlayerChatRoomDraw = null;
@@ -1250,35 +1240,25 @@ function SubbysPlushiesPageMain() {
 
     function restartPerformanceSensitiveMonitors() {
         if (plushStatusIconTimer != null) {
-            window.clearInterval(plushStatusIconTimer);
+            window.clearTimeout(plushStatusIconTimer);
             plushStatusIconTimer = null;
-            startPlushStatusIconMonitor();
         }
-        if (dragToggleUiTimer != null) {
-            window.clearInterval(dragToggleUiTimer);
-            dragToggleUiTimer = window.setInterval(refreshDragToggleButton, performanceInterval(2500, 8000));
-        }
-        if (roomMascotUiSafetyTimer != null) {
-            window.clearInterval(roomMascotUiSafetyTimer);
-            roomMascotUiSafetyTimer = window.setInterval(() => {
-                if (roomMascotState?.name || roomMascotOverlay?.isConnected) refreshRoomMascotOverlay();
-                refreshRoomMascotAdminButton();
-            }, performanceInterval(5000, 15000));
-        }
-        if (offerChatObserverMonitor != null) {
-            window.clearInterval(offerChatObserverMonitor);
-            offerChatObserverMonitor = window.setInterval(
-                () => ensureOfferChatObserver("chat observer monitor"),
-                performanceInterval(CHAT_OBSERVER_MONITOR_INTERVAL_MS, CHAT_OBSERVER_MONITOR_INTERVAL_MS * 3)
-            );
-        }
+        startPlushStatusIconMonitor();
+
         if (roomRosterWatchdog != null) {
             window.clearInterval(roomRosterWatchdog);
             roomRosterWatchdog = window.setInterval(
-                () => checkRoomRosterChange(isLowCpuMode() ? "120-second watchdog" : "60-second watchdog"),
-                performanceInterval(ROOM_ROSTER_WATCHDOG_INTERVAL_MS, ROOM_ROSTER_WATCHDOG_INTERVAL_MS * 3)
+                () => checkRoomRosterChange(isLowCpuMode() ? "10-minute watchdog" : "5-minute watchdog"),
+                performanceInterval(ROOM_ROSTER_WATCHDOG_INTERVAL_MS, ROOM_ROSTER_WATCHDOG_INTERVAL_MS * 2)
             );
         }
+
+        if (hugTightlyActivityMonitor != null) {
+            window.clearTimeout(hugTightlyActivityMonitor);
+            hugTightlyActivityMonitor = null;
+            scheduleActivityIntegrityCheck();
+        }
+
         if (roomMascotCycleTimer != null) {
             stopRoomMascotCycleMonitor();
             if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
@@ -2368,7 +2348,7 @@ function SubbysPlushiesPageMain() {
             const storedCurrent = Number(value.currentStreak);
             const storedLongest = Number(value.longestStreak);
 
-            // v2.3.7.16 compact records did not store streaks. We cannot safely
+            // v2.3.7.17 compact records did not store streaks. We cannot safely
             // reconstruct a historical consecutive streak from count + lastDay,
             // so migrate conservatively from the next interaction onward.
             const currentStreak = Number.isFinite(storedCurrent)
@@ -3151,16 +3131,6 @@ function SubbysPlushiesPageMain() {
         let image = canvasOverlayImageCache.get(source);
         if (!image) {
             image = new Image();
-            const option = renderImages.findIndex(value => value === source);
-            if (option >= 0) {
-                try {
-                    plushImageRenderMeta.set(image, {
-                        groupName: GROUP,
-                        option,
-                        source: "canvas-overlay",
-                    });
-                } catch (_) {}
-            }
             canvasOverlayImageCache.set(source, image);
             image.src = source;
         }
@@ -3719,11 +3689,13 @@ function SubbysPlushiesPageMain() {
         const targetItem = statusOverlayTargetItem();
         if (window.CurrentScreen !== "ChatRoom" || !isOurs(targetItem)) {
             removePlushStatusIcon();
+            schedulePlushStatusSleepRefresh(targetItem);
             return false;
         }
         const descriptor = plushStatusDescriptor(targetItem);
         if (!descriptor?.symbol) {
             removePlushStatusIcon();
+            schedulePlushStatusSleepRefresh(targetItem);
             return false;
         }
         if (!plushStatusIconElement?.isConnected) {
@@ -3746,15 +3718,33 @@ function SubbysPlushiesPageMain() {
         plushStatusIconElement.textContent = descriptor.symbol;
         plushStatusIconElement.style.color = descriptor.color || "#FFFFFF";
         plushStatusIconElement.dataset.state = descriptor.type || "mood";
-        return positionPlushStatusIcon();
+        const positioned = positionPlushStatusIcon();
+        schedulePlushStatusSleepRefresh(targetItem);
+        return positioned;
+    }
+
+    function schedulePlushStatusSleepRefresh(item = statusOverlayTargetItem()) {
+        if (plushStatusIconTimer != null) window.clearTimeout(plushStatusIconTimer);
+        plushStatusIconTimer = null;
+        if (document.hidden || window.CurrentScreen !== "ChatRoom" || !isOurs(item)) return false;
+
+        const plushName = plushNameForItem(item);
+        const record = getPlushRelationshipRecord(plushName);
+        const dueAt = (Number(record?.lastInteractionAt) || Date.now()) + SLEEPY_AFTER_MS;
+        const wait = dueAt - Date.now();
+        if (wait <= 0) return false;
+
+        plushStatusIconTimer = window.setTimeout(() => {
+            plushStatusIconTimer = null;
+            refreshPlushStatusIcon();
+        }, Math.max(50, Math.min(0x7fffffff, wait + 50)));
+        return true;
     }
 
     function startPlushStatusIconMonitor() {
-        refreshPlushStatusIcon();
-        if (plushStatusIconTimer == null) {
-            plushStatusIconTimer = window.setInterval(refreshPlushStatusIcon, performanceInterval(15000, 60000));
-        }
-        return true;
+        const result = refreshPlushStatusIcon();
+        schedulePlushStatusSleepRefresh(statusOverlayTargetItem());
+        return result;
     }
 
     function plushEmoteDefinition(type) {
@@ -3823,10 +3813,6 @@ function SubbysPlushiesPageMain() {
         clearPetSuitPlushOverlays();
         lastCharacterChatRoomDraw.clear();
         exactCharacterCanvasProjection.clear();
-        try {
-            const mainCanvas = window.MainCanvas?.canvas || document.getElementById("MainCanvas");
-            if (mainCanvas) trackedPlushCanvasMarks.delete(mainCanvas);
-        } catch (_) {}
     }
 
     function positionRemotePlushEmote(memberNumber) {
@@ -4102,13 +4088,47 @@ function SubbysPlushiesPageMain() {
 
     function scheduleNextIdleAnimation(delay = null) {
         if (idleAnimationTimer != null) window.clearTimeout(idleAnimationTimer);
-        if (!getFeatureSettings().idleAnimations || isLowCpuMode()) { idleAnimationTimer = null; return false; }
+        if (!getFeatureSettings().idleAnimations || isLowCpuMode() || document.hidden) { idleAnimationTimer = null; return false; }
         const wait = Number.isFinite(delay) ? Math.max(500, delay) : IDLE_MIN_DELAY_MS + Math.random() * (IDLE_MAX_DELAY_MS - IDLE_MIN_DELAY_MS);
         idleAnimationTimer = window.setTimeout(() => {
             idleAnimationTimer = null;
             runIdleAnimation();
             scheduleNextIdleAnimation();
         }, wait);
+        return true;
+    }
+
+    let visibilityPerformanceHooksInstalled = false;
+
+    function installVisibilityPerformanceHooks() {
+        if (visibilityPerformanceHooksInstalled) return true;
+        visibilityPerformanceHooksInstalled = true;
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) {
+                cancelIdleAnimation(false);
+                stopRoomMascotCycleMonitor();
+                if (hugTightlyActivityMonitor != null) {
+                    window.clearTimeout(hugTightlyActivityMonitor);
+                    hugTightlyActivityMonitor = null;
+                }
+                if (plushStatusIconTimer != null) {
+                    window.clearTimeout(plushStatusIconTimer);
+                    plushStatusIconTimer = null;
+                }
+                return;
+            }
+
+            syncHugTightlyActivityAvailability("tab visible");
+            scheduleActivityIntegrityCheck();
+            if (!installedHooks.has("ChatRoomAppendChat")) ensureOfferChatObserver("tab visible fallback");
+            refreshDragToggleButton();
+            refreshRoomMascotOverlay();
+            refreshRoomMascotAdminButton();
+            startPlushStatusIconMonitor();
+            if (getFeatureSettings().idleAnimations && !isLowCpuMode()) scheduleNextIdleAnimation(1200);
+            if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
+            scheduleRoomRosterEventCheck("tab visible", 0);
+        }, { passive: true });
         return true;
     }
 
@@ -5554,6 +5574,7 @@ function SubbysPlushiesPageMain() {
         if (state?.name) cache[key] = cloneBackupValue(state);
         else delete cache[key];
         writeLocalJSON(ROOM_MASCOT_CACHE_STORAGE_KEY, cache);
+        if (getFeatureSettings().hourlyMascotCycle && window.CurrentScreen === "ChatRoom") scheduleRoomMascotCycleCheck();
         return true;
     }
 
@@ -5761,22 +5782,41 @@ function SubbysPlushiesPageMain() {
     }
 
     function stopRoomMascotCycleMonitor() {
-        if (roomMascotCycleTimer != null) window.clearInterval(roomMascotCycleTimer);
+        if (roomMascotCycleTimer != null) window.clearTimeout(roomMascotCycleTimer);
         roomMascotCycleTimer = null;
         roomMascotCyclePendingUntil = 0;
         return true;
     }
 
+    function scheduleRoomMascotCycleCheck() {
+        if (roomMascotCycleTimer != null) window.clearTimeout(roomMascotCycleTimer);
+        roomMascotCycleTimer = null;
+        if (!getFeatureSettings().hourlyMascotCycle || document.hidden || window.CurrentScreen !== "ChatRoom") return false;
+
+        const now = Date.now();
+        const shared = roomMascotFromSharedRoomData();
+        if (shared) roomMascotState = shared;
+        const dueAt = roomMascotCycleDueAt(shared || roomMascotState);
+        let targetAt = Math.max(roomMascotCycleEligibleAt || now, roomMascotCyclePendingUntil || 0);
+        if (dueAt > now) targetAt = Math.max(targetAt, dueAt);
+        else if (!playerIsRoomMascotCycleLeader()) {
+            targetAt = Math.max(targetAt, now + performanceInterval(60 * 1000, 3 * 60 * 1000));
+        } else {
+            targetAt = Math.max(targetAt, now + 250);
+        }
+
+        roomMascotCycleTimer = window.setTimeout(() => {
+            roomMascotCycleTimer = null;
+            maybeCycleRoomMascotHourly();
+            scheduleRoomMascotCycleCheck();
+        }, Math.max(250, Math.min(0x7fffffff, targetAt - now + 25)));
+        return true;
+    }
+
     function startRoomMascotCycleMonitor() {
         if (!getFeatureSettings().hourlyMascotCycle) return false;
-        if (roomMascotCycleTimer != null) return true;
-        roomMascotCycleEligibleAt = Date.now() + ROOM_MASCOT_CYCLE_SETTLE_MS;
-        roomMascotCycleTimer = window.setInterval(
-            maybeCycleRoomMascotHourly,
-            performanceInterval(ROOM_MASCOT_CYCLE_CHECK_MS, ROOM_MASCOT_CYCLE_CHECK_MS * 3)
-        );
-        window.setTimeout(maybeCycleRoomMascotHourly, ROOM_MASCOT_CYCLE_SETTLE_MS + 250);
-        return true;
+        roomMascotCycleEligibleAt = Math.max(roomMascotCycleEligibleAt || 0, Date.now() + ROOM_MASCOT_CYCLE_SETTLE_MS);
+        return scheduleRoomMascotCycleCheck();
     }
 
     function mascotRenderIndex(name) {
@@ -5824,12 +5864,6 @@ function SubbysPlushiesPageMain() {
             refreshRoomMascotAdminButton();
         }, { passive: true });
 
-        if (roomMascotUiSafetyTimer == null) {
-            roomMascotUiSafetyTimer = window.setInterval(() => {
-                if (roomMascotState?.name || roomMascotOverlay?.isConnected) refreshRoomMascotOverlay();
-                refreshRoomMascotAdminButton();
-            }, performanceInterval(2500, 8000));
-        }
         return true;
     }
 
@@ -6815,7 +6849,6 @@ function SubbysPlushiesPageMain() {
 
     function installDragToggleUi() {
         refreshDragToggleButton();
-        if (dragToggleUiTimer == null) dragToggleUiTimer = window.setInterval(refreshDragToggleButton, performanceInterval(5000, 15000));
         window.addEventListener("resize", refreshDragToggleButton, { passive: true });
         return true;
     }
@@ -8137,7 +8170,7 @@ function SubbysPlushiesPageMain() {
             log("Registered Subby's Plushies in BC's native Preferences > Extensions list with mapped plushie icon.");
 
             if (extensionsIntegrationTimer != null) {
-                window.clearInterval(extensionsIntegrationTimer);
+                window.clearTimeout(extensionsIntegrationTimer);
                 extensionsIntegrationTimer = null;
             }
             return true;
@@ -8150,7 +8183,14 @@ function SubbysPlushiesPageMain() {
     function startPreferencesExtensionsIntegration() {
         if (installPreferencesExtensionsIntegration()) return;
         if (extensionsIntegrationTimer != null) return;
-        extensionsIntegrationTimer = window.setInterval(() => installPreferencesExtensionsIntegration(), 3000);
+        let delay = 1500;
+        const retry = () => {
+            extensionsIntegrationTimer = null;
+            if (installPreferencesExtensionsIntegration()) return;
+            delay = Math.min(30000, Math.round(delay * 1.8));
+            extensionsIntegrationTimer = window.setTimeout(retry, delay);
+        };
+        extensionsIntegrationTimer = window.setTimeout(retry, delay);
     }
 
     function clearChatInput() {
@@ -9978,13 +10018,20 @@ function SubbysPlushiesPageMain() {
         return true;
     }
 
+    function stopOfferChatObserver() {
+        try { offerChatObserver?.disconnect?.(); } catch (_) {}
+        offerChatObserver = null;
+        offerChatObservedRoot = null;
+        if (offerChatObserverMonitor != null) window.clearTimeout(offerChatObserverMonitor);
+        offerChatObserverMonitor = null;
+    }
+
     function startOfferChatObserverMonitor() {
-        if (offerChatObserverMonitor != null) return;
-        ensureOfferChatObserver("startup");
-        offerChatObserverMonitor = window.setInterval(
-            () => ensureOfferChatObserver("chat observer monitor"),
-            performanceInterval(CHAT_OBSERVER_MONITOR_INTERVAL_MS, CHAT_OBSERVER_MONITOR_INTERVAL_MS * 3)
-        );
+        if (installedHooks.has("ChatRoomAppendChat")) {
+            stopOfferChatObserver();
+            return true;
+        }
+        return ensureOfferChatObserver("fallback");
     }
 
     function closeOfferPrompt() {
@@ -10808,20 +10855,26 @@ function SubbysPlushiesPageMain() {
         return false;
     }
 
+    function scheduleActivityIntegrityCheck(delay = ACTIVITY_INTEGRITY_INTERVAL_MS) {
+        if (hugTightlyActivityMonitor != null) window.clearTimeout(hugTightlyActivityMonitor);
+        hugTightlyActivityMonitor = window.setTimeout(() => {
+            hugTightlyActivityMonitor = null;
+            if (!document.hidden) {
+                lastActivityMonitorHeldState = isOurs(getHeld(window.Player));
+                lastActivityMonitorFullCheckAt = Date.now();
+                syncHugTightlyActivityAvailability("60-second integrity check");
+            }
+            scheduleActivityIntegrityCheck(document.hidden ? ACTIVITY_INTEGRITY_INTERVAL_MS * 5 : ACTIVITY_INTEGRITY_INTERVAL_MS);
+        }, Math.max(1000, Number(delay) || ACTIVITY_INTEGRITY_INTERVAL_MS));
+        return true;
+    }
+
     function startHugTightlyActivityMonitor() {
         if (hugTightlyActivityMonitor != null) return;
         syncHugTightlyActivityAvailability("startup");
         lastActivityMonitorHeldState = isOurs(getHeld(window.Player));
         lastActivityMonitorFullCheckAt = Date.now();
-        hugTightlyActivityMonitor = window.setInterval(() => {
-            const heldNow = isOurs(getHeld(window.Player));
-            const now = Date.now();
-            if (heldNow !== lastActivityMonitorHeldState || now - lastActivityMonitorFullCheckAt >= ACTIVITY_INTEGRITY_INTERVAL_MS) {
-                lastActivityMonitorHeldState = heldNow;
-                lastActivityMonitorFullCheckAt = now;
-                syncHugTightlyActivityAvailability("held-item monitor");
-            }
-        }, ACTIVITY_MONITOR_INTERVAL_MS);
+        scheduleActivityIntegrityCheck();
     }
 
     function getDictionaryText(data, tag) {
@@ -11565,6 +11618,7 @@ function SubbysPlushiesPageMain() {
             clearRemotePlushEmotes();
             addonPresenceMembers.clear();
             clearPetSuitPlushOverlays();
+            stopOfferChatObserver();
             pruneRememberedPlushStates(false);
             return result;
         })) hooked++;
@@ -11578,6 +11632,7 @@ function SubbysPlushiesPageMain() {
                 window.setTimeout(() => recoverRoomMascotState({ allowCache: true }), 0);
                 window.setTimeout(() => trackRoomAchievements(), 900);
                 window.setTimeout(() => sendAddonPresence(true), 450);
+                if (!installedHooks.has("ChatRoomAppendChat")) window.setTimeout(() => ensureOfferChatObserver("ChatRoomSync fallback"), 0);
                 stopRoomMascotCycleMonitor();
                 if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
             };
@@ -11591,6 +11646,7 @@ function SubbysPlushiesPageMain() {
                     scheduleRoomRosterEventCheck("ChatRoomSync", 0);
                     recoverRoomMascotState({ allowCache: true });
                     sendAddonPresence(true);
+                    if (!installedHooks.has("ChatRoomAppendChat")) ensureOfferChatObserver("ChatRoomSync fallback");
                     stopRoomMascotCycleMonitor();
                     if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
                 }, 450);
@@ -11647,10 +11703,10 @@ function SubbysPlushiesPageMain() {
         if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
 
         roomRosterWatchdog = window.setInterval(
-            () => checkRoomRosterChange(isLowCpuMode() ? "120-second watchdog" : "60-second watchdog"),
-            performanceInterval(ROOM_ROSTER_WATCHDOG_INTERVAL_MS, ROOM_ROSTER_WATCHDOG_INTERVAL_MS * 3)
+            () => checkRoomRosterChange(isLowCpuMode() ? "10-minute watchdog" : "5-minute watchdog"),
+            performanceInterval(ROOM_ROSTER_WATCHDOG_INTERVAL_MS, ROOM_ROSTER_WATCHDOG_INTERVAL_MS * 2)
         );
-        log(`Started event-driven room roster recovery (${hooked} hook(s), ${isLowCpuMode() ? "120s" : "60s"} watchdog).`);
+        log(`Started event-driven room roster recovery (${hooked} hook(s), ${isLowCpuMode() ? "10m" : "5m"} watchdog).`);
     }
 
     function isChatAction(data) {
@@ -11765,36 +11821,41 @@ function SubbysPlushiesPageMain() {
                 (Number.isFinite(playerMember) && member === playerMember);
 
             let held = null;
+            let handheld = null;
+            let needsExactProjection = false;
             if (C && window.CurrentScreen === "ChatRoom") {
                 held = getHeld(C);
+                handheld = getHandheldItem(C);
                 const x = Number(args?.[1]);
                 const y = Number(args?.[2]);
                 const zoomArg = args?.[3] == null ? 1 : Number(args[3]);
                 const zoom = Number.isFinite(zoomArg) && zoomArg > 0 ? zoomArg : 1;
-                if (Number.isFinite(x) && Number.isFinite(y)) {
-                    const needsMatrix = samePlayer || isOurs(held) || remotePlushEmotes.has(member) || characterHasAddonPresence(C);
-                    const placement = { x, y, zoom, matrix: needsMatrix ? currentCanvasTransformSnapshot() : null, at: Date.now() };
+                const hasRemoteEmote = Number.isFinite(member) && remotePlushEmotes.has(member);
+                const hasLocalOverlay = samePlayer && (
+                    speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected ||
+                    dragSession || dragModeEnabled
+                );
+                const petSuitFallback = isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C));
+                needsExactProjection = isOurs(held) || hasRemoteEmote || hasLocalOverlay || petSuitFallback;
+
+                if (Number.isFinite(x) && Number.isFinite(y) && (needsExactProjection || characterHasAddonPresence(C))) {
+                    const placement = { x, y, zoom, matrix: currentCanvasTransformSnapshot(), at: Date.now() };
                     if (samePlayer) lastPlayerChatRoomDraw = placement;
                     if (Number.isFinite(member)) lastCharacterChatRoomDraw.set(member, placement);
                 }
             }
 
             let result;
-            if (C && window.CurrentScreen === "ChatRoom") {
-                const previousCharacter = activeDrawCharacter;
-                const previousKey = activeDrawCharacterKey;
-                activeDrawCharacter = C;
-                activeDrawCharacterKey = characterProjectionKey(C);
-                try {
-                    result = captureExactCharacterProjection(C, () => next(args));
-                    if (isOurs(getHandheldItem(C)) || petSuitRenderStates.has(petSuitOverlayKey(C))) drawPetSuitPlushCanvasOverlay(C);
-                    drawAddonPresenceIcon(C);
-                } finally {
-                    activeDrawCharacter = previousCharacter;
-                    activeDrawCharacterKey = previousKey;
-                }
+            if (C && window.CurrentScreen === "ChatRoom" && needsExactProjection) {
+                result = captureExactCharacterProjection(C, () => next(args));
             } else {
+                if (C) exactCharacterCanvasProjection.delete(characterProjectionKey(C));
                 result = next(args);
+            }
+
+            if (C && window.CurrentScreen === "ChatRoom") {
+                if (isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C))) drawPetSuitPlushCanvasOverlay(C);
+                if (characterHasAddonPresence(C)) drawAddonPresenceIcon(C);
             }
 
             if (samePlayer && (speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected)) {
@@ -11945,6 +12006,13 @@ function SubbysPlushiesPageMain() {
                 }
             }
 
+            const heldNow = isOurs(getHeld(window.Player));
+            if (heldNow !== lastActivityMonitorHeldState) {
+                lastActivityMonitorHeldState = heldNow;
+                syncHugTightlyActivityAvailability("CharacterRefresh held-state change");
+                refreshDragToggleButton();
+                refreshPlushStatusIcon();
+            }
             return result;
         });
 
@@ -11979,8 +12047,25 @@ function SubbysPlushiesPageMain() {
                     }
                 }
             }
-            return next(args);
+            const result = next(args);
+            const heldNow = isOurs(getHeld(window.Player));
+            if (heldNow !== lastActivityMonitorHeldState) {
+                lastActivityMonitorHeldState = heldNow;
+                syncHugTightlyActivityAvailability("ChatRoomCharacterUpdate held-state change");
+                refreshDragToggleButton();
+                refreshPlushStatusIcon();
+            }
+            return result;
         });
+
+        const chatAppendHooked = installHook("ChatRoomAppendChat", 10000, (args, next) => {
+            const node = args?.[0];
+            const result = next(args);
+            if (node && window.CurrentScreen === "ChatRoom") inspectOfferMutationNode(node, getOfferChatRoot());
+            return result;
+        });
+        if (chatAppendHooked) stopOfferChatObserver();
+        else startOfferChatObserverMonitor();
 
         const actionMessageHooked = installHook("ChatRoomMessage", 10000, (args, next) => {
             const data = args?.[0];
@@ -12143,7 +12228,7 @@ function SubbysPlushiesPageMain() {
 
         log(
             `Installed plush-state persistence hooks: ActivityAllowedForGroup=${activityOrderHooked}, ` +
-            `DrawCharacter=${drawCharacterHooked}, CharacterOverlay=${characterOverlayHooked}, ActivityRun=${activityRunHooked}, CharacterRefresh=${refreshHooked}, ` +
+            `DrawCharacter=${drawCharacterHooked}, CharacterOverlay=${characterOverlayHooked}, ActivityRun=${activityRunHooked}, CharacterRefresh=${refreshHooked}, ChatAppend=${chatAppendHooked}, ` +
             `ChatRoomCharacterUpdate=${updateHooked}, ` +
             `ChatRoomMessage=${actionMessageHooked}, ServerSend=${serverSendHooked}, ` +
             `RoomRosterEvents=${roomRosterEventHookCount}, watchdog=60s (no forced Action refresh).`
@@ -12788,56 +12873,74 @@ function SubbysPlushiesPageMain() {
         return canvas.toDataURL("image/png");
     }
 
+    function renderIndexesForSource(source) {
+        const indexes = [];
+        for (let i = 0; i < PLUSH_IMAGES.length; i++) if (PLUSH_IMAGES[i] === source) indexes.push(i);
+        return indexes;
+    }
+
+    function refreshLazyRenderConsumers(source) {
+        imageMappings = buildImageMappings();
+        if (window.CurrentScreen !== "ChatRoom") return;
+        const characters = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
+        for (const C of characters) {
+            let matched = false;
+            for (const item of getEquippedPlushItems(C)) {
+                const option = canonicalWirePlushOption(getItemPlushOption(item));
+                if (validPlushOption(option) && PLUSH_IMAGES[option] === source) { matched = true; break; }
+            }
+            if (matched) rebuildCharacterCanvas(C, "lazy plush render ready");
+        }
+        scheduleLocalOverlayReposition();
+    }
+
+    function ensureRenderImage(optionIndex, { refreshConsumers = true } = {}) {
+        const option = canonicalWirePlushOption(Number(optionIndex));
+        if (!validPlushOption(option)) return Promise.resolve(renderFallbackImage || renderImages[0] || null);
+        if (renderImages[option] && renderImages[option] !== renderFallbackImage) return Promise.resolve(renderImages[option]);
+
+        const source = PLUSH_IMAGES[option];
+        if (source === PLUSH_IMAGES[0]) return Promise.resolve(renderFallbackImage || renderImages[0] || null);
+        if (renderImagePromises.has(source)) return renderImagePromises.get(source);
+
+        const promise = (async () => {
+            let image = null;
+            try {
+                image = await renderSmallPlush(source, PLUSH_NAMES[option]);
+            } catch (e) {
+                warn(`Could not prepare remote plush image for ${PLUSH_NAMES[option]}:`, source, e);
+            }
+            const resolved = image || renderFallbackImage || renderImages[0] || makeTransparentRenderFallback();
+            for (const index of renderIndexesForSource(source)) renderImages[index] = resolved;
+            if (refreshConsumers && image) refreshLazyRenderConsumers(source);
+            return resolved;
+        })().finally(() => renderImagePromises.delete(source));
+
+        renderImagePromises.set(source, promise);
+        return promise;
+    }
+
     async function prepareRenderImages() {
-        const uniqueSources = [...new Set(PLUSH_IMAGES)];
-        const firstIndexBySource = new Map();
-
-        PLUSH_IMAGES.forEach((source, index) => {
-            if (!firstIndexBySource.has(source)) firstIndexBySource.set(source, index);
-        });
-
-        const preparedEntries = await Promise.all(
-            uniqueSources.map(async source => {
-                const index = firstIndexBySource.get(source) ?? 0;
-                try {
-                    return [source, await renderSmallPlush(source, PLUSH_NAMES[index])];
-                } catch (e) {
-                    warn(`Could not prepare remote plush image for ${PLUSH_NAMES[index]}:`, source, e);
-                    return [source, null];
-                }
-            })
-        );
-
-        const prepared = new Map(preparedEntries);
-        const subbycatSource = PLUSH_IMAGES[0];
-        const firstGoodRender =
-            prepared.get(subbycatSource) ||
-            preparedEntries.find(([, image]) => typeof image === "string" && image.startsWith("data:image/png"))?.[1] ||
-            makeTransparentRenderFallback();
-
-        PLUSH_IMAGES.forEach((source, index) => {
-            const image = prepared.get(source);
-            renderImages[index] =
-                typeof image === "string" && image.startsWith("data:image/png")
-                    ? image
-                    : firstGoodRender;
-        });
+        let firstGoodRender = null;
+        try {
+            firstGoodRender = await renderSmallPlush(PLUSH_IMAGES[0], PLUSH_NAMES[0]);
+        } catch (e) {
+            warn("Could not prepare Subbycat fallback artwork; using a transparent fallback.", e);
+        }
+        renderFallbackImage = firstGoodRender || makeTransparentRenderFallback();
+        for (let i = 0; i < renderImages.length; i++) renderImages[i] = renderFallbackImage;
+        for (const index of renderIndexesForSource(PLUSH_IMAGES[0])) renderImages[index] = renderFallbackImage;
 
         try {
             hugTightlyIconImage = await renderSmallPlush(HUG_TIGHTLY_ICON_URL, HUG_TIGHTLY_ACTIVITY_LABEL);
             log("Prepared Hug Tightly activity icon from assets/plushies/hugtightly.png.");
         } catch (e) {
-            hugTightlyIconImage = renderImages[0] || firstGoodRender;
+            hugTightlyIconImage = renderFallbackImage;
             warn("Could not load assets/plushies/hugtightly.png; using the plush image as the activity icon.", e);
         }
 
         imageMappings = buildImageMappings();
-
-        const failedCount = preparedEntries.filter(([, image]) => !image).length;
-        log(
-            `Prepared ${uniqueSources.length - failedCount}/${uniqueSources.length} remote plush image source(s) ` +
-            `for ${PLUSHES.length} plush options${failedCount ? `; ${failedCount} used fallback artwork` : ""}.`
-        );
+        log(`Prepared startup artwork only; ${PLUSHES.length - renderIndexesForSource(PLUSH_IMAGES[0]).length} plush option(s) will load lazily on first use.`);
     }
 
     function resolveModularArchetype() {
@@ -13058,432 +13161,6 @@ function SubbysPlushiesPageMain() {
         return value;
     }
 
-    function plushImageRequestMetadata(source) {
-        if (typeof source !== "string" || !source) return null;
-        if (!source.includes(ASSET_NAME) && !source.includes("SubbysPlushies") && !source.includes("subbysplushies")) return null;
-
-        const normalized = normalizeAssetImagePath(source);
-        if (typeof normalized !== "string" || normalized.startsWith("data:") || normalized.startsWith("blob:")) return null;
-
-        let groupName = null;
-        for (const group of PLUSH_GROUPS) {
-            if (normalized.includes(`/${group}/`)) {
-                groupName = group;
-                break;
-            }
-        }
-
-        let option = null;
-        const typeMatch = normalized.match(/(?:^|[_/])p(\d+)(?:[_./]|$)/i);
-        if (typeMatch) option = Number(typeMatch[1]);
-
-        if (!Number.isInteger(option)) {
-            const layerMatch = normalized.match(/(?:^|[_/])Plush(\d+)(?:[_./]|$)/i);
-            if (layerMatch) option = Number(layerMatch[1]) - 1;
-        }
-
-        if (!Number.isInteger(option) || !validPlushOption(option)) option = null;
-        return { groupName, option, source: normalized };
-    }
-
-    function tagPlushImageElement(image, source) {
-        if (!image || (typeof image !== "object" && typeof image !== "function")) return null;
-        const meta = plushImageRequestMetadata(source);
-        if (!meta) return null;
-        try { plushImageRenderMeta.set(image, meta); } catch (_) {}
-        return meta;
-    }
-
-    function fallbackPlushImageMetadata(source) {
-        if (!source || (typeof source !== "object" && typeof source !== "function")) return null;
-
-        let meta = null;
-        try { meta = plushImageRenderMeta.get(source) || null; } catch (_) {}
-        if (meta) return meta;
-
-        const src = typeof source.currentSrc === "string" && source.currentSrc
-            ? source.currentSrc
-            : (typeof source.src === "string" ? source.src : "");
-        if (!src || !src.startsWith("data:")) return null;
-
-        const option = renderImages.findIndex(value => value === src);
-        if (option < 0) return null;
-
-        // If only one equipped plushie uses this image, infer the group as well.
-        let groupName = null;
-        const player = window.Player;
-        if (player) {
-            const matching = PLUSH_GROUPS.filter(group => {
-                const item = getInventoryItem(player, group);
-                return isOurs(item) && canonicalWirePlushOption(getItemPlushOption(item)) === option;
-            });
-            if (matching.length === 1) groupName = matching[0];
-        }
-
-        meta = { groupName, option, source: "render-image" };
-        try { plushImageRenderMeta.set(source, meta); } catch (_) {}
-        return meta;
-    }
-
-    function canvasPointThroughDrawProjection(point, projection) {
-        if (!point || !projection) return null;
-        const sw = Number(projection.sw);
-        const sh = Number(projection.sh);
-        if (!Number.isFinite(sw) || !Number.isFinite(sh) || Math.abs(sw) < 1e-8 || Math.abs(sh) < 1e-8) return null;
-
-        const unitX = (Number(point.x) - projection.sx) / sw;
-        const unitY = (Number(point.y) - projection.sy) / sh;
-        const x = projection.dx + unitX * projection.dw;
-        const y = projection.dy + unitY * projection.dh;
-        const matrix = projection.matrix;
-
-        if (!matrix) return { x, y };
-        return {
-            x: matrix.a * x + matrix.c * y + matrix.e,
-            y: matrix.b * x + matrix.d * y + matrix.f,
-        };
-    }
-
-    function destinationCornersFromDrawProjection(projection) {
-        if (!projection) return null;
-        const matrix = projection.matrix;
-        const raw = [
-            { x: projection.dx, y: projection.dy },
-            { x: projection.dx + projection.dw, y: projection.dy },
-            { x: projection.dx + projection.dw, y: projection.dy + projection.dh },
-            { x: projection.dx, y: projection.dy + projection.dh },
-        ];
-        return raw.map(point => {
-            if (!matrix) return point;
-            return {
-                x: matrix.a * point.x + matrix.c * point.y + matrix.e,
-                y: matrix.b * point.x + matrix.d * point.y + matrix.f,
-            };
-        });
-    }
-
-    function boundsFromCanvasPoints(points) {
-        if (!Array.isArray(points) || !points.length) return null;
-        const valid = points.filter(point => Number.isFinite(point?.x) && Number.isFinite(point?.y));
-        if (!valid.length) return null;
-        const xs = valid.map(point => point.x);
-        const ys = valid.map(point => point.y);
-        const left = Math.min(...xs);
-        const right = Math.max(...xs);
-        const top = Math.min(...ys);
-        const bottom = Math.max(...ys);
-        return {
-            left, right, top, bottom,
-            width: Math.max(0, right - left),
-            height: Math.max(0, bottom - top),
-            centerX: (left + right) / 2,
-            centerY: (top + bottom) / 2,
-            points: valid.map(point => ({ x: point.x, y: point.y })),
-        };
-    }
-
-    function plushTransformSignature(item) {
-        if (!isOurs(item)) return "";
-        const transform = readActivePlushLayerTransform(item);
-        if (!transform) return "";
-        return [
-            item?.Asset?.Group?.Name || "",
-            canonicalWirePlushOption(getItemPlushOption(item)),
-            transform.TranslationX,
-            transform.TranslationY,
-            transform.ScaleX,
-            transform.ScaleY,
-            transform.Rotation,
-        ].join("|");
-    }
-
-    function trackedMarkKey(ownerKey, groupName, option) {
-        return `${ownerKey || "*"}|${groupName || "*"}|${Number.isInteger(option) ? option : "*"}`;
-    }
-
-    function storeTrackedPlushMark(canvas, mark) {
-        if (!canvas || !mark?.bounds) return false;
-        let marks = trackedPlushCanvasMarks.get(canvas);
-        if (!marks) {
-            marks = new Map();
-            trackedPlushCanvasMarks.set(canvas, marks);
-        }
-
-        const mainCanvas = window.MainCanvas?.canvas || document.getElementById("MainCanvas");
-        const onMainCanvas = canvas === mainCanvas;
-
-        let ownerKey = mark.ownerKey || null;
-        let transformSignature = mark.transformSignature || null;
-
-        if (onMainCanvas && activeDrawCharacter) {
-            ownerKey = activeDrawCharacterKey || characterProjectionKey(activeDrawCharacter);
-            if (mark.groupName) {
-                const item = getInventoryItem(activeDrawCharacter, mark.groupName);
-                if (isOurs(item)) transformSignature = plushTransformSignature(item);
-            }
-        }
-
-        const stored = {
-            ...mark,
-            ownerKey,
-            transformSignature,
-            at: Date.now(),
-        };
-
-        marks.set(trackedMarkKey(ownerKey, stored.groupName, stored.option), stored);
-
-        // Keep this extremely small; canvas drawing is hot code.
-        if (marks.size > 12) {
-            const ordered = [...marks.entries()].sort((a, b) => Number(a[1]?.at || 0) - Number(b[1]?.at || 0));
-            while (ordered.length > 12) {
-                const [key] = ordered.shift();
-                marks.delete(key);
-            }
-        }
-        return true;
-    }
-
-    function propagateTrackedPlushMarks(ctx, args, projection, directMeta = null) {
-        const destinationCanvas = ctx?.canvas;
-        const source = args?.[0];
-        if (!destinationCanvas || !source || !projection) return false;
-
-        let changed = false;
-
-        // A native plush image being drawn: capture the destination rectangle directly.
-        if (directMeta) {
-            const points = destinationCornersFromDrawProjection(projection);
-            const bounds = boundsFromCanvasPoints(points);
-            if (bounds) {
-                changed = storeTrackedPlushMark(destinationCanvas, {
-                    groupName: directMeta.groupName || null,
-                    option: Number.isInteger(directMeta.option) ? directMeta.option : null,
-                    bounds,
-                }) || changed;
-            }
-        }
-
-        // A canvas that already contains a plushie being composited into another
-        // canvas: carry the exact rectangle through the same drawImage transform.
-        const sourceMarks = trackedPlushCanvasMarks.get(source);
-        if (sourceMarks?.size) {
-            for (const sourceMark of sourceMarks.values()) {
-                if (!sourceMark?.bounds?.points?.length) continue;
-                const points = sourceMark.bounds.points
-                    .map(point => canvasPointThroughDrawProjection(point, projection))
-                    .filter(Boolean);
-                const bounds = boundsFromCanvasPoints(points);
-                if (!bounds) continue;
-                changed = storeTrackedPlushMark(destinationCanvas, {
-                    groupName: sourceMark.groupName || null,
-                    option: Number.isInteger(sourceMark.option) ? sourceMark.option : null,
-                    ownerKey: sourceMark.ownerKey || null,
-                    transformSignature: sourceMark.transformSignature || null,
-                    bounds,
-                }) || changed;
-            }
-        }
-
-        return changed;
-    }
-
-    function cloneTrackedPlushMarks(source, target) {
-        if (!source || !target) return false;
-        const marks = trackedPlushCanvasMarks.get(source);
-        if (!marks?.size) return false;
-
-        const copy = new Map();
-        for (const [key, mark] of marks) {
-            if (!mark?.bounds) continue;
-            copy.set(key, {
-                ...mark,
-                bounds: {
-                    ...mark.bounds,
-                    points: Array.isArray(mark.bounds.points)
-                        ? mark.bounds.points.map(point => ({ x: point.x, y: point.y }))
-                        : [],
-                },
-            });
-        }
-        if (!copy.size) return false;
-        trackedPlushCanvasMarks.set(target, copy);
-        return true;
-    }
-
-    function installPlushTrackingOnContextPrototype(proto, label) {
-        if (!proto || typeof proto.drawImage !== "function") return false;
-
-        let installed = false;
-        const currentDrawImage = proto.drawImage;
-
-        if (!currentDrawImage.__SubbysPlushiesTrackedDrawImage) {
-            const originalDrawImage = currentDrawImage;
-            const wrappedDrawImage = function (...args) {
-                const result = originalDrawImage.apply(this, args);
-
-                try {
-                    const source = args?.[0];
-                    const directMeta = fallbackPlushImageMetadata(source);
-                    const sourceMarks = source && (typeof source === "object" || typeof source === "function")
-                        ? trackedPlushCanvasMarks.get(source)
-                        : null;
-
-                    if (directMeta || sourceMarks?.size) {
-                        const projection = normalizeDrawImageProjection(source, args, matrixSnapshotFromContext(this));
-                        if (projection) propagateTrackedPlushMarks(this, args, projection, directMeta);
-                    }
-                } catch (_) {}
-
-                return result;
-            };
-
-            try {
-                Object.defineProperty(wrappedDrawImage, "__SubbysPlushiesTrackedDrawImage", { value: true });
-                Object.defineProperty(wrappedDrawImage, "__SubbysPlushiesTrackingLabel", { value: label });
-                proto.drawImage = wrappedDrawImage;
-                installed = true;
-            } catch (e) {
-                warn(`Could not install plush draw tracking on ${label}:`, e);
-            }
-        } else {
-            installed = true;
-        }
-
-        const currentClearRect = proto.clearRect;
-        if (typeof currentClearRect === "function" && !currentClearRect.__SubbysPlushiesTrackedClearRect) {
-            const originalClearRect = currentClearRect;
-            const wrappedClearRect = function (...args) {
-                try {
-                    if (this?.canvas && trackedPlushCanvasMarks.has(this.canvas)) {
-                        trackedPlushCanvasMarks.delete(this.canvas);
-                    }
-                } catch (_) {}
-                return originalClearRect.apply(this, args);
-            };
-            try {
-                Object.defineProperty(wrappedClearRect, "__SubbysPlushiesTrackedClearRect", { value: true });
-                proto.clearRect = wrappedClearRect;
-            } catch (_) {}
-        }
-
-        return installed;
-    }
-
-    function installPlushBitmapTracking() {
-        let installed = false;
-
-        const offscreenProto = window.OffscreenCanvas?.prototype;
-        if (offscreenProto && typeof offscreenProto.transferToImageBitmap === "function") {
-            const current = offscreenProto.transferToImageBitmap;
-            if (!current.__SubbysPlushiesTrackedBitmapTransfer) {
-                const original = current;
-                const wrapped = function (...args) {
-                    const bitmap = original.apply(this, args);
-                    try { cloneTrackedPlushMarks(this, bitmap); } catch (_) {}
-                    return bitmap;
-                };
-                try {
-                    Object.defineProperty(wrapped, "__SubbysPlushiesTrackedBitmapTransfer", { value: true });
-                    offscreenProto.transferToImageBitmap = wrapped;
-                    installed = true;
-                } catch (_) {}
-            } else {
-                installed = true;
-            }
-        }
-
-        if (typeof window.createImageBitmap === "function" &&
-            !window.createImageBitmap.__SubbysPlushiesTrackedCreateImageBitmap) {
-            const originalCreateImageBitmap = window.createImageBitmap;
-            const wrappedCreateImageBitmap = function (source, ...args) {
-                const result = originalCreateImageBitmap.call(this, source, ...args);
-                if (!result || typeof result.then !== "function") return result;
-                return result.then(bitmap => {
-                    try { cloneTrackedPlushMarks(source, bitmap); } catch (_) {}
-                    return bitmap;
-                });
-            };
-            try {
-                Object.defineProperty(wrappedCreateImageBitmap, "__SubbysPlushiesTrackedCreateImageBitmap", { value: true });
-                window.createImageBitmap = wrappedCreateImageBitmap;
-                installed = true;
-            } catch (_) {}
-        } else if (typeof window.createImageBitmap === "function") {
-            installed = true;
-        }
-
-        return installed;
-    }
-
-    function installPlushCanvasTracking() {
-        if (plushCanvasTrackingInstalled) return true;
-
-        const backends = [];
-        if (installPlushTrackingOnContextPrototype(window.CanvasRenderingContext2D?.prototype, "CanvasRenderingContext2D")) {
-            backends.push("canvas");
-        }
-        if (installPlushTrackingOnContextPrototype(window.OffscreenCanvasRenderingContext2D?.prototype, "OffscreenCanvasRenderingContext2D")) {
-            backends.push("offscreen");
-        }
-        if (installPlushBitmapTracking()) backends.push("bitmap");
-
-        plushCanvasTrackingInstalled = backends.length > 0;
-        if (plushCanvasTrackingInstalled) {
-            log(`Installed exact plush canvas-position tracker (${backends.join(", ")}).`);
-        } else {
-            warn("No compatible canvas backend was available for exact plush position tracking.");
-        }
-        return plushCanvasTrackingInstalled;
-    }
-
-    function trackedPlushScreenBounds(C, item) {
-        if (!C || !isOurs(item)) return null;
-        const ctx = window.MainCanvas;
-        const canvas = ctx?.canvas || document.getElementById("MainCanvas");
-        const rect = canvas?.getBoundingClientRect?.();
-        if (!canvas || !rect || rect.width <= 0 || rect.height <= 0) return null;
-
-        const marks = trackedPlushCanvasMarks.get(canvas);
-        if (!marks?.size) return null;
-
-        const ownerKey = characterProjectionKey(C);
-        const groupName = item?.Asset?.Group?.Name || null;
-        const option = canonicalWirePlushOption(getItemPlushOption(item));
-        const signature = plushTransformSignature(item);
-        const now = Date.now();
-
-        const candidates = [...marks.values()]
-            .filter(mark => {
-                if (!mark?.bounds) return false;
-                if (mark.ownerKey && mark.ownerKey !== ownerKey) return false;
-                if (mark.groupName && groupName && mark.groupName !== groupName) return false;
-                if (Number.isInteger(mark.option) && validPlushOption(option) && mark.option !== option) return false;
-                return now - Number(mark.at || 0) < 5000;
-            })
-            .sort((a, b) => {
-                const exactGroupA = a.groupName === groupName ? 1 : 0;
-                const exactGroupB = b.groupName === groupName ? 1 : 0;
-                if (exactGroupA !== exactGroupB) return exactGroupB - exactGroupA;
-                const exactOptionA = a.option === option ? 1 : 0;
-                const exactOptionB = b.option === option ? 1 : 0;
-                if (exactOptionA !== exactOptionB) return exactOptionB - exactOptionA;
-                const exactTransformA = a.transformSignature === signature ? 1 : 0;
-                const exactTransformB = b.transformSignature === signature ? 1 : 0;
-                if (exactTransformA !== exactTransformB) return exactTransformB - exactTransformA;
-                return Number(b.at || 0) - Number(a.at || 0);
-            });
-
-        const mark = candidates[0];
-        if (!mark) return null;
-
-        const logicalWidth = Number(canvas.width) || 2000;
-        const logicalHeight = Number(canvas.height) || 1000;
-        const screenPoints = mark.bounds.points.map(point => ({
-            x: rect.left + (point.x / logicalWidth) * rect.width,
-            y: rect.top + (point.y / logicalHeight) * rect.height,
-        }));
-        return boundsFromCanvasPoints(screenPoints);
-    }
 
     function mapImageSource(source) {
         if (typeof source !== "string" || !imageMappings) return source;
@@ -13498,7 +13175,15 @@ function SubbysPlushiesPageMain() {
         if (typeof normalized !== "string") return source;
 
         const direct = imageMappings[normalized];
-        if (direct) return direct;
+        if (direct) {
+            const metaType = normalized.match(/(?:^|[_/])p(\d+)(?:[_./]|$)/i);
+            const metaLayer = normalized.match(/(?:^|[_/])Plush(\d+)(?:[_./]|$)/i);
+            const lazyIndex = metaType ? Number(metaType[1]) : (metaLayer ? Number(metaLayer[1]) - 1 : -1);
+            if (validPlushOption(lazyIndex) && renderImages[lazyIndex] === renderFallbackImage && PLUSH_IMAGES[lazyIndex] !== PLUSH_IMAGES[0]) {
+                void ensureRenderImage(lazyIndex);
+            }
+            return direct;
+        }
 
         const compactNormalized = normalized.replace(/[^a-z0-9]/gi, "").toLowerCase();
         let extraActivitySpec = null;
@@ -13528,7 +13213,8 @@ function SubbysPlushiesPageMain() {
         if (typeMatch) {
             const index = Number(typeMatch[1]);
             if (Number.isInteger(index) && index >= 0 && index < renderImages.length) {
-                return renderImages[index];
+                if (renderImages[index] === renderFallbackImage && PLUSH_IMAGES[index] !== PLUSH_IMAGES[0]) void ensureRenderImage(index);
+                return renderImages[index] || renderFallbackImage;
             }
         }
 
@@ -13536,7 +13222,8 @@ function SubbysPlushiesPageMain() {
         if (layerMatch) {
             const index = Number(layerMatch[1]) - 1;
             if (Number.isInteger(index) && index >= 0 && index < renderImages.length) {
-                return renderImages[index];
+                if (renderImages[index] === renderFallbackImage && PLUSH_IMAGES[index] !== PLUSH_IMAGES[0]) void ensureRenderImage(index);
+                return renderImages[index] || renderFallbackImage;
             }
         }
 
@@ -13575,7 +13262,6 @@ function SubbysPlushiesPageMain() {
                 if (!value.includes("SubbysPlushies") && !value.includes("subbysplushies")) {
                     return originalSet.call(this, value);
                 }
-                tagPlushImageElement(this, value);
                 return originalSet.call(this, mapImageSource(value));
             };
 
@@ -13603,8 +13289,7 @@ function SubbysPlushiesPageMain() {
             const wrappedSetAttribute = function (name, value) {
                 if ((name === "src" || name === "SRC") && typeof value === "string" &&
                     (value.includes("SubbysPlushies") || value.includes("subbysplushies"))) {
-                    tagPlushImageElement(this, value);
-                    return originalSetAttribute.call(this, name, mapImageSource(value));
+                        return originalSetAttribute.call(this, name, mapImageSource(value));
                 }
                 return originalSetAttribute.call(this, name, value);
             };
@@ -14558,6 +14243,7 @@ function SubbysPlushiesPageMain() {
         if (blockLockedPlushMutation(item, "change its character")) return false;
 
         const wireOption = publicToWirePlushOption(optionIndex);
+        void ensureRenderImage(wireOption);
         const previousWireOption = getItemPlushOption(item);
         const previousOption = wireToPublicPlushOption(previousWireOption);
 
@@ -14906,18 +14592,19 @@ function SubbysPlushiesPageMain() {
             modularArchetype: resolveModularArchetype(),
             performance: {
                 profile: "release-reviewed event-driven hot-path profile",
-                activityMonitorMs: ACTIVITY_MONITOR_INTERVAL_MS,
+                activityMonitorMode: "event-driven + one-minute integrity timeout",
                 activityFullIntegrityMs: ACTIVITY_INTEGRITY_INTERVAL_MS,
                 roomRosterMode: "event-driven + watchdog",
                 roomRosterWatchdogMs: ROOM_ROSTER_WATCHDOG_INTERVAL_MS,
                 roomRosterEventHooks: roomRosterEventHookCount,
-                chatObserverHealthMs: CHAT_OBSERVER_MONITOR_INTERVAL_MS,
+                chatObserverHealthMs: null,
+                chatObserverMode: installedHooks.has("ChatRoomAppendChat") ? "native ChatRoomAppendChat hook" : "MutationObserver fallback",
                 chatObserverCharacterData: false,
                 globalTextGetHook: false,
                 unrelatedActionFastPath: true,
                 activityRunShallowInspection: true,
                 activityTargetShallowInspection: true,
-                characterRefreshActivityScanRemoved: true,
+                characterRefreshActivitySync: true,
                 singleImageInterceptionPath: true,
                 bcImagePathHook: bcImagePathHookInstalled,
                 htmlImageSrcHook: imageElementSrcHookInstalled,
@@ -14955,6 +14642,8 @@ function SubbysPlushiesPageMain() {
                 petSuitCanvasFallbackActive: [...petSuitRenderStates.values()].filter(state => !!state?.active).length,
                 petSuitAssets: [...PET_SUIT_ASSET_NAMES],
                 prepared: renderImages.every(image => typeof image === "string"),
+                lazyPreparedSources: new Set(renderImages.filter(image => image && image !== renderFallbackImage)).size,
+                lazyLoadsInFlight: renderImagePromises.size,
                 mappingProbe: mapImageSource(renderProbe),
                 selectedTypeProbe,
                 selectedTypeMapped: selectedTypeProbe ? mapImageSource(selectedTypeProbe) : null,
@@ -15036,7 +14725,7 @@ function SubbysPlushiesPageMain() {
                 },
                 offerPrompt: {
                     nativeChatAppendAvailable: typeof window.ChatRoomAppendChat === "function",
-                    transportMode: "visible-action-chat-observer",
+                    transportMode: installedHooks.has("ChatRoomAppendChat") ? "native-chat-append-hook" : "visible-action-chat-observer-fallback",
                     chatObserverAttached: !!offerChatObserver && !!offerChatObservedRoot?.isConnected,
                     chatObserverAttachCount: offerChatObserverAttachCount,
                     chatRowsSeen: offerChatRowsSeen,
@@ -15292,18 +14981,18 @@ function SubbysPlushiesPageMain() {
         await waitForBC();
         checkDuplicateAsset();
 
-        startOfferChatObserverMonitor();
-
         initHookBackend();
         scheduleNativeCommandFallbackHook();
 
         await prepareRenderImages();
         setupNativeAsset();
         installPlushStateHooks();
+        startOfferChatObserverMonitor();
         installDirectDragHandlers();
         installDragToggleUi();
         installRoomMascotUiSafety();
         installRoomMascotAdminPicker();
+        installVisibilityPerformanceHooks();
         startPreferencesExtensionsIntegration();
         startHugTightlyActivityMonitor();
         scheduleNextIdleAnimation(3500);
@@ -15333,7 +15022,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "2.3.7.16";
+    const VERSION = "2.3.7.17";
     const BRIDGE_ATTR = "data-subbys-plushies-page-bridge";
     const BRIDGE_VALUE = `v${VERSION}`;
 

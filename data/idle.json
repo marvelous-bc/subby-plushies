@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pluginVersion": "2.3.7.16",
+  "pluginVersion": "2.3.7.17",
   "minDelayMs": 22000,
   "maxDelayMs": 48000,
   "frames": [
