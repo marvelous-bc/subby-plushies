@@ -1,8 +1,8 @@
 {
-  "version": "2.3.7.16",
+  "version": "2.3.7.17",
   "releaseDate": "2026-10-03",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
   "repositoryUrl": "https://github.com/marvelous-bc/subby-plushies",
-  "notes": "Performance optimization release: batched progress persistence, coalesced achievement checks, cached achievement metrics, compact interaction-day tracking, and lighter base-Cuddle detection. No newly added gameplay features removed.",
-  "sha256": "2c9c81c23d97e34bb3a0b8239723ff8de161189c0b806e755a6d9459f9f374b4"
+  "notes": "Lightweight runtime release: gated character projection work, one-shot mascot/status timers, event-driven UI/activity sync, fallback-only chat observer, hidden-tab pausing, lazy plush image preparation, and dead canvas-tracker removal. No gameplay features removed.",
+  "sha256": "6e96cd1a950d4228b3894826479014be3304e9876107083e93a5103f1d589a52"
 }
