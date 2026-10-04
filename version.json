@@ -1,8 +1,8 @@
 {
-  "version": "2.9.1",
+  "version": "2.9.2",
   "releaseDate": "2026-10-04",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
   "repositoryUrl": "https://github.com/marvelous-bc/subby-plushies",
-  "notes": "2.9.1: plugin-generated text uses native Bondage Club nicknames without BCX alias leakage, and hourly room mascot cycling uses a shared room-wide claim/lock so only one automatic cycle is accepted per hourly window regardless of how many addon users are present.",
-  "sha256": "55d4fd4a05fa95d4788f4aaf7fb79e68311ae79d714891131f6aa8b3f23feb32"
+  "notes": "2.9.2: adds DOGS Devious Padlock compatibility for both plushie slots while preserving DOGS lock ownership, key-holder rules, permissions, synchronization, and anti-removal behavior.",
+  "sha256": "abb74cfdc340f27d8c91b5cd5c35fa189d6e3590f63f8578e45fc30bbb925c96"
 }

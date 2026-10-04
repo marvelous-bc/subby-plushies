@@ -2,9 +2,9 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.3.7.18
+// @version      2.9.2
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
-// @released     2026-10-03
+// @released     2026-10-04
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -24,8 +24,8 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "2.3.7.18";
-    const BUILD_DATE = "2026-10-03";
+    const VERSION = "2.9.2";
+    const BUILD_DATE = "2026-10-04";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -33,6 +33,14 @@ function SubbysPlushiesPageMain() {
     const GROUP = "ItemHandheld";
     const ADDON_GROUP = "ItemAddon";
     const PLUSH_GROUPS = Object.freeze([GROUP, ADDON_GROUP]);
+    // DOGS (Devious Obligate Great Stuff) represents its custom Devious Padlock
+    // with a normal BC base lock plus Property.Name = "DeviousPadlock". DOGS'
+    // InventoryLock hook only writes that marker when the item argument is an
+    // Item object, not when callers pass a group-name string. The bridge below
+    // normalizes only our two plushie groups before DOGS sees the lock call.
+    const DOGS_DEVIOUS_PADLOCK_NAME = "DeviousPadlock";
+    const DOGS_COMPAT_HOOK_PRIORITY = 1000000;
+    const DOGS_COMPAT_SDK_RETRY_DELAYS_MS = Object.freeze([500, 1000, 2000, 4000, 8000, 16000, 30000]);
     const ASSET_NAME = "SubbysPlushies";
     const MODULE_KEY = "p";
     const PET_SUIT_ASSET_NAMES = new Set(["BitchSuit", "ShinyPetSuit", "PetCrawler"]);
@@ -285,9 +293,14 @@ function SubbysPlushiesPageMain() {
     const ROOM_MASCOT_CUSTOM_KEY = "SubbysPlushiesMascot";
     const ROOM_MASCOT_CYCLE_MS = 60 * 60 * 1000;
     const ROOM_MASCOT_CYCLE_SETTLE_MS = 15 * 1000;
+    const ROOM_MASCOT_CYCLE_CLAIM_CONTENT = "SubbysPlushiesMascotCycleClaim";
+    const ROOM_MASCOT_CYCLE_CLAIM_TAG = "SubbysPlushiesMascotCycleKey";
+    const ROOM_MASCOT_CYCLE_CLAIM_WAIT_MS = 3000;
+    const ROOM_MASCOT_CYCLE_CLAIM_TTL_MS = 30000;
     const ROOM_MASCOT_AFFECTION_MODIFIER = 1;
     const ROOM_MASCOT_CACHE_STORAGE_KEY = "SubbysPlushies:room-mascots:v1";
     const ROOM_MASCOT_POSITION_STORAGE_KEY = "SubbysPlushies:room-mascot-position:v1";
+    const ROOM_MASCOT_BASE_DEVICE_PIXEL_RATIO = Math.max(0.1, Number(window.devicePixelRatio) || 1);
     const DRAG_TOGGLE_POSITION_STORAGE_KEY = "SubbysPlushies:drag-toggle-position:v1";
     const DRAG_TARGET_GROUP_STORAGE_KEY = "SubbysPlushies:drag-target-group:v1";
     const PLUSH_EMOTE_SYNC_CONTENT_PREFIX = "SubbysPlushiesEmote:";
@@ -841,6 +854,8 @@ function SubbysPlushiesPageMain() {
 
     const renderImages = new Array(PLUSHES.length);
     const renderImagePromises = new Map();
+    const lazyNativeImageElementsBySource = new Map();
+    const lazyNativeImageSourceByElement = new WeakMap();
     let renderFallbackImage = null;
     let hugTightlyIconImage = null;
 
@@ -1020,6 +1035,9 @@ function SubbysPlushiesPageMain() {
     let roomMascotCycleTimer = null;
     let roomMascotCycleEligibleAt = 0;
     let roomMascotCyclePendingUntil = 0;
+    let roomMascotCycleClaimTimer = null;
+    let roomMascotCycleClaimKey = null;
+    const roomMascotCycleClaims = new Map();
     let queuedRoomMascotPublish = null;
     let queuedRoomMascotPublishTimer = null;
     let lastUpdateInfo = null;
@@ -1132,6 +1150,13 @@ function SubbysPlushiesPageMain() {
     let imageElementSetAttributeHookInstalled = false;
     let bcImagePathHookInstalled = null;
     let nativeCommandHookInstalled = false;
+    let dogsCompatibilityHookInstalled = false;
+    let dogsCompatibilitySdkHookInstalled = false;
+    let dogsCompatibilityBackend = "inactive";
+    let dogsCompatibilityFixCount = 0;
+    let lastDogsCompatibilityFix = null;
+    let dogsCompatibilityRetryTimer = null;
+    let dogsCompatibilityLateModApi = null;
     let plushieCommandAutocompleteState = null;
     let plushieCommandAutocompleteCache = null;
 
@@ -1190,6 +1215,187 @@ function SubbysPlushiesPageMain() {
         window[functionName] = wrapped;
         installedHooks.add(functionName);
         return true;
+    }
+
+    function dogsLockAssetName(lock) {
+        if (typeof lock === "string") return lock;
+        return lock?.Asset?.Name || lock?.Name || null;
+    }
+
+    function dogsAddonDetected() {
+        try {
+            if (typeof window.AssetGet === "function" &&
+                window.AssetGet(FAMILY, "ItemMisc", DOGS_DEVIOUS_PADLOCK_NAME)) return true;
+        } catch (_) {}
+
+        try {
+            const sdk = window.bcModSdk || window.bcModSDK;
+            const mods = typeof sdk?.getModsInfo === "function" ? sdk.getModsInfo() : null;
+            if (Array.isArray(mods) && mods.some(info => {
+                const name = String(info?.name || "").trim();
+                const fullName = String(info?.fullName || "").trim();
+                return name.toUpperCase() === "DOGS" || /Devious\s+Obligate\s+Great\s+Stuff/i.test(fullName);
+            })) return true;
+        } catch (_) {}
+
+        try {
+            if (window.Player?.DOGS) return true;
+            if (Array.isArray(window.ChatRoomCharacter) && window.ChatRoomCharacter.some(C => !!C?.DOGS)) return true;
+        } catch (_) {}
+        return false;
+    }
+
+    function dogsInventoryLockCompatibilityHandler(args, next) {
+        const C = args?.[0];
+        const itemOrGroup = args?.[1];
+        const lock = args?.[2];
+        if (dogsLockAssetName(lock) !== DOGS_DEVIOUS_PADLOCK_NAME) return next(args);
+
+        const groupName = typeof itemOrGroup === "string"
+            ? itemOrGroup
+            : itemOrGroup?.Asset?.Group?.Name;
+        if (!PLUSH_GROUPS.includes(groupName)) return next(args);
+
+        const item = typeof itemOrGroup === "string"
+            ? getInventoryItem(C, groupName)
+            : itemOrGroup;
+        if (!isOurs(item)) return next(args);
+
+        // DOGS' own InventoryLock hook preserves the custom lock marker only on
+        // object-form items. Convert the group-name overload to that form before
+        // handing control down the hook chain. BC supports both overloads.
+        const forwarded = Array.isArray(args) ? args.slice() : Array.from(args || []);
+        const convertedGroupToItem = typeof itemOrGroup === "string";
+        if (convertedGroupToItem) forwarded[1] = item;
+
+        const result = next(forwarded);
+        const property = getProperty(item);
+        let markerRestored = false;
+
+        // Normally DOGS sets this marker itself. This post-call guard covers a
+        // mixed load order where its hook ran but a later validator retained only
+        // the base BC lock. We never change LockedBy, ownership, key holders, or
+        // DOGS storage; this only restores DOGS' identifying marker on our item.
+        if (property && itemHasActiveLock(item) && property.Name !== DOGS_DEVIOUS_PADLOCK_NAME) {
+            property.Name = DOGS_DEVIOUS_PADLOCK_NAME;
+            markerRestored = true;
+        }
+
+        dogsCompatibilityFixCount++;
+        lastDogsCompatibilityFix = {
+            groupName,
+            convertedGroupToItem,
+            markerRestored,
+            lockedBy: property?.LockedBy || null,
+            lockMemberNumber: property?.LockMemberNumber ?? null,
+            at: new Date().toISOString(),
+        };
+
+        // If the marker had to be repaired locally, publish the corrected item on
+        // the next task. DOGS' normal path does not need this extra update.
+        if (markerRestored && C === window.Player && window.CurrentScreen === "ChatRoom") {
+            window.setTimeout(() => {
+                try {
+                    const current = getInventoryItem(window.Player, groupName);
+                    if (isOurs(current) && current?.Property?.Name === DOGS_DEVIOUS_PADLOCK_NAME &&
+                        typeof window.ChatRoomCharacterUpdate === "function") {
+                        window.ChatRoomCharacterUpdate(window.Player);
+                    }
+                } catch (_) {}
+            }, 0);
+        }
+
+        return result;
+    }
+
+    function installDogsCompatibilitySdkHook(api, label = "SDK") {
+        if (dogsCompatibilitySdkHookInstalled || !api || typeof api.hookFunction !== "function") return false;
+        try {
+            api.hookFunction("InventoryLock", DOGS_COMPAT_HOOK_PRIORITY, (args, next) =>
+                dogsInventoryLockCompatibilityHandler(args, next));
+            dogsCompatibilitySdkHookInstalled = true;
+            dogsCompatibilityHookInstalled = true;
+            dogsCompatibilityBackend = label;
+            installedHooks.add("InventoryLock");
+            log(`DOGS Devious Padlock compatibility installed (${label}).`);
+            return true;
+        } catch (e) {
+            warn("DOGS compatibility SDK hook could not be installed:", e);
+            return false;
+        }
+    }
+
+    function scheduleLateDogsCompatibilitySdkUpgrade(attempt = 0) {
+        if (dogsCompatibilitySdkHookInstalled || modApi || attempt >= DOGS_COMPAT_SDK_RETRY_DELAYS_MS.length) return false;
+        if (dogsCompatibilityRetryTimer != null) return true;
+
+        dogsCompatibilityRetryTimer = window.setTimeout(() => {
+            dogsCompatibilityRetryTimer = null;
+            if (dogsCompatibilitySdkHookInstalled || modApi) return;
+
+            const sdk = window.bcModSdk || window.bcModSDK;
+            if (sdk && typeof sdk.registerMod === "function") {
+                try {
+                    dogsCompatibilityLateModApi = sdk.registerMod({
+                        name: `${MOD_NAME}DOGSCompat`,
+                        fullName: `${DISPLAY_NAME} — DOGS compatibility`,
+                        version: VERSION,
+                        repository: "https://github.com/marvelous-bc/subby-plushies",
+                    });
+                    if (installDogsCompatibilitySdkHook(
+                        dogsCompatibilityLateModApi,
+                        "late SDK high-priority bridge"
+                    )) return;
+                } catch (_) {
+                    // The main addon may have registered between retries. Try its
+                    // API if available, otherwise keep the direct fallback.
+                    if (modApi && installDogsCompatibilitySdkHook(modApi, "main SDK high-priority bridge")) return;
+                }
+            }
+            scheduleLateDogsCompatibilitySdkUpgrade(attempt + 1);
+        }, DOGS_COMPAT_SDK_RETRY_DELAYS_MS[attempt]);
+        return true;
+    }
+
+    function installDogsCompatibilityBridge() {
+        if (modApi && typeof modApi.hookFunction === "function") {
+            return installDogsCompatibilitySdkHook(modApi, "SDK high-priority bridge");
+        }
+
+        const directInstalled = installHook(
+            "InventoryLock",
+            DOGS_COMPAT_HOOK_PRIORITY,
+            dogsInventoryLockCompatibilityHandler
+        );
+        dogsCompatibilityHookInstalled = directInstalled;
+        dogsCompatibilityBackend = directInstalled
+            ? "direct wrapper + late SDK upgrade"
+            : "unavailable";
+        scheduleLateDogsCompatibilitySdkUpgrade();
+        return directInstalled;
+    }
+
+    function dogsCompatibilityDebugSnapshot() {
+        const equipped = getEquippedPlushItems(window.Player).map(item => ({
+            group: item?.Asset?.Group?.Name || null,
+            marker: item?.Property?.Name || null,
+            lockedBy: item?.Property?.LockedBy || null,
+            lockMemberNumber: item?.Property?.LockMemberNumber ?? null,
+            hasLockEffect: Array.isArray(item?.Property?.Effect) && item.Property.Effect.includes("Lock"),
+        }));
+        return {
+            detected: dogsAddonDetected(),
+            deviousPadlockAsset: (() => {
+                try { return !!window.AssetGet?.(FAMILY, "ItemMisc", DOGS_DEVIOUS_PADLOCK_NAME); } catch (_) { return false; }
+            })(),
+            hookInstalled: dogsCompatibilityHookInstalled,
+            sdkPriorityHookInstalled: dogsCompatibilitySdkHookInstalled,
+            backend: dogsCompatibilityBackend,
+            hookPriority: DOGS_COMPAT_HOOK_PRIORITY,
+            fixCount: dogsCompatibilityFixCount,
+            lastFix: lastDogsCompatibilityFix,
+            equipped,
+        };
     }
 
     function readLocalJSON(key, fallback) {
@@ -5611,12 +5817,14 @@ function SubbysPlushiesPageMain() {
         const member = Number(raw?.memberNumber);
         const nextCycleAt = Number(raw?.nextCycleAt);
         const affectionModifier = Number(raw?.affectionModifier);
+        const lastAutoCycleKey = typeof raw?.lastAutoCycleKey === "string" ? raw.lastAutoCycleKey : null;
         return {
             name: known,
             setBy: typeof raw?.setBy === "string" && raw.setBy.trim() ? raw.setBy.trim() : "room admin",
             memberNumber: Number.isFinite(member) ? member : null,
             at: typeof raw?.at === "string" ? raw.at : null,
             nextCycleAt: Number.isFinite(nextCycleAt) ? nextCycleAt : null,
+            lastAutoCycleKey,
             affectionModifier: Number.isFinite(affectionModifier) ? affectionModifier : ROOM_MASCOT_AFFECTION_MODIFIER,
             shared: true,
         };
@@ -5696,6 +5904,7 @@ function SubbysPlushiesPageMain() {
                 memberNumber: Number(window.Player?.MemberNumber) || null,
                 at: state.at || new Date().toISOString(),
                 nextCycleAt: Number.isFinite(Number(state.nextCycleAt)) ? Number(state.nextCycleAt) : Date.now() + ROOM_MASCOT_CYCLE_MS,
+                lastAutoCycleKey: typeof state.lastAutoCycleKey === "string" ? state.lastAutoCycleKey : null,
                 affectionModifier: Number.isFinite(Number(state.affectionModifier)) ? Number(state.affectionModifier) : ROOM_MASCOT_AFFECTION_MODIFIER,
             };
         } else {
@@ -5756,26 +5965,90 @@ function SubbysPlushiesPageMain() {
         return publishRoomMascotSharedStateNow(state);
     }
 
-    function roomMascotCycleAdminMembers() {
-        pruneAddonPresence();
-        const admins = new Set(roomAdminMembers());
-        const members = new Set();
+    function pruneRoomMascotCycleClaims() {
+        const now = Date.now();
+        const present = new Set((Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [])
+            .map(C => Number(C?.MemberNumber))
+            .filter(Number.isFinite));
         const playerMember = Number(window.Player?.MemberNumber);
-        if (Number.isFinite(playerMember) && admins.has(playerMember)) members.add(playerMember);
-        for (const C of Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : []) {
-            const member = Number(C?.MemberNumber);
-            if (!Number.isFinite(member) || !admins.has(member) || !characterHasAddonPresence(C)) continue;
-            members.add(member);
+        if (Number.isFinite(playerMember)) present.add(playerMember);
+        for (const [key, claims] of [...roomMascotCycleClaims.entries()]) {
+            for (const [member, at] of [...claims.entries()]) {
+                if (!present.has(member) || now - Number(at || 0) > ROOM_MASCOT_CYCLE_CLAIM_TTL_MS) claims.delete(member);
+            }
+            if (!claims.size) roomMascotCycleClaims.delete(key);
         }
-        return [...members].sort((a, b) => a - b);
     }
 
-    function playerIsRoomMascotCycleLeader() {
-        if (!canSetRoomMascot()) return false;
+    function roomMascotCycleKey(dueAt) {
+        const roomKey = currentRoomMascotCacheKey() || String(window.ChatRoomData?.Name || "room");
+        return `${roomKey}|${Math.trunc(Number(dueAt) || 0)}`;
+    }
+
+    function rememberRoomMascotCycleClaim(key, memberNumber, at = Date.now()) {
+        const cleanKey = String(key || "").trim();
+        const member = Number(memberNumber);
+        if (!cleanKey || !Number.isFinite(member) || !isRoomAdminMember(member)) return false;
+        pruneRoomMascotCycleClaims();
+        let claims = roomMascotCycleClaims.get(cleanKey);
+        if (!claims) {
+            claims = new Map();
+            roomMascotCycleClaims.set(cleanKey, claims);
+        }
+        claims.set(member, Number(at) || Date.now());
+        return true;
+    }
+
+    function processRoomMascotCycleClaimPacket(data) {
+        if (!data || data.Type !== "Hidden" || data.Content !== ROOM_MASCOT_CYCLE_CLAIM_CONTENT) return false;
+        const sender = Number(data.Sender);
+        const key = getDictionaryText(data, ROOM_MASCOT_CYCLE_CLAIM_TAG);
+        if (!Number.isFinite(sender) || !key || !isRoomAdminMember(sender)) return true;
+        rememberRoomMascotCycleClaim(key, sender);
+        return true;
+    }
+
+    function sendRoomMascotCycleClaim(key) {
+        if (!canSetRoomMascot() || typeof window.ServerSend !== "function" || window.CurrentScreen !== "ChatRoom") return false;
+        const member = Number(window.Player?.MemberNumber);
+        if (!Number.isFinite(member)) return false;
+        rememberRoomMascotCycleClaim(key, member);
+        try {
+            window.ServerSend("ChatRoomChat", {
+                Content: ROOM_MASCOT_CYCLE_CLAIM_CONTENT,
+                Type: "Hidden",
+                Dictionary: [{ Tag: ROOM_MASCOT_CYCLE_CLAIM_TAG, Text: String(key) }],
+            });
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function roomMascotCycleWinner(key) {
+        pruneRoomMascotCycleClaims();
+        const claims = roomMascotCycleClaims.get(String(key || ""));
+        if (!claims?.size) return null;
+        const present = new Set((Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [])
+            .map(C => Number(C?.MemberNumber))
+            .filter(Number.isFinite));
         const playerMember = Number(window.Player?.MemberNumber);
-        if (!Number.isFinite(playerMember)) return false;
-        const candidates = roomMascotCycleAdminMembers();
-        return candidates.length > 0 && candidates[0] === playerMember;
+        if (Number.isFinite(playerMember)) present.add(playerMember);
+        const candidates = [...claims.keys()]
+            .filter(member => present.has(member) && isRoomAdminMember(member))
+            .sort((a, b) => a - b);
+        return candidates.length ? candidates[0] : null;
+    }
+
+    function stableMascotCycleIndex(key, length) {
+        if (!(length > 0)) return 0;
+        const input = String(key || "room mascot");
+        let hash = 2166136261;
+        for (let i = 0; i < input.length; i++) {
+            hash ^= input.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0) % length;
     }
 
     function roomMascotCycleDueAt(state = roomMascotState) {
@@ -5785,29 +6058,86 @@ function SubbysPlushiesPageMain() {
         return Number.isFinite(setAt) ? setAt + ROOM_MASCOT_CYCLE_MS : 0;
     }
 
-    function maybeCycleRoomMascotHourly() {
+    function finalizeRoomMascotCycleClaim(key) {
+        if (roomMascotCycleClaimTimer != null) window.clearTimeout(roomMascotCycleClaimTimer);
+        roomMascotCycleClaimTimer = null;
+        if (roomMascotCycleClaimKey === key) roomMascotCycleClaimKey = null;
         if (!getFeatureSettings().hourlyMascotCycle || window.CurrentScreen !== "ChatRoom") return false;
-        const now = Date.now();
-        if (now < roomMascotCycleEligibleAt || now < roomMascotCyclePendingUntil) return false;
-        if (!playerIsRoomMascotCycleLeader()) return false;
 
+        const now = Date.now();
         const shared = roomMascotFromSharedRoomData();
-        if (shared) roomMascotState = shared;
-        const dueAt = roomMascotCycleDueAt(shared || roomMascotState);
-        if (dueAt > now) return false;
+        if (!shared) {
+            roomMascotCyclePendingUntil = now + 60000;
+            scheduleRoomMascotCycleCheck();
+            return false;
+        }
+        roomMascotState = shared;
+        const state = shared;
+        const dueAt = roomMascotCycleDueAt(state);
+        const currentKey = roomMascotCycleKey(dueAt);
+        if (!dueAt || dueAt > now || currentKey !== key || state?.lastAutoCycleKey === key) {
+            scheduleRoomMascotCycleCheck();
+            return false;
+        }
+
+        const winner = roomMascotCycleWinner(key);
+        const playerMember = Number(window.Player?.MemberNumber);
+        if (!Number.isFinite(winner) || winner !== playerMember) {
+            // Give the elected client time to publish the room update before any
+            // retry. This prevents several addon users from taking turns cycling.
+            roomMascotCyclePendingUntil = now + 30000;
+            scheduleRoomMascotCycleCheck();
+            return false;
+        }
 
         roomMascotCyclePendingUntil = now + 12000;
-        return pickRandomRoomMascot({
+        const changed = pickRandomRoomMascot({
             hourlyCycle: true,
-            excludeName: roomMascotState?.name || null,
+            excludeName: state?.name || null,
             nextCycleAt: now + ROOM_MASCOT_CYCLE_MS,
+            cycleKey: key,
         });
+        scheduleRoomMascotCycleCheck();
+        return changed;
+    }
+
+    function maybeCycleRoomMascotHourly() {
+        if (!getFeatureSettings().hourlyMascotCycle || window.CurrentScreen !== "ChatRoom" || !canSetRoomMascot()) return false;
+        const now = Date.now();
+        if (now < roomMascotCycleEligibleAt || now < roomMascotCyclePendingUntil) return false;
+
+        const shared = roomMascotFromSharedRoomData();
+        if (!shared) {
+            roomMascotCyclePendingUntil = now + 60000;
+            scheduleRoomMascotCycleCheck();
+            return false;
+        }
+        roomMascotState = shared;
+        const state = shared;
+        const dueAt = roomMascotCycleDueAt(state);
+        if (!dueAt || dueAt > now) return false;
+        const key = roomMascotCycleKey(dueAt);
+        if (state?.lastAutoCycleKey === key) return false;
+        if (roomMascotCycleClaimKey === key && roomMascotCycleClaimTimer != null) return false;
+
+        roomMascotCycleClaimKey = key;
+        roomMascotCyclePendingUntil = now + ROOM_MASCOT_CYCLE_CLAIM_WAIT_MS + 1000;
+        sendRoomMascotCycleClaim(key);
+        roomMascotCycleClaimTimer = window.setTimeout(
+            () => finalizeRoomMascotCycleClaim(key),
+            ROOM_MASCOT_CYCLE_CLAIM_WAIT_MS
+        );
+        return true;
     }
 
     function stopRoomMascotCycleMonitor() {
         if (roomMascotCycleTimer != null) window.clearTimeout(roomMascotCycleTimer);
+        if (roomMascotCycleClaimTimer != null) window.clearTimeout(roomMascotCycleClaimTimer);
         roomMascotCycleTimer = null;
+        roomMascotCycleClaimTimer = null;
+        roomMascotCycleClaimKey = null;
         roomMascotCyclePendingUntil = 0;
+        roomMascotCycleClaims.clear();
         return true;
     }
 
@@ -5822,11 +6152,8 @@ function SubbysPlushiesPageMain() {
         const dueAt = roomMascotCycleDueAt(shared || roomMascotState);
         let targetAt = Math.max(roomMascotCycleEligibleAt || now, roomMascotCyclePendingUntil || 0);
         if (dueAt > now) targetAt = Math.max(targetAt, dueAt);
-        else if (!playerIsRoomMascotCycleLeader()) {
-            targetAt = Math.max(targetAt, now + performanceInterval(60 * 1000, 3 * 60 * 1000));
-        } else {
-            targetAt = Math.max(targetAt, now + 250);
-        }
+        else if (!canSetRoomMascot()) targetAt = Math.max(targetAt, now + performanceInterval(60 * 1000, 3 * 60 * 1000));
+        else targetAt = Math.max(targetAt, now + 250);
 
         roomMascotCycleTimer = window.setTimeout(() => {
             roomMascotCycleTimer = null;
@@ -5982,13 +6309,21 @@ function SubbysPlushiesPageMain() {
             roomMascotOverlayImage = image;
             roomMascotOverlayLabel = label;
         }
-        const viewportScale = Math.max(0.52, Math.min(1, Math.min(rect.width / 1000, rect.height / 760)));
-        const overlayWidth = Math.round(72 * viewportScale);
-        const padding = Math.max(3, Math.round(6 * viewportScale));
-        const imageSize = Math.max(30, overlayWidth - padding * 2);
-        const fontSize = Math.max(9, Math.round(13 * viewportScale));
+        // Keep the mascot's apparent size stable when the browser zoom level
+        // changes. devicePixelRatio tracks desktop browser zoom in Chromium/
+        // Firefox; neutralize that factor before applying responsive canvas size.
+        const currentDpr = Math.max(0.1, Number(window.devicePixelRatio) || ROOM_MASCOT_BASE_DEVICE_PIXEL_RATIO);
+        const browserZoomRatio = currentDpr / ROOM_MASCOT_BASE_DEVICE_PIXEL_RATIO;
+        const zoomNeutralWidth = rect.width * browserZoomRatio;
+        const zoomNeutralHeight = rect.height * browserZoomRatio;
+        const viewportScale = Math.max(0.52, Math.min(1, Math.min(zoomNeutralWidth / 1000, zoomNeutralHeight / 760)));
+        const zoomCssCompensation = 1 / browserZoomRatio;
+        const overlayWidth = Math.max(38, Math.round(72 * viewportScale * zoomCssCompensation));
+        const padding = Math.max(2, Math.round(6 * viewportScale * zoomCssCompensation));
+        const imageSize = Math.max(24, overlayWidth - padding * 2);
+        const fontSize = Math.max(7, Math.round(13 * viewportScale * zoomCssCompensation));
         const rawLeft = rect.left + mascotPosition.x * rect.width - overlayWidth / 2;
-        const estimatedHeight = overlayWidth + Math.max(18, Math.round(31 * viewportScale));
+        const estimatedHeight = overlayWidth + Math.max(12, Math.round(31 * viewportScale * zoomCssCompensation));
         const rawTop = rect.top + mascotPosition.y * rect.height - estimatedHeight / 2;
         const left = Math.max(rect.left + 2, Math.min(rect.right - overlayWidth - 2, rawLeft));
         const top = Math.max(rect.top + 2, Math.min(rect.bottom - estimatedHeight - 2, rawTop));
@@ -6005,7 +6340,7 @@ function SubbysPlushiesPageMain() {
         Object.assign(roomMascotOverlayImage.style, {
             width: `${imageSize}px`,
             height: `${imageSize}px`,
-            marginBottom: `${Math.max(2, Math.round(4 * viewportScale))}px`,
+            marginBottom: `${Math.max(1, Math.round(4 * viewportScale * zoomCssCompensation))}px`,
         });
         const index = mascotRenderIndex(roomMascotState.name);
         const imageSource = index >= 0 ? uiPlushImageSource(index) : uiPlushImageSource(0);
@@ -6054,6 +6389,7 @@ function SubbysPlushiesPageMain() {
             memberNumber: Number(window.Player?.MemberNumber) || null,
             at: new Date().toISOString(),
             nextCycleAt: Number.isFinite(nextCycleAt) ? nextCycleAt : Date.now() + ROOM_MASCOT_CYCLE_MS,
+            lastAutoCycleKey: hourlyCycle && typeof options?.cycleKey === "string" ? options.cycleKey : null,
             affectionModifier: ROOM_MASCOT_AFFECTION_MODIFIER,
             shared: true,
         };
@@ -6109,11 +6445,16 @@ function SubbysPlushiesPageMain() {
             appendLocalInfoBox("Room mascot", ["No plushies are available to choose from."]);
             return false;
         }
-        const selected = choices[Math.floor(Math.random() * choices.length)];
+        const cycleKey = typeof options?.cycleKey === "string" ? options.cycleKey : null;
+        const selectedIndex = cycleKey
+            ? stableMascotCycleIndex(cycleKey, choices.length)
+            : Math.floor(Math.random() * choices.length);
+        const selected = choices[selectedIndex];
         return setRoomMascotByOption(selected.option, {
             randomPick: true,
             hourlyCycle: !!options?.hourlyCycle,
             nextCycleAt: Number(options?.nextCycleAt),
+            cycleKey,
         });
     }
 
@@ -6354,6 +6695,7 @@ function SubbysPlushiesPageMain() {
                 memberNumber: senderMember,
                 at: new Date().toISOString(),
                 nextCycleAt: Date.now() + ROOM_MASCOT_CYCLE_MS,
+                lastAutoCycleKey: null,
                 affectionModifier: ROOM_MASCOT_AFFECTION_MODIFIER,
                 shared: true,
             };
@@ -6371,6 +6713,7 @@ function SubbysPlushiesPageMain() {
             memberNumber: senderMember,
             at: new Date().toISOString(),
             nextCycleAt: Date.now() + ROOM_MASCOT_CYCLE_MS,
+            lastAutoCycleKey: null,
             affectionModifier: ROOM_MASCOT_AFFECTION_MODIFIER,
             shared: true,
         };
@@ -8944,12 +9287,19 @@ function SubbysPlushiesPageMain() {
         return { sourceMember, targetMember, sourceName, targetName };
     }
 
+    // Text generated by Subby's Plushies uses BC's native nickname when one is
+    // set, then falls back to the character/account name. We deliberately read
+    // the character data directly instead of CharacterNickname(), because BCX
+    // can hook that helper and substitute a local alias that other players do
+    // not share. Aliases are still accepted for target searching only.
     function getCharacterDisplayName(C) {
         if (!C) return null;
-        try {
-            if (typeof CharacterNickname === "function") return CharacterNickname(C);
-        } catch (_) {}
-        return C.Nickname || C.Name || null;
+        const nickname = typeof C?.Nickname === "string" ? C.Nickname.trim() : "";
+        if (nickname) return nickname;
+        const name = typeof C?.Name === "string" ? C.Name.trim() : "";
+        if (name) return name;
+        const accountName = typeof C?.AccountName === "string" ? C.AccountName.trim() : "";
+        return accountName || null;
     }
 
     function characterPronouns(C) {
@@ -9752,7 +10102,10 @@ function SubbysPlushiesPageMain() {
     }
 
     function formatOfferCharacterLabel(name, memberNumber) {
-        const cleanName = String(name || "Someone").trim() || "Someone";
+        const canonical = Number.isFinite(memberNumber)
+            ? getCharacterDisplayName(getRoomCharacterByMember(Number(memberNumber)))
+            : null;
+        const cleanName = String(canonical || name || "Someone").trim() || "Someone";
         return Number.isFinite(memberNumber)
             ? `${cleanName}(${memberNumber})`
             : cleanName;
@@ -9787,7 +10140,7 @@ function SubbysPlushiesPageMain() {
                     if (!normalized) continue;
                     if (rendered === normalized || rendered.endsWith(`(${normalized}`) || rendered.endsWith(normalized)) {
                         if (!best || normalized.length > best.normalized.length) {
-                            best = { name: String(candidate), member: C.MemberNumber, normalized };
+                            best = { name: getCharacterDisplayName(C) || String(candidate), member: C.MemberNumber, normalized };
                         }
                     }
                 }
@@ -11055,9 +11408,7 @@ function SubbysPlushiesPageMain() {
     }
 
     function makeHugTightlyNetworkAction(originalData) {
-        const sourceName = typeof CharacterNickname === "function"
-            ? CharacterNickname(window.Player)
-            : (window.Player?.Nickname || window.Player?.Name || "Someone");
+        const sourceName = getCharacterDisplayName(window.Player) || "Someone";
         const member = Number.isFinite(window.Player?.MemberNumber) ? window.Player.MemberNumber : "local";
         const token = `${member}:${Date.now()}:${++hugTightlyEventSequence}`;
 
@@ -11127,6 +11478,10 @@ function SubbysPlushiesPageMain() {
     function itemHasActiveLock(item) {
         const property = item?.Property;
         if (!property || typeof property !== "object") return false;
+        // DOGS intentionally keeps a normal BC base lock in LockedBy while
+        // Property.Name identifies the custom Devious Padlock. Treat that marker
+        // as locked even during a transient BC effect refresh.
+        if (property.Name === DOGS_DEVIOUS_PADLOCK_NAME) return true;
         try {
             if (typeof window.InventoryItemHasEffect === "function" && window.InventoryItemHasEffect(item, "Lock", true)) return true;
         } catch (_) {}
@@ -12095,6 +12450,7 @@ function SubbysPlushiesPageMain() {
         const actionMessageHooked = installHook("ChatRoomMessage", 10000, (args, next) => {
             const data = args?.[0];
             if (processAddonPresencePacket(data)) return next(args);
+            if (processRoomMascotCycleClaimPacket(data)) return next(args);
             if (processOfferDecisionSignal(data)) return next(args);
 
             const hiddenBattleData = data?.Type === "Hidden" ? battleDataFromAction(data) : null;
@@ -12149,6 +12505,7 @@ function SubbysPlushiesPageMain() {
                         memberNumber: Number(window.Player?.MemberNumber) || null,
                         at: roomMascotState.at || new Date().toISOString(),
                         nextCycleAt: Number.isFinite(Number(roomMascotState.nextCycleAt)) ? Number(roomMascotState.nextCycleAt) : Date.now() + ROOM_MASCOT_CYCLE_MS,
+                        lastAutoCycleKey: typeof roomMascotState.lastAutoCycleKey === "string" ? roomMascotState.lastAutoCycleKey : null,
                         affectionModifier: Number.isFinite(Number(roomMascotState.affectionModifier)) ? Number(roomMascotState.affectionModifier) : ROOM_MASCOT_AFFECTION_MODIFIER,
                     };
                 } else if (roomMascotAdminDirty) {
@@ -12937,6 +13294,7 @@ function SubbysPlushiesPageMain() {
             }
             const resolved = image || renderFallbackImage || renderImages[0] || makeTransparentRenderFallback();
             for (const index of renderIndexesForSource(source)) renderImages[index] = resolved;
+            refreshTrackedNativeImageElements(source, resolved);
             if (refreshConsumers && image) refreshLazyRenderConsumers(source);
             return resolved;
         })().finally(() => renderImagePromises.delete(source));
@@ -13187,6 +13545,60 @@ function SubbysPlushiesPageMain() {
     }
 
 
+    function plushOptionFromNativeImagePath(source) {
+        const normalized = normalizeAssetImagePath(source);
+        if (typeof normalized !== "string" || !normalized.includes(ASSET_NAME)) return -1;
+        const typeMatch = normalized.match(/(?:^|[_/])p(\d+)(?:[_./]|$)/i);
+        if (typeMatch) {
+            const index = Number(typeMatch[1]);
+            return validPlushOption(index) ? index : -1;
+        }
+        const layerMatch = normalized.match(/(?:^|[_/])Plush(\d+)(?:[_./]|$)/i);
+        if (layerMatch) {
+            const index = Number(layerMatch[1]) - 1;
+            return validPlushOption(index) ? index : -1;
+        }
+        return -1;
+    }
+
+    function trackLazyNativeImageElement(image, requestedSource) {
+        if (!image || typeof requestedSource !== "string") return -1;
+        const option = plushOptionFromNativeImagePath(requestedSource);
+        if (!validPlushOption(option)) return -1;
+        const source = PLUSH_IMAGES[option];
+        if (!source || source === PLUSH_IMAGES[0]) return option;
+
+        lazyNativeImageSourceByElement.set(image, source);
+        let images = lazyNativeImageElementsBySource.get(source);
+        if (!images) {
+            images = new Set();
+            lazyNativeImageElementsBySource.set(source, images);
+        }
+        images.add(image);
+        return option;
+    }
+
+    function refreshTrackedNativeImageElements(source, resolvedImage) {
+        const images = lazyNativeImageElementsBySource.get(source);
+        if (!images?.size || typeof resolvedImage !== "string" || !resolvedImage) return false;
+        let changed = false;
+        for (const image of [...images]) {
+            if (!image || lazyNativeImageSourceByElement.get(image) !== source) {
+                images.delete(image);
+                continue;
+            }
+            try {
+                // resolvedImage is a data URL, so the source hook passes it through
+                // untouched. This updates BC's already-cached Image object in place.
+                image.src = resolvedImage;
+                changed = true;
+            } catch (_) {}
+            images.delete(image);
+        }
+        if (!images.size) lazyNativeImageElementsBySource.delete(source);
+        return changed;
+    }
+
     function mapImageSource(source) {
         if (typeof source !== "string" || !imageMappings) return source;
 
@@ -13288,7 +13700,12 @@ function SubbysPlushiesPageMain() {
             const wrappedSet = function (value) {
                 if (typeof value !== "string") return originalSet.call(this, value);
                 if (!value.includes("SubbysPlushies") && !value.includes("subbysplushies")) {
+                    try { lazyNativeImageSourceByElement.delete(this); } catch (_) {}
                     return originalSet.call(this, value);
+                }
+                const lazyOption = trackLazyNativeImageElement(this, value);
+                if (validPlushOption(lazyOption) && renderImages[lazyOption] === renderFallbackImage && PLUSH_IMAGES[lazyOption] !== PLUSH_IMAGES[0]) {
+                    void ensureRenderImage(lazyOption);
                 }
                 return originalSet.call(this, mapImageSource(value));
             };
@@ -13317,7 +13734,14 @@ function SubbysPlushiesPageMain() {
             const wrappedSetAttribute = function (name, value) {
                 if ((name === "src" || name === "SRC") && typeof value === "string" &&
                     (value.includes("SubbysPlushies") || value.includes("subbysplushies"))) {
+                        const lazyOption = trackLazyNativeImageElement(this, value);
+                        if (validPlushOption(lazyOption) && renderImages[lazyOption] === renderFallbackImage && PLUSH_IMAGES[lazyOption] !== PLUSH_IMAGES[0]) {
+                            void ensureRenderImage(lazyOption);
+                        }
                         return originalSetAttribute.call(this, name, mapImageSource(value));
+                }
+                if (name === "src" || name === "SRC") {
+                    try { lazyNativeImageSourceByElement.delete(this); } catch (_) {}
                 }
                 return originalSetAttribute.call(this, name, value);
             };
@@ -14238,9 +14662,7 @@ function SubbysPlushiesPageMain() {
                 return;
             }
 
-            const sourceName = typeof CharacterNickname === "function"
-                ? CharacterNickname(C)
-                : (C?.Nickname || C?.Name || "Character");
+            const sourceName = getCharacterDisplayName(C) || "Character";
 
             const message = `${sourceName} has swapped her plushie to ${plushName}.`;
 
@@ -14615,6 +15037,7 @@ function SubbysPlushiesPageMain() {
             startupError: startupError ? String(startupError) : null,
             hookBackend,
             installedHooks: [...installedHooks],
+            dogsCompatibility: dogsCompatibilityDebugSnapshot(),
             assetAddStrategy,
             modularRegistrationStrategy,
             modularArchetype: resolveModularArchetype(),
@@ -15010,6 +15433,7 @@ function SubbysPlushiesPageMain() {
         checkDuplicateAsset();
 
         initHookBackend();
+        installDogsCompatibilityBridge();
         scheduleNativeCommandFallbackHook();
 
         await prepareRenderImages();
@@ -15050,7 +15474,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "2.3.7.17";
+    const VERSION = "2.9.2";
     const BRIDGE_ATTR = "data-subbys-plushies-page-bridge";
     const BRIDGE_VALUE = `v${VERSION}`;
 
