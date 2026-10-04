@@ -2,13 +2,13 @@
 // @name         BC - Subby's Plushies Launcher
 // @namespace    subbycat.subbysplushies.launcher
 // @author       Marvelous
-// @version      2.3.7.13
+// @version      2.3.7.18
 // @description  Thin auto-update launcher for Subby's Plushies. Loads the matching full build from GitHub.
 // @homepageURL  https://github.com/marvelous-bc/subby-plushies
 // @supportURL   https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL    https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js
 // @downloadURL  https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js
-// @require      https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js?launcher=2.3.7.13
+// @require      https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js?launcher=2.3.7.18
 // @match        https://bondageprojects.elementfx.com/R*
 // @match        https://www.bondageprojects.elementfx.com/R*
 // @match        https://bondageeurope.com/*/BondageClub/*
@@ -25,7 +25,7 @@
 (() => {
     "use strict";
     const tag = "[Subby's Plushies Launcher]";
-    const expected = "2.3.7.13";
+    const expected = "2.3.7.18";
     window.setTimeout(() => {
         const api = window.SubbysPlushies;
         const active = String(api?.version || window.__SUBBYS_PLUSHIES_ACTIVE__ || "");

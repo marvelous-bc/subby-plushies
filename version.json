@@ -1,8 +1,8 @@
 {
-  "version": "2.9.0",
+  "version": "2.3.7.18",
   "releaseDate": "2026-10-03",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
   "repositoryUrl": "https://github.com/marvelous-bc/subby-plushies",
-  "notes": "Major 2.9 release: fixes held-plush lazy image cache fallbacks, uses canonical BC character names in all plugin-generated text, and keeps the room mascot's apparent size stable across browser zoom changes.",
-  "sha256": "f5586b6f5eefd27203192408cd092940c1fdefa811131098a28b23548a64a8ac"
+  "notes": "Fixes lazy-image placeholders in the room mascot picker and UI previews while preserving lightweight lazy canvas rendering.",
+  "sha256": "16e0cdbb81945802eb3f1583fef2bfc24c0c7b401f4a6df248c587497c2489ed"
 }
