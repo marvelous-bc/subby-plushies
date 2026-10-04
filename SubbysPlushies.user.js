@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.3.7.17
+// @version      2.3.7.18
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @released     2026-10-03
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "2.3.7.17";
+    const VERSION = "2.3.7.18";
     const BUILD_DATE = "2026-10-03";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
@@ -843,6 +843,29 @@ function SubbysPlushiesPageMain() {
     const renderImagePromises = new Map();
     let renderFallbackImage = null;
     let hugTightlyIconImage = null;
+
+    // DOM/UI previews should never mistake the lazy-render placeholder for the
+    // plushie's real artwork. Use a prepared optimized render when available;
+    // otherwise point the UI directly at the original GitHub asset. This keeps
+    // canvas rendering lazy without showing Subbycat as every unloaded plushie.
+    function uiPlushImageSource(optionIndex) {
+        const index = Math.trunc(Number(optionIndex));
+        if (!Number.isFinite(index) || index < 0 || index >= PLUSH_IMAGES.length) {
+            return renderFallbackImage || PLUSH_FALLBACK_IMAGE;
+        }
+        const prepared = renderImages[index];
+        if (prepared && prepared !== renderFallbackImage) return prepared;
+        return PLUSH_IMAGES[index] || prepared || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
+    }
+
+    function installUiPlushImageFallback(image) {
+        if (!image || typeof image.addEventListener !== "function") return image;
+        image.addEventListener("error", () => {
+            const fallback = renderFallbackImage || PLUSH_FALLBACK_IMAGE;
+            if (fallback && image.src !== fallback) image.src = fallback;
+        }, { once: true });
+        return image;
+    }
     let imageMappings = null;
     let modularArchetype = null;
     let modApi = null;
@@ -3095,7 +3118,7 @@ function SubbysPlushiesPageMain() {
         if (!isOurs(item)) return null;
         const option = canonicalWirePlushOption(getItemPlushOption(item));
         if (!validPlushOption(option)) return null;
-        return renderImages[option] || PLUSH_IMAGES[option] || PLUSH_FALLBACK_IMAGE || null;
+        return uiPlushImageSource(option) || null;
     }
 
     function syncPetSuitPlushOverlay(C) {
@@ -5985,7 +6008,7 @@ function SubbysPlushiesPageMain() {
             marginBottom: `${Math.max(2, Math.round(4 * viewportScale))}px`,
         });
         const index = mascotRenderIndex(roomMascotState.name);
-        const imageSource = index >= 0 ? (renderImages[index] || PLUSH_IMAGES[index] || PLUSH_FALLBACK_IMAGE) : (renderImages[0] || PLUSH_FALLBACK_IMAGE);
+        const imageSource = index >= 0 ? uiPlushImageSource(index) : uiPlushImageSource(0);
         if (roomMascotOverlayImage && roomMascotOverlayImage.src !== imageSource) roomMascotOverlayImage.src = imageSource;
         if (roomMascotOverlayLabel) {
             roomMascotOverlayLabel.innerHTML = "";
@@ -6154,9 +6177,11 @@ function SubbysPlushiesPageMain() {
                 font: "13px Arial, sans-serif",
                 cursor: "pointer",
             });
-            const image = document.createElement("img");
+            const image = installUiPlushImageFallback(document.createElement("img"));
             image.alt = name;
-            image.src = renderImages[wire] || PLUSH_IMAGES[wire] || PLUSH_FALLBACK_IMAGE;
+            image.loading = "lazy";
+            image.decoding = "async";
+            image.src = uiPlushImageSource(wire);
             Object.assign(image.style, { display: "block", width: "92px", height: "92px", objectFit: "contain", margin: "0 auto 6px" });
             const label = document.createElement("div");
             label.textContent = name;
@@ -7149,9 +7174,9 @@ function SubbysPlushiesPageMain() {
     function loreBrowseImage(name) {
         const wanted = normalizeLoreLookupKey(name);
         for (let i = 0; i < PUBLIC_PLUSH_COUNT; i++) {
-            if (normalizeLoreLookupKey(PLUSH_NAMES[i]) === wanted) return renderImages[i] || PLUSH_IMAGES[i] || PLUSH_FALLBACK_IMAGE;
+            if (normalizeLoreLookupKey(PLUSH_NAMES[i]) === wanted) return uiPlushImageSource(i);
         }
-        return renderImages[0] || PLUSH_FALLBACK_IMAGE;
+        return uiPlushImageSource(0);
     }
 
     function selectExtensionsLore(name) {
@@ -13204,7 +13229,10 @@ function SubbysPlushiesPageMain() {
 
         if (extraActivitySpec) {
             const selected = getItemPlushOption(getHeld(window.Player));
-            return renderImages[selected] || renderImages[0] || source;
+            if (validPlushOption(selected) && renderImages[selected] === renderFallbackImage && PLUSH_IMAGES[selected] !== PLUSH_IMAGES[0]) {
+                void ensureRenderImage(selected);
+            }
+            return validPlushOption(selected) ? uiPlushImageSource(selected) : uiPlushImageSource(0) || source;
         }
 
         if (!normalized.includes(ASSET_NAME)) return source;

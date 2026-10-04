@@ -1,8 +1,8 @@
 {
-  "version": "2.3.7.17",
+  "version": "2.3.7.18",
   "releaseDate": "2026-10-03",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
   "repositoryUrl": "https://github.com/marvelous-bc/subby-plushies",
-  "notes": "Lightweight runtime release: gated character projection work, one-shot mascot/status timers, event-driven UI/activity sync, fallback-only chat observer, hidden-tab pausing, lazy plush image preparation, and dead canvas-tracker removal. No gameplay features removed.",
-  "sha256": "6e96cd1a950d4228b3894826479014be3304e9876107083e93a5103f1d589a52"
+  "notes": "Fixes lazy-image placeholders in the room mascot picker and UI previews while preserving lightweight lazy canvas rendering.",
+  "sha256": "16e0cdbb81945802eb3f1583fef2bfc24c0c7b401f4a6df248c587497c2489ed"
 }
