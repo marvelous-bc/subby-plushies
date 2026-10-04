@@ -1,8 +1,8 @@
 {
-  "version": "2.3.7.18",
-  "releaseDate": "2026-10-03",
+  "version": "2.9.1",
+  "releaseDate": "2026-10-04",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
   "repositoryUrl": "https://github.com/marvelous-bc/subby-plushies",
-  "notes": "Fixes lazy-image placeholders in the room mascot picker and UI previews while preserving lightweight lazy canvas rendering.",
-  "sha256": "16e0cdbb81945802eb3f1583fef2bfc24c0c7b401f4a6df248c587497c2489ed"
+  "notes": "2.9.1: plugin-generated text uses native Bondage Club nicknames without BCX alias leakage, and hourly room mascot cycling uses a shared room-wide claim/lock so only one automatic cycle is accepted per hourly window regardless of how many addon users are present.",
+  "sha256": "55d4fd4a05fa95d4788f4aaf7fb79e68311ae79d714891131f6aa8b3f23feb32"
 }
