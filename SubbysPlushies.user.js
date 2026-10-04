@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.3.7.14
+// @version      2.3.7.15
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @released     2026-10-03
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "2.3.7.14";
+    const VERSION = "2.3.7.15";
     const BUILD_DATE = "2026-10-03";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
@@ -1005,6 +1005,13 @@ function SubbysPlushiesPageMain() {
     let lastUpdateInfo = null;
     let updateCheckPromise = null;
     let statsState = null;
+    let generalStatsSaveTimer = null;
+    let moodStoreSaveTimer = null;
+    let relationshipStoreSaveTimer = null;
+    let achievementCheckTimer = null;
+    let achievementCheckShowNew = false;
+    let achievementMetricCache = null;
+    let allAvailablePlushNamesCache = null;
     let idleAnimationTimer = null;
     let idleAnimationGeneration = 0;
     let activeIdleAnimationSession = null;
@@ -1619,7 +1626,7 @@ function SubbysPlushiesPageMain() {
         if (!record || typeof record !== "object") {
             record = { interactions: 0, lastInteractionAt: now, updatedAt: now };
             store[plushName] = record;
-            writeLocalJSON(RELATIONSHIP_STORAGE_KEY, store);
+            scheduleRelationshipStoreSave();
             return record;
         }
         record.interactions = Math.max(0, Math.floor(Number(record.interactions) || 0));
@@ -1670,10 +1677,10 @@ function SubbysPlushiesPageMain() {
         if (wake) record.lastInteractionAt = Date.now();
         record.updatedAt = Date.now();
         store[plushName] = record;
-        writeLocalJSON(RELATIONSHIP_STORAGE_KEY, store);
+        scheduleRelationshipStoreSave();
         const status = relationshipStatus(plushName);
         const milestone = amount > 0 && status.level !== before ? status.level : null;
-        if (amount) checkAchievements(true);
+        if (milestone) scheduleAchievementCheck(true);
         if (milestone) showRelationshipMilestone(plushName, milestone);
         refreshPlushStatusIcon();
         if (amount) emitPluginApiEvent("relationship", { plushName, ...status, milestone });
@@ -1894,6 +1901,7 @@ function SubbysPlushiesPageMain() {
         if (!payload || typeof payload !== "object" || Number(payload.schemaVersion) !== BACKUP_SCHEMA_VERSION || !payload.data || typeof payload.data !== "object") {
             throw new Error("Unsupported Subby's Plushies backup file. This build only accepts the current backup format.");
         }
+        cancelPendingStatsWork();
         const data = payload.data;
         const safeObject = value => value && typeof value === "object" && !Array.isArray(value) ? cloneBackupValue(value) : null;
         const layout = safeObject(data.layouts) || {};
@@ -2039,7 +2047,7 @@ function SubbysPlushiesPageMain() {
         if (!record || typeof record !== "object") {
             record = { score: MOOD_DEFAULT_SCORE, interactions: 0, updatedAt: now, decayBaseScore: MOOD_DEFAULT_SCORE };
             store[name] = record;
-            writeLocalJSON(MOOD_STORAGE_KEY, store);
+            scheduleMoodStoreSave();
             return record;
         }
 
@@ -2055,7 +2063,7 @@ function SubbysPlushiesPageMain() {
             if (now - last >= MOOD_HELD_CLOCK_WRITE_MS) {
                 record.updatedAt = now;
                 store[name] = record;
-                writeLocalJSON(MOOD_STORAGE_KEY, store);
+                scheduleMoodStoreSave();
             }
             return record;
         }
@@ -2069,7 +2077,7 @@ function SubbysPlushiesPageMain() {
             // Preserve the partial remainder so decay is exactly once per 8-hour block.
             record.updatedAt = last + steps * MOOD_DRIFT_EVERY_MS;
             store[name] = record;
-            writeLocalJSON(MOOD_STORAGE_KEY, store);
+            scheduleMoodStoreSave();
             const appliedDelta = record.score - beforeScore;
             if (appliedDelta) {
                 const historyEntry = recordMoodHistory(name, appliedDelta, "idle decay", record.score, now);
@@ -2102,7 +2110,7 @@ function SubbysPlushiesPageMain() {
         record.decayBaseScore = record.score;
         record.updatedAt = Date.now();
         store[name] = record;
-        writeLocalJSON(MOOD_STORAGE_KEY, store);
+        scheduleMoodStoreSave();
         const historyEntry = recordMoodHistory(name, effectiveDelta, reason, record.score);
         lastMoodChange = { name, delta: effectiveDelta, baseDelta: delta, mascotModifier, reason, score: record.score, at: new Date().toISOString() };
         refreshPlushStatusIcon();
@@ -2174,6 +2182,89 @@ function SubbysPlushiesPageMain() {
         return writeLocalJSON(STATS_STORAGE_KEY, portable);
     }
 
+    function flushMoodStoreSave() {
+        if (moodStoreSaveTimer != null) { window.clearTimeout(moodStoreSaveTimer); moodStoreSaveTimer = null; }
+        return moodState ? writeLocalJSON(MOOD_STORAGE_KEY, moodState) : true;
+    }
+
+    function scheduleMoodStoreSave(delayMs = 80) {
+        if (moodStoreSaveTimer != null) return false;
+        moodStoreSaveTimer = window.setTimeout(() => { moodStoreSaveTimer = null; if (moodState) writeLocalJSON(MOOD_STORAGE_KEY, moodState); }, Math.max(0, Number(delayMs) || 0));
+        return true;
+    }
+
+    function flushRelationshipStoreSave() {
+        if (relationshipStoreSaveTimer != null) { window.clearTimeout(relationshipStoreSaveTimer); relationshipStoreSaveTimer = null; }
+        return relationshipState ? writeLocalJSON(RELATIONSHIP_STORAGE_KEY, relationshipState) : true;
+    }
+
+    function scheduleRelationshipStoreSave(delayMs = 80) {
+        if (relationshipStoreSaveTimer != null) return false;
+        relationshipStoreSaveTimer = window.setTimeout(() => { relationshipStoreSaveTimer = null; if (relationshipState) writeLocalJSON(RELATIONSHIP_STORAGE_KEY, relationshipState); }, Math.max(0, Number(delayMs) || 0));
+        return true;
+    }
+
+    function flushGeneralStatsSave() {
+        if (generalStatsSaveTimer != null) {
+            window.clearTimeout(generalStatsSaveTimer);
+            generalStatsSaveTimer = null;
+        }
+        return saveGeneralStatsStore();
+    }
+
+    function scheduleGeneralStatsSave(delayMs = 80) {
+        if (generalStatsSaveTimer != null) return false;
+        generalStatsSaveTimer = window.setTimeout(() => {
+            generalStatsSaveTimer = null;
+            saveGeneralStatsStore();
+        }, Math.max(0, Number(delayMs) || 0));
+        return true;
+    }
+
+    function scheduleAchievementCheck(showNew = true, delayMs = 25) {
+        achievementCheckShowNew = achievementCheckShowNew || !!showNew;
+        if (achievementCheckTimer != null) return false;
+        achievementCheckTimer = window.setTimeout(() => {
+            achievementCheckTimer = null;
+            const notify = achievementCheckShowNew;
+            achievementCheckShowNew = false;
+            checkAchievements(notify);
+        }, Math.max(0, Number(delayMs) || 0));
+        return true;
+    }
+
+    function queueStatsAchievementFlush(showNew = true) {
+        scheduleGeneralStatsSave();
+        scheduleAchievementCheck(showNew);
+        return true;
+    }
+
+    function cancelPendingStatsWork() {
+        if (generalStatsSaveTimer != null) window.clearTimeout(generalStatsSaveTimer);
+        if (moodStoreSaveTimer != null) window.clearTimeout(moodStoreSaveTimer);
+        if (relationshipStoreSaveTimer != null) window.clearTimeout(relationshipStoreSaveTimer);
+        if (achievementCheckTimer != null) window.clearTimeout(achievementCheckTimer);
+        generalStatsSaveTimer = null;
+        moodStoreSaveTimer = null;
+        relationshipStoreSaveTimer = null;
+        achievementCheckTimer = null;
+        achievementCheckShowNew = false;
+    }
+
+    function flushDeferredProgressStores() {
+        flushMoodStoreSave();
+        flushRelationshipStoreSave();
+        flushGeneralStatsSave();
+    }
+
+    function cachedAchievementMetric(key, compute) {
+        if (!(achievementMetricCache instanceof Map)) return compute();
+        if (achievementMetricCache.has(key)) return achievementMetricCache.get(key);
+        const value = compute();
+        achievementMetricCache.set(key, value);
+        return value;
+    }
+
     function getAchievementProgress(stats = getStatsStore()) {
         if (!stats.progress || typeof stats.progress !== "object" || Array.isArray(stats.progress)) stats.progress = {};
         const p = stats.progress;
@@ -2198,12 +2289,16 @@ function SubbysPlushiesPageMain() {
     }
 
     function allAvailablePlushNames() {
+        if (allAvailablePlushNamesCache) return allAvailablePlushNamesCache;
         const names = [];
+        const seen = new Set();
         for (let option = 0; option < PUBLIC_PLUSH_COUNT; option++) {
             const name = publicPlushName(option);
-            if (name && !names.some(entry => normalizeLoreLookupKey(entry) === normalizeLoreLookupKey(name))) names.push(name);
+            const key = normalizeLoreLookupKey(name);
+            if (name && key && !seen.has(key)) { seen.add(key); names.push(name); }
         }
-        return names;
+        allAvailablePlushNamesCache = Object.freeze(names);
+        return allAvailablePlushNamesCache;
     }
 
     function relationshipRank(name) {
@@ -2211,12 +2306,16 @@ function SubbysPlushiesPageMain() {
     }
 
     function countPlushiesAtRelationship(levelName) {
-        const wanted = relationshipRank(levelName);
-        const store = getRelationshipStore();
-        return allAvailablePlushNames().filter(name => {
-            const interactions = Math.max(0, Number(store?.[name]?.interactions) || 0);
-            return relationshipRank(relationshipLevelForInteractions(interactions).name) >= wanted;
-        }).length;
+        return cachedAchievementMetric(`relationship:${levelName}`, () => {
+            const wanted = relationshipRank(levelName);
+            const store = getRelationshipStore();
+            let count = 0;
+            for (const name of allAvailablePlushNames()) {
+                const interactions = Math.max(0, Number(store?.[name]?.interactions) || 0);
+                if (relationshipRank(relationshipLevelForInteractions(interactions).name) >= wanted) count++;
+            }
+            return count;
+        });
     }
 
     function allAvailablePlushiesAtRelationship(levelName) {
@@ -2225,32 +2324,47 @@ function SubbysPlushiesPageMain() {
     }
 
     function maxPlushMoodScore() {
-        const store = getMoodStore();
-        let best = MOOD_DEFAULT_SCORE;
-        for (const name of allAvailablePlushNames()) {
-            const raw = Number(store?.[name]?.score);
-            best = Math.max(best, Number.isFinite(raw) ? clampMood(raw) : MOOD_DEFAULT_SCORE);
+        return cachedAchievementMetric("maxMoodScore", () => {
+            const store = getMoodStore();
+            let best = MOOD_DEFAULT_SCORE;
+            for (const name of allAvailablePlushNames()) {
+                const raw = Number(store?.[name]?.score);
+                best = Math.max(best, Number.isFinite(raw) ? clampMood(raw) : MOOD_DEFAULT_SCORE);
+            }
+            return best;
+        });
+    }
+
+    function interactionDayRecord(value) {
+        if (value && typeof value === "object" && !Array.isArray(value) && Number.isFinite(Number(value.count))) {
+            return { count: Math.max(0, Math.floor(Number(value.count) || 0)), lastDay: String(value.lastDay || "") };
         }
-        return best;
+        const legacyDays = value && typeof value === "object" && !Array.isArray(value)
+            ? Object.keys(value).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key)).sort()
+            : [];
+        return { count: legacyDays.length, lastDay: legacyDays.at?.(-1) || legacyDays[legacyDays.length - 1] || "" };
     }
 
     function maxInteractionDaysForOnePlush(stats = getStatsStore()) {
-        const days = getAchievementProgress(stats).interactionDays;
-        let best = 0;
-        for (const entries of Object.values(days)) best = Math.max(best, objectKeyCount(entries));
-        return best;
+        return cachedAchievementMetric("maxInteractionDays", () => {
+            const days = getAchievementProgress(stats).interactionDays;
+            let best = 0;
+            for (const entry of Object.values(days)) best = Math.max(best, interactionDayRecord(entry).count);
+            return best;
+        });
     }
 
     function markProgress(key, value = 1, { mode = "max", check = true } = {}) {
         const stats = getStatsStore();
         const p = getAchievementProgress(stats);
         const numeric = Math.max(0, Number(value) || 0);
-        if (mode === "add") p[key] = Math.max(0, Number(p[key]) || 0) + numeric;
-        else if (mode === "set") p[key] = numeric;
-        else p[key] = Math.max(Math.max(0, Number(p[key]) || 0), numeric);
-        saveGeneralStatsStore();
-        if (check) checkAchievements(true);
-        return p[key];
+        const before = Math.max(0, Number(p[key]) || 0);
+        const next = mode === "add" ? before + numeric : mode === "set" ? numeric : Math.max(before, numeric);
+        if (next === before) return before;
+        p[key] = next;
+        scheduleGeneralStatsSave();
+        if (check) scheduleAchievementCheck(true);
+        return next;
     }
 
     function currentAchievementInteractionItem() {
@@ -2271,53 +2385,63 @@ function SubbysPlushiesPageMain() {
         achievementSession.selectedPlushes.add(normalizedName);
         if (achievementSession.selectedPlushes.size >= 10) markProgress("professionalPlushieWrangler", 1);
         achievementSession.selectionHistory.push({ name: normalizedName, at: now });
-        achievementSession.selectionHistory = achievementSession.selectionHistory.filter(entry => now - entry.at <= 120000);
+        achievementSession.selectionHistory = achievementSession.selectionHistory.filter(entry => now - entry.at <= 120000).slice(-32);
         const same = achievementSession.selectionHistory.filter(entry => normalizeLoreLookupKey(entry.name) === normalizeLoreLookupKey(normalizedName));
         if (same.length >= 5) markProgress("actuallyThisOne", 1);
         if (groupName && PLUSH_GROUPS.includes(groupName)) achievementSession.equipSinceByGroup.set(groupName, { name: normalizedName, at: now });
         trackDualEquippedAchievement();
     }
 
+    const PERSONAL_SPACE_ACTIONS = Object.freeze(["rubFace", "noseBoop", "foreheadBump", "cheekRest"]);
+    const PERSONAL_SPACE_ACTION_SET = new Set(PERSONAL_SPACE_ACTIONS);
+
     function trackInteractionAchievements(actionKey, plushName) {
         const stats = getStatsStore();
         const p = getAchievementProgress(stats);
         const today = new Date().toISOString().slice(0, 10);
-        if (!p.interactionDays[plushName] || typeof p.interactionDays[plushName] !== "object") p.interactionDays[plushName] = {};
-        p.interactionDays[plushName][today] = 1;
+        const dayRecord = interactionDayRecord(p.interactionDays[plushName]);
+        if (dayRecord.lastDay !== today) {
+            dayRecord.count += 1;
+            dayRecord.lastDay = today;
+            p.interactionDays[plushName] = dayRecord;
+        } else if (p.interactionDays[plushName] !== dayRecord && !Number.isFinite(Number(p.interactionDays[plushName]?.count))) {
+            p.interactionDays[plushName] = dayRecord;
+        }
         if (actionKey === "bonk") {
             p.bonkedPlushies[plushName] = 1;
             p.pendingForgiveness[plushName] = 1;
         }
-        const requiredPersonalSpace = new Set(["rubFace", "noseBoop", "foreheadBump", "cheekRest"]);
-        if (requiredPersonalSpace.has(actionKey)) {
+        if (PERSONAL_SPACE_ACTION_SET.has(actionKey)) {
             let seen = achievementSession.personalSpaceByPlush.get(plushName);
             if (!seen) { seen = new Set(); achievementSession.personalSpaceByPlush.set(plushName, seen); }
             seen.add(actionKey);
-            if ([...requiredPersonalSpace].every(key => seen.has(key))) p.personalSpace = 1;
+            if (!p.personalSpace && PERSONAL_SPACE_ACTIONS.every(key => seen.has(key))) p.personalSpace = 1;
         }
         const item = currentAchievementInteractionItem();
         const group = item?.Asset?.Group?.Name;
         if (isOurs(item) && PLUSH_GROUPS.includes(group)) {
-            achievementSession.interactionByGroup.set(group, { at: Date.now(), name: plushNameForItem(item) });
+            const now = Date.now();
+            achievementSession.interactionByGroup.set(group, { at: now, name: plushNameForItem(item) });
             const hand = achievementSession.interactionByGroup.get(GROUP);
             const addon = achievementSession.interactionByGroup.get(ADDON_GROUP);
-            if (hand && addon && Date.now() - hand.at <= 30000 && Date.now() - addon.at <= 30000 && normalizeLoreLookupKey(hand.name) !== normalizeLoreLookupKey(addon.name)) p.doubleTrouble = 1;
+            if (!p.doubleTrouble && hand && addon && now - hand.at <= 30000 && now - addon.at <= 30000 && normalizeLoreLookupKey(hand.name) !== normalizeLoreLookupKey(addon.name)) p.doubleTrouble = 1;
         }
-        saveGeneralStatsStore();
-        checkAchievements(true);
+        // recordStat() queues the single stats save + achievement pass for this interaction.
     }
 
     function trackMoodAchievementTransition(plushName, beforeScore, afterScore) {
         const stats = getStatsStore();
         const p = getAchievementProgress(stats);
+        let changed = false;
         if (beforeScore <= 18 || afterScore <= 18) achievementSession.grumpySeen.add(plushName);
-        if (achievementSession.grumpySeen.has(plushName) && afterScore >= 93) p.plushieTherapist = 1;
+        if (!p.plushieTherapist && achievementSession.grumpySeen.has(plushName) && afterScore >= 93) { p.plushieTherapist = 1; changed = true; }
         if (p.pendingForgiveness?.[plushName] && afterScore >= 93) {
             p.forgiven = 1;
             delete p.pendingForgiveness[plushName];
+            changed = true;
         }
-        saveGeneralStatsStore();
-        checkAchievements(true);
+        if (changed) scheduleGeneralStatsSave();
+        if (changed || (beforeScore < 100 && afterScore >= 100)) scheduleAchievementCheck(true);
     }
 
     function trackCommittedAchievement() {
@@ -2344,17 +2468,18 @@ function SubbysPlushiesPageMain() {
         if (window.CurrentScreen !== "ChatRoom") return false;
         const stats = getStatsStore();
         const p = getAchievementProgress(stats);
+        let changed = false;
         const room = roomAchievementKey();
-        if (room) p.roomsVisited[room] = 1;
+        if (room && !p.roomsVisited[room]) { p.roomsVisited[room] = 1; changed = true; }
         const queenPresent = cuddleQueenEncounterValue() >= 1 && Number(window.Player?.MemberNumber) !== CUDDLE_QUEEN_MEMBER_NUMBER;
         if (cuddleRoomJoinedValue()) {
-            if (!queenPresent) p.fashionablyEarly = 1;
+            if (!queenPresent && !p.fashionablyEarly) { p.fashionablyEarly = 1; changed = true; }
             const held = getHeld(window.Player);
-            if (queenPresent && isOurs(held) && relationshipRank(relationshipStatus(plushNameForItem(held)).level) >= relationshipRank("Bonded")) p.royalAudience = 1;
+            if (!p.royalAudience && queenPresent && isOurs(held) && relationshipRank(relationshipStatus(plushNameForItem(held)).level) >= relationshipRank("Bonded")) { p.royalAudience = 1; changed = true; }
         }
-        if (roomMascotState?.name && getEquippedPlushItems(window.Player).some(item => normalizeLoreLookupKey(plushNameForItem(item)) === normalizeLoreLookupKey(roomMascotState.name))) p.roomCelebrity = 1;
-        saveGeneralStatsStore();
-        checkAchievements(true);
+        if (!p.roomCelebrity && roomMascotState?.name && getEquippedPlushItems(window.Player).some(item => normalizeLoreLookupKey(plushNameForItem(item)) === normalizeLoreLookupKey(roomMascotState.name))) { p.roomCelebrity = 1; changed = true; }
+        if (changed) scheduleGeneralStatsSave();
+        scheduleAchievementCheck(true);
         return true;
     }
 
@@ -2362,9 +2487,11 @@ function SubbysPlushiesPageMain() {
         const member = Number(memberNumber);
         if (!Number.isFinite(member) || member === Number(window.Player?.MemberNumber)) return false;
         const stats = getStatsStore();
-        getAchievementProgress(stats).playersInteracted[String(member)] = 1;
-        saveGeneralStatsStore();
-        checkAchievements(true);
+        const players = getAchievementProgress(stats).playersInteracted;
+        const key = String(member);
+        if (players[key]) return false;
+        players[key] = 1;
+        queueStatsAchievementFlush(true);
         return true;
     }
 
@@ -2374,8 +2501,7 @@ function SubbysPlushiesPageMain() {
         const p = getAchievementProgress(stats);
         p.protectTriggers = Math.max(0, Number(p.protectTriggers) || 0) + 1;
         if (achievementSession.protectCountInRoom >= 5) p.overprotective = 1;
-        saveGeneralStatsStore();
-        checkAchievements(true);
+        queueStatsAchievementFlush(true);
     }
 
     function trackBattleAchievement(result, ownScore, opponentScore) {
@@ -2388,36 +2514,37 @@ function SubbysPlushiesPageMain() {
         } else {
             p.currentBattleWinStreak = 0;
         }
-        saveGeneralStatsStore();
-        checkAchievements(true);
+        queueStatsAchievementFlush(true);
     }
 
     function trackResizeAchievement(item, transform) {
         if (!isOurs(item) || item !== getInventoryItem(window.Player, item?.Asset?.Group?.Name)) return false;
+        const p = getAchievementProgress();
+        if (p.tinyPlushie && p.absoluteUnit) return true;
         const sx = Math.abs(Number(transform?.ScaleX));
         const sy = Math.abs(Number(transform?.ScaleY));
         if (Number.isFinite(sx) && Number.isFinite(sy)) {
             const minScale = Math.min(sx, sy), maxScale = Math.max(sx, sy);
-            if (minScale <= 0.35) markProgress("tinyPlushie", 1);
-            if (maxScale >= 2) markProgress("absoluteUnit", 1);
+            if (!p.tinyPlushie && minScale <= 0.35) markProgress("tinyPlushie", 1);
+            if (!p.absoluteUnit && maxScale >= 2) markProgress("absoluteUnit", 1);
         }
         return true;
     }
 
     function actionLooksLikeBaseCuddle(data) {
         if (!isChatAction(data)) return false;
-        const strings = [];
-        const visit = (value, depth = 0) => {
-            if (depth > 5 || value == null) return;
-            if (typeof value === "string") { strings.push(value); return; }
-            if (Array.isArray(value)) { for (const entry of value) visit(entry, depth + 1); return; }
-            if (typeof value === "object") for (const [key, entry] of Object.entries(value)) { strings.push(key); visit(entry, depth + 1); }
-        };
-        visit(data);
-        return strings.some(value => /(^|[^a-z])cuddle([^a-z]|$)/i.test(value) && !/SubbysPlushiesCuddle/i.test(value));
+        const strings = [data.Content, data.Name, data.ActivityName, data.Activity?.Name, data.Activity?.ActivityName];
+        if (Array.isArray(data.Dictionary)) {
+            for (const entry of data.Dictionary.slice(0, 32)) {
+                if (typeof entry?.Tag === "string") strings.push(entry.Tag);
+                if (typeof entry?.Text === "string") strings.push(entry.Text);
+            }
+        }
+        return strings.some(value => typeof value === "string" && /(^|[^a-z])cuddle([^a-z]|$)/i.test(value) && !/SubbysPlushiesCuddle/i.test(value));
     }
 
     function maybeTrackBaseCuddleAchievement(data) {
+        if (getStatsStore().achievements?.royal_cuddle) return false;
         if (!actionLooksLikeBaseCuddle(data)) return false;
         const context = getActionCharacterContext(data);
         const playerMember = Number(window.Player?.MemberNumber);
@@ -2453,16 +2580,21 @@ function SubbysPlushiesPageMain() {
     function checkAchievements(showNew = true) {
         const stats = getStatsStore();
         const unlocked = [];
-        for (const achievement of ACHIEVEMENTS) {
-            if (stats.achievements[achievement.id]) continue;
-            let passed = false;
-            try { passed = !!achievement.test(stats); } catch (_) {}
-            if (!passed) continue;
-            stats.achievements[achievement.id] = Date.now();
-            unlocked.push(achievement);
+        achievementMetricCache = new Map();
+        try {
+            for (const achievement of ACHIEVEMENTS) {
+                if (stats.achievements[achievement.id]) continue;
+                let passed = false;
+                try { passed = !!achievement.test(stats); } catch (_) {}
+                if (!passed) continue;
+                stats.achievements[achievement.id] = Date.now();
+                unlocked.push(achievement);
+            }
+        } finally {
+            achievementMetricCache = null;
         }
         if (unlocked.length) {
-            saveGeneralStatsStore();
+            flushGeneralStatsSave();
             if (showNew) {
                 for (const achievement of unlocked) {
                     appendLocalInfoBox(`Achievement unlocked: ${achievement.name}`, [achievement.description]);
@@ -2492,17 +2624,16 @@ function SubbysPlushiesPageMain() {
         const plushName = detail?.plushName || currentPlushName();
         if (plushName) stats.plushesUsed[plushName] = (Number(stats.plushesUsed[plushName]) || 0) + (kind === "select" ? value : 0);
         if (kind.startsWith("battle")) saveBattleStatsStore();
-        else saveGeneralStatsStore();
-        checkAchievements(true);
+        else scheduleGeneralStatsSave();
+        scheduleAchievementCheck(true);
         return stats;
     }
 
     function recordPlushSelection(name = currentPlushName(), groupName = null) {
         const stats = getStatsStore();
         stats.plushesUsed[name] = (Number(stats.plushesUsed[name]) || 0) + 1;
-        saveGeneralStatsStore();
         trackSelectionAchievements(name, groupName);
-        checkAchievements(true);
+        queueStatsAchievementFlush(true);
     }
 
     function showStats() {
@@ -11307,7 +11438,7 @@ function SubbysPlushiesPageMain() {
             captureVisiblePlushStates();
             pruneRememberedPlushStates(true);
             pruneAddonPresence();
-            checkAchievements(true);
+            scheduleAchievementCheck(true);
             window.setTimeout(() => sendAddonPresence(false), 250);
             return;
         }
@@ -11321,7 +11452,7 @@ function SubbysPlushiesPageMain() {
         captureVisiblePlushStates();
         pruneRememberedPlushStates(true);
         pruneAddonPresence();
-        checkAchievements(true);
+        scheduleAchievementCheck(true);
         window.setTimeout(() => sendAddonPresence(false), 250);
 
         roomRosterRecoveryCount++;
@@ -15093,6 +15224,7 @@ function SubbysPlushiesPageMain() {
     async function main() {
         log(`Starting standalone v${VERSION}...`);
 
+        window.addEventListener("pagehide", flushDeferredProgressStores, { capture: true });
         loadCachedGitData();
         void refreshGitDataFromGitHub({ force: false, silent: true });
 
@@ -15140,7 +15272,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "2.3.7.14";
+    const VERSION = "2.3.7.15";
     const BRIDGE_ATTR = "data-subbys-plushies-page-bridge";
     const BRIDGE_VALUE = `v${VERSION}`;
 
