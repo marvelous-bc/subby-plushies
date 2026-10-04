@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pluginVersion": "2.3.7.13",
+  "pluginVersion": "2.3.7.14",
   "drawPriority": 51,
   "renderBox": {
     "left": 186,
@@ -67,5 +67,12 @@
       "TranslationY": -78,
       "Rotation": 0
     }
+  },
+  "balanceGame": {
+    "firstSuccessSeconds": 8,
+    "secondsPerAdditionalSuccess": 2,
+    "maximumSeconds": 20,
+    "maximumStages": 7,
+    "difficulty": "Target narrows and marker speed increases after each successful stage."
   }
 }

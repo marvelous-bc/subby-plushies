@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pluginVersion": "2.3.7.13",
+  "pluginVersion": "2.3.7.14",
   "generatedFrom": "CURRENT_COMMAND_GROUPS in SubbysPlushies.user.js",
   "groups": [
     {
@@ -114,7 +114,7 @@
         },
         {
           "command": "/plushiebalance",
-          "description": "Open the Balance on Head minigame directly."
+          "description": "Open the progressive Balance on Head minigame (8–20 seconds)."
         },
         {
           "command": "/plushieposes",

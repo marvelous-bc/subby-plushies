@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pluginVersion": "2.3.7.13",
+  "pluginVersion": "2.3.7.14",
   "storageKey": "SubbysPlushies:stats:v1",
   "battleStorage": "per-account",
   "fields": {
@@ -12,7 +12,23 @@
     "mascotSets": "number",
     "drags": "number",
     "offers": "number",
+    "progress": "object (achievement/stat progress; rooms, players, offer successes, streaks, Protect count, interaction days, resize flags, etc.)",
     "achievements": "object<achievementId,timestampMs>"
+  },
+  "progressHighlights": {
+    "roomsVisited": "object<roomName,1>",
+    "playersInteracted": "object<memberNumber,1>",
+    "interactionDays": "object<plushName,object<YYYY-MM-DD,1>>",
+    "bonkedPlushies": "object<plushName,1>",
+    "successfulOffers": "number",
+    "bestBattleWinStreak": "number",
+    "currentBattleWinStreak": "number",
+    "photoFinishWins": "number",
+    "protectTriggers": "number",
+    "balanceBestSeconds": "number",
+    "baseCuddleSubbycat": "0|1",
+    "tinyPlushie": "0|1",
+    "absoluteUnit": "0|1"
   },
   "battleFields": {
     "played": "number",
@@ -20,5 +36,5 @@
     "losses": "number",
     "draws": "number"
   },
-  "note": "General stats remain local. Battle stats/history are stored per Bondage Club account member number."
+  "note": "General stats remain local and the Stats tab surfaces the new achievement-related counters. Battle stats/history remain stored per Bondage Club account member number."
 }

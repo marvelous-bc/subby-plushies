@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pluginVersion": "2.3.7.13",
+  "pluginVersion": "2.3.7.14",
   "affectionActionKeys": [
     "rubFace",
     "cuddleChest",
@@ -16,6 +16,10 @@
     "whisper",
     "hugTightly"
   ],
+  "hiddenDisplay": {
+    "lockedName": "???",
+    "lockedDescription": "Hidden achievement"
+  },
   "achievements": [
     {
       "id": "first_friend",
@@ -166,6 +170,271 @@
         "operator": ">=",
         "value": 1
       }
+    },
+    {
+      "id": "royal_cuddle",
+      "name": "Royal Cuddle",
+      "description": "Use Bondage Club's base Cuddle action on Subbycat.",
+      "condition": {
+        "metric": "progress.baseCuddleSubbycat",
+        "operator": ">=",
+        "value": 1
+      },
+      "hidden": true
+    },
+    {
+      "id": "professional_plushie_wrangler",
+      "name": "Professional Plushie Wrangler",
+      "description": "Use 10 different plushies in one session.",
+      "condition": {
+        "metric": "progress.professionalPlushieWrangler",
+        "operator": ">=",
+        "value": 1
+      },
+      "hidden": true
+    },
+    {
+      "id": "actually_this_one",
+      "name": "Actually, This One",
+      "description": "Switch back to the same plushie 5 times within 2 minutes.",
+      "condition": {
+        "metric": "progress.actuallyThisOne",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "plushie_hoarder",
+      "name": "Plushie Hoarder",
+      "description": "Have plushies equipped in both supported plushie slots at once.",
+      "condition": {
+        "metric": "progress.plushieHoarder",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "double_trouble",
+      "name": "Double Trouble",
+      "description": "Interact with your two different equipped plushies in both slots within 30 seconds.",
+      "condition": {
+        "metric": "progress.doubleTrouble",
+        "operator": ">=",
+        "value": 1
+      },
+      "hidden": true
+    },
+    {
+      "id": "everybody_loves_me",
+      "name": "Everybody Loves Me",
+      "description": "Reach Friend with every available plushie.",
+      "condition": {
+        "metric": "friendPlushies",
+        "operator": ">=",
+        "value": 18
+      }
+    },
+    {
+      "id": "maximum_cuddle",
+      "name": "Maximum Cuddle",
+      "description": "Reach 100 mood/affection on a plushie.",
+      "condition": {
+        "metric": "maxMoodScore",
+        "operator": ">=",
+        "value": 100
+      }
+    },
+    {
+      "id": "plushie_therapist",
+      "name": "Plushie Therapist",
+      "description": "Bring a plushie from Grumpy to Adoring in a single session.",
+      "condition": {
+        "metric": "progress.plushieTherapist",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "committed",
+      "name": "Committed",
+      "description": "Keep one plushie equipped for 8 hours without swapping.",
+      "condition": {
+        "metric": "progress.committed",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "old_friends",
+      "name": "Old Friends",
+      "description": "Reach Bonded with 3 plushies.",
+      "condition": {
+        "metric": "bondedPlushies",
+        "operator": ">=",
+        "value": 3
+      }
+    },
+    {
+      "id": "still_here",
+      "name": "Still Here",
+      "description": "Interact with the same plushie on 7 different days.",
+      "condition": {
+        "metric": "maxInteractionDays",
+        "operator": ">=",
+        "value": 7
+      }
+    },
+    {
+      "id": "forgiven",
+      "name": "Forgiven",
+      "description": "Bonk a plushie, then raise it back to Adoring.",
+      "condition": {
+        "metric": "progress.forgiven",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "personal_space",
+      "name": "Personal Space?",
+      "description": "Rub Face, Nose Boop, Forehead Bump, and Cheek Rest in one session.",
+      "condition": {
+        "metric": "progress.personalSpace",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "headwear",
+      "name": "Headwear",
+      "description": "Balance a plushie on your head 50 times.",
+      "condition": {
+        "metric": "actions.balanceHead",
+        "operator": ">=",
+        "value": 50
+      }
+    },
+    {
+      "id": "overprotective",
+      "name": "Overprotective",
+      "description": "Trigger Protect 5 times within one room session.",
+      "condition": {
+        "metric": "progress.overprotective",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "room_celebrity",
+      "name": "Room Celebrity",
+      "description": "Have one of your equipped plushies become the room mascot.",
+      "condition": {
+        "metric": "progress.roomCelebrity",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "world_tour",
+      "name": "World Tour",
+      "description": "Use the addon in 10 different chat rooms.",
+      "condition": {
+        "metric": "uniqueRoomsVisited",
+        "operator": ">=",
+        "value": 10
+      }
+    },
+    {
+      "id": "social_butterfly",
+      "name": "Social Butterfly",
+      "description": "Perform plushie actions involving 10 different players.",
+      "condition": {
+        "metric": "uniquePlayersInteracted",
+        "operator": ">=",
+        "value": 10
+      }
+    },
+    {
+      "id": "sharing_is_caring",
+      "name": "Sharing Is Caring",
+      "description": "Successfully offer a plushie to someone.",
+      "condition": {
+        "metric": "progress.successfulOffers",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "unbeatable_ish",
+      "name": "Unbeatable-ish",
+      "description": "Win 5 plushie battles in a row.",
+      "condition": {
+        "metric": "progress.bestBattleWinStreak",
+        "operator": ">=",
+        "value": 5
+      }
+    },
+    {
+      "id": "photo_finish",
+      "name": "Photo Finish",
+      "description": "Win a plushie battle by exactly 1 point.",
+      "condition": {
+        "metric": "progress.photoFinishWins",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "chaos_gremlin",
+      "name": "Chaos Gremlin",
+      "description": "Bonk every available plushie at least once.",
+      "condition": {
+        "metric": "bonkedPlushies",
+        "operator": ">=",
+        "value": 18
+      }
+    },
+    {
+      "id": "tiny_plushie",
+      "name": "Tiny Plushie",
+      "description": "Resize a plushie extremely small.",
+      "condition": {
+        "metric": "progress.tinyPlushie",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "absolute_unit",
+      "name": "Absolute Unit",
+      "description": "Resize a plushie extremely large.",
+      "condition": {
+        "metric": "progress.absoluteUnit",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    {
+      "id": "fashionably_early",
+      "name": "Fashionably Early",
+      "description": "Join the cuddle room before the Cuddle Queen is there.",
+      "condition": {
+        "metric": "progress.fashionablyEarly",
+        "operator": ">=",
+        "value": 1
+      },
+      "hidden": true
+    },
+    {
+      "id": "royal_audience",
+      "name": "Royal Audience",
+      "description": "Be in the cuddle room with the Cuddle Queen while holding a Bonded plushie.",
+      "condition": {
+        "metric": "progress.royalAudience",
+        "operator": ">=",
+        "value": 1
+      },
+      "hidden": true
     }
   ]
 }
