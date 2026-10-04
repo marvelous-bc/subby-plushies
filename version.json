@@ -1,8 +1,8 @@
 {
-  "version": "2.3.7.14",
+  "version": "2.3.7.16",
   "releaseDate": "2026-10-03",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
   "repositoryUrl": "https://github.com/marvelous-bc/subby-plushies",
-  "notes": "Progressive 8\u201320 second Balance game, self-offer removal, zoom-compensated battle round text, expanded visible/hidden achievements, and expanded Stats progress tracking.",
-  "sha256": "eada08e571dc84989e3b03d21f3e1afa6e8b92c76e1d1b46c32db537af1601e5"
+  "notes": "Performance optimization release: batched progress persistence, coalesced achievement checks, cached achievement metrics, compact interaction-day tracking, and lighter base-Cuddle detection. No newly added gameplay features removed.",
+  "sha256": "2c9c81c23d97e34bb3a0b8239723ff8de161189c0b806e755a6d9459f9f374b4"
 }

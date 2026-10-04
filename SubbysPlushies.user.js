@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.3.7.15
+// @version      2.3.7.16
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @released     2026-10-03
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "2.3.7.15";
+    const VERSION = "2.3.7.16";
     const BUILD_DATE = "2026-10-03";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
@@ -433,7 +433,7 @@ function SubbysPlushiesPageMain() {
         Object.freeze({ id: "plushie_therapist", name: "Plushie Therapist", description: "Bring a plushie from Grumpy to Adoring in a single session.", test: s => progressMetric(s, "plushieTherapist") >= 1 }),
         Object.freeze({ id: "committed", name: "Committed", description: "Keep one plushie equipped for 8 hours without swapping.", test: s => progressMetric(s, "committed") >= 1 }),
         Object.freeze({ id: "old_friends", name: "Old Friends", description: "Reach Bonded with 3 plushies.", test: s => countPlushiesAtRelationship("Bonded") >= 3 }),
-        Object.freeze({ id: "still_here", name: "Still Here", description: "Interact with the same plushie on 7 different days.", test: s => maxInteractionDaysForOnePlush(s) >= 7 }),
+        Object.freeze({ id: "still_here", name: "Still Here", description: "Interact with the same plushie on 7 consecutive days.", test: s => maxInteractionStreakForOnePlush(s) >= 7 }),
         Object.freeze({ id: "forgiven", name: "Forgiven", description: "Bonk a plushie, then raise it back to Adoring.", test: s => progressMetric(s, "forgiven") >= 1 }),
         Object.freeze({ id: "personal_space", name: "Personal Space?", description: "Rub Face, Nose Boop, Forehead Bump, and Cheek Rest in one session.", test: s => progressMetric(s, "personalSpace") >= 1 }),
         Object.freeze({ id: "headwear", name: "Headwear", description: "Balance a plushie on your head 50 times.", test: s => (s.actions?.balanceHead || 0) >= 50 }),
@@ -2335,14 +2335,56 @@ function SubbysPlushiesPageMain() {
         });
     }
 
+    function interactionDayDifference(previousDay, nextDay) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(previousDay || "")) || !/^\d{4}-\d{2}-\d{2}$/.test(String(nextDay || ""))) return null;
+        const previous = Date.parse(`${previousDay}T00:00:00Z`);
+        const next = Date.parse(`${nextDay}T00:00:00Z`);
+        if (!Number.isFinite(previous) || !Number.isFinite(next)) return null;
+        return Math.round((next - previous) / 86400000);
+    }
+
+    function streakMetricsFromLegacyDays(days) {
+        const sorted = [...new Set(days)].filter(day => /^\d{4}-\d{2}-\d{2}$/.test(day)).sort();
+        let currentStreak = 0;
+        let longestStreak = 0;
+        let previousDay = "";
+        for (const day of sorted) {
+            currentStreak = previousDay && interactionDayDifference(previousDay, day) === 1 ? currentStreak + 1 : 1;
+            longestStreak = Math.max(longestStreak, currentStreak);
+            previousDay = day;
+        }
+        return {
+            count: sorted.length,
+            lastDay: sorted[sorted.length - 1] || "",
+            currentStreak,
+            longestStreak,
+        };
+    }
+
     function interactionDayRecord(value) {
         if (value && typeof value === "object" && !Array.isArray(value) && Number.isFinite(Number(value.count))) {
-            return { count: Math.max(0, Math.floor(Number(value.count) || 0)), lastDay: String(value.lastDay || "") };
+            const count = Math.max(0, Math.floor(Number(value.count) || 0));
+            const lastDay = String(value.lastDay || "");
+            const storedCurrent = Number(value.currentStreak);
+            const storedLongest = Number(value.longestStreak);
+
+            // v2.3.7.16 compact records did not store streaks. We cannot safely
+            // reconstruct a historical consecutive streak from count + lastDay,
+            // so migrate conservatively from the next interaction onward.
+            const currentStreak = Number.isFinite(storedCurrent)
+                ? Math.max(0, Math.floor(storedCurrent))
+                : (count > 0 && lastDay ? 1 : 0);
+            const longestStreak = Number.isFinite(storedLongest)
+                ? Math.max(currentStreak, Math.floor(storedLongest))
+                : currentStreak;
+
+            return { count, lastDay, currentStreak, longestStreak };
         }
+
         const legacyDays = value && typeof value === "object" && !Array.isArray(value)
-            ? Object.keys(value).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key)).sort()
+            ? Object.keys(value).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key))
             : [];
-        return { count: legacyDays.length, lastDay: legacyDays.at?.(-1) || legacyDays[legacyDays.length - 1] || "" };
+        return streakMetricsFromLegacyDays(legacyDays);
     }
 
     function maxInteractionDaysForOnePlush(stats = getStatsStore()) {
@@ -2350,6 +2392,15 @@ function SubbysPlushiesPageMain() {
             const days = getAchievementProgress(stats).interactionDays;
             let best = 0;
             for (const entry of Object.values(days)) best = Math.max(best, interactionDayRecord(entry).count);
+            return best;
+        });
+    }
+
+    function maxInteractionStreakForOnePlush(stats = getStatsStore()) {
+        return cachedAchievementMetric("maxInteractionStreak", () => {
+            const days = getAchievementProgress(stats).interactionDays;
+            let best = 0;
+            for (const entry of Object.values(days)) best = Math.max(best, interactionDayRecord(entry).longestStreak);
             return best;
         });
     }
@@ -2399,12 +2450,21 @@ function SubbysPlushiesPageMain() {
         const stats = getStatsStore();
         const p = getAchievementProgress(stats);
         const today = new Date().toISOString().slice(0, 10);
-        const dayRecord = interactionDayRecord(p.interactionDays[plushName]);
+        const storedDayRecord = p.interactionDays[plushName];
+        const dayRecord = interactionDayRecord(storedDayRecord);
         if (dayRecord.lastDay !== today) {
+            const dayDifference = interactionDayDifference(dayRecord.lastDay, today);
             dayRecord.count += 1;
+            dayRecord.currentStreak = dayDifference === 1 ? Math.max(1, dayRecord.currentStreak + 1) : 1;
+            dayRecord.longestStreak = Math.max(dayRecord.longestStreak, dayRecord.currentStreak);
             dayRecord.lastDay = today;
             p.interactionDays[plushName] = dayRecord;
-        } else if (p.interactionDays[plushName] !== dayRecord && !Number.isFinite(Number(p.interactionDays[plushName]?.count))) {
+        } else if (
+            storedDayRecord !== dayRecord &&
+            (!Number.isFinite(Number(storedDayRecord?.count)) ||
+             !Number.isFinite(Number(storedDayRecord?.currentStreak)) ||
+             !Number.isFinite(Number(storedDayRecord?.longestStreak)))
+        ) {
             p.interactionDays[plushName] = dayRecord;
         }
         if (actionKey === "bonk") {
@@ -2644,7 +2704,7 @@ function SubbysPlushiesPageMain() {
             `Speech bubbles: ${s.speechBubbles} • idle wiggles: ${s.idleAnimations} • drags: ${s.drags}`,
             `Offers started: ${s.offers} • successful offers: ${progressMetric(s, "successfulOffers")} • room mascots set: ${s.mascotSets}`,
             `Different plushies used: ${Object.keys(s.plushesUsed).length} • rooms: ${objectKeyCount(getAchievementProgress(s).roomsVisited)} • players: ${objectKeyCount(getAchievementProgress(s).playersInteracted)}`,
-            `Best battle win streak: ${progressMetric(s, "bestBattleWinStreak")} • Protect triggers: ${progressMetric(s, "protectTriggers")} • best balance: ${progressMetric(s, "balanceBestSeconds")}s`,
+            `Best battle win streak: ${progressMetric(s, "bestBattleWinStreak")} • longest plushie streak: ${maxInteractionStreakForOnePlush(s)} days • best balance: ${progressMetric(s, "balanceBestSeconds")}s`,
         ]);
         return { ...s };
     }
@@ -7677,6 +7737,7 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(summary, "Best battle win streak", progressMetric(s, "bestBattleWinStreak"));
         appendExtensionsKeyValue(summary, "Protect triggers", progressMetric(s, "protectTriggers"));
         appendExtensionsKeyValue(summary, "Best balance duration", `${progressMetric(s, "balanceBestSeconds")}s`);
+        appendExtensionsKeyValue(summary, "Longest plushie interaction streak", `${maxInteractionStreakForOnePlush(s)} days`);
         appendExtensionsKeyValue(summary, "Most interaction days (one plushie)", maxInteractionDaysForOnePlush(s));
         container.appendChild(summary);
 
@@ -15272,7 +15333,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "2.3.7.15";
+    const VERSION = "2.3.7.16";
     const BRIDGE_ATTR = "data-subbys-plushies-page-bridge";
     const BRIDGE_VALUE = `v${VERSION}`;
 

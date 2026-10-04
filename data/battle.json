@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pluginVersion": "2.3.7.14",
+  "pluginVersion": "2.3.7.16",
   "rounds": 3,
   "challengeTtlMs": 90000,
   "resultDelayMs": 180,

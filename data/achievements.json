@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pluginVersion": "2.3.7.14",
+  "pluginVersion": "2.3.7.16",
   "affectionActionKeys": [
     "rubFace",
     "cuddleChest",
@@ -277,7 +277,7 @@
     {
       "id": "still_here",
       "name": "Still Here",
-      "description": "Interact with the same plushie on 7 different days.",
+      "description": "Interact with the same plushie on 7 consecutive days.",
       "condition": {
         "metric": "maxInteractionDays",
         "operator": ">=",
