@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.9.2
+// @version      2.9.3
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @released     2026-10-04
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "2.9.2";
+    const VERSION = "2.9.3";
     const BUILD_DATE = "2026-10-04";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
@@ -3481,6 +3481,41 @@ function SubbysPlushiesPageMain() {
             cssPerMainX: rect.width / logicalWidth,
             cssPerMainY: rect.height / logicalHeight,
         };
+    }
+
+    function boundsFromCanvasPoints(points) {
+        if (!Array.isArray(points) || !points.length) return null;
+        const valid = points.filter(point => Number.isFinite(point?.x) && Number.isFinite(point?.y));
+        if (!valid.length) return null;
+        const xs = valid.map(point => point.x);
+        const ys = valid.map(point => point.y);
+        const left = Math.min(...xs);
+        const right = Math.max(...xs);
+        const top = Math.min(...ys);
+        const bottom = Math.max(...ys);
+        return {
+            left, right, top, bottom,
+            width: Math.max(0, right - left),
+            height: Math.max(0, bottom - top),
+            centerX: (left + right) / 2,
+            centerY: (top + bottom) / 2,
+            points: valid.map(point => ({ x: point.x, y: point.y })),
+        };
+    }
+
+    function plushTransformSignature(item) {
+        if (!isOurs(item)) return "";
+        const transform = readActivePlushLayerTransform(item);
+        if (!transform) return "";
+        return [
+            item?.Asset?.Group?.Name || "",
+            canonicalWirePlushOption(getItemPlushOption(item)),
+            transform.TranslationX,
+            transform.TranslationY,
+            transform.ScaleX,
+            transform.ScaleY,
+            transform.Rotation,
+        ].join("|");
     }
 
     function cloneBounds(bounds) {
@@ -15474,7 +15509,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "2.9.2";
+    const VERSION = "2.9.3";
     const BRIDGE_ATTR = "data-subbys-plushies-page-bridge";
     const BRIDGE_VALUE = `v${VERSION}`;
 

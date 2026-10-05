@@ -1,8 +1,8 @@
 {
-  "version": "2.9.2",
-  "releaseDate": "2026-10-04",
+  "version": "2.9.3",
+  "releaseDate": "2026-10-05",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
   "repositoryUrl": "https://github.com/marvelous-bc/subby-plushies",
-  "notes": "2.9.2: adds DOGS Devious Padlock compatibility for both plushie slots while preserving DOGS lock ownership, key-holder rules, permissions, synchronization, and anti-removal behavior.",
-  "sha256": "abb74cfdc340f27d8c91b5cd5c35fa189d6e3590f63f8578e45fc30bbb925c96"
+  "notes": "2.9.3: fixes Easy Drag after the lightweight canvas cleanup by restoring the two small geometry/transform helpers still required by drag overlay bounds.",
+  "sha256": "f9917506889707fd2f205d29ed073f4e41691b1d9e935eabc02d415e3567ab62"
 }
