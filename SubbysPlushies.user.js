@@ -2,9 +2,9 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      2.9.3
+// @version      3.0.0
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
-// @released     2026-10-04
+// @released     2026-10-05
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -24,8 +24,8 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "2.9.3";
-    const BUILD_DATE = "2026-10-04";
+    const VERSION = "3.0.0";
+    const BUILD_DATE = "2026-10-05";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -53,6 +53,7 @@ function SubbysPlushiesPageMain() {
     const HUG_TIGHTLY_MARKER_TAG = "SubbysPlushiesHugTightly";
 
     const CUSTOM_ACTIVITY_ID_BASE = 9010;
+    const EXTRA_ACTION_ID_BASE = 9060;
     const CUSTOM_ACTIVITY_MARKER_TAG = "SubbysPlushiesActivity";
     const CUSTOM_ACTIVITY_TOKEN_TAG = "SubbysPlushiesActivityToken";
     const CUSTOM_ACTIVITY_SOURCE_MEMBER_TAG = "SubbysPlushiesSourceMember";
@@ -247,13 +248,227 @@ function SubbysPlushiesPageMain() {
         },
     ].map(spec => Object.freeze(spec)));
 
+    // Optional non-plush activities. These are globally available only when the
+    // Extra Actions setting is enabled, and are always ordered after plushie actions.
+    const EXTRA_ACTIONS = Object.freeze([
+        {
+            key: "extraRuffleHair",
+            name: "SubbysPlushiesExtraRuffleHair",
+            label: "Ruffle Hair",
+            category: "extra",
+            targets: ["ItemHood"],
+            targetSelf: false,
+            selfText: "{Source} playfully ruffles their own hair.",
+            otherText: "{Source} playfully ruffles {Target}'s hair.",
+        },
+        {
+            key: "extraShoulderSqueeze",
+            name: "SubbysPlushiesExtraShoulderSqueeze",
+            label: "Shoulder Squeeze",
+            category: "extra",
+            targets: ["ItemTorso"],
+            targetSelf: false,
+            selfText: "{Source} gives their own shoulder a reassuring squeeze.",
+            otherText: "{Source} gives {Target}'s shoulder a reassuring squeeze.",
+        },
+        {
+            key: "extraTapShoulder",
+            name: "SubbysPlushiesExtraTapShoulder",
+            label: "Tap Shoulder",
+            category: "extra",
+            targets: ["ItemTorso"],
+            targetSelf: false,
+            selfText: "{Source} taps their own shoulder.",
+            otherText: "{Source} taps {Target} lightly on the shoulder.",
+        },
+        {
+            key: "extraSquishCheek",
+            name: "SubbysPlushiesExtraSquishCheek",
+            label: "Squish Cheek",
+            category: "extra",
+            targets: ["ItemMouth"],
+            targetSelf: false,
+            selfText: "{Source} gently squishes their own cheek.",
+            otherText: "{Source} gently squishes {Target}'s cheek.",
+        },
+        {
+            key: "extraPatCheek",
+            name: "SubbysPlushiesExtraPatCheek",
+            label: "Pat Cheek",
+            category: "extra",
+            targets: ["ItemMouth"],
+            targetSelf: false,
+            selfText: "{Source} softly pats their own cheek.",
+            otherText: "{Source} softly pats {Target}'s cheek.",
+        },
+        {
+            key: "extraCupCheek",
+            name: "SubbysPlushiesExtraCupCheek",
+            label: "Cup Cheek",
+            category: "extra",
+            targets: ["ItemMouth"],
+            targetSelf: false,
+            selfText: "{Source} gently cups their own cheek with one hand.",
+            otherText: "{Source} gently cups {Target}'s cheek with one hand.",
+        },
+        {
+            key: "extraBrushCheek",
+            name: "SubbysPlushiesExtraBrushCheek",
+            label: "Brush Cheek",
+            category: "extra",
+            targets: ["ItemMouth"],
+            targetSelf: false,
+            selfText: "{Source} gently brushes the back of a hand across their own cheek.",
+            otherText: "{Source} gently brushes the back of a hand across {Target}'s cheek.",
+        },
+        {
+            key: "extraBrushHairFromFace",
+            name: "SubbysPlushiesExtraBrushHairFromFace",
+            label: "Brush Hair From Face",
+            category: "extra",
+            targets: ["ItemHood"],
+            targetSelf: false,
+            selfText: "{Source} brushes a loose strand of hair away from their own face.",
+            otherText: "{Source} gently brushes a loose strand of hair away from {Target}'s face.",
+        },
+        {
+            key: "extraTuckHairBehindEar",
+            name: "SubbysPlushiesExtraTuckHairBehindEar",
+            label: "Tuck Hair Behind Ear",
+            category: "extra",
+            targets: ["ItemHood"],
+            targetSelf: false,
+            selfText: "{Source} tucks a loose strand of hair behind their own ear.",
+            otherText: "{Source} gently tucks a loose strand of {Target}'s hair behind {Target}'s ear.",
+        },
+        {
+            key: "extraTwirlHair",
+            name: "SubbysPlushiesExtraTwirlHair",
+            label: "Twirl Hair",
+            category: "extra",
+            targets: ["ItemHood"],
+            targetSelf: false,
+            selfText: "{Source} idly twirls a lock of their own hair around a finger.",
+            otherText: "{Source} playfully twirls a lock of {Target}'s hair around a finger.",
+        },
+        {
+            key: "extraFixCollar",
+            name: "SubbysPlushiesExtraFixCollar",
+            label: "Fix Collar",
+            category: "extra",
+            targets: ["ItemNeck"],
+            targetSelf: false,
+            requiresOccupiedGroup: "ItemNeck",
+            selfText: "{Source} carefully straightens their own collar.",
+            otherText: "{Source} carefully straightens {Target}'s collar.",
+        },
+        {
+            key: "extraTapHead",
+            name: "SubbysPlushiesExtraTapHead",
+            label: "Tap Head",
+            category: "extra",
+            targets: ["ItemHood"],
+            targetSelf: false,
+            selfText: "{Source} gives themself a light tap on the head.",
+            otherText: "{Source} gives {Target} a light tap on the head.",
+        },
+        {
+            key: "extraMeasureHeight",
+            name: "SubbysPlushiesExtraMeasureHeight",
+            label: "Measure Height",
+            category: "extra",
+            targets: ["ItemHood", "ItemTorso"],
+            targetSelf: false,
+            effect: "measureHeight",
+            selfText: "{Source} tries to measure their own height.",
+            otherText: "{Source} compares height with {Target}.",
+        },
+        {
+            key: "extraCoverEars",
+            name: "SubbysPlushiesExtraCoverEars",
+            label: "Cover Ears",
+            category: "extra",
+            targets: ["ItemHood"],
+            targetSelf: false,
+            selfText: "{Source} covers their own ears with both hands.",
+            otherText: "{Source} gently covers {Target}'s ears with both hands.",
+        },
+        {
+            key: "extraRestChinShoulder",
+            name: "SubbysPlushiesExtraRestChinShoulder",
+            label: "Rest Chin on Shoulder",
+            category: "extra",
+            targets: ["ItemTorso"],
+            targetSelf: false,
+            selfText: "{Source} rests {SourcePossessive} chin against {SourcePossessive} own shoulder.",
+            otherText: "{Source} rests {SourcePossessive} chin on {Target}'s shoulder.",
+        },
+        {
+            key: "extraRestChinHead",
+            name: "SubbysPlushiesExtraRestChinHead",
+            label: "Rest Chin on Head",
+            category: "extra",
+            targets: ["ItemHood"],
+            targetSelf: false,
+            selfText: "{Source} tries to rest {SourcePossessive} chin on {SourcePossessive} own head.",
+            otherText: "{Source} rests {SourcePossessive} chin gently on top of {Target}'s head.",
+        },
+        {
+            key: "extraLinkArms",
+            name: "SubbysPlushiesExtraLinkArms",
+            label: "Link Arms",
+            category: "extra",
+            targets: ["ItemArms", "ItemTorso"],
+            targetSelf: false,
+            selfText: "{Source} folds their own arms together.",
+            otherText: "{Source} links arms with {Target}.",
+        },
+        {
+            key: "extraRaiseArm",
+            name: "SubbysPlushiesExtraRaiseArm",
+            label: "Raise Their Arm",
+            category: "extra",
+            targets: ["ItemArms", "ItemHands"],
+            targetSelf: false,
+            effect: "raiseTargetArm",
+            selfText: "{Source} raises one of their own arms.",
+            otherText: "{Source} gently raises one of {Target}'s arms.",
+        },
+        {
+            key: "extraBowTo",
+            name: "SubbysPlushiesExtraBowTo",
+            label: "Bow To",
+            category: "extra",
+            targets: ["ItemTorso"],
+            targetSelf: false,
+            selfText: "{Source} gives themself an unnecessarily formal bow.",
+            otherText: "{Source} gives {Target} a graceful bow.",
+        },
+        {
+            key: "extraPointDramatically",
+            name: "SubbysPlushiesExtraPointDramatically",
+            label: "Point Dramatically",
+            category: "extra",
+            targets: ["ItemTorso", "ItemHood"],
+            targetSelf: false,
+            selfText: "{Source} points dramatically at themself.",
+            otherText: "{Source} points dramatically at {Target}.",
+        },
+    ].map(spec => Object.freeze(spec)));
+
+    const ALL_PLUGIN_ACTIVITIES = Object.freeze([...CUSTOM_PLUSH_ACTIVITIES, ...EXTRA_ACTIONS]);
     const CUSTOM_ACTIVITY_BY_KEY = new Map(CUSTOM_PLUSH_ACTIVITIES.map(spec => [spec.key, spec]));
     const CUSTOM_ACTIVITY_BY_NAME = new Map(CUSTOM_PLUSH_ACTIVITIES.map(spec => [spec.name, spec]));
-    const CUSTOM_ACTIVITY_FAST_TOKENS = Object.freeze(CUSTOM_PLUSH_ACTIVITIES.map(spec => Object.freeze({
+    const EXTRA_ACTION_BY_KEY = new Map(EXTRA_ACTIONS.map(spec => [spec.key, spec]));
+    const EXTRA_ACTION_BY_NAME = new Map(EXTRA_ACTIONS.map(spec => [spec.name, spec]));
+    const PLUGIN_ACTIVITY_BY_KEY = new Map(ALL_PLUGIN_ACTIVITIES.map(spec => [spec.key, spec]));
+    const PLUGIN_ACTIVITY_BY_NAME = new Map(ALL_PLUGIN_ACTIVITIES.map(spec => [spec.name, spec]));
+    const CUSTOM_ACTIVITY_FAST_TOKENS = Object.freeze(ALL_PLUGIN_ACTIVITIES.map(spec => Object.freeze({
         spec,
         compactName: spec.name.replace(/[^a-z0-9]/gi, "").toLowerCase(),
         compactLabel: spec.label.replace(/[^a-z0-9]/gi, "").toLowerCase(),
     })));
+    const isExtraActionSpec = spec => spec?.category === "extra";
     let BALANCE_HEAD_DURATION_MS = 8000;
     const BALANCE_HEAD_BASE_DURATION_MS = 8000;
     const BALANCE_HEAD_DURATION_STEP_MS = 2000;
@@ -323,6 +538,7 @@ function SubbysPlushiesPageMain() {
         idleAnimations: true,
         speechBubbles: true,
         showDragButton: true,
+        extraActions: false,
     });
     let IDLE_MIN_DELAY_MS = 22000;
     let IDLE_MAX_DELAY_MS = 48000;
@@ -792,6 +1008,7 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushiejealous", description: "Toggle Jealous Plushie mode." }),
                 Object.freeze({ command: "/plushieidle", description: "Toggle idle plushie wiggle animations." }),
                 Object.freeze({ command: "/plushiespeech", description: "Toggle local automatic speech bubbles." }),
+                Object.freeze({ command: "/plushieextraactions", description: "Toggle optional non-plush Extra Actions. Disabled by default." }),
                 Object.freeze({ command: "/plushiespeak", description: "Force one local plushie speech bubble." }),
                 Object.freeze({ command: "/plushiebubble", description: "Alias for /plushiespeak." }),
                 Object.freeze({ command: "/plushiepurr", description: "Play the plushie purr sound locally." }),
@@ -902,7 +1119,9 @@ function SubbysPlushiesPageMain() {
     let lastActivityMonitorHeldState = null;
     let lastActivityMonitorFullCheckAt = 0;
     const customActivityObjects = new Map();
+    const extraActionObjects = new Map();
     let customActivitiesRegistration = "inactive";
+    let extraActionsRegistration = "inactive";
     let activityMenuOrderHookInstalled = false;
     let activityMenuOrderPassCount = 0;
     let lastActivityMenuOrder = null;
@@ -1433,6 +1652,7 @@ function SubbysPlushiesPageMain() {
             idleAnimations: storedBoolean("idleAnimations"),
             speechBubbles: storedBoolean("speechBubbles"),
             showDragButton: storedBoolean("showDragButton"),
+            extraActions: storedBoolean("extraActions"),
             performanceMode: String(stored.performanceMode || "normal").toLowerCase() === "low" ? "low" : "normal",
         };
         return featureSettingsState;
@@ -1455,6 +1675,9 @@ function SubbysPlushiesPageMain() {
         if (key === "hourlyMascotCycle") {
             if (settings[key]) startRoomMascotCycleMonitor();
             else stopRoomMascotCycleMonitor();
+        }
+        if (key === "extraActions") {
+            syncExtraActionsAvailability("setting toggle");
         }
         return settings[key];
     }
@@ -7710,6 +7933,7 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow("Hourly Mascot Cycle", "Once per hour, one elected addon room admin picks the next random mascot for everyone.", settings.hourlyMascotCycle, () => toggleFeatureSetting("hourlyMascotCycle")),
             extensionsSettingRow("Idle Animation", "Occasional lightweight local plush wiggles.", settings.idleAnimations, () => toggleFeatureSetting("idleAnimations")),
             extensionsSettingRow("Speech Bubbles", "Allow local mood-based plush speech bubbles.", settings.speechBubbles, () => toggleFeatureSetting("speechBubbles")),
+            extensionsSettingRow("Extra Actions", "Adds optional non-plush social actions after all plushie actions. Disabled by default.", settings.extraActions, () => toggleFeatureSetting("extraActions")),
             extensionsSettingRow("Automatic Update Checks", "Check the repository manifest at most once per day.", settings.autoUpdateChecks, () => toggleFeatureSetting("autoUpdateChecks"))
         );
         container.appendChild(section);
@@ -8889,6 +9113,7 @@ function SubbysPlushiesPageMain() {
         if (command === "/plushiespeak" || command === "/plushiebubble") { requireReady(() => showSpeechBubble(null, { force: true })); return true; }
         if (command === "/plushieidle") { requireReady(() => { const enabled = toggleFeatureSetting("idleAnimations"); appendLocalInfoBox("Idle Animation", [`Idle Animation is now ${enabled ? "ON" : "off"}.`]); }); return true; }
         if (command === "/plushiespeech") { requireReady(() => { const enabled = toggleFeatureSetting("speechBubbles"); appendLocalInfoBox("Speech Bubbles", [`Speech Bubbles are now ${enabled ? "ON" : "off"}.`]); }); return true; }
+        if (command === "/plushieextraactions") { requireReady(() => { const enabled = toggleFeatureSetting("extraActions"); appendLocalInfoBox("Extra Actions", [`Extra Actions are now ${enabled ? "ON" : "off"}.`, enabled ? "Non-plush actions are appended after all plushie actions." : "Optional non-plush actions were removed from the activity list."], { compact: true }); }); return true; }
         if (command === "/plushiebattle" || command.startsWith("/plushiebattle ")) {
             requireReady(() => challengePlushBattle(command.slice("/plushiebattle".length).trim()));
             return true;
@@ -8904,6 +9129,7 @@ function SubbysPlushiesPageMain() {
                     `Automatic update checks: ${settings.autoUpdateChecks ? "ON" : "off"}`,
                     `Idle animations: ${settings.idleAnimations ? "ON" : "off"}`,
                     `Speech bubbles: ${settings.speechBubbles ? "ON" : "off"}`,
+                    `Extra Actions: ${settings.extraActions ? "ON" : "off"}`,
                     `Performance mode: ${settings.performanceMode === "low" ? "Low CPU" : "Normal"}`,
                 ]);
             });
@@ -9099,6 +9325,75 @@ function SubbysPlushiesPageMain() {
         return removed > 0;
     }
 
+    function allocateExtraActionID(activities, offset = 0) {
+        let activityID = EXTRA_ACTION_ID_BASE + offset;
+        const usedIDs = new Set(activities.map(activity => activity?.ActivityID).filter(Number.isFinite));
+        while (usedIDs.has(activityID)) activityID++;
+        return activityID;
+    }
+
+    function makeExtraAction(spec, activities, offset) {
+        return {
+            Name: spec.name,
+            ActivityID: allocateExtraActionID(activities, offset),
+            MaxProgress: 0,
+            Prerequisite: customActivityPrerequisites(spec),
+            Target: [...spec.targets],
+            TargetSelf: !!spec.targetSelf,
+            ActivityExpression: [
+                { Group: "Blush", Name: "Low", Timer: 10 },
+            ],
+        };
+    }
+
+    function ensureExtraActionsRegistered(reason = "availability check") {
+        const activities = window.ActivityFemale3DCG;
+        if (!Array.isArray(activities) || !getFeatureSettings().extraActions) return false;
+
+        for (let i = 0; i < EXTRA_ACTIONS.length; i++) {
+            const spec = EXTRA_ACTIONS[i];
+            let activity = activities.find(entry => entry?.Name === spec.name);
+            if (!activity) {
+                activity = makeExtraAction(spec, activities, i);
+                activities.push(activity);
+                log(`Enabled Extra Action: ${spec.label} (ID ${activity.ActivityID}).`);
+            } else {
+                activity.Prerequisite = customActivityPrerequisites(spec);
+                activity.Target = [...spec.targets];
+                activity.TargetSelf = !!spec.targetSelf;
+            }
+            extraActionObjects.set(spec.key, activity);
+        }
+
+        extraActionsRegistration = `active (${reason})`;
+        return true;
+    }
+
+    function removeExtraActions(reason = "availability check") {
+        const activities = window.ActivityFemale3DCG;
+        if (!Array.isArray(activities)) return false;
+        const names = new Set(EXTRA_ACTIONS.map(spec => spec.name));
+        let removed = 0;
+        for (let i = activities.length - 1; i >= 0; i--) {
+            if (names.has(activities[i]?.Name)) {
+                activities.splice(i, 1);
+                removed++;
+            }
+        }
+        extraActionObjects.clear();
+        extraActionsRegistration = `inactive (${reason})`;
+        if (removed) log(`Disabled ${removed} Extra Action${removed === 1 ? "" : "s"} (${reason}).`);
+        return removed > 0;
+    }
+
+    function syncExtraActionsAvailability(reason = "availability check") {
+        if (getFeatureSettings().extraActions) return ensureExtraActionsRegistered(reason);
+        const anyRegistered = window.ActivityFemale3DCG?.some?.(activity => EXTRA_ACTION_BY_NAME.has(activity?.Name));
+        if (extraActionObjects.size || anyRegistered) removeExtraActions(reason);
+        else extraActionsRegistration = `inactive (${reason})`;
+        return false;
+    }
+
     function compactActivityName(value) {
         return String(value || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
     }
@@ -9106,16 +9401,17 @@ function SubbysPlushiesPageMain() {
     function customActivityFromKnownString(value) {
         if (typeof value !== "string" || !value) return null;
 
-        const direct = CUSTOM_ACTIVITY_BY_NAME.get(value);
+        const direct = PLUGIN_ACTIVITY_BY_NAME.get(value);
         if (direct) return direct;
 
         const lower = value.toLowerCase();
-        if (!lower.includes("subbysplushies") && !lower.includes("plushie")) return null;
-
         const compact = compactActivityName(value);
         for (const token of CUSTOM_ACTIVITY_FAST_TOKENS) {
-            if (compact === token.compactName || compact === token.compactLabel ||
-                compact.includes(token.compactName)) return token.spec;
+            if (compact === token.compactName || compact === token.compactLabel) return token.spec;
+        }
+        if (!lower.includes("subbysplushies") && !lower.includes("plushie")) return null;
+        for (const token of CUSTOM_ACTIVITY_FAST_TOKENS) {
+            if (compact.includes(token.compactName)) return token.spec;
         }
         return null;
     }
@@ -9138,9 +9434,9 @@ function SubbysPlushiesPageMain() {
             if (!value || typeof value !== "object") return;
             if (value === hugTightlyActivityObject) hugTightly = true;
             if (!customSpec) {
-                for (const activity of customActivityObjects.values()) {
+                for (const activity of [...customActivityObjects.values(), ...extraActionObjects.values()]) {
                     if (value === activity) {
-                        customSpec = CUSTOM_ACTIVITY_BY_NAME.get(activity?.Name) || null;
+                        customSpec = PLUGIN_ACTIVITY_BY_NAME.get(activity?.Name) || null;
                         break;
                     }
                 }
@@ -9174,7 +9470,7 @@ function SubbysPlushiesPageMain() {
 
         if (typeof value === "string") {
             const compact = compactActivityName(value);
-            for (const spec of CUSTOM_PLUSH_ACTIVITIES) {
+            for (const spec of ALL_PLUGIN_ACTIVITIES) {
                 const compactName = compactActivityName(spec.name);
                 if (compact.includes(compactName) || compact.includes(compactActivityName(spec.label))) {
                     return spec;
@@ -9207,8 +9503,242 @@ function SubbysPlushiesPageMain() {
 
     function getCustomActivityFromAction(data) {
         const key = getDictionaryText(data, CUSTOM_ACTIVITY_MARKER_TAG);
-        if (key && CUSTOM_ACTIVITY_BY_KEY.has(key)) return CUSTOM_ACTIVITY_BY_KEY.get(key);
+        if (key && PLUGIN_ACTIVITY_BY_KEY.has(key)) return PLUGIN_ACTIVITY_BY_KEY.get(key);
         return identifyCustomActivity(data);
+    }
+
+    function normalizeHeightMultiplierCandidate(value) {
+        let numeric = Number(value);
+        if (!Number.isFinite(numeric) || numeric <= 0) return null;
+        // Some extensions store percentages (for example 110 for 110%).
+        if (numeric > 10 && numeric <= 400) numeric /= 100;
+        return numeric >= 0.25 && numeric <= 4 ? numeric : null;
+    }
+
+    function extractEchoHeightMultiplier(value, depth = 0, seen = new Set()) {
+        if (!value || typeof value !== "object" || depth > 2 || seen.has(value)) return null;
+        seen.add(value);
+
+        for (const [key, entry] of Object.entries(value)) {
+            const normalizedKey = String(key || "");
+            const isHeightScaleKey = /height.*(?:mult(?:iplier)?|scale|ratio)|(?:mult(?:iplier)?|scale|ratio).*height/i.test(normalizedKey);
+            if (isHeightScaleKey && !/^HeightRatio(?:Proportion)?$/i.test(normalizedKey)) {
+                const candidate = normalizeHeightMultiplierCandidate(entry);
+                if (candidate != null) return candidate;
+            }
+        }
+
+        for (const [key, entry] of Object.entries(value)) {
+            if (!entry || typeof entry !== "object") continue;
+            if (!/echo|height|scale|size|character/i.test(String(key || ""))) continue;
+            const nested = extractEchoHeightMultiplier(entry, depth + 1, seen);
+            if (nested != null) return nested;
+        }
+        return null;
+    }
+
+    function echoHeightMultiplierForCharacter(C) {
+        if (!C) return 1;
+
+        const directKeys = [
+            "EchoHeightMultiplier", "ECHOHeightMultiplier", "echoHeightMultiplier",
+            "EchoHeightScale", "ECHOHeightScale", "echoHeightScale",
+            "EchoHeightRatio", "ECHOHeightRatio", "echoHeightRatio",
+        ];
+        for (const key of directKeys) {
+            const candidate = normalizeHeightMultiplierCandidate(C?.[key]);
+            if (candidate != null) return candidate;
+        }
+
+        // Echo builds have used different storage shapes over time. Search only
+        // explicitly Echo-named character containers so this never mistakes BC's
+        // native HeightRatio for an addon multiplier.
+        try {
+            for (const [key, value] of Object.entries(C)) {
+                if (!/echo/i.test(key)) continue;
+                const candidate = extractEchoHeightMultiplier(value);
+                if (candidate != null) return candidate;
+            }
+        } catch (_) {}
+
+        // Some Echo features store extension data on an equipped item's Property.
+        try {
+            for (const item of Array.isArray(C.Appearance) ? C.Appearance : []) {
+                const marker = [
+                    item?.Asset?.Group?.Name,
+                    item?.Asset?.Name,
+                    item?.Property?.Name,
+                    item?.Property?.Type,
+                ].filter(Boolean).join(" ");
+                if (!/echo/i.test(marker)) continue;
+                const candidate = extractEchoHeightMultiplier(item?.Property);
+                if (candidate != null) return candidate;
+            }
+        } catch (_) {}
+
+        // Support public/global Echo APIs if the installed build exposes one.
+        const member = Number(C?.MemberNumber);
+        const globalFunctionNames = [
+            "EchoGetHeightMultiplier", "ECHOGetHeightMultiplier",
+            "EchoCharacterHeightMultiplier", "ECHOCharacterHeightMultiplier",
+            "EchoGetHeightScale", "ECHOGetHeightScale",
+        ];
+        for (const name of globalFunctionNames) {
+            const fn = window?.[name];
+            if (typeof fn !== "function") continue;
+            try {
+                const candidate = normalizeHeightMultiplierCandidate(fn(C, Number.isFinite(member) ? member : undefined));
+                if (candidate != null) return candidate;
+            } catch (_) {}
+        }
+
+        // Last-resort compatibility for Echo versions that expose one namespaced
+        // object instead of a fixed API. This runs only when Measure Height is used.
+        try {
+            let inspected = 0;
+            for (const key of Object.keys(window)) {
+                if (!/echo/i.test(key) || inspected++ > 80) continue;
+                let value;
+                try { value = window[key]; } catch (_) { continue; }
+                if (value && typeof value === "object") {
+                    const candidate = extractEchoHeightMultiplier(value);
+                    if (candidate != null) return candidate;
+                } else if (typeof value === "function" && /height.*(?:mult|scale|ratio)|(?:mult|scale|ratio).*height/i.test(key) && value.length <= 2) {
+                    try {
+                        const candidate = normalizeHeightMultiplierCandidate(value(C, Number.isFinite(member) ? member : undefined));
+                        if (candidate != null) return candidate;
+                    } catch (_) {}
+                }
+            }
+        } catch (_) {}
+
+        return 1;
+    }
+
+    function characterEffectiveHeightScale(C) {
+        let bcHeightRatio = Number(C?.HeightRatio);
+        if (!Number.isFinite(bcHeightRatio) || bcHeightRatio <= 0) bcHeightRatio = 1;
+        const echoMultiplier = echoHeightMultiplierForCharacter(C);
+        const effective = bcHeightRatio * echoMultiplier;
+        return {
+            bcHeightRatio,
+            echoMultiplier,
+            effective: Number.isFinite(effective) && effective > 0 ? effective : bcHeightRatio,
+        };
+    }
+
+    function measureHeightActionText(sourceCharacter, targetCharacter, sourceName, targetName) {
+        const source = characterEffectiveHeightScale(sourceCharacter);
+        const target = characterEffectiveHeightScale(targetCharacter);
+        const sourceLabel = sourceName || getCharacterDisplayName(sourceCharacter) || "Someone";
+        const targetLabel = targetName || getCharacterDisplayName(targetCharacter) || "someone";
+        const average = Math.max(0.01, (source.effective + target.effective) / 2);
+        const signedDifference = source.effective - target.effective;
+        const percentDifference = Math.abs(signedDifference) / average * 100;
+
+        if (percentDifference < 1.5) {
+            return `${sourceLabel} measures height with ${targetLabel} and finds they are almost exactly the same height.`;
+        }
+
+        const sourceTaller = signedDifference > 0;
+        const taller = sourceTaller ? sourceLabel : targetLabel;
+        const shorter = sourceTaller ? targetLabel : sourceLabel;
+        if (percentDifference < 4.5) {
+            return `${sourceLabel} measures height with ${targetLabel} and finds ${taller} is just a little taller than ${shorter}.`;
+        }
+        if (percentDifference < 9) {
+            return `${sourceLabel} measures height with ${targetLabel} and finds ${taller} is noticeably taller than ${shorter}.`;
+        }
+        if (percentDifference < 17) {
+            return `${sourceLabel} measures height with ${targetLabel} and finds ${taller} is much taller than ${shorter}.`;
+        }
+        return `${sourceLabel} measures height with ${targetLabel} and finds ${taller} towers over ${shorter}.`;
+    }
+
+    function extraActionAvailableForTarget(spec, targetCharacter = window.DialogFocusCharacter) {
+        if (!isExtraActionSpec(spec)) return true;
+        if (!targetCharacter) return !spec?.requiresOccupiedGroup;
+        if (spec?.requiresOccupiedGroup) {
+            return !!getInventoryItem(targetCharacter, spec.requiresOccupiedGroup);
+        }
+        return true;
+    }
+
+    const EXTRA_RAISE_ARM_DURATION_MS = 5000;
+    const extraRaisedArmSessions = new Map();
+
+    function extraActionCharacterKey(C) {
+        const member = Number(C?.MemberNumber);
+        if (Number.isFinite(member)) return `member:${member}`;
+        if (C === window.Player) return "player";
+        return `character:${String(C?.ID ?? C?.Name ?? "unknown")}`;
+    }
+
+    function activePoseSnapshot(C) {
+        return Array.isArray(C?.ActivePose) ? C.ActivePose.map(value => String(value)) : [];
+    }
+
+    function refreshExtraActionPose(C, sync = false) {
+        if (!C) return false;
+        try {
+            if (typeof window.CharacterLoadCanvas === "function") window.CharacterLoadCanvas(C);
+            else if (typeof window.CharacterRefresh === "function") window.CharacterRefresh(C, false);
+        } catch (_) {}
+        if (sync && C === window.Player && typeof window.ChatRoomCharacterUpdate === "function") {
+            try { window.ChatRoomCharacterUpdate(C); } catch (_) {}
+        }
+        return true;
+    }
+
+    function applyTemporaryRaisedArm(C) {
+        if (!C) return false;
+        const key = extraActionCharacterKey(C);
+        const existing = extraRaisedArmSessions.get(key);
+        if (existing?.timer != null) window.clearTimeout(existing.timer);
+
+        const before = existing?.before || activePoseSnapshot(C);
+        let applied = false;
+        try {
+            if (typeof window.CharacterSetActivePose === "function") {
+                window.CharacterSetActivePose(C, "OverTheHead");
+                applied = true;
+            }
+        } catch (_) {}
+
+        if (!applied || !activePoseSnapshot(C).includes("OverTheHead")) {
+            try {
+                const current = activePoseSnapshot(C).filter(pose => pose !== "OverTheHead");
+                C.ActivePose = [...current, "OverTheHead"];
+                applied = true;
+            } catch (_) {}
+        }
+        if (!applied) return false;
+
+        refreshExtraActionPose(C, C === window.Player);
+        const appliedSignature = JSON.stringify(activePoseSnapshot(C));
+        const session = { before: [...before], appliedSignature, timer: null };
+        session.timer = window.setTimeout(() => {
+            const current = extraRaisedArmSessions.get(key);
+            if (current !== session) return;
+            extraRaisedArmSessions.delete(key);
+            // Do not overwrite a pose the character changed after the action.
+            if (JSON.stringify(activePoseSnapshot(C)) !== session.appliedSignature) return;
+            try { C.ActivePose = [...session.before]; } catch (_) { return; }
+            refreshExtraActionPose(C, C === window.Player);
+        }, EXTRA_RAISE_ARM_DURATION_MS);
+        extraRaisedArmSessions.set(key, session);
+        return true;
+    }
+
+    function processExtraActionEffect(data, spec = getCustomActivityFromAction(data)) {
+        if (!isExtraActionSpec(spec) || !spec?.effect) return false;
+        if (spec.effect !== "raiseTargetArm") return false;
+        const context = getActionCharacterContext(data);
+        const target = Number.isFinite(context.targetMember)
+            ? getRoomCharacterByMember(context.targetMember)
+            : null;
+        if (!target) return false;
+        return applyTemporaryRaisedArm(target);
     }
 
     function activityTemplate(spec, self, sourceCharacter, targetCharacter, sourceName, targetName, plushName) {
@@ -9216,8 +9746,21 @@ function SubbysPlushiesPageMain() {
         const targetPronouns = characterPronouns(targetCharacter);
         const ownerPronouns = self ? sourcePronouns : targetPronouns;
         const namedPlush = String(plushName || currentPlushName() || "plushie");
+
+        if (spec?.effect === "measureHeight" && !self && targetCharacter) {
+            return measureHeightActionText(sourceCharacter, targetCharacter, sourceName, targetName);
+        }
+
         let template = self ? spec.selfText : (spec.otherText || spec.selfText);
         template = template
+            .replaceAll("{SourceSubject}", sourcePronouns.subject)
+            .replaceAll("{SourceObject}", sourcePronouns.object)
+            .replaceAll("{SourcePossessive}", sourcePronouns.possessive)
+            .replaceAll("{SourceReflexive}", sourcePronouns.reflexive)
+            .replaceAll("{TargetSubject}", targetPronouns.subject)
+            .replaceAll("{TargetObject}", targetPronouns.object)
+            .replaceAll("{TargetPossessive}", targetPronouns.possessive)
+            .replaceAll("{TargetReflexive}", targetPronouns.reflexive)
             .replaceAll("the plushie", `the ${namedPlush} plushie`)
             .replaceAll("their", ownerPronouns.possessive)
             .replaceAll("themself", ownerPronouns.reflexive)
@@ -9449,23 +9992,64 @@ function SubbysPlushiesPageMain() {
         return self || window.Player || null;
     }
 
+    function getRoomCharacterByRenderedName(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return null;
+
+        // BC can render DestinationCharacter as a possessive display string in
+        // activity packets (for example "Marvelousi's"). Measure Height needs
+        // the real Character object so it can read HeightRatio / Echo scaling.
+        // Normalize the possessive only for lookup; emitted text always uses the
+        // character object's native BC nickname/name.
+        const variants = new Set([raw.toLocaleLowerCase()]);
+        if (/[’']s$/i.test(raw)) variants.add(raw.slice(0, -2).trim().toLocaleLowerCase());
+        if (/s[’']$/i.test(raw)) variants.add(raw.slice(0, -1).trim().toLocaleLowerCase());
+
+        const characters = [window.Player, ...(Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [])]
+            .filter(Boolean);
+        for (const C of characters) {
+            const names = [getCharacterDisplayName(C), C?.Nickname, C?.Name, C?.AccountName]
+                .filter(Boolean)
+                .map(name => String(name).trim().toLocaleLowerCase());
+            if (names.some(name => variants.has(name))) return C;
+        }
+        return null;
+    }
+
     function makeCustomActivityNetworkAction(originalData, spec, fallbackTarget = null) {
         const playerName = getCharacterDisplayName(window.Player) || "Someone";
         const playerMember = Number.isFinite(window.Player?.MemberNumber) ? window.Player.MemberNumber : null;
         const context = getActionCharacterContext(originalData, fallbackTarget);
-        const targetName = context.targetName || getCharacterDisplayName(fallbackTarget);
-        const targetMember = Number.isFinite(context.targetMember)
+        let targetName = context.targetName || getCharacterDisplayName(fallbackTarget);
+        let targetMember = Number.isFinite(context.targetMember)
             ? context.targetMember
             : (Number.isFinite(fallbackTarget?.MemberNumber) ? fallbackTarget.MemberNumber : null);
+
+        const sourceCharacter = window.Player;
+        let targetCharacter = Number.isFinite(targetMember) ? getRoomCharacterByMember(targetMember) : fallbackTarget;
+
+        // Keep the proven 2.9.6 activity/chat flow. Only Measure Height gets this
+        // extra target recovery step: if another addon/BC leaves us with a
+        // rendered possessive name instead of a MemberNumber, resolve that name
+        // back to the room Character before building the dynamic height message.
+        if (spec?.effect === "measureHeight" && !targetCharacter) {
+            targetCharacter = getRoomCharacterByRenderedName(targetName);
+        }
+        if (spec?.effect === "measureHeight" && targetCharacter) {
+            const canonicalTargetName = getCharacterDisplayName(targetCharacter);
+            if (canonicalTargetName) targetName = canonicalTargetName;
+            if (!Number.isFinite(targetMember) && Number.isFinite(Number(targetCharacter.MemberNumber))) {
+                targetMember = Number(targetCharacter.MemberNumber);
+            }
+        }
 
         const isSelf =
             (Number.isFinite(playerMember) && Number.isFinite(targetMember) && playerMember === targetMember) ||
             (!!targetName && targetName === playerName) ||
+            targetCharacter === window.Player ||
             fallbackTarget === window.Player;
 
         const token = `${playerMember ?? "local"}:${Date.now()}:${++customActivityEventSequence}:${spec.key}`;
-        const sourceCharacter = window.Player;
-        const targetCharacter = Number.isFinite(targetMember) ? getRoomCharacterByMember(targetMember) : fallbackTarget;
         const message = activityTemplate(spec, isSelf, sourceCharacter, targetCharacter, playerName, targetName, currentPlushName());
 
         const preserved = Array.isArray(originalData?.Dictionary)
@@ -11276,6 +11860,7 @@ function SubbysPlushiesPageMain() {
                 lastActivityMonitorHeldState = isOurs(getHeld(window.Player));
                 lastActivityMonitorFullCheckAt = Date.now();
                 syncHugTightlyActivityAvailability("60-second integrity check");
+                syncExtraActionsAvailability("60-second integrity check");
             }
             scheduleActivityIntegrityCheck(document.hidden ? ACTIVITY_INTEGRITY_INTERVAL_MS * 5 : ACTIVITY_INTEGRITY_INTERVAL_MS);
         }, Math.max(1000, Number(delay) || ACTIVITY_INTEGRITY_INTERVAL_MS));
@@ -11285,6 +11870,7 @@ function SubbysPlushiesPageMain() {
     function startHugTightlyActivityMonitor() {
         if (hugTightlyActivityMonitor != null) return;
         syncHugTightlyActivityAvailability("startup");
+        syncExtraActionsAvailability("startup");
         lastActivityMonitorHeldState = isOurs(getHeld(window.Player));
         lastActivityMonitorFullCheckAt = Date.now();
         scheduleActivityIntegrityCheck();
@@ -12151,19 +12737,24 @@ function SubbysPlushiesPageMain() {
         return false;
     }
 
-    function isPlushMenuActivity(entry) {
-        if (!entry) return false;
-
-        const name = entry.Name;
-        if (typeof name === "string" && (name === HUG_TIGHTLY_ACTIVITY_NAME || CUSTOM_ACTIVITY_BY_NAME.has(name))) return true;
-
-        const activityName = entry.ActivityName;
-        if (typeof activityName === "string" && (activityName === HUG_TIGHTLY_ACTIVITY_NAME || CUSTOM_ACTIVITY_BY_NAME.has(activityName))) return true;
-
+    function activityEntryName(entry) {
+        if (!entry) return null;
+        if (typeof entry.Name === "string") return entry.Name;
+        if (typeof entry.ActivityName === "string") return entry.ActivityName;
         const activity = entry.Activity;
         const nestedName = activity && typeof activity === "object" ? activity.Name : activity;
-        return typeof nestedName === "string" &&
-            (nestedName === HUG_TIGHTLY_ACTIVITY_NAME || CUSTOM_ACTIVITY_BY_NAME.has(nestedName));
+        return typeof nestedName === "string" ? nestedName : null;
+    }
+
+    function isPlushMenuActivity(entry) {
+        const name = activityEntryName(entry);
+        return typeof name === "string" &&
+            (name === HUG_TIGHTLY_ACTIVITY_NAME || CUSTOM_ACTIVITY_BY_NAME.has(name));
+    }
+
+    function isExtraMenuActivity(entry) {
+        const name = activityEntryName(entry);
+        return typeof name === "string" && EXTRA_ACTION_BY_NAME.has(name);
     }
 
     function installActivityMenuOrderingHook() {
@@ -12179,40 +12770,39 @@ function SubbysPlushiesPageMain() {
             const playerMember = Number(window.Player?.MemberNumber);
             const focused = window.DialogFocusCharacter;
             const selfTarget = focused === window.Player || (Number.isFinite(playerMember) && Number(focused?.MemberNumber) === playerMember);
-            const working = selfTarget
-                ? result.filter(entry => {
-                    const name = entry?.Name || entry?.ActivityName || entry?.Activity?.Name || entry?.Activity;
-                    return name !== CUSTOM_ACTIVITY_BY_KEY.get("offer")?.name;
-                })
-                : result;
+            const working = result.filter(entry => {
+                const name = entry?.Name || entry?.ActivityName || entry?.Activity?.Name || entry?.Activity;
+                if (selfTarget && name === CUSTOM_ACTIVITY_BY_KEY.get("offer")?.name) return false;
+                const extraSpec = typeof name === "string" ? EXTRA_ACTION_BY_NAME.get(name) : null;
+                if (extraSpec && !extraActionAvailableForTarget(extraSpec, focused)) return false;
+                return true;
+            });
             if (working.length < 2) return working;
 
-            if (!hugTightlyActivityEnabled && customActivityObjects.size === 0) return working;
-
-            let sawPlush = false;
-            let needsReorder = false;
-            for (const entry of working) {
-                if (isPlushMenuActivity(entry)) {
-                    sawPlush = true;
-                } else if (sawPlush) {
-                    needsReorder = true;
-                    break;
-                }
-            }
-
-            if (!sawPlush || !needsReorder) return working;
+            if (!hugTightlyActivityEnabled && customActivityObjects.size === 0 && extraActionObjects.size === 0) return working;
 
             const normal = [];
             const plush = [];
+            const extra = [];
             for (const entry of working) {
-                (isPlushMenuActivity(entry) ? plush : normal).push(entry);
+                if (isExtraMenuActivity(entry)) extra.push(entry);
+                else if (isPlushMenuActivity(entry)) plush.push(entry);
+                else normal.push(entry);
             }
-            const reordered = normal.concat(plush);
+            if (!plush.length && !extra.length) return working;
+
+            // Normal/base activities first, then all plushie activities, then optional
+            // Extra Actions. This keeps Extra Actions visibly separated at the end.
+            const reordered = normal.concat(plush, extra);
+            const unchanged = reordered.length === working.length && reordered.every((entry, index) => entry === working[index]);
+            if (unchanged) return working;
+
             activityMenuOrderPassCount++;
             lastActivityMenuOrder = {
                 group: typeof args?.[1] === "string" ? args[1] : args?.[1]?.Name || null,
                 total: working.length,
                 plushCount: plush.length,
+                extraCount: extra.length,
                 normalCount: normal.length,
                 at: new Date().toISOString(),
             };
@@ -12220,7 +12810,7 @@ function SubbysPlushiesPageMain() {
         });
 
         activityMenuOrderHookInstalled = installed;
-        if (installed) log("Installed R132 final activity-list ordering hook (plush actions last).");
+        if (installed) log("Installed R132 final activity-list ordering hook (plush actions, then Extra Actions last).");
         else warn("ActivityAllowedForGroup was unavailable; plush activity ordering was not installed.");
         return installed;
     }
@@ -12297,7 +12887,7 @@ function SubbysPlushiesPageMain() {
         const characterOverlayHooked = false;
 
         const activityRunHooked = installHook("ActivityRun", 10000, (args, next) => {
-            if (!hugTightlyActivityEnabled && customActivityObjects.size === 0) return next(args);
+            if (!hugTightlyActivityEnabled && customActivityObjects.size === 0 && extraActionObjects.size === 0) return next(args);
 
             const activityRunInfo = inspectActivityRunFast(args);
             if (activityRunInfo.hugTightly) {
@@ -12308,6 +12898,10 @@ function SubbysPlushiesPageMain() {
             const customSpec = activityRunInfo.customSpec;
             const jealousEnabled = getFeatureSettings().jealousPlushie;
             const focusedTarget = (customSpec || jealousEnabled) ? findActivityTargetFast(args) : null;
+            if (customSpec && isExtraActionSpec(customSpec) && !extraActionAvailableForTarget(customSpec, focusedTarget)) {
+                appendLocalInfoBox(customSpec.label, ["That action is not available for the current target."], { compact: true });
+                return;
+            }
             if (customSpec) {
                 pendingLocalCustomActivity = {
                     key: customSpec.key,
@@ -12343,11 +12937,11 @@ function SubbysPlushiesPageMain() {
 
             const result = next(args);
 
-            if (customSpec && focusedTarget && focusedTarget !== window.Player) trackSocialPlayer(focusedTarget.MemberNumber);
+            if (customSpec && !isExtraActionSpec(customSpec) && focusedTarget && focusedTarget !== window.Player) trackSocialPlayer(focusedTarget.MemberNumber);
             if (runBalanceEffect) {
                 window.setTimeout(startBalanceHeadMinigame, 120);
             }
-            if (customSpec && customSpec.effect !== "balanceHead") handleLocalPlushInteraction(customSpec.key);
+            if (customSpec && !isExtraActionSpec(customSpec) && customSpec.effect !== "balanceHead") handleLocalPlushInteraction(customSpec.key);
             if (jealousReaction) window.setTimeout(() => triggerJealousReaction(jealousReaction.target, jealousReaction.activityName), 80);
 
             return result;
@@ -12503,9 +13097,11 @@ function SubbysPlushiesPageMain() {
             if (!isChatAction(data)) return next(args);
 
             maybeTrackBaseCuddleAchievement(data);
+            const pluginActionSpec = getCustomActivityFromAction(data);
+            if (isExtraActionSpec(pluginActionSpec)) processExtraActionEffect(data, pluginActionSpec);
             const offerDecisionHandled = processOfferDecisionAction(data);
             const protectCandidate = getFeatureSettings().protectMe && actionLooksProtectable(data);
-            const plushRelated = offerDecisionHandled || isPotentialPlushAction(data);
+            const plushRelated = offerDecisionHandled || (!isExtraActionSpec(pluginActionSpec) && isPotentialPlushAction(data));
             if (!plushRelated && !protectCandidate) return next(args);
 
             const hugTightly = plushRelated && isHugTightlyAction(data);
@@ -12581,7 +13177,7 @@ function SubbysPlushiesPageMain() {
             const now = Date.now();
             const pendingHugTightly = now <= pendingLocalHugTightlyUntil;
             const pendingCustom = !!pendingLocalCustomActivity && pendingLocalCustomActivity.until >= now;
-            if (!hugTightlyActivityEnabled && customActivityObjects.size === 0 && !pendingHugTightly && !pendingCustom) {
+            if (!hugTightlyActivityEnabled && customActivityObjects.size === 0 && extraActionObjects.size === 0 && !pendingHugTightly && !pendingCustom) {
                 return next(args);
             }
 
@@ -12598,10 +13194,10 @@ function SubbysPlushiesPageMain() {
                 touchPlushRelationship(currentPlushName(), { increment: 1, wake: true });
                 void playPurrSfx(token, "outgoing Hug Tightly action");
             } else {
-                const directSpec = packetLooksPlush ? getCustomActivityFromAction(originalData) : null;
+                const directSpec = getCustomActivityFromAction(originalData);
                 const pendingSpec =
                     pendingCustom
-                        ? CUSTOM_ACTIVITY_BY_KEY.get(pendingLocalCustomActivity.key)
+                        ? PLUGIN_ACTIVITY_BY_KEY.get(pendingLocalCustomActivity.key)
                         : null;
                 const customSpec = directSpec || pendingSpec;
 
@@ -12617,7 +13213,7 @@ function SubbysPlushiesPageMain() {
                     nextArgs = args.slice();
                     nextArgs[1] = normalized.data;
 
-                    if (Number.isFinite(normalized.targetMember) && !normalized.isSelf) trackSocialPlayer(normalized.targetMember);
+                    if (!isExtraActionSpec(customSpec) && Number.isFinite(normalized.targetMember) && !normalized.isSelf) trackSocialPlayer(normalized.targetMember);
                     if (customSpec.key === "offer" && Number.isFinite(normalized.targetMember) && !normalized.isSelf) {
                         rememberOutgoingPlushOffer(normalized.targetMember, normalized.token);
                         recordStat("offer", 1, { plushName: currentPlushName() });
@@ -13495,7 +14091,7 @@ function SubbysPlushiesPageMain() {
 
     function installHugTightlyTextHook() {
         const compactHugName = compactActivityName(HUG_TIGHTLY_ACTIVITY_NAME);
-        const activityTextTokens = CUSTOM_PLUSH_ACTIVITIES.map(spec => ({
+        const activityTextTokens = ALL_PLUGIN_ACTIVITIES.map(spec => ({
             spec,
             name: compactActivityName(spec.name),
             label: compactActivityName(spec.label),
@@ -14825,6 +15421,14 @@ function SubbysPlushiesPageMain() {
             }
         }
 
+        if (getFeatureSettings().extraActions && Array.isArray(window.ActivityFemale3DCG)) {
+            const registeredNames = new Set(window.ActivityFemale3DCG.map(activity => activity?.Name));
+            const missingExtras = EXTRA_ACTIONS.filter(spec => !registeredNames.has(spec.name));
+            if (missingExtras.length) {
+                problems.push(`Missing enabled Extra Actions: ${missingExtras.map(spec => spec.label).join(", ")}.`);
+            }
+        }
+
         const renderProbe = `${ASSET_BASE}_XLarge_Plush1.png`;
         try {
             const mapped = mapImageSource(renderProbe);
@@ -15274,6 +15878,19 @@ function SubbysPlushiesPageMain() {
                     registered: !!window.ActivityFemale3DCG?.some?.(activity => activity?.Name === spec.name),
                 })),
             },
+            optionalExtraActions: {
+                enabled: getFeatureSettings().extraActions,
+                registration: extraActionsRegistration,
+                count: EXTRA_ACTIONS.length,
+                ordering: "after plushie actions",
+                activities: EXTRA_ACTIONS.map(spec => ({
+                    key: spec.key,
+                    name: spec.name,
+                    label: spec.label,
+                    targets: spec.targets,
+                    registered: !!window.ActivityFemale3DCG?.some?.(activity => activity?.Name === spec.name),
+                })),
+            },
             callbacks: {
                 init: typeof window[`${EXTENDED_PREFIX}Init`],
                 load: typeof window[`${EXTENDED_PREFIX}Load`],
@@ -15509,7 +16126,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "2.9.3";
+    const VERSION = "3.0.0";
     const BRIDGE_ATTR = "data-subbys-plushies-page-bridge";
     const BRIDGE_VALUE = `v${VERSION}`;
 

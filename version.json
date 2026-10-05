@@ -1,8 +1,8 @@
 {
-  "version": "2.9.3",
+  "version": "3.0.0",
   "releaseDate": "2026-10-05",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
   "repositoryUrl": "https://github.com/marvelous-bc/subby-plushies",
-  "notes": "2.9.3: fixes Easy Drag after the lightweight canvas cleanup by restoring the two small geometry/transform helpers still required by drag overlay bounds.",
-  "sha256": "f9917506889707fd2f205d29ed073f4e41691b1d9e935eabc02d415e3567ab62"
+  "notes": "3.0.0: v3 adds 20 new optional Extra Action emotes after the plushie actions, disabled by default, while retaining Fix Collar, BC/Echo-aware Measure Height, Raise Their Arm, and the 2.9.8 Measure Height target-recovery fix.",
+  "sha256": "93905e7770a5bccb1f9b9eee96c4e92dced23a9f910ef151cb3ae3ae6f24983a"
 }
