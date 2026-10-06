@@ -1,71 +1,191 @@
-# Subby's Plushies v2
+# Subby's Plushies
 
-**Current release:** `2.3.7.13`  
-**Release date:** 2026-10-03  
-**Target:** Bondage Club R132
+A Bondage Club R132 userscript/addon that adds collectible plushies, plushie-focused activities, optional social actions, room mascots, relationships, emotes, battles, achievements, pose tools, lore, and a built-in Extensions control center.
 
-Subby's Plushies is a standalone Bondage Club companion addon built around native modular plushie items. It includes plushie activities, mood/affection, relationships, synchronized emotes, two wearable plushie slots, room mascots, battles, saved poses, themes, stats, achievements, backups, Easy Drag, and a native Preferences → Extensions control center.
+**Current version:** `3.1.21`  
+**Bondage Club target:** `R132`  
+**Repository:** `marvelous-bc/subby-plushies`
 
-## What's current in 2.3.7.13
+## Highlights
 
-- Main handheld plushie in `ItemHandheld` plus an optional second plushie in `ItemAddon`.
-- Passive affection loss is **-1 per 8 hours** for plushies that are not equipped; equipped plushies do not decay.
-- Room mascot supports manual set, random selection, admin picker, local movement, and a shared hourly cycle designed so clients converge on one room update.
-- Room mascot grants the configured positive-affection modifier to matching plushie interactions.
-- Protect Me reacts to `boop` and `bap`; `poke` belongs to Jealous Plushie instead of Protect Me.
-- Idle wiggle/rotation applies to equipped plushies, including the ItemAddon/ceiling-style second plushie.
-- Easy Drag and native Move/Resize preserve the current transform instead of resetting unrelated resize/rotation values.
-- Action text can include the actual plushie name and uses BC character information rather than hardcoded generic pronouns where supported.
-- 15-second plushie emotes synchronize to other room users running the addon.
-- Opera/userscript isolation handling is built into the full script: it can bridge itself into the Bondage Club page context when necessary.
-- The Commands tab always starts from the command list compiled into the current build; `data/commands.json` may add documentation but cannot hide newer built-in commands.
-
-## Installation
-
-
-### Launcher
-
-`SubbysPlushies-Launcher.user.js` is a thin userscript that `@require`s the matching full build from this repository. The full build itself handles the page-context/browser compatibility logic.
-
-For Opera/Chromium userscript managers, make sure the extension is allowed to run user scripts on the Bondage Club site. In Opera this may require enabling **Developer mode** and **Allow user scripts** for the userscript extension.
-
-### Firefox bookmark
-
-`SubbysPlushies-Firefox-Bookmarklet.txt` contains a bookmarklet. Create a bookmark, paste the full `javascript:...` line into its URL/Location field, open Bondage Club, then click the bookmark to fetch the latest full build.
-
-## Main features
-
-- 18 public plushie variants plus the internal Subbycat wire alias.
-- Native `ItemHandheld` and `ItemAddon` integration.
-- Native per-layer Move/Resize plus Easy Drag and named snap points.
-- Plush activities: Rub Against Face, Cuddle to Chest, Nuzzle, Pat, Pet, Hide Behind, Kiss, Kiss With Plushie, Nose Boop, Rest Cheek, Forehead Bump, Snuggle, Bonk, Balance on Head, Offer, Show, Whisper, Squeeze Cheeks, Wave, and Hug Tightly/purr support.
-- Per-plush mood, relationship progression, favorites, sleepy state, and three saved pose slots.
-- Relationship levels: Stranger → Familiar → Friend → Bestie → Bonded.
-- Relationship milestone bubbles and achievements.
-- Synchronized room emotes and addon-presence indicator.
-- Shared room mascot with local display/movement controls and hourly cycling.
-- Multiplayer plushie battles with per-account battle stats/history.
-- Searchable Use menu and native Extensions control center.
+- **20 public plushies** with individual artwork/lore support.
+- Plushie interactions use the currently selected plushie's name in action text.
+- Nickname-aware and pronoun-aware generated dialogue.
+- **20 plushie actions** including Hug Tightly, Offer Plushie, Balance on Head, Hide Behind Plushie, and Start a Wave Emote.
+- **20 optional Extra Actions**, disabled by default.
+- Shared room emotes and left-to-right Wave chains.
+- **Pose safety:** Wave and Raise Both Arms affect only the upper-body pose family, and can be ignored completely with `Ignore Pose-Changing Emotes`.
+- Dynamic **Measure Height** comparison text.
+- Synced 15-second plushie emotes: happy, angry, sleepy, protective, and sulky.
+- Protect Me and Jealous Plushie reactions.
+- Plushie mood/affection, relationships, favorites, achievements, and statistics.
+- Idle affection decay is `-1` every 8 hours only while that plushie is not being held.
+- Shared room mascot with room-admin controls and local positioning.
+- Plushie battles with Battle History.
+- Saved plushie poses, Move / Resize integration, Easy Drag, and snap points.
+- Backup / restore and Git-backed data refresh.
 - Normal and Low CPU performance modes.
-- Portable backup/restore with progression integrity sealing.
-- Validated Git-backed configuration with local last-known-good caching and built-in fallbacks.
-- Public `window.SubbysPlushies` integration API.
+- Opera-compatible userscript/bootstrap work from the v3 release line.
 
-## Mood and affection
+## Plushies
 
-Each plushie has its own happiness score. Positive and negative interactions adjust that score. A plushie that is **not currently equipped** loses 1 point for each completed 8-hour block. Plushies equipped in either supported plushie slot are protected from decay, and the decay clock is kept current so removing a plushie does not immediately apply hidden accumulated losses.
+- Subbycat
+- Ale
+- M
+- Izneas
+- Lyra
+- Subbycat and Luna
+- Subbycat and Ale
+- Subbycat and Terra
+- Subbycat and Pink
+- Subbycat and Steele
+- Terra
+- Steele
+- Izzy and Lyly
+- Hari
+- Fog
+- Hira
+- Pink
+- Kyu
+- Rey
+- Margot
 
-## Protect / Jealous behavior
+Rey includes built-in lore. Margot's lore is intentionally hidden for now.
 
-Protect Me watches hostile/rough action verbs such as slap, spank, hit, punch, kick, bonk, **boop**, **bap**, tickle, bite, pinch, whip, shock, zap, attack, smack, and swat. `poke` is intentionally excluded from Protect Me and included in Jealous Plushie detection.
+## Activities
+
+### Plushie actions
+
+- Rub Against Face
+- Cuddle to Chest
+- Nuzzle Plushie
+- Pat Plushie
+- Pet Plushie
+- Hide Behind Plushie
+- Kiss Plushie
+- Kiss With Plushie
+- Nose Boop Plushie
+- Rest Cheek on Plushie
+- Forehead Bump Plushie
+- Snuggle Plushie
+- Bonk With Plushie
+- Balance Plushie on Head
+- Offer Plushie
+- Show Plushie
+- Whisper to Plushie
+- Squeeze Cheeks With Plushie
+- Start a Wave Emote
+- Hug Tightly
+
+### Optional Extra Actions
+
+Enable these with **Extra Actions** in Settings or `/plushieextraactions`.
+
+- Ruffle Hair
+- Shoulder Squeeze
+- Tap Shoulder
+- Squish Cheek
+- Pat Cheek
+- Cup Cheek
+- Brush Cheek
+- Brush Hair From Face
+- Tuck Hair Behind Ear
+- Twirl Hair
+- Fix Collar
+- Tap Head
+- Measure Height
+- Cover Ears
+- Rest Chin on Shoulder
+- Rest Chin on Head
+- Link Arms
+- Raise Both Arms
+- Bow To
+- Point Dramatically
+
+## Shared action artwork
+
+Custom activity icons use a small shared set under `assets/plushies/`:
+
+| Asset | Used for |
+|---|---|
+| `hairaction.png` | Hair actions: Ruffle Hair, Brush Hair From Face, Tuck Hair Behind Ear, Twirl Hair |
+| `faceaction.png` | Face/cheek actions |
+| `pointing.png` | Point Dramatically |
+| `subbycat.png` | Fallback/default artwork for every other custom action |
+
+If one of the three shared action images fails to load, the addon falls back to `subbycat.png`.
+
+## Extensions control center
+
+The current top-level tabs are:
+
+- **Status**
+- **Lore**
+- **Settings**
+- **Progress**
+- **Commands**
+
+### Settings
+
+- **General** — feature toggles, pose safety, performance, update behavior, speech/emotes, and related preferences.
+- **Layout** — Extensions UI layout/customization.
+
+### Progress
+
+- **Stats**
+- **Achievements**
+- **Plushies** — relationship/favorite/emote/saved-pose information.
+- **Battle History**
+- **Backup**
+
+Lore remains its own top-level tab.
+
+## Pose safety
+
+Wave and Raise Both Arms are temporary upper-body animations.
+
+- **Start a Wave Emote:** arms remain raised for about 3 seconds per participant.
+- **Raise Both Arms:** arms remain raised for about 5 seconds.
+- The addon switches only the `BaseUpper` / `OverTheHead` upper-body pose family so kneeling or sitting lower-body poses are preserved.
+- Enable **Ignore Pose-Changing Emotes** to keep the chat actions while ignoring the pose changes locally.
+- Command: `/plushieignoreposes`
 
 ## Room mascot
 
-Room admins can set the held plushie as mascot, choose a random mascot, open the mascot picker, or clear it. The synchronized room state lets later joiners recover the current mascot. Each user can move/hide/show the mascot overlay locally without changing room state. Hourly cycling is enabled by default.
+Room mascots are changed manually; there is no automatic hourly mascot cycle.
+
+Room admins can set the held plushie, choose a random mascot, use the picker, or clear the mascot. Each client can locally hide/show and reposition the mascot picture.
+
+## Mood and relationships
+
+Plushies track mood/affection and relationship progress locally.
+
+- Held plushies do not receive idle affection decay.
+- Unheld plushies lose `1` affection per 8-hour idle interval.
+- Relationship/stat/achievement information is available under **Progress**.
+- Mood history storage is not used by the current release.
+
+## Data files
+
+The addon can load validated Git-backed data files such as:
+
+- `lore.json`
+- `speech.json`
+- `moods.json`
+- `achievements.json`
+- `battle.json`
+- `commands.json`
+- `poses.json`
+- `defaults.json`
+- `idle.json`
+- `protect.json`
+- `relationships.json`
+
+The executable command list embedded in the userscript remains authoritative; `commands.json` can supplement documentation without replacing commands supported by the current build.
 
 ## Commands
 
-`/help` keeps Bondage Club's normal help and adds a plushie summary. `/help plushie` and `/help plushies` show the full addon command reference. Tab completion is available for plushie commands and common arguments.
+The in-game **Commands** tab, `/help plushie`, `/help plushies`, and autocomplete use the same current command catalog.
 
 ### General
 
@@ -80,17 +200,17 @@ Room admins can set the held plushie as mascot, choose a random mascot, open the
 | `/plushierecover` | Run the plush recovery helper. |
 | `/plushiefeatures` | Show the current feature-toggle status. |
 
-### Extensions Tabs
+### Extensions & Navigation
 
 | Command | Description |
 |---|---|
-| `/plushieextensions` | Open the Subby's Plushies Extensions control center on Settings. |
+| `/plushieextensions` | Open the Subby's Plushies Extensions control center on Settings → General. |
 | `/plushiestatus` | Open the Status tab. |
-| `/plushiesettings` | Open the Settings tab. |
-| `/plushielayout` | Open the Layout customization tab. |
-| `/plushieplushies` | Open the Plushies tab with relationships, favorites, emotes, and saved poses. |
-| `/plushiehistory` | Open the History tab for mood and plushie battles. |
-| `/plushiebackup` | Open the Backup / Restore tab. |
+| `/plushiesettings` | Open Settings → General. |
+| `/plushielayout` | Open Settings → Layout customization. |
+| `/plushieplushies` | Open Progress → Plushies with relationships, favorites, emotes, and saved poses. |
+| `/plushiehistory` | Open Progress → Battle History. |
+| `/plushiebackup` | Open Progress → Backup / Restore. |
 | `/plushiecommands` | Open the Commands tab directly. |
 | `/plushiecommand` | Alias for /plushiecommands. |
 
@@ -105,8 +225,8 @@ Room admins can set the held plushie as mascot, choose a random mascot, open the
 | `/plushiecenter` | Alias for /plushiehands. |
 | `/plushiedrag [on|off]` | Toggle Easy Drag, or explicitly turn it on/off. |
 | `/plushiesnap <point>` | Snap to hands, chest, face, head, left shoulder, or right shoulder. |
-| `/plushiebalance` | Open the Balance on Head minigame directly. |
-| `/plushieposes` | Open the Plushies tab at the saved-pose controls. |
+| `/plushiebalance` | Open the progressive Balance on Head minigame (8–20 seconds). |
+| `/plushieposes` | Open Progress → Plushies at the saved-pose controls. |
 | `/plushieposesave <1|2|3>` | Save the current plushie's X/Y position, scale, and rotation to a pose slot. |
 | `/plushieposeload <1|2|3>` | Apply a saved pose for the held plushie. |
 | `/plushieposeclear <1|2|3>` | Clear a saved pose slot for the held plushie. |
@@ -124,6 +244,10 @@ Room admins can set the held plushie as mascot, choose a random mascot, open the
 | `/plushiejealous` | Toggle Jealous Plushie mode. |
 | `/plushieidle` | Toggle idle plushie wiggle animations. |
 | `/plushiespeech` | Toggle local automatic speech bubbles. |
+| `/plushieextraactions` | Toggle optional non-plush Extra Actions. Disabled by default. |
+| `/plushiewavechain` | Toggle left-to-right shared Wave emote chains. |
+| `/plushieignoreposes` | Toggle ignoring pose-changing plugin emotes such as Wave and Raise Both Arms. |
+| `/plushieexpressions` | Toggle short expression reactions to plushie and Extra Actions. |
 | `/plushiespeak` | Force one local plushie speech bubble. |
 | `/plushiebubble` | Alias for /plushiespeak. |
 | `/plushiepurr` | Play the plushie purr sound locally. |
@@ -143,13 +267,13 @@ Room admins can set the held plushie as mascot, choose a random mascot, open the
 | `/plushiemascotshow` | Shortcut for /plushiemascot show. |
 | `/plushiemascothide` | Shortcut for /plushiemascot hide. |
 
-### Battle, Stats & Achievements
+### Battle & Progress
 
 | Command | Description |
 |---|---|
 | `/plushiebattle [member/name]` | Challenge another player to a plushie battle; with no target, use the focused character when possible. |
-| `/plushiestats` | Open the detailed Stats tab. |
-| `/plushieachievements` | Open the detailed Achievements tab. |
+| `/plushiestats` | Open Progress → Stats. |
+| `/plushieachievements` | Open Progress → Achievements. |
 | `/plushieach` | Short alias for /plushieachievements. |
 
 ### Backup / Restore
@@ -167,17 +291,56 @@ Room admins can set the held plushie as mascot, choose a random mascot, open the
 | `/plushieupdateopen` | Open the latest update / download page. |
 | `/plushiedata` | Show Git-backed data source and cache status. |
 | `/plushiedatareload` | Force-refresh validated data files from GitHub. |
+| `/plushieversion` | Show the currently running addon version and pose-safety status. |
 | `/plushiedebug` | Print detailed addon diagnostics to the browser console. |
 
-## Data files
+## Installation / updating
 
-The main script validates remotely fetched JSON before applying it. Startup-critical behavior always has built-in fallbacks. This repo refresh aligns the runtime JSON with the current build so remote configuration does not silently reintroduce older values.
+1. Install a userscript manager supported by your browser.
+2. Install `SubbysPlushies.user.js`.
+3. Keep the repository assets under their existing paths.
+4. The addon checks `version.json` for updates when automatic update checks are enabled.
 
-## Public addon API
+For a repo update, replace the root userscript, `version.json`, `commands.json`, and `README.md` together when provided in a release package.
 
-Other addons should use `window.SubbysPlushies` instead of reaching into internal functions. The API exposes status/version information and helpers such as held plush lookup, mood/relationship data, battle history, emotes, performance mode, and event subscriptions.
+## Asset layout
 
-## Support
+```text
+assets/
+├── plushies/
+│   ├── subbycat.png
+│   ├── hairaction.png
+│   ├── faceaction.png
+│   ├── pointing.png
+│   └── ...other plushie artwork...
+└── sfx/
+    └── ...sound effects...
+```
 
-Repository: https://github.com/marvelous-bc/subby-plushies  
-Issues: https://github.com/marvelous-bc/subby-plushies/issues
+## v3 release-line summary
+
+The v3 series expanded the addon substantially. Major changes include:
+
+- 20+ new/custom interaction actions and optional Extra Actions.
+- Shared emote chains and synchronized plushie emotes.
+- Nickname/pronoun-aware dialogue.
+- Custom action sender/receiver chat rendering fixes.
+- Measure Height.
+- Raise Both Arms and kneeling-safe Wave behavior.
+- Ignore Pose-Changing Emotes safety control.
+- Protect/Jealous keyword changes.
+- Manual-only room mascot behavior.
+- 8-hour idle affection decay for unheld plushies.
+- Improved drag, resize, saved-pose, and layout persistence.
+- Stats, achievements, Battle History, Backup, and Plushies consolidated under Progress.
+- Layout moved under Settings.
+- Rey and Margot added while preserving the legacy Subbycat wire option.
+- Shared `hairaction.png`, `faceaction.png`, and `pointing.png` custom-action artwork.
+- Updated command reference/autocomplete and Git-backed command documentation.
+
+## Notes for contributors
+
+- Keep **wire option 18** reserved for the legacy Subbycat alias for backwards compatibility.
+- New public plushie options are mapped around that legacy wire value.
+- Keep executable commands in `CURRENT_COMMAND_GROUPS` synchronized with `commands.json` and this README.
+- Keep new custom-action image categories routed through the shared action-image resolver rather than adding one-off icon logic.

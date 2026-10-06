@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.1.12
+// @version      3.1.21
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @released     2026-10-05
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.1.12";
+    const VERSION = "3.1.21";
     const BUILD_DATE = "2026-10-05";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
@@ -469,6 +469,39 @@ function SubbysPlushiesPageMain() {
     const EXTRA_ACTION_BY_NAME = new Map(EXTRA_ACTIONS.map(spec => [spec.name, spec]));
     const PLUGIN_ACTIVITY_BY_KEY = new Map(ALL_PLUGIN_ACTIVITIES.map(spec => [spec.key, spec]));
     const PLUGIN_ACTIVITY_BY_NAME = new Map(ALL_PLUGIN_ACTIVITIES.map(spec => [spec.name, spec]));
+
+    const HAIR_ACTION_KEYS = new Set([
+        "extraRuffleHair",
+        "extraBrushHairFromFace",
+        "extraTuckHairBehindEar",
+        "extraTwirlHair",
+    ]);
+
+    const FACE_ACTION_KEYS = new Set([
+        "rubFace",
+        "hideBehind",
+        "kissWith",
+        "noseBoop",
+        "cheekRest",
+        "foreheadBump",
+        "squeezeCheeks",
+        "extraSquishCheek",
+        "extraPatCheek",
+        "extraCupCheek",
+        "extraBrushCheek",
+    ]);
+
+    const POINTING_ACTION_KEYS = new Set([
+        "extraPointDramatically",
+    ]);
+
+    function customActionImageCategory(spec) {
+        const key = String(spec?.key || "");
+        if (HAIR_ACTION_KEYS.has(key)) return "hair";
+        if (POINTING_ACTION_KEYS.has(key)) return "pointing";
+        if (FACE_ACTION_KEYS.has(key)) return "face";
+        return "default";
+    }
     const CUSTOM_ACTIVITY_FAST_TOKENS = Object.freeze(ALL_PLUGIN_ACTIVITIES.map(spec => Object.freeze({
         spec,
         compactName: spec.name.replace(/[^a-z0-9]/gi, "").toLowerCase(),
@@ -544,6 +577,7 @@ function SubbysPlushiesPageMain() {
         extraActions: false,
         sharedEmoteChains: true,
         expressionReactions: true,
+        ignorePoseChangingEmotes: false,
     });
     let IDLE_MIN_DELAY_MS = 22000;
     let IDLE_MAX_DELAY_MS = 48000;
@@ -728,8 +762,13 @@ function SubbysPlushiesPageMain() {
     const UPDATE_MANIFEST_URL = `${REPOSITORY_RAW_ROOT}/version.json`;
     const PLUSH_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/plushies`;
     const SFX_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/sfx`;
-    const HUG_TIGHTLY_ICON_URL = `${PLUSH_ASSET_ROOT}/hugtightly.png`;
     const plushAsset = fileName => `${PLUSH_ASSET_ROOT}/${fileName}`;
+
+    // Shared activity artwork. Every custom action resolves to one of these
+    // three images, or to the default Subbycat artwork.
+    const HAIR_ACTION_ICON_URL = plushAsset("hairaction.png");
+    const FACE_ACTION_ICON_URL = plushAsset("faceaction.png");
+    const POINTING_ACTION_ICON_URL = plushAsset("pointing.png");
 
     const PURR_SFX_URLS = Object.freeze([
         `${SFX_ASSET_ROOT}/purr.mp3`,
@@ -884,8 +923,8 @@ function SubbysPlushiesPageMain() {
         shadow: "#17121D",
     });
     const LOFI_PREVIEW_RECT = Object.freeze({ x: 1040, y: 738, w: 910, h: 82 });
-    const USE_MENU_PAGE_SIZE = 12;
-    const USE_MENU_NAV_RECT = Object.freeze({ x: 1510, y: 650, w: 430, h: 58 });
+    const USE_MENU_PAGE_SIZE = 16;
+    const USE_MENU_NAV_RECT = Object.freeze({ x: 1040, y: 770, w: 430, h: 58 });
     const USE_MENU_BACK_RECT = Object.freeze({ x: 1040, y: 650, w: 430, h: 58 });
     const USE_MENU_PREVIOUS_RECT = Object.freeze({ x: 1410, y: 103, w: 54, h: 28 });
     const LAYOUT_DEFAULTS = Object.freeze({
@@ -949,8 +988,6 @@ function SubbysPlushiesPageMain() {
         Presets: Object.freeze({ x: 1040, y: 914, w: 280, h: 58 }),
         Extensions: Object.freeze({ x: 1335, y: 914, w: 300, h: 58 }),
         Battle: Object.freeze({ x: 1650, y: 914, w: 300, h: 58 }),
-        Balance: Object.freeze({ x: 1040, y: 770, w: 280, h: 58 }),
-
         Protect: Object.freeze({ x: 1040, y: 842, w: 280, h: 58 }),
         Jealous: Object.freeze({ x: 1335, y: 842, w: 300, h: 58 }),
         Drag: Object.freeze({ x: 1650, y: 842, w: 300, h: 58 }),
@@ -961,6 +998,8 @@ function SubbysPlushiesPageMain() {
         Speech: Object.freeze({ x: 1335, y: 690, w: 300, h: 58 }),
         EmotesSettings: Object.freeze({ x: 1650, y: 690, w: 300, h: 58 }),
         ExtraActions: Object.freeze({ x: 1040, y: 770, w: 280, h: 58 }),
+        IgnorePoseChanges: Object.freeze({ x: 1650, y: 770, w: 300, h: 58 }),
+        SettingsBack: Object.freeze({ x: 1640, y: 103, w: 235, h: 38 }),
     });
 
     const USE_MENU_EMOTES = Object.freeze([
@@ -973,7 +1012,7 @@ function SubbysPlushiesPageMain() {
 
     const EXTENSIONS_IDENTIFIER = "SubbysPlushies";
     const EXTENSIONS_BUTTON_TEXT = "Subby's Plushies";
-    const EXTENSIONS_TABS = Object.freeze(["status", "lore", "plushies", "history", "settings", "layout", "progress", "backup", "commands"]);
+    const EXTENSIONS_TABS = Object.freeze(["status", "lore", "settings", "progress", "commands"]);
 
     const CURRENT_COMMAND_GROUPS = Object.freeze([
         Object.freeze({
@@ -990,15 +1029,15 @@ function SubbysPlushiesPageMain() {
             ]),
         }),
         Object.freeze({
-            title: "Extensions Tabs",
+            title: "Extensions & Navigation",
             commands: Object.freeze([
                 Object.freeze({ command: "/plushieextensions", description: "Open the Subby's Plushies Extensions control center on Settings." }),
                 Object.freeze({ command: "/plushiestatus", description: "Open the Status tab." }),
-                Object.freeze({ command: "/plushiesettings", description: "Open the Settings tab." }),
-                Object.freeze({ command: "/plushielayout", description: "Open the Layout customization tab." }),
-                Object.freeze({ command: "/plushieplushies", description: "Open the Plushies tab with relationships, favorites, emotes, and saved poses." }),
-                Object.freeze({ command: "/plushiehistory", description: "Open the History tab for plushie battles." }),
-                Object.freeze({ command: "/plushiebackup", description: "Open the Backup / Restore tab." }),
+                Object.freeze({ command: "/plushiesettings", description: "Open Settings → General." }),
+                Object.freeze({ command: "/plushielayout", description: "Open Settings → Layout customization." }),
+                Object.freeze({ command: "/plushieplushies", description: "Open Progress → Plushies with relationships, favorites, emotes, and saved poses." }),
+                Object.freeze({ command: "/plushiehistory", description: "Open Progress → Battle History." }),
+                Object.freeze({ command: "/plushiebackup", description: "Open Progress → Backup / Restore." }),
                 Object.freeze({ command: "/plushiecommands", description: "Open the Commands tab directly." }),
                 Object.freeze({ command: "/plushiecommand", description: "Alias for /plushiecommands." }),
             ]),
@@ -1034,6 +1073,7 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushiespeech", description: "Toggle local automatic speech bubbles." }),
                 Object.freeze({ command: "/plushieextraactions", description: "Toggle optional non-plush Extra Actions. Disabled by default." }),
                 Object.freeze({ command: "/plushiewavechain", description: "Toggle left-to-right shared Wave emote chains." }),
+                Object.freeze({ command: "/plushieignoreposes", description: "Toggle ignoring pose-changing plugin emotes such as Wave and Raise Both Arms." }),
                 Object.freeze({ command: "/plushieexpressions", description: "Toggle short expression reactions to plushie and Extra Actions." }),
                 Object.freeze({ command: "/plushiespeak", description: "Force one local plushie speech bubble." }),
                 Object.freeze({ command: "/plushiebubble", description: "Alias for /plushiespeak." }),
@@ -1078,6 +1118,7 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushieupdateopen", description: "Open the latest update / download page." }),
                 Object.freeze({ command: "/plushiedata", description: "Show Git-backed data source and cache status." }),
                 Object.freeze({ command: "/plushiedatareload", description: "Force-refresh validated data files from GitHub." }),
+                Object.freeze({ command: "/plushieversion", description: "Show the currently running addon version and pose-safety status." }),
                 Object.freeze({ command: "/plushiedebug", description: "Print detailed addon diagnostics to the browser console." }),
             ]),
         }),
@@ -1100,7 +1141,9 @@ function SubbysPlushiesPageMain() {
     const lazyNativeImageElementsBySource = new Map();
     const lazyNativeImageSourceByElement = new WeakMap();
     let renderFallbackImage = null;
-    let hugTightlyIconImage = null;
+    let hairActionIconImage = null;
+    let faceActionIconImage = null;
+    let pointingActionIconImage = null;
 
     // DOM/UI previews should never mistake the lazy-render placeholder for the
     // plushie's real artwork. Use a prepared optimized render when available;
@@ -1336,6 +1379,7 @@ function SubbysPlushiesPageMain() {
     let extensionsPanelElement = null;
     let extensionsPanelContent = null;
     let extensionsActiveTab = "status";
+    let extensionsSettingsTab = "general";
     let extensionsProgressTab = "stats";
     let extensionsLoreSelectedName = null;
     let extensionsIntegrationTimer = null;
@@ -1682,6 +1726,7 @@ function SubbysPlushiesPageMain() {
             extraActions: storedBoolean("extraActions"),
             sharedEmoteChains: storedBoolean("sharedEmoteChains"),
             expressionReactions: storedBoolean("expressionReactions"),
+            ignorePoseChangingEmotes: storedBoolean("ignorePoseChangingEmotes"),
             performanceMode: String(stored.performanceMode || "normal").toLowerCase() === "low" ? "low" : "normal",
         };
         return featureSettingsState;
@@ -1704,6 +1749,20 @@ function SubbysPlushiesPageMain() {
         if (key === "extraActions") {
             syncExtraActionsAvailability("setting toggle");
         }
+        if (key === "ignorePoseChangingEmotes" && settings[key]) {
+            for (const [sessionKey, session] of [...extraRaisedArmSessions.entries()]) {
+                if (session?.timer != null) window.clearTimeout(session.timer);
+                extraRaisedArmSessions.delete(sessionKey);
+            }
+
+            if (typeof resetTemporaryArmsToBase === "function") {
+                if (window.Player) resetTemporaryArmsToBase(window.Player, "pose-safety enabled");
+                for (const C of Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : []) {
+                    if (C && C !== window.Player) resetTemporaryArmsToBase(C, "pose-safety enabled");
+                }
+            }
+        }
+        if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return settings[key];
     }
 
@@ -1872,8 +1931,8 @@ function SubbysPlushiesPageMain() {
     function useMenuLayoutMetrics() {
         const compact = getLayoutSettings().useMenuDensity === "compact";
         return compact
-            ? { startY: 162, rowGap: 70, buttonH: 52, subStartY: 176, subRowGap: 90, searchTop: 105, searchHeight: 26, searchWidth: 340 }
-            : { startY: 164, rowGap: 82, buttonH: 62, subStartY: 182, subRowGap: 106, searchTop: 104, searchHeight: 28, searchWidth: 350 };
+            ? { startY: 162, rowGap: 66, buttonH: 50, subStartY: 176, subRowGap: 90, searchTop: 105, searchHeight: 26, searchWidth: 340 }
+            : { startY: 164, rowGap: 70, buttonH: 58, subStartY: 182, subRowGap: 106, searchTop: 104, searchHeight: 28, searchWidth: 350 };
     }
 
     function extensionsLayoutMetrics() {
@@ -5889,7 +5948,12 @@ function SubbysPlushiesPageMain() {
             HIDE_BEHIND_DURATION_MS = normalized.hideBehind.durationMs;
             HIDE_BEHIND_FACE_TRANSFORM = normalized.hideBehind.transform;
         } else if (fileName === "defaults.json") {
-            FEATURE_DEFAULTS = normalized.featureDefaults;
+            FEATURE_DEFAULTS = Object.freeze({
+                ...normalized.featureDefaults,
+                ignorePoseChangingEmotes: Object.prototype.hasOwnProperty.call(normalized.featureDefaults, "ignorePoseChangingEmotes")
+                    ? !!normalized.featureDefaults.ignorePoseChangingEmotes
+                    : false,
+            });
         } else if (fileName === "idle.json") {
             IDLE_MIN_DELAY_MS = Math.min(normalized.minDelayMs, normalized.maxDelayMs);
             IDLE_MAX_DELAY_MS = Math.max(normalized.minDelayMs, normalized.maxDelayMs);
@@ -7570,6 +7634,7 @@ function SubbysPlushiesPageMain() {
             extraActions: settings.extraActions,
             sharedEmoteChains: settings.sharedEmoteChains,
             expressionReactions: settings.expressionReactions,
+            ignorePoseChangingEmotes: settings.ignorePoseChangingEmotes,
             speechBubbles: settings.speechBubbles,
             autoUpdateChecks: settings.autoUpdateChecks,
             performanceMode: settings.performanceMode,
@@ -7870,6 +7935,7 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(enabled, "Speech bubbles", status.speechBubbles ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Extra Actions", status.extraActions ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Shared emote chains", status.sharedEmoteChains ? "ON" : "Off");
+        appendExtensionsKeyValue(enabled, "Ignore pose-changing emotes", status.ignorePoseChangingEmotes ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Expression reactions", status.expressionReactions ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Automatic update checks", status.autoUpdateChecks ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Performance mode", status.performanceMode === "low" ? "Low CPU" : "Normal");
@@ -7886,8 +7952,20 @@ function SubbysPlushiesPageMain() {
         container.appendChild(actions);
     }
 
-    function renderExtensionsSettings(container) {
+    function renderExtensionsSettingsGeneral(container) {
         const settings = getFeatureSettings();
+
+        const poseSafety = makeExtensionsSection(`Pose Safety • v${VERSION}`);
+        poseSafety.append(
+            extensionsSettingRow(
+                "Ignore Pose-Changing Emotes",
+                "Wave and Raise Both Arms still appear in chat, but this client ignores their pose changes entirely.",
+                settings.ignorePoseChangingEmotes,
+                () => toggleFeatureSetting("ignorePoseChangingEmotes")
+            )
+        );
+        container.appendChild(poseSafety);
+
         const section = makeExtensionsSection("Settings");
         section.append(
             extensionsSettingRow("Protect Me", "The held plush reacts to selected incoming actions.", settings.protectMe, () => toggleFeatureSetting("protectMe")),
@@ -7951,6 +8029,33 @@ function SubbysPlushiesPageMain() {
         );
         utility.appendChild(buttons);
         container.appendChild(utility);
+    }
+
+    function renderExtensionsSettings(container) {
+        const nav = document.createElement("div");
+        Object.assign(nav.style, {
+            display: "flex",
+            gap: "8px",
+            flexWrap: "wrap",
+            marginBottom: "12px",
+        });
+
+        const options = [
+            ["general", "General"],
+            ["layout", "Layout"],
+        ];
+
+        for (const [key, label] of options) {
+            nav.appendChild(makeExtensionsButton(label, () => {
+                extensionsSettingsTab = key;
+                renderExtensionsPanel();
+            }, { active: extensionsSettingsTab === key }));
+        }
+
+        container.appendChild(nav);
+
+        if (extensionsSettingsTab === "layout") renderExtensionsLayout(container);
+        else renderExtensionsSettingsGeneral(container);
     }
 
     function renderExtensionsPlushies(container) {
@@ -8433,6 +8538,9 @@ function SubbysPlushiesPageMain() {
         const options = [
             ["stats", "Stats"],
             ["achievements", "Achievements"],
+            ["plushies", "Plushies"],
+            ["battlehistory", "Battle History"],
+            ["backup", "Backup"],
         ];
         for (const [key, label] of options) {
             nav.appendChild(makeExtensionsButton(label, () => {
@@ -8441,7 +8549,11 @@ function SubbysPlushiesPageMain() {
             }, { active: extensionsProgressTab === key }));
         }
         container.appendChild(nav);
+
         if (extensionsProgressTab === "achievements") renderExtensionsAchievements(container);
+        else if (extensionsProgressTab === "plushies") renderExtensionsPlushies(container);
+        else if (extensionsProgressTab === "battlehistory") renderExtensionsHistory(container);
+        else if (extensionsProgressTab === "backup") renderExtensionsBackup(container);
         else renderExtensionsStats(container);
     }
 
@@ -8481,11 +8593,53 @@ function SubbysPlushiesPageMain() {
             }
             target.commands.push(...additions);
         }
-        return groups;
+
+        const criticalCommands = [
+            {
+                command: "/plushieignoreposes",
+                description: "Toggle ignoring pose-changing plugin emotes such as Wave and Raise Both Arms."
+            },
+            {
+                command: "/plushieversion",
+                description: "Show the currently running Subby's Plushies version and pose-safety status."
+            },
+        ];
+        let safetyGroup = groups.find(group => group.title === "Safety");
+        if (!safetyGroup) {
+            safetyGroup = { title: "Safety", commands: [] };
+            groups.push(safetyGroup);
+        }
+        for (const entry of criticalCommands) {
+            const base = commandBase(entry.command);
+            if (documentedBases.has(base)) continue;
+            documentedBases.add(base);
+            safetyGroup.commands.push(entry);
+        }
+
+        return groups.filter(group => group.commands.length);
     }
 
     function renderExtensionsCommands(container) {
         const groups = commandGroupsForDisplay();
+
+        const overview = makeExtensionsSection(`Command Reference • v${VERSION}`);
+        const intro = document.createElement("div");
+        intro.textContent = "All commands below are executable by this build. Commands also appear in /help and autocomplete where supported.";
+        Object.assign(intro.style, {
+            color: getExtensionsStyle().muted,
+            lineHeight: "1.4",
+            marginBottom: "8px",
+        });
+
+        const navigation = document.createElement("div");
+        navigation.textContent = "Navigation: Settings → General / Layout • Progress → Stats / Achievements / Plushies / Battle History / Backup • Lore remains top-level.";
+        Object.assign(navigation.style, {
+            color: getExtensionsStyle().muted,
+            lineHeight: "1.4",
+        });
+
+        overview.append(intro, navigation);
+        container.appendChild(overview);
 
         for (const group of groups) {
             const section = makeExtensionsSection(group.title);
@@ -8553,12 +8707,8 @@ function SubbysPlushiesPageMain() {
         extensionsPanelContent.innerHTML = "";
         extensionsPanelElement.style.font = `${extensionsLayoutMetrics().fontSize}px Arial, sans-serif`;
         if (extensionsActiveTab === "lore") renderExtensionsLore(extensionsPanelContent);
-        else if (extensionsActiveTab === "plushies") renderExtensionsPlushies(extensionsPanelContent);
-        else if (extensionsActiveTab === "history") renderExtensionsHistory(extensionsPanelContent);
         else if (extensionsActiveTab === "settings") renderExtensionsSettings(extensionsPanelContent);
-        else if (extensionsActiveTab === "layout") renderExtensionsLayout(extensionsPanelContent);
         else if (extensionsActiveTab === "progress") renderExtensionsProgress(extensionsPanelContent);
-        else if (extensionsActiveTab === "backup") renderExtensionsBackup(extensionsPanelContent);
         else if (extensionsActiveTab === "commands") renderExtensionsCommands(extensionsPanelContent);
         else renderExtensionsStatus(extensionsPanelContent);
 
@@ -8629,7 +8779,25 @@ function SubbysPlushiesPageMain() {
 
     function openExtensionsPanel(tab = "status", fromNativePreference = false) {
         const requestedTab = String(tab || "status").toLowerCase();
-        if (requestedTab === "stats" || requestedTab === "achievements") {
+
+        if (requestedTab === "layout") {
+            extensionsSettingsTab = "layout";
+            extensionsActiveTab = "settings";
+        } else if (requestedTab === "settings") {
+            extensionsSettingsTab = "general";
+            extensionsActiveTab = "settings";
+        } else if (requestedTab === "plushies") {
+            extensionsProgressTab = "plushies";
+            extensionsActiveTab = "progress";
+        } else if (requestedTab === "history") {
+            extensionsProgressTab = "battlehistory";
+            extensionsActiveTab = "progress";
+        } else if (
+            requestedTab === "stats" ||
+            requestedTab === "achievements" ||
+            requestedTab === "backup" ||
+            requestedTab === "battlehistory"
+        ) {
             extensionsProgressTab = requestedTab;
             extensionsActiveTab = "progress";
         } else if (EXTENSIONS_TABS.includes(requestedTab)) {
@@ -8690,7 +8858,7 @@ function SubbysPlushiesPageMain() {
             background: getExtensionsStyle().header,
             flexWrap: "wrap",
         });
-        const labels = { status: "Status", lore: "Lore", plushies: "Plushies", history: "History", settings: "Settings", layout: "Layout", progress: "Progress", backup: "Backup", commands: "Commands" };
+        const labels = { status: "Status", lore: "Lore", settings: "Settings", progress: "Progress", commands: "Commands" };
         for (const tab of EXTENSIONS_TABS) {
             const button = makeExtensionsButton(labels[tab], () => {
                 extensionsActiveTab = tab;
@@ -8927,7 +9095,14 @@ function SubbysPlushiesPageMain() {
         );
     }
 
+    function normalizePlushieCommandInput(command) {
+        let normalized = String(command || "").trim().toLowerCase();
+        if (/^plushie(?:[a-z]|$)/.test(normalized)) normalized = `/${normalized}`;
+        return normalized;
+    }
+
     function consumeCommand(command) {
+        command = normalizePlushieCommandInput(command);
         if (command === "/help plushie" || command === "/help plushies") {
             requireReady(() => showPlushieHelp({ detailed: true }));
             return true;
@@ -8945,15 +9120,24 @@ function SubbysPlushiesPageMain() {
             return true;
         }
         if (command === "/plushielayout") {
-            requireReady(() => openExtensionsPanel("layout"));
+            requireReady(() => {
+                extensionsSettingsTab = "layout";
+                openExtensionsPanel("settings");
+            });
             return true;
         }
         if (command === "/plushieplushies" || command === "/plushieposes") {
-            requireReady(() => openExtensionsPanel("plushies"));
+            requireReady(() => {
+                extensionsProgressTab = "plushies";
+                openExtensionsPanel("progress");
+            });
             return true;
         }
         if (command === "/plushiebackup") {
-            requireReady(() => openExtensionsPanel("backup"));
+            requireReady(() => {
+                extensionsProgressTab = "backup";
+                openExtensionsPanel("progress");
+            });
             return true;
         }
         if (command === "/plushieexport") {
@@ -9075,7 +9259,13 @@ function SubbysPlushiesPageMain() {
             requireReady(() => { void checkForUpdates({ silent: false }); });
             return true;
         }
-        if (command === "/plushiehistory") { requireReady(() => openExtensionsPanel("history")); return true; }
+        if (command === "/plushiehistory") {
+            requireReady(() => {
+                extensionsProgressTab = "battlehistory";
+                openExtensionsPanel("progress");
+            });
+            return true;
+        }
         if (command === "/plushieperformance" || command.startsWith("/plushieperformance ")) {
             requireReady(() => {
                 const arg = command.slice("/plushieperformance".length).trim();
@@ -9100,6 +9290,29 @@ function SubbysPlushiesPageMain() {
         if (command === "/plushiespeech") { requireReady(() => { const enabled = toggleFeatureSetting("speechBubbles"); appendLocalInfoBox("Speech Bubbles", [`Speech Bubbles are now ${enabled ? "ON" : "off"}.`]); }); return true; }
         if (command === "/plushieextraactions") { requireReady(() => { const enabled = toggleFeatureSetting("extraActions"); appendLocalInfoBox("Extra Actions", [`Extra Actions are now ${enabled ? "ON" : "off"}.`, enabled ? "Non-plush actions are appended after all plushie actions." : "Optional non-plush actions were removed from the activity list."], { compact: true }); }); return true; }
         if (command === "/plushiewavechain") { requireReady(() => { const enabled = toggleFeatureSetting("sharedEmoteChains"); appendLocalInfoBox("Shared Emote Chains", [`Left-to-right Wave chains are now ${enabled ? "ON" : "off"}.`], { compact: true }); }); return true; }
+        if (command === "/plushieversion") {
+            appendLocalInfoBox("Subby's Plushies Version", [
+                `Running v${VERSION} (${BUILD_DATE}).`,
+                `Pose-changing emotes: ${getFeatureSettings().ignorePoseChangingEmotes ? "IGNORED" : "allowed"}.`
+            ], { compact: true });
+            return true;
+        }
+        if (command === "/plushieignoreposes") {
+            requireReady(() => {
+                const enabled = toggleFeatureSetting("ignorePoseChangingEmotes");
+                appendLocalInfoBox(
+                    "Ignore Pose-Changing Emotes",
+                    [
+                        `Pose-changing plugin emotes are now ${enabled ? "IGNORED" : "allowed"}.`,
+                        enabled
+                            ? "Wave and Raise Both Arms will keep their chat text but will not move characters on this client."
+                            : "Wave and Raise Both Arms may animate the upper body again."
+                    ],
+                    { compact: true }
+                );
+            });
+            return true;
+        }
         if (command === "/plushieexpressions") { requireReady(() => { const enabled = toggleFeatureSetting("expressionReactions"); appendLocalInfoBox("Expression Reactions", [`Expression reactions are now ${enabled ? "ON" : "off"}.`], { compact: true }); }); return true; }
         if (command === "/plushiebattle" || command.startsWith("/plushiebattle ")) {
             requireReady(() => challengePlushBattle(command.slice("/plushiebattle".length).trim()));
@@ -9118,6 +9331,7 @@ function SubbysPlushiesPageMain() {
                     `Speech bubbles: ${settings.speechBubbles ? "ON" : "off"}`,
                     `Extra Actions: ${settings.extraActions ? "ON" : "off"}`,
                     `Shared emote chains: ${settings.sharedEmoteChains ? "ON" : "off"}`,
+                    `Ignore pose-changing emotes: ${settings.ignorePoseChangingEmotes ? "ON" : "off"}`,
                     `Expression reactions: ${settings.expressionReactions ? "ON" : "off"}`,
                     `Performance mode: ${settings.performanceMode === "low" ? "Low CPU" : "Normal"}`,
                 ]);
@@ -9178,7 +9392,7 @@ function SubbysPlushiesPageMain() {
             if (handlePlushieChatAutocomplete(event, input)) return;
             if (event.key !== "Enter") return;
 
-            const command = String(input.value || "").trim().toLowerCase();
+            const command = normalizePlushieCommandInput(input.value);
             if (!consumeCommand(command)) return;
 
             event.preventDefault();
@@ -9198,7 +9412,7 @@ function SubbysPlushiesPageMain() {
 
         const installed = installHook("ChatRoomSendChat", 20000, (args, next) => {
             const input = document.getElementById("InputChat");
-            const command = String(input?.value || "").trim().toLowerCase();
+            const command = normalizePlushieCommandInput(input?.value);
             if (!command) return next(args);
             if (command === "/help") {
                 const result = next(args);
@@ -9884,6 +10098,16 @@ function SubbysPlushiesPageMain() {
     function applyTemporaryRaisedArm(C, durationMs = EXTRA_RAISE_ARM_DURATION_MS, source = "extra-action") {
         if (!C) return false;
 
+        // Local opt-out: keep the chat action but ignore every pose-changing
+        // effect owned by this feature. Currently this covers Wave and Raise Both Arms.
+        if (getFeatureSettings().ignorePoseChangingEmotes) {
+            log("Ignored pose-changing emote.", {
+                source,
+                memberNumber: C?.MemberNumber ?? null,
+            });
+            return false;
+        }
+
         const key = extraActionCharacterKey(C);
         const existing = extraRaisedArmSessions.get(key);
 
@@ -9908,16 +10132,43 @@ function SubbysPlushiesPageMain() {
                 })(),
             };
 
-        const desired = [...beforeState.activePose.filter(pose => pose !== EXTRA_ARM_RAISED_POSE && pose !== EXTRA_ARM_BASE_POSE), EXTRA_ARM_RAISED_POSE];
+        // IMPORTANT: change only the UPPER-body pose family.
+        // Passing the entire ActivePose array through CharacterSetActivePose can
+        // cause BC to re-evaluate lower-body pose compatibility and stand a
+        // kneeling/sitting character up. A single OverTheHead pose with ForceChange
+        // replaces BaseUpper while preserving Kneel/BaseLower/etc.
+        let applied = false;
+        try {
+            if (typeof window.CharacterSetActivePose === "function") {
+                window.CharacterSetActivePose(C, EXTRA_ARM_RAISED_POSE, true);
+                applied = activePoseSnapshot(C).includes(EXTRA_ARM_RAISED_POSE);
+            }
+        } catch (e) {
+            warn("Could not apply upper-body raised-arm pose:", e);
+        }
 
-        if (!setExtraActionActivePoses(C, desired)) {
+        // Compatibility fallback: replace ONLY the known upper-body pose entries
+        // in ActivePose. Preserve every lower-body pose exactly as-is.
+        if (!applied) {
+            try {
+                const active = activePoseSnapshot(C)
+                    .filter(pose =>
+                        pose !== EXTRA_ARM_RAISED_POSE &&
+                        pose !== EXTRA_ARM_BASE_POSE
+                    );
+                active.push(EXTRA_ARM_RAISED_POSE);
+                C.ActivePose = active;
+                refreshExtraActionPose(C);
+                applied = activePoseSnapshot(C).includes(EXTRA_ARM_RAISED_POSE);
+            } catch (_) {}
+        }
+
+        if (!applied) {
             extraRaisedArmSessions.delete(key);
             diagnoseExtraActionArmPose(C, `${source}: pose rejected`);
             return false;
         }
 
-        // CharacterSetActivePose may also update C.Pose. That's fine while the
-        // animation is active; beforeState keeps the exact pre-animation copy.
         const session = {
             beforeState,
             source,
@@ -14526,13 +14777,32 @@ function SubbysPlushiesPageMain() {
         for (let i = 0; i < renderImages.length; i++) renderImages[i] = renderFallbackImage;
         for (const index of renderIndexesForSource(PLUSH_IMAGES[0])) renderImages[index] = renderFallbackImage;
 
-        try {
-            hugTightlyIconImage = await renderSmallPlush(HUG_TIGHTLY_ICON_URL, HUG_TIGHTLY_ACTIVITY_LABEL);
-            log("Prepared Hug Tightly activity icon from assets/plushies/hugtightly.png.");
-        } catch (e) {
-            hugTightlyIconImage = renderFallbackImage;
-            warn("Could not load assets/plushies/hugtightly.png; using the plush image as the activity icon.", e);
-        }
+        const prepareActionIcon = async (url, label, fileName) => {
+            try {
+                const image = await renderSmallPlush(url, label);
+                log(`Prepared shared action icon from assets/plushies/${fileName}.`);
+                return image || renderFallbackImage;
+            } catch (e) {
+                warn(`Could not load assets/plushies/${fileName}; using subbycat.png instead.`, e);
+                return renderFallbackImage;
+            }
+        };
+
+        hairActionIconImage = await prepareActionIcon(
+            HAIR_ACTION_ICON_URL,
+            "Hair Action",
+            "hairaction.png"
+        );
+        faceActionIconImage = await prepareActionIcon(
+            FACE_ACTION_ICON_URL,
+            "Face Action",
+            "faceaction.png"
+        );
+        pointingActionIconImage = await prepareActionIcon(
+            POINTING_ACTION_ICON_URL,
+            "Point Dramatically",
+            "pointing.png"
+        );
 
         imageMappings = buildImageMappings();
         log(`Prepared startup artwork only; ${PLUSHES.length - renderIndexesForSource(PLUSH_IMAGES[0]).length} plush option(s) will load lazily on first use.`);
@@ -14742,8 +15012,21 @@ function SubbysPlushiesPageMain() {
 
     const IMAGE_COMPACT_HUG_NAME = compactActivityName(HUG_TIGHTLY_ACTIVITY_NAME);
     const IMAGE_CUSTOM_ACTIVITY_TOKENS = Object.freeze(
-        CUSTOM_PLUSH_ACTIVITIES.map(spec => Object.freeze({ spec, name: compactActivityName(spec.name) }))
+        ALL_PLUGIN_ACTIVITIES.map(spec => Object.freeze({ spec, name: compactActivityName(spec.name) }))
     );
+
+    function resolvedCustomActionImage(spec) {
+        switch (customActionImageCategory(spec)) {
+            case "hair":
+                return hairActionIconImage || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
+            case "face":
+                return faceActionIconImage || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
+            case "pointing":
+                return pointingActionIconImage || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
+            default:
+                return renderFallbackImage || PLUSH_FALLBACK_IMAGE;
+        }
+    }
 
     function normalizeAssetImagePath(source) {
         if (typeof source !== "string") return null;
@@ -14858,15 +15141,12 @@ function SubbysPlushiesPageMain() {
             compactNormalized.includes("hugtightlyitem") ||
             compactNormalized.includes("subbysplushieshugtightly")
         ) {
-            return hugTightlyIconImage || renderImages[0] || source;
+            // Hug Tightly does not belong to hair/face/pointing, so use Subbycat.
+            return renderFallbackImage || PLUSH_FALLBACK_IMAGE || source;
         }
 
         if (extraActivitySpec) {
-            const selected = getItemPlushOption(getHeld(window.Player));
-            if (validPlushOption(selected) && renderImages[selected] === renderFallbackImage && PLUSH_IMAGES[selected] !== PLUSH_IMAGES[0]) {
-                void ensureRenderImage(selected);
-            }
-            return validPlushOption(selected) ? uiPlushImageSource(selected) : uiPlushImageSource(0) || source;
+            return resolvedCustomActionImage(extraActivitySpec) || source;
         }
 
         if (!normalized.includes(ASSET_NAME)) return source;
@@ -15579,7 +15859,6 @@ function SubbysPlushiesPageMain() {
         }
 
         if (!settingsPage && !emotesPage && !presetsPage) {
-            drawButton(FEATURE_MENU.Balance, "Balance Minigame");
             drawButton(FEATURE_MENU.Emotes, "Emotes");
             drawButton(FEATURE_MENU.Mascot, roomMascotState?.name ? `Mascot: ${roomMascotState.name}` : "Set Room Mascot");
             drawButton(FEATURE_MENU.Settings, "Settings");
@@ -15588,17 +15867,22 @@ function SubbysPlushiesPageMain() {
             drawButton(FEATURE_MENU.Battle, "Battle");
         } else if (settingsPage) {
             const settings = getFeatureSettings();
+            drawButton(FEATURE_MENU.SettingsBack, "Back to plushies");
             drawButton(FEATURE_MENU.Idle, `Idle Animation: ${settings.idleAnimations ? "ON" : "off"}`, settings.idleAnimations);
             drawButton(FEATURE_MENU.Speech, `Speech Bubbles: ${settings.speechBubbles ? "ON" : "off"}`, settings.speechBubbles);
             drawButton(FEATURE_MENU.EmotesSettings, "Emotes");
             drawButton(FEATURE_MENU.ExtraActions, `Extra Actions: ${settings.extraActions ? "ON" : "off"}`, settings.extraActions);
+            drawButton(
+                FEATURE_MENU.IgnorePoseChanges,
+                `Ignore Pose Changes: ${settings.ignorePoseChangingEmotes ? "ON" : "off"}`,
+                settings.ignorePoseChangingEmotes
+            );
             drawButton(FEATURE_MENU.Protect, `Protect Me: ${settings.protectMe ? "ON" : "off"}`, settings.protectMe);
             drawButton(FEATURE_MENU.Jealous, `Jealous: ${settings.jealousPlushie ? "ON" : "off"}`, settings.jealousPlushie);
             drawButton(FEATURE_MENU.Drag, `Drag UI: ${dragModeEnabled ? "ON" : "off"}`, dragModeEnabled);
             drawButton(FEATURE_MENU.MascotVisible, `Mascot Picture: ${settings.showRoomMascot ? "ON" : "hidden"}`, settings.showRoomMascot);
             drawButton(FEATURE_MENU.AutoUpdate, `Auto Update Check: ${settings.autoUpdateChecks ? "ON" : "off"}`, settings.autoUpdateChecks);
             drawButton(FEATURE_MENU.Update, "Check Update Now");
-            drawButton({ x: MENU.BackX, y: MENU.BackY, w: MENU.BackW, h: MENU.BackH }, "Back to plushies");
             return;
         }
 
@@ -15689,6 +15973,7 @@ function SubbysPlushiesPageMain() {
                 return true;
             }
             if (mouseInRect(FEATURE_MENU.ExtraActions)) { toggleFeatureSetting("extraActions"); return true; }
+            if (mouseInRect(FEATURE_MENU.IgnorePoseChanges)) { toggleFeatureSetting("ignorePoseChangingEmotes"); return true; }
             if (mouseInRect(FEATURE_MENU.Protect)) { toggleFeatureSetting("protectMe"); return true; }
             if (mouseInRect(FEATURE_MENU.Jealous)) { toggleFeatureSetting("jealousPlushie"); return true; }
             if (mouseInRect(FEATURE_MENU.Drag)) { openDragUi(); return true; }
@@ -15699,7 +15984,7 @@ function SubbysPlushiesPageMain() {
             }
             if (mouseInRect(FEATURE_MENU.AutoUpdate)) { toggleFeatureSetting("autoUpdateChecks"); return true; }
             if (mouseInRect(FEATURE_MENU.Update)) { void checkForUpdates({ silent: false }); return true; }
-            if (mouseInRect({ x: MENU.BackX, y: MENU.BackY, w: MENU.BackW, h: MENU.BackH })) {
+            if (mouseInRect(FEATURE_MENU.SettingsBack)) {
                 plushMenuPage = "characters";
                 plushMenuListPage = 0;
                 return true;
@@ -15740,11 +16025,6 @@ function SubbysPlushiesPageMain() {
             return mouseInRect({ x: MENU.PanelX, y: MENU.PanelY, w: MENU.PanelW, h: MENU.PanelH });
         }
 
-        if (mouseInRect(FEATURE_MENU.Balance)) {
-            closeCustomPlushMenu();
-            window.setTimeout(startBalanceHeadMinigame, 0);
-            return true;
-        }
         if (mouseInRect(FEATURE_MENU.Emotes)) {
             plushMenuReturnPage = "characters";
             plushMenuPage = "emotes";
@@ -16724,7 +17004,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.1.12";
+    const VERSION = "3.1.21";
     const BRIDGE_ATTR = "data-subbys-plushies-page-bridge";
     const BRIDGE_VALUE = `v${VERSION}`;
 

@@ -1,8 +1,8 @@
 {
-  "version": "3.1.9",
-  "released": "2026-10-05",
+  "version": "3.1.21",
+  "released": "2026-10-06",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Since v3.0.0: Expanded the v3 activity/emote set with 20+ plushie and social actions. Added shared room emote chains, including Start a Wave Emote with left-to-right sequencing. Wave participants now raise both arms for 3 seconds and return to BC's BaseUpper arm pose. Added Raise Both Arms with a 5-second temporary OverTheHead pose and reliable BaseUpper reset. Added Measure Height with dynamic height-comparison chat text and sender-side local rendering. Added nickname-aware dialogue so action text uses character nicknames/display names correctly. Updated plushie action dialogue to include the selected plushie's name where appropriate. Added expression reactions for supported activities. Added activity/search improvements for the extra/social action menus. Removed the automatic hourly room-mascot cycle; mascot changes are manual. Updated room mascot behavior and compatibility handling. Moved poke-style jealousy behavior into Jealous and added boop/bap handling to Protect. Changed affection idle decay to -1 every 8 hours for plushies that are not currently being held. Held plushies are excluded from idle affection decay. Improved drag/move/resize persistence and plushie positioning behavior. Improved gender-aware and possessive action text. Improved synced/non-local emote and custom activity networking. Improved custom activity packet normalization so plugin actions survive R132 activity packet differences. Improved sender-side chat rendering and duplicate suppression for custom plugin actions. Added arm-pose diagnostics and console helpers for testing/resetting temporary poses. Added Rey plushie using assets/plushies/rey.png. Added Rey's built-in lore. Added Margot plushie using assets/plushies/margot.png. Added a hidden-lore placeholder for Margot. Preserved legacy Subbycat wire option 18 for backwards compatibility while adding Rey and Margot. Expanded the public plushie count to 20. Kept Opera/R132-compatible bootstrap and userscript loading behavior.",
+  "notes": "Updated repository documentation and command reference. README.md now documents the current v3.1.21 feature set, navigation, plushies, actions, action-image mapping, pose safety, data files, and complete command catalog. The in-addon Commands tab now includes the current navigation layout and documents /plushieversion in the authoritative command list. commands.json is synchronized with the executable commands. Reworked custom activity artwork into three shared assets. Hair actions use assets/plushies/hairaction.png, cheek/face actions use assets/plushies/faceaction.png, Point Dramatically uses assets/plushies/pointing.png, and every action outside those categories—including Hug Tightly—uses the default subbycat.png artwork. The resolver now covers both plushie activities and Extra Actions. Reorganized the Extensions control center and plush selector: plushie pages now show 16 entries, Layout moved under Settings as a General/Layout sub-tab, and Plushies moved under Progress while Lore remains a top-level tab. Legacy commands and direct tab requests redirect to the new locations. Refined the handheld menu layout: Back to plushies now lives inside the actual top-right menu header, the Balance Minigame menu button was removed, plushie pages now show 14 entries instead of 12, and the Next/Previous Page button was moved down into the row previously occupied by Balance Minigame. Cleaned up the handheld Settings layout: removed the Pose Safety/version status text and moved Back to plushies into a dedicated compact top-right Settings button so it no longer overlaps the feature controls. Moved Battle History out of the top-level Extensions navigation and into Progress as its own sub-tab beside Stats, Achievements, and Backup. /plushiehistory now opens Progress → Battle History, and legacy requests to open the old History tab are redirected there automatically. Moved Backup / Restore out of the top-level Extensions navigation and into Progress as a third sub-tab beside Stats and Achievements. /plushiebackup now opens Progress → Backup, and legacy attempts to open the old backup tab are redirected there automatically. Fixed Pose Safety exposure and command registration. Ignore Pose-Changing Emotes is now the first dedicated Extension Settings section and has a guaranteed handheld Settings slot with a visible v3.1.14 status line. Both /plushieignoreposes and plushieignoreposes are accepted, /plushieversion was added, critical safety commands are preserved even after Git command data refresh, and enabling pose-ignore immediately cancels active Wave/Raise Both Arms poses. Added Ignore Pose-Changing Emotes. When enabled, Wave and Raise Both Arms keep their chat text but perform no pose changes on the local client. Also made arm animations kneeling-safe by changing only the upper-body pose family (BaseUpper/OverTheHead) instead of passing the full ActivePose array, so kneeling/sitting lower-body poses are preserved. Reworked sender-side custom emote rendering to reuse the proven Measure Height path: BC finishes ServerSend first, then the generated action row is appended on the next event-loop tick using the simple ChatMessageAction row. Duplicate suppression now requires an actual matching DOM row, not merely a previously-seen token. Fixed sender-side custom action text: outgoing plugin activities are now rendered synchronously from the exact normalized packet before ServerSend, and locally-created chat rows no longer carry sender/target routing metadata that could cause BC to suppress the actor's own row. Fixed nickname/pronoun-aware custom activities disappearing from chat. All Subby's Plushies custom activities now use the same deterministic local chat-row renderer for both sender and receiving addon clients, with token-based duplicate suppression. Since v3.0.0: Expanded the v3 activity/emote set with 20+ plushie and social actions. Added shared room emote chains, including Start a Wave Emote with left-to-right sequencing. Wave participants now raise both arms for 3 seconds and return to BC's BaseUpper arm pose. Added Raise Both Arms with a 5-second temporary OverTheHead pose and reliable BaseUpper reset. Added Measure Height with dynamic height-comparison chat text and sender-side local rendering. Added nickname-aware dialogue so action text uses character nicknames/display names correctly. Updated plushie action dialogue to include the selected plushie's name where appropriate. Added expression reactions for supported activities. Added activity/search improvements for the extra/social action menus. Removed the automatic hourly room-mascot cycle; mascot changes are manual. Updated room mascot behavior and compatibility handling. Moved poke-style jealousy behavior into Jealous and added boop/bap handling to Protect. Changed affection idle decay to -1 every 8 hours for plushies that are not currently being held. Held plushies are excluded from idle affection decay. Improved drag/move/resize persistence and plushie positioning behavior. Improved gender-aware and possessive action text. Improved synced/non-local emote and custom activity networking. Improved custom activity packet normalization so plugin actions survive R132 activity packet differences. Improved sender-side chat rendering and duplicate suppression for custom plugin actions. Added arm-pose diagnostics and console helpers for testing/resetting temporary poses. Added Rey plushie using assets/plushies/rey.png. Added Rey's built-in lore. Added Margot plushie using assets/plushies/margot.png. Added a hidden-lore placeholder for Margot. Preserved legacy Subbycat wire option 18 for backwards compatibility while adding Rey and Margot. Expanded the public plushie count to 20. Kept Opera/R132-compatible bootstrap and userscript loading behavior.",
   "changesSinceV3": [
     "Expanded the v3 activity/emote set with 20+ plushie and social actions.",
     "Added shared room emote chains, including Start a Wave Emote with left-to-right sequencing.",
@@ -25,12 +25,24 @@
     "Improved sender-side chat rendering and duplicate suppression for custom plugin actions.",
     "Added arm-pose diagnostics and console helpers for testing/resetting temporary poses.",
     "Added Rey plushie using assets/plushies/rey.png.",
-    "Added Rey's lore.",
+    "Added Rey's built-in lore.",
     "Added Margot plushie using assets/plushies/margot.png.",
     "Added a hidden-lore placeholder for Margot.",
     "Preserved legacy Subbycat wire option 18 for backwards compatibility while adding Rey and Margot.",
     "Expanded the public plushie count to 20.",
-    "Kept R132-compatible bootstrap and userscript loading behavior."
+    "Kept Opera/R132-compatible bootstrap and userscript loading behavior.",
+    "Fixed nickname/pronoun-aware custom activities disappearing from chat. All Subby's Plushies custom activities now use the same deterministic local chat-row renderer for both sender and receiving addon clients, with token-based duplicate suppression.",
+    "Fixed sender-side custom action text: outgoing plugin activities are now rendered synchronously from the exact normalized packet before ServerSend, and locally-created chat rows no longer carry sender/target routing metadata that could cause BC to suppress the actor's own row.",
+    "Reworked sender-side custom emote rendering to reuse the proven Measure Height path: BC finishes ServerSend first, then the generated action row is appended on the next event-loop tick using the simple ChatMessageAction row. Duplicate suppression now requires an actual matching DOM row, not merely a previously-seen token.",
+    "Added Ignore Pose-Changing Emotes. When enabled, Wave and Raise Both Arms keep their chat text but perform no pose changes on the local client. Also made arm animations kneeling-safe by changing only the upper-body pose family (BaseUpper/OverTheHead) instead of passing the full ActivePose array, so kneeling/sitting lower-body poses are preserved.",
+    "Fixed Pose Safety exposure and command registration. Ignore Pose-Changing Emotes is now the first dedicated Extension Settings section and has a guaranteed handheld Settings slot with a visible v3.1.14 status line. Both /plushieignoreposes and plushieignoreposes are accepted, /plushieversion was added, critical safety commands are preserved even after Git command data refresh, and enabling pose-ignore immediately cancels active Wave/Raise Both Arms poses.",
+    "Moved Backup / Restore out of the top-level Extensions navigation and into Progress as a third sub-tab beside Stats and Achievements. /plushiebackup now opens Progress → Backup, and legacy attempts to open the old backup tab are redirected there automatically.",
+    "Moved Battle History out of the top-level Extensions navigation and into Progress as its own sub-tab beside Stats, Achievements, and Backup. /plushiehistory now opens Progress → Battle History, and legacy requests to open the old History tab are redirected there automatically.",
+    "Cleaned up the handheld Settings layout: removed the Pose Safety/version status text and moved Back to plushies into a dedicated compact top-right Settings button so it no longer overlaps the feature controls.",
+    "Refined the handheld menu layout: Back to plushies now lives inside the actual top-right menu header, the Balance Minigame menu button was removed, plushie pages now show 14 entries instead of 12, and the Next/Previous Page button was moved down into the row previously occupied by Balance Minigame.",
+    "Reorganized the Extensions control center and plush selector: plushie pages now show 16 entries, Layout moved under Settings as a General/Layout sub-tab, and Plushies moved under Progress while Lore remains a top-level tab. Legacy commands and direct tab requests redirect to the new locations.",
+    "Reworked custom activity artwork into three shared assets. Hair actions use assets/plushies/hairaction.png, cheek/face actions use assets/plushies/faceaction.png, Point Dramatically uses assets/plushies/pointing.png, and every action outside those categories—including Hug Tightly—uses the default subbycat.png artwork. The resolver now covers both plushie activities and Extra Actions.",
+    "Updated repository documentation and command reference. README.md now documents the current v3.1.21 feature set, navigation, plushies, actions, action-image mapping, pose safety, data files, and complete command catalog. The in-addon Commands tab now includes the current navigation layout and documents /plushieversion in the authoritative command list. commands.json is synchronized with the executable commands."
   ],
   "history": [
     {
@@ -108,6 +120,130 @@
         "Preserved legacy Subbycat wire option 18.",
         "Expanded public plushie count to 20.",
         "Fixed the stale internal bootstrap version so all v3.1.9 version constants match."
+      ]
+    },
+    {
+      "version": "3.1.10",
+      "changes": [
+        "Fixed pronoun/nickname-aware custom emotes not appearing in chat.",
+        "All custom plugin activities now render for the sender through one common chat-row path.",
+        "Receiving addon clients render the same generated text directly instead of relying on R132's synthetic Beep action renderer.",
+        "Added per-action token deduplication so server echoes do not create duplicate chat rows."
+      ]
+    },
+    {
+      "version": "3.1.11",
+      "changes": [
+        "Fixed the actor not seeing their own pronoun/nickname-aware custom action text.",
+        "Outgoing custom actions now render locally before ServerSend instead of waiting for a possible self echo.",
+        "Removed data-sender/data-target routing metadata from manually-created local action rows.",
+        "Receiving players continue to see the same generated text through the network packet."
+      ]
+    },
+    {
+      "version": "3.1.12",
+      "changes": [
+        "Reused the working Measure Height sender-side chat rendering path for every custom activity.",
+        "Outgoing custom action rows are appended after ServerSend completes, on the next event-loop tick.",
+        "Restored the simple ChatMessage ChatMessageAction row class used by the working height-comparison fix.",
+        "Fixed token deduplication so a token only suppresses rendering when its chat row actually exists."
+      ]
+    },
+    {
+      "version": "3.1.13",
+      "changes": [
+        "Added Ignore Pose-Changing Emotes setting in the handheld Settings page and Extension Settings.",
+        "Added /plushieignoreposes command.",
+        "When ignored, Wave and Raise Both Arms still show chat text but do not move characters locally.",
+        "Changed temporary arm animation to use only the upper-body pose family.",
+        "Wave and Raise Both Arms no longer submit the whole ActivePose array, preventing kneeling/sitting characters from being stood up."
+      ]
+    },
+    {
+      "version": "3.1.14",
+      "changes": [
+        "Made Ignore Pose-Changing Emotes the first dedicated Extension Settings section.",
+        "Moved Ignore Pose Changes to a guaranteed visible handheld Settings slot.",
+        "Added visible Pose Safety/version status text to handheld Settings.",
+        "Made plushieignoreposes work with or without the leading slash.",
+        "Added /plushieversion for verifying the actually running build.",
+        "Protected critical pose-safety commands from Git commands.json refreshes.",
+        "Protected the pose-ignore default from older defaults.json files.",
+        "Enabling pose-ignore immediately cancels and resets active Wave/Raise Both Arms sessions."
+      ]
+    },
+    {
+      "version": "3.1.15",
+      "changes": [
+        "Removed Backup from the top-level Extensions tabs.",
+        "Added Backup as a third Progress sub-tab beside Stats and Achievements.",
+        "Kept all existing Export Backup and Import Backup behavior unchanged.",
+        "Updated /plushiebackup to open Progress → Backup.",
+        "Added compatibility redirect for code that still tries to open the old backup tab."
+      ]
+    },
+    {
+      "version": "3.1.16",
+      "changes": [
+        "Removed History from the top-level Extensions tabs.",
+        "Added Battle History as a Progress sub-tab.",
+        "Kept the existing last-20 battle history renderer and data unchanged.",
+        "Updated /plushiehistory to open Progress → Battle History.",
+        "Added compatibility redirect for code that still opens the old History tab."
+      ]
+    },
+    {
+      "version": "3.1.17",
+      "changes": [
+        "Removed the Pose Safety/version status text from handheld Settings.",
+        "Moved Back to plushies into a dedicated top-right Settings button.",
+        "Removed the old centered Back to plushies button that overlapped the settings controls."
+      ]
+    },
+    {
+      "version": "3.1.18",
+      "changes": [
+        "Moved Back to plushies from the Settings body into the actual top-right menu header.",
+        "Removed the Balance Minigame button from the handheld plushie menu.",
+        "Kept Balance on Head/minigame functionality available through its activity and /plushiebalance command.",
+        "Increased plushie list page size from 12 to 14 entries.",
+        "Moved Next/Previous Page to the old Balance Minigame row at the bottom of the plushie list."
+      ]
+    },
+    {
+      "version": "3.1.19",
+      "changes": [
+        "Increased plushie selector page size from 14 to 16 entries.",
+        "Adjusted selector row spacing so eight rows fit cleanly per page.",
+        "Removed Layout from the top-level Extensions tabs.",
+        "Added General and Layout sub-tabs inside Settings.",
+        "Removed Plushies from the top-level Extensions tabs.",
+        "Added Plushies as a Progress sub-tab.",
+        "Kept Lore as a top-level tab.",
+        "Updated /plushielayout to open Settings → Layout.",
+        "Updated /plushieplushies and /plushieposes to open Progress → Plushies.",
+        "Legacy direct requests for layout/plushies redirect to their new locations."
+      ]
+    },
+    {
+      "version": "3.1.20",
+      "changes": [
+        "Added shared hairaction.png artwork for Ruffle Hair, Brush Hair From Face, Tuck Hair Behind Ear, and Twirl Hair.",
+        "Added shared faceaction.png artwork for face/cheek actions such as Rub Against Face, cheek interactions, Nose Boop, Forehead Bump, and Squeeze Cheeks.",
+        "Added pointing.png artwork for Point Dramatically.",
+        "All remaining custom activities now use subbycat.png as their action artwork.",
+        "Hug Tightly no longer uses hugtightly.png; it now uses subbycat.png.",
+        "Expanded the action-image resolver to include Extra Actions as well as plushie actions.",
+        "If any of the three shared action images fail to load, the plugin falls back to subbycat.png."
+      ]
+    },
+    {
+      "version": "3.1.21",
+      "changes": [
+        "Rewrote README.md to match the current v3 feature set and UI organization.",
+        "Added the complete current command reference to README.md.",
+        "Updated the in-addon Commands tab with the current Settings/Progress navigation layout.",
+        "Added /plushieversion to the authoritative built-in command documentation."
       ]
     }
   ]
