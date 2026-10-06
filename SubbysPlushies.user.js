@@ -2,9 +2,9 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.1.21
+// @version      3.1.32
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
-// @released     2026-10-05
+// @released     2026-10-06
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -19,12 +19,24 @@
 // @match        https://www.bondage-asia.com/club/*/
 // @run-at       document-end
 // @grant        none
+// @sandbox      raw
+// @inject-into  page
 // ==/UserScript==
 
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.1.21";
+    const VERSION = "3.1.32";
+
+    try {
+        document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
+        document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
+        if (document.currentScript?.dataset?.subbysPlushiesLoader === "1") {
+            document.documentElement?.setAttribute("data-subbys-plushies-load-source", "loader");
+        } else if (!document.documentElement?.getAttribute("data-subbys-plushies-load-source")) {
+            document.documentElement?.setAttribute("data-subbys-plushies-load-source", "direct");
+        }
+    } catch (_) {}
     const BUILD_DATE = "2026-10-05";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
@@ -1350,6 +1362,10 @@ function SubbysPlushiesPageMain() {
     const seenSharedWaveChains = new Map();
     let lastSharedWaveStartedAt = 0;
     let lastAddonPresenceBroadcastAt = 0;
+    let lastNativePresenceDrawAt = 0;
+    let nativePresenceDrawCount = 0;
+    let nativePresenceDrawMethod = "uninitialized";
+    let nativePresenceChatRoomRunHooked = false;
     const petSuitRenderStates = new Map();
     const manualPlushMainBounds = new Map();
     const canvasOverlayImageCache = new Map();
@@ -4491,6 +4507,7 @@ function SubbysPlushiesPageMain() {
         if (!data || data.Type !== "Hidden" || data.Content !== ADDON_PRESENCE_CONTENT) return false;
         const sender = Number(data.Sender);
         if (!Number.isFinite(sender)) return false;
+
         rememberAddonPresence(sender, getDictionaryText(data, ADDON_PRESENCE_TAG) || "");
         return true;
     }
@@ -4669,42 +4686,244 @@ function SubbysPlushiesPageMain() {
         }
     }
 
-    function drawAddonPresenceIcon(C) {
-        if (window.CurrentScreen !== "ChatRoom" || !characterHasAddonPresence(C)) return false;
-        if (typeof window.ChatRoomHideIconState === "number" && window.ChatRoomHideIconState !== 0) return false;
+    // Native addon badge anchor in character coordinates.
+    // Center it above the head instead of the upper-right status area so it
+    // does not overlap AFK / typing / wardrobe / other native status bubbles.
+    const ADDON_PRESENCE_ICON_CHARACTER_X = 229;
+    const ADDON_PRESENCE_ICON_CHARACTER_Y = -104;
+    const ADDON_PRESENCE_ICON_CHARACTER_SIZE = 42;
+    const ADDON_PRESENCE_ICON_ALPHA = 0.55;
+
+    function addonPresenceIconHiddenByNativeUI() {
+        // Behave like the native/BCX character icon overlay: when BC hides room
+        // character icons, this addon marker hides with them.
+        const state = Number(window.ChatRoomHideIconState);
+        return Number.isFinite(state) && state !== 0;
+    }
+
+    function addonPresenceCharacterVisible(C) {
+        if (!C || !characterHasAddonPresence(C)) return false;
+
         const member = Number(C?.MemberNumber);
-        if (Number.isFinite(member) && Array.isArray(window.Player?.GhostList) && window.Player.GhostList.includes(member)) return false;
-        const ctx = window.MainCanvas;
-        const image = getCanvasOverlayImage(renderImages[0] || PLUSH_FALLBACK_IMAGE);
-        if (!ctx || typeof ctx.drawImage !== "function") return false;
-        const center = characterPointToMainCanvas(C, 315, 20);
-        const sizePoint = characterPointToMainCanvas(C, 349, 20);
-        if (!center || !sizePoint) return false;
-        const size = Math.max(22, Math.min(44, Math.hypot(sizePoint.x - center.x, sizePoint.y - center.y)));
-        try {
-            ctx.save();
-            if (typeof ctx.setTransform === "function") ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.globalAlpha = 0.96;
-            ctx.fillStyle = "rgba(31,16,45,.88)";
-            ctx.strokeStyle = "rgba(177,94,255,.98)";
-            ctx.lineWidth = Math.max(1, size * 0.06);
-            ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
-            ctx.strokeRect(center.x - size / 2, center.y - size / 2, size, size);
-            if (image) ctx.drawImage(image, center.x - size * 0.42, center.y - size * 0.42, size * 0.84, size * 0.84);
-            else {
-                ctx.fillStyle = "white";
-                ctx.font = `bold ${Math.max(11, size * 0.48)}px Arial`;
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText("P", center.x, center.y + 1);
-            }
-            ctx.restore();
-            return true;
-        } catch (_) {
-            try { ctx.restore(); } catch (_) {}
+        const localMember = Number(window.Player?.MemberNumber);
+
+        // Keep the BCX behavior of not exposing addon markers for ghosted users.
+        if (
+            Number.isFinite(member) &&
+            member !== localMember &&
+            Array.isArray(window.Player?.GhostList) &&
+            window.Player.GhostList.includes(member)
+        ) {
             return false;
         }
+
+        return true;
     }
+
+    function nativePresenceIconRect(C) {
+        const topLeft = characterPointToMainCanvas(
+            C,
+            ADDON_PRESENCE_ICON_CHARACTER_X,
+            ADDON_PRESENCE_ICON_CHARACTER_Y
+        );
+        const xPoint = characterPointToMainCanvas(
+            C,
+            ADDON_PRESENCE_ICON_CHARACTER_X + ADDON_PRESENCE_ICON_CHARACTER_SIZE,
+            ADDON_PRESENCE_ICON_CHARACTER_Y
+        );
+        const yPoint = characterPointToMainCanvas(
+            C,
+            ADDON_PRESENCE_ICON_CHARACTER_X,
+            ADDON_PRESENCE_ICON_CHARACTER_Y + ADDON_PRESENCE_ICON_CHARACTER_SIZE
+        );
+
+        if (!topLeft || !xPoint || !yPoint) return null;
+
+        const projectedWidth = Math.hypot(xPoint.x - topLeft.x, xPoint.y - topLeft.y);
+        const projectedHeight = Math.hypot(yPoint.x - topLeft.x, yPoint.y - topLeft.y);
+        if (![topLeft.x, topLeft.y, projectedWidth, projectedHeight].every(Number.isFinite)) return null;
+
+        return {
+            x: topLeft.x,
+            y: topLeft.y,
+            width: Math.max(20, Math.min(44, projectedWidth)),
+            height: Math.max(20, Math.min(44, projectedHeight)),
+        };
+    }
+
+    function drawAddonPresenceIconNative(C) {
+        if (
+            window.CurrentScreen !== "ChatRoom" ||
+            addonPresenceIconHiddenByNativeUI() ||
+            !addonPresenceCharacterVisible(C)
+        ) {
+            return false;
+        }
+
+        const rect = nativePresenceIconRect(C);
+        if (!rect) return false;
+
+        // renderImages[0] is the prepared data URL generated from
+        // assets/plushies/subbycat.png.
+        const source = renderImages[0] || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
+        if (!source) return false;
+
+        // Primary path: Bondage Club's own image draw helper, matching the way BCX
+        // uses BC drawing primitives for in-game UI.
+        try {
+            if (typeof window.DrawImageEx === "function") {
+                window.DrawImageEx(source, rect.x, rect.y, {
+                    Alpha: ADDON_PRESENCE_ICON_ALPHA,
+                    Width: rect.width,
+                    Height: rect.height,
+                });
+                nativePresenceDrawMethod = "DrawImageEx";
+                nativePresenceDrawCount++;
+                lastNativePresenceDrawAt = Date.now();
+                return true;
+            }
+        } catch (e) {
+            nativePresenceDrawMethod = "DrawImageEx failed";
+        }
+
+        // Compatibility path: keep the same semi-transparent appearance even
+        // when DrawImageEx is unavailable.
+        const ctx = window.MainCanvas;
+        const image = getCanvasOverlayImage(source);
+
+        if (ctx && image && typeof ctx.drawImage === "function") {
+            try {
+                ctx.save();
+                if (typeof ctx.setTransform === "function") ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.globalAlpha = ADDON_PRESENCE_ICON_ALPHA;
+                ctx.drawImage(image, rect.x, rect.y, rect.width, rect.height);
+                ctx.restore();
+
+                nativePresenceDrawMethod = "MainCanvas transparent fallback";
+                nativePresenceDrawCount++;
+                lastNativePresenceDrawAt = Date.now();
+                return true;
+            } catch (_) {
+                try { ctx.restore(); } catch (_) {}
+            }
+        }
+
+        // Last resort only. DrawImageResize has no alpha option in BC, so this
+        // path is used only if neither transparency-capable renderer is available.
+        try {
+            if (typeof window.DrawImageResize === "function") {
+                window.DrawImageResize(source, rect.x, rect.y, rect.width, rect.height);
+                nativePresenceDrawMethod = "DrawImageResize opaque last resort";
+                nativePresenceDrawCount++;
+                lastNativePresenceDrawAt = Date.now();
+                return true;
+            }
+        } catch (_) {}
+
+        return false;
+    }
+
+    function drawAllAddonPresenceIconsNative() {
+        if (
+            window.CurrentScreen !== "ChatRoom" ||
+            addonPresenceIconHiddenByNativeUI()
+        ) {
+            return 0;
+        }
+
+        const localMember = Number(window.Player?.MemberNumber);
+        if (Number.isFinite(localMember)) rememberAddonPresence(localMember, VERSION);
+
+        const all = [
+            window.Player,
+            ...(Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : []),
+        ].filter(Boolean);
+
+        const seen = new Set();
+        let drawn = 0;
+
+        for (const C of all) {
+            const member = Number(C?.MemberNumber);
+            const key = Number.isFinite(member) ? `member:${member}` : C;
+            if (seen.has(key)) continue;
+            seen.add(key);
+
+            if (addonPresenceCharacterVisible(C) && drawAddonPresenceIconNative(C)) drawn++;
+        }
+
+        return drawn;
+    }
+
+    function installNativeAddonPresenceOverlayHook() {
+        if (nativePresenceChatRoomRunHooked) return true;
+
+        // BC-native frame boundary:
+        // 1) let ChatRoomRun draw the complete room, characters and native icons;
+        // 2) draw the addon marker on MainCanvas with BC's DrawImageEx.
+        //
+        // This is intentionally NOT part of DrawCharacter. The previous approach
+        // was erased by later character/UI rendering in the same frame.
+        const hooked = installHook("ChatRoomRun", 10000, (args, next) => {
+            const result = next(args);
+            try {
+                pruneAddonPresence();
+                drawAllAddonPresenceIconsNative();
+            } catch (e) {
+                warn("Native addon-presence overlay draw failed:", e);
+            }
+            return result;
+        });
+
+        nativePresenceChatRoomRunHooked = hooked;
+        return hooked;
+    }
+
+    window.SubbysPlushiesDialogueTest = (actionKey = "pet") => {
+        const spec = PLUGIN_ACTIVITY_BY_KEY.get(String(actionKey || "pet"));
+        if (!spec) return null;
+        const sourceName = getCharacterDisplayName(window.Player) || "Someone";
+        const value = activityTemplate(
+            spec,
+            true,
+            window.Player,
+            window.Player,
+            sourceName,
+            sourceName,
+            currentPlushName()
+        );
+        console.log("[Subby's Plushies dialogue test]", value);
+        return value;
+    };
+
+    window.SubbysPlushiesPresenceDiag = () => {
+        const C = window.Player || null;
+        const info = {
+            version: VERSION,
+            currentScreen: window.CurrentScreen,
+            localMember: Number(window.Player?.MemberNumber) || null,
+            localPresence: !!C && characterHasAddonPresence(C),
+            knownPresenceMembers: [...addonPresenceMembers.keys()],
+            chatRoomRunHooked: nativePresenceChatRoomRunHooked,
+            ChatRoomRun: typeof window.ChatRoomRun,
+            DrawImageEx: typeof window.DrawImageEx,
+            DrawImageResize: typeof window.DrawImageResize,
+            ChatRoomHideIconState: window.ChatRoomHideIconState,
+            drawMethod: nativePresenceDrawMethod,
+            drawCount: nativePresenceDrawCount,
+            lastDrawAt: lastNativePresenceDrawAt || null,
+            localRect: C ? nativePresenceIconRect(C) : null,
+            asset: "assets/plushies/subbycat.png",
+            anchor: {
+                x: ADDON_PRESENCE_ICON_CHARACTER_X,
+                y: ADDON_PRESENCE_ICON_CHARACTER_Y,
+                size: ADDON_PRESENCE_ICON_CHARACTER_SIZE,
+                alpha: ADDON_PRESENCE_ICON_ALPHA,
+            },
+        };
+        try { console.table(info); } catch (_) { console.log(info); }
+        return info;
+    };
+    window.SubbysPlushiesPresenceDiagnostic = window.SubbysPlushiesPresenceDiag;
 
     function triggerPlushEmote(type) {
         const selected = plushEmoteDefinition(type);
@@ -10415,7 +10634,13 @@ function SubbysPlushiesPageMain() {
         const targetPronouns = context.targetPronouns || characterPronouns(context.targetCharacter);
         const ownerPronouns = context.self ? sourcePronouns : targetPronouns;
         const plushName = String(context.plushName || currentPlushName() || "plushie").trim() || "plushie";
-        const plushPhrase = /^plushie$/i.test(plushName) ? "the plushie" : `the ${plushName} plushie`;
+
+        // The equipped plushie belongs to the SOURCE/acting character, even when
+        // the activity targets somebody else.  Use the actor's real BC pronouns:
+        // "her Subbycat plushie", "his Rey plushie", "their Margot plushie".
+        const plushPhrase = /^plushie$/i.test(plushName)
+            ? `${sourcePronouns.possessive} plushie`
+            : `${sourcePronouns.possessive} ${plushName} plushie`;
 
         let text = String(template || "")
             .replaceAll("{SourceSubject}", sourcePronouns.subject)
@@ -12676,6 +12901,17 @@ function SubbysPlushiesPageMain() {
         const sourceName = getCharacterDisplayName(window.Player) || "Someone";
         const member = Number.isFinite(window.Player?.MemberNumber) ? window.Player.MemberNumber : "local";
         const token = `${member}:${Date.now()}:${++hugTightlyEventSequence}`;
+        const message = renderNicknameAwareDialogue(
+            "{Source} hugs {Plushie} tightly.",
+            {
+                self: true,
+                sourceCharacter: window.Player,
+                targetCharacter: window.Player,
+                sourceName,
+                targetName: sourceName,
+                plushName: currentPlushName(),
+            }
+        );
 
         return {
             data: {
@@ -12684,7 +12920,7 @@ function SubbysPlushiesPageMain() {
                 Type: "Action",
                 Dictionary: [
                     { Tag: "Beep", Text: "msg" },
-                    { Tag: "msg", Text: `${sourceName} hugs the ${currentPlushName()} plushie tightly.` },
+                    { Tag: "msg", Text: message },
                     { Tag: HUG_TIGHTLY_MARKER_TAG, Text: token },
                 ],
             },
@@ -13615,7 +13851,6 @@ function SubbysPlushiesPageMain() {
 
             if (C && window.CurrentScreen === "ChatRoom") {
                 if (isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C))) drawPetSuitPlushCanvasOverlay(C);
-                if (characterHasAddonPresence(C)) drawAddonPresenceIcon(C);
             }
 
             if (samePlayer && (speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected)) {
@@ -13639,7 +13874,7 @@ function SubbysPlushiesPageMain() {
             return result;
         });
 
-        const characterOverlayHooked = false;
+        const characterOverlayHooked = installNativeAddonPresenceOverlayHook();
 
         const activityRunHooked = installHook("ActivityRun", 10000, (args, next) => {
             if (!hugTightlyActivityEnabled && customActivityObjects.size === 0 && extraActionObjects.size === 0) return next(args);
@@ -14958,11 +15193,13 @@ function SubbysPlushiesPageMain() {
         function bcActivityTemplate(spec, self) {
             const template = self ? spec.selfText : (spec.otherText || spec.selfText);
             const plushName = String(currentPlushName() || "plushie").trim() || "plushie";
-            const plushPhrase = /^plushie$/i.test(plushName) ? "the plushie" : `the ${plushName} plushie`;
-            // This text is only BC's local/fallback activity dictionary. The
-            // outgoing packet is still normalized by the nickname-aware engine.
-            // Resolve plush tokens here too so even a fallback never regresses to
-            // generic "the plushie" wording or leaks raw template placeholders.
+            const plushPhrase = /^plushie$/i.test(plushName)
+                ? "SourceCharacter's plushie"
+                : `SourceCharacter's ${plushName} plushie`;
+
+            // This is only BC's local/fallback dictionary text. The normal outgoing
+            // packet uses renderNicknameAwareDialogue and therefore emits the
+            // actor's actual her/his/their pronoun.
             return template
                 .replaceAll("{Source}", "SourceCharacter")
                 .replaceAll("{Target}", "DestinationCharacter")
@@ -14990,7 +15227,7 @@ function SubbysPlushiesPageMain() {
             if (isHug) {
                 if (/^label-/i.test(key)) return HUG_TIGHTLY_ACTIVITY_LABEL;
                 if (/^chat(?:self|other)-/i.test(key)) {
-                    return `SourceCharacter hugs the ${currentPlushName()} plushie tightly.`;
+                    return `SourceCharacter hugs SourceCharacter's ${currentPlushName()} plushie tightly.`;
                 }
                 return HUG_TIGHTLY_ACTIVITY_LABEL;
             }
@@ -16672,6 +16909,20 @@ function SubbysPlushiesPageMain() {
                 lastPurrPlay,
                 recentPurrTokenCount: recentPurrTokens.size,
             },
+            addonPresence: {
+                knownMembers: [...addonPresenceMembers.entries()].map(([member, value]) => ({
+                    member,
+                    version: value?.version || "",
+                    at: value?.at || null,
+                })),
+                localMember: Number(window.Player?.MemberNumber) || null,
+                localPresence: !!window.Player && characterHasAddonPresence(window.Player),
+                nativeOverlayHooked: nativePresenceChatRoomRunHooked,
+                drawMethod: nativePresenceDrawMethod,
+                drawCount: nativePresenceDrawCount,
+                lastDrawAt: lastNativePresenceDrawAt || null,
+                hideIconState: window.ChatRoomHideIconState,
+            },
             extraActivities: {
                 registration: customActivitiesRegistration,
                 count: CUSTOM_PLUSH_ACTIVITIES.length,
@@ -17004,122 +17255,72 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.1.21";
-    const BRIDGE_ATTR = "data-subbys-plushies-page-bridge";
-    const BRIDGE_VALUE = `v${VERSION}`;
+    const VERSION = "3.1.32";
+    const RUNTIME_ATTR = "data-subbys-plushies-runtime";
+    const VERSION_ATTR = "data-subbys-plushies-version";
 
-    function pageGlobalsVisible(target = window) {
+    function pageGlobalsVisible() {
         try {
-            return typeof target.AssetGet === "function" &&
-                typeof target.InventoryWear === "function" &&
-                Array.isArray(target.AssetGroup);
+            return typeof window.AssetGet === "function" &&
+                typeof window.InventoryWear === "function" &&
+                Array.isArray(window.AssetGroup);
         } catch (_) {
             return false;
         }
     }
 
-    function runDirect() {
+    function exposeBootstrapDiag(state = "starting") {
         try {
-            console.log(BOOT_TAG, "Bondage Club page globals are visible; running directly.");
-            SubbysPlushiesPageMain();
-            return true;
-        } catch (e) {
-            console.error(BOOT_TAG, "Direct startup threw before main() could handle it:", e);
-            return false;
-        }
-    }
-
-    function pageCode() {
-        const mainSource = SubbysPlushiesPageMain.toString();
-        return `(() => {\n` +
-            `  try { document.documentElement?.setAttribute(${JSON.stringify(BRIDGE_ATTR)}, ${JSON.stringify(BRIDGE_VALUE)}); } catch (_) {}\n` +
-            `  try { (${mainSource})(); } catch (e) { console.error(${JSON.stringify(BOOT_TAG)}, "Page-context startup threw:", e); }\n` +
-            `})();\n//# sourceURL=SubbysPlushies.page.js`;
-    }
-
-    function bridgeConfirmed() {
-        try { return document.documentElement?.getAttribute(BRIDGE_ATTR) === BRIDGE_VALUE; }
-        catch (_) { return false; }
-    }
-
-    function tryUnsafeWindowBridge(code) {
-        try {
-            if (typeof unsafeWindow === "undefined" || !unsafeWindow || unsafeWindow === window) return false;
-            if (typeof unsafeWindow.eval === "function") {
-                unsafeWindow.eval(code);
-                if (bridgeConfirmed()) {
-                    console.log(BOOT_TAG, "Entered the Bondage Club page context through unsafeWindow.");
-                    return true;
-                }
-            }
-            if (typeof unsafeWindow.Function === "function") {
-                unsafeWindow.Function(code)();
-                if (bridgeConfirmed()) {
-                    console.log(BOOT_TAG, "Entered the Bondage Club page context through the page Function constructor.");
-                    return true;
-                }
-            }
-        } catch (e) {
-            console.warn(BOOT_TAG, "unsafeWindow page bridge was unavailable:", e);
-        }
-        return false;
-    }
-
-    function tryScriptBridge(code) {
-        const root = document.documentElement || document.head || document.body;
-        if (!root) return false;
-
-        const script = document.createElement("script");
-        script.type = "text/javascript";
-        script.dataset.subbysPlushiesBootstrap = VERSION;
-
-        // Reuse a page nonce when one exists so strict CSP configurations do not
-        // block the bridge merely because the userscript manager uses isolation.
-        try {
-            const nonceSource = document.querySelector("script[nonce]");
-            const nonce = nonceSource?.nonce || nonceSource?.getAttribute?.("nonce");
-            if (nonce) script.setAttribute("nonce", nonce);
+            document.documentElement?.setAttribute(RUNTIME_ATTR, "main-world");
+            document.documentElement?.setAttribute(VERSION_ATTR, VERSION);
         } catch (_) {}
 
-        script.textContent = code;
-        try {
-            root.appendChild(script);
-        } catch (e) {
-            console.error(BOOT_TAG, "Could not append the page-context bridge:", e);
-            return false;
-        } finally {
-            try { script.remove(); } catch (_) {}
-        }
-
-        if (bridgeConfirmed()) {
-            console.log(BOOT_TAG, "Entered the Bondage Club page context through a DOM script bridge.");
-            return true;
-        }
-
-        console.error(
-            BOOT_TAG,
-            "Opera/userscript isolation was detected, but the page bridge did not execute. " +
-            "Check the console for a Content Security Policy or userscript-manager error."
-        );
-        return false;
+        window.SubbysPlushiesBootstrapDiag = () => {
+            const info = {
+                version: VERSION,
+                runtime: document.documentElement?.getAttribute(RUNTIME_ATTR) || null,
+                versionMarker: document.documentElement?.getAttribute(VERSION_ATTR) || null,
+                state,
+                pageGlobalsVisible: pageGlobalsVisible(),
+                windowIsGlobalThis: window === globalThis,
+                AssetGet: typeof window.AssetGet,
+                ChatRoomRun: typeof window.ChatRoomRun,
+                DrawImageEx: typeof window.DrawImageEx,
+                activeGuard: window.__SUBBYS_PLUSHIES_ACTIVE__ ?? null,
+            };
+            try { console.table(info); } catch (_) { console.log(info); }
+            return info;
+        };
     }
 
     async function bootstrap() {
-        // At document-end the game is normally already available. Give slower
-        // Opera/BC loads a short chance to expose the globals before assuming
-        // this userscript is running in an isolated JavaScript world.
-        for (let attempt = 0; attempt < 20; attempt++) {
-            if (pageGlobalsVisible(window)) {
-                runDirect();
+        exposeBootstrapDiag("waiting-for-bc");
+
+        // BCX-style startup principle: run in Bondage Club's own JavaScript world
+        // and wait until the game globals exist before installing hooks.
+        for (let attempt = 0; attempt < 240; attempt++) {
+            if (pageGlobalsVisible()) {
+                exposeBootstrapDiag("starting-main");
+                try {
+                    SubbysPlushiesPageMain();
+                    exposeBootstrapDiag("main-started");
+                    console.log(BOOT_TAG, `Started v${VERSION} in Bondage Club's main world.`);
+                } catch (e) {
+                    exposeBootstrapDiag("main-threw");
+                    console.error(BOOT_TAG, "Main-world startup threw:", e);
+                }
                 return;
             }
             await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        const code = pageCode();
-        if (tryUnsafeWindowBridge(code)) return;
-        tryScriptBridge(code);
+        exposeBootstrapDiag("bc-globals-timeout");
+        console.error(
+            BOOT_TAG,
+            "Bondage Club globals did not become available in the page context."
+        );
     }
 
+    exposeBootstrapDiag("bootstrap-loaded");
     void bootstrap();
 })();
