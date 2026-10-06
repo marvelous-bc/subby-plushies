@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.0.0
+// @version      3.1.9
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @released     2026-10-05
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.0.0";
+    const VERSION = "3.1.9";
     const BUILD_DATE = "2026-10-05";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
@@ -54,6 +54,12 @@ function SubbysPlushiesPageMain() {
 
     const CUSTOM_ACTIVITY_ID_BASE = 9010;
     const EXTRA_ACTION_ID_BASE = 9060;
+    const SHARED_WAVE_CONTENT = "SubbysPlushiesSharedWave";
+    const SHARED_WAVE_TAG = "SubbysPlushiesSharedWaveData";
+    const SHARED_WAVE_STEP_MS = 520;
+    const SHARED_WAVE_LEAD_MS = 450;
+    const SHARED_WAVE_POSE_MS = 3000;
+    const SHARED_WAVE_COOLDOWN_MS = 8000;
     const CUSTOM_ACTIVITY_MARKER_TAG = "SubbysPlushiesActivity";
     const CUSTOM_ACTIVITY_TOKEN_TAG = "SubbysPlushiesActivityToken";
     const CUSTOM_ACTIVITY_SOURCE_MEMBER_TAG = "SubbysPlushiesSourceMember";
@@ -69,8 +75,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} rubs their cheek against the plushie.",
-            otherText: "{Source} leans in with the plushie so {Target} can rub their cheek against it.",
+            selfText: "{Source} rubs their cheek against {Plushie}.",
+            otherText: "{Source} leans in with {Plushie} so {Target} can rub their cheek against it.",
         },
         {
             key: "cuddleChest",
@@ -79,8 +85,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemTorso", "ItemBreast"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} snuggles their chest against the plushie.",
-            otherText: "{Source} leans close with the plushie so {Target} can snuggle against it.",
+            selfText: "{Source} snuggles their chest against {Plushie}.",
+            otherText: "{Source} leans close with {Plushie} so {Target} can snuggle against it.",
         },
         {
             key: "nuzzle",
@@ -89,8 +95,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} nuzzles into the plushie.",
-            otherText: "{Source} leans in with the plushie so {Target} can nuzzle against it.",
+            selfText: "{Source} nuzzles into {Plushie}.",
+            otherText: "{Source} leans in with {Plushie} so {Target} can nuzzle against it.",
         },
         {
             key: "pat",
@@ -98,8 +104,8 @@ function SubbysPlushiesPageMain() {
             label: "Pat Plushie",
             targets: ["ItemHands"],
             targetSelf: true,
-            selfText: "{Source} gives the plushie a gentle pat.",
-            otherText: "{Source} holds the plushie out for {Target} and gives it a gentle pat.",
+            selfText: "{Source} gives {Plushie} a gentle pat.",
+            otherText: "{Source} holds {Plushie} out for {Target} and gives it a gentle pat.",
         },
         {
             key: "pet",
@@ -107,8 +113,8 @@ function SubbysPlushiesPageMain() {
             label: "Pet Plushie",
             targets: ["ItemHands"],
             targetSelf: true,
-            selfText: "{Source} pets the plushie affectionately.",
-            otherText: "{Source} lets {Target} pet the plushie.",
+            selfText: "{Source} pets {Plushie} affectionately.",
+            otherText: "{Source} lets {Target} pet {Plushie}.",
         },
         {
             key: "hideBehind",
@@ -116,8 +122,8 @@ function SubbysPlushiesPageMain() {
             label: "Hide Behind Plushie",
             targets: ["ItemMouth", "ItemHood"],
             targetSelf: true,
-            selfText: "{Source} hides their face behind the plushie.",
-            otherText: "{Source} playfully hides the plushie in front of {Target}'s face.",
+            selfText: "{Source} hides their face behind {Plushie}.",
+            otherText: "{Source} playfully hides {Plushie} in front of {TargetPossessiveName} face.",
             effect: "hideBehindFace",
         },
         {
@@ -127,8 +133,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} gives the plushie a little kiss.",
-            otherText: "{Source} leans in with the plushie and gives it a little kiss beside {Target}.",
+            selfText: "{Source} gives {Plushie} a little kiss.",
+            otherText: "{Source} leans in with {Plushie} and gives it a little kiss beside {Target}.",
         },
         {
             key: "kissWith",
@@ -137,8 +143,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: false,
             handsFree: true,
-            selfText: "{Source} gives the plushie a little kiss.",
-            otherText: "{Source} leans in with the plushie tucked close and gives {Target} a little cheek kiss.",
+            selfText: "{Source} gives {Plushie} a little kiss.",
+            otherText: "{Source} leans in with {Plushie} tucked close and gives {Target} a little cheek kiss.",
         },
         {
             key: "noseBoop",
@@ -147,8 +153,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemNose", "ItemMouth"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} gently boops their nose against the plushie.",
-            otherText: "{Source} leans in with the plushie so {Target} can gently boop it with their nose.",
+            selfText: "{Source} gently boops their nose against {Plushie}.",
+            otherText: "{Source} leans in with {Plushie} so {Target} can gently boop it with their nose.",
         },
         {
             key: "cheekRest",
@@ -157,8 +163,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} rests their cheek against the plushie.",
-            otherText: "{Source} leans close with the plushie so {Target} can rest their cheek against it.",
+            selfText: "{Source} rests their cheek against {Plushie}.",
+            otherText: "{Source} leans close with {Plushie} so {Target} can rest their cheek against it.",
         },
         {
             key: "foreheadBump",
@@ -167,8 +173,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemHood"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} gently bumps their forehead against the plushie.",
-            otherText: "{Source} leans in with the plushie so {Target} can gently bump their forehead against it.",
+            selfText: "{Source} gently bumps their forehead against {Plushie}.",
+            otherText: "{Source} leans in with {Plushie} so {Target} can gently bump their forehead against it.",
         },
         {
             key: "snugglePlushie",
@@ -177,8 +183,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemTorso", "ItemBreast"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} snuggles close against the plushie.",
-            otherText: "{Source} leans close with the plushie so {Target} can snuggle against it.",
+            selfText: "{Source} snuggles close against {Plushie}.",
+            otherText: "{Source} leans close with {Plushie} so {Target} can snuggle against it.",
         },
         {
             key: "bonk",
@@ -186,8 +192,8 @@ function SubbysPlushiesPageMain() {
             label: "Bonk With Plushie",
             targets: ["ItemHood", "ItemMouth"],
             targetSelf: true,
-            selfText: "{Source} gently bonks themself with the plushie.",
-            otherText: "{Source} gently bonks {Target} with the plushie.",
+            selfText: "{Source} gently bonks themself with {Plushie}.",
+            otherText: "{Source} gently bonks {Target} with {Plushie}.",
         },
         {
             key: "balanceHead",
@@ -195,8 +201,8 @@ function SubbysPlushiesPageMain() {
             label: "Balance Plushie on Head",
             targets: ["ItemHood"],
             targetSelf: true,
-            selfText: "{Source} tries to balance the plushie on their head.",
-            otherText: "{Source} tries to balance the plushie on {Target}'s head.",
+            selfText: "{Source} tries to balance {Plushie} on their head.",
+            otherText: "{Source} tries to balance {Plushie} on {TargetPossessiveName} head.",
             effect: "balanceHead",
         },
         {
@@ -205,8 +211,8 @@ function SubbysPlushiesPageMain() {
             label: "Offer Plushie",
             targets: ["ItemHands"],
             targetSelf: false,
-            selfText: "{Source} offers the plushie.",
-            otherText: "{Source} offers the plushie to {Target}.",
+            selfText: "{Source} offers {Plushie}.",
+            otherText: "{Source} offers {Plushie} to {Target}.",
             prompt: true,
         },
         {
@@ -215,8 +221,8 @@ function SubbysPlushiesPageMain() {
             label: "Show Plushie",
             targets: ["ItemHands"],
             targetSelf: false,
-            selfText: "{Source} holds up the plushie.",
-            otherText: "{Source} holds up the plushie to show {Target}.",
+            selfText: "{Source} holds up {Plushie}.",
+            otherText: "{Source} holds up {Plushie} to show {Target}.",
         },
         {
             key: "whisper",
@@ -225,8 +231,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} leans in and whispers something to the plushie.",
-            otherText: "{Source} whispers something to the plushie while looking at {Target}.",
+            selfText: "{Source} leans in and whispers something to {Plushie}.",
+            otherText: "{Source} whispers something to {Plushie} while looking at {Target}.",
         },
         {
             key: "squeezeCheeks",
@@ -234,17 +240,17 @@ function SubbysPlushiesPageMain() {
             label: "Squeeze Cheeks With Plushie",
             targets: ["ItemMouth"],
             targetSelf: false,
-            selfText: "{Source} gently squishes their cheeks with the plushie.",
-            otherText: "{Source} gently squishes {Target}'s cheeks with the plushie.",
+            selfText: "{Source} gently squishes their cheeks with {Plushie}.",
+            otherText: "{Source} gently squishes {TargetPossessiveName} cheeks with {Plushie}.",
         },
         {
             key: "wave",
             name: "SubbysPlushiesWavePlushieItem",
-            label: "Wave Plushie",
+            label: "Start a wave emote",
             targets: ["ItemHands"],
-            targetSelf: false,
-            selfText: "{Source} waves the plushie.",
-            otherText: "{Source} waves the plushie at {Target}.",
+            targetSelf: true,
+            selfText: "{Source} starts a wave emote.",
+            otherText: "{Source} starts a wave emote.",
         },
     ].map(spec => Object.freeze(spec)));
 
@@ -259,7 +265,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemHood"],
             targetSelf: false,
             selfText: "{Source} playfully ruffles their own hair.",
-            otherText: "{Source} playfully ruffles {Target}'s hair.",
+            otherText: "{Source} playfully ruffles {TargetPossessiveName} hair.",
         },
         {
             key: "extraShoulderSqueeze",
@@ -269,7 +275,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemTorso"],
             targetSelf: false,
             selfText: "{Source} gives their own shoulder a reassuring squeeze.",
-            otherText: "{Source} gives {Target}'s shoulder a reassuring squeeze.",
+            otherText: "{Source} gives {TargetPossessiveName} shoulder a reassuring squeeze.",
         },
         {
             key: "extraTapShoulder",
@@ -289,7 +295,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: false,
             selfText: "{Source} gently squishes their own cheek.",
-            otherText: "{Source} gently squishes {Target}'s cheek.",
+            otherText: "{Source} gently squishes {TargetPossessiveName} cheek.",
         },
         {
             key: "extraPatCheek",
@@ -299,7 +305,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: false,
             selfText: "{Source} softly pats their own cheek.",
-            otherText: "{Source} softly pats {Target}'s cheek.",
+            otherText: "{Source} softly pats {TargetPossessiveName} cheek.",
         },
         {
             key: "extraCupCheek",
@@ -309,7 +315,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: false,
             selfText: "{Source} gently cups their own cheek with one hand.",
-            otherText: "{Source} gently cups {Target}'s cheek with one hand.",
+            otherText: "{Source} gently cups {TargetPossessiveName} cheek with one hand.",
         },
         {
             key: "extraBrushCheek",
@@ -319,7 +325,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: false,
             selfText: "{Source} gently brushes the back of a hand across their own cheek.",
-            otherText: "{Source} gently brushes the back of a hand across {Target}'s cheek.",
+            otherText: "{Source} gently brushes the back of a hand across {TargetPossessiveName} cheek.",
         },
         {
             key: "extraBrushHairFromFace",
@@ -329,7 +335,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemHood"],
             targetSelf: false,
             selfText: "{Source} brushes a loose strand of hair away from their own face.",
-            otherText: "{Source} gently brushes a loose strand of hair away from {Target}'s face.",
+            otherText: "{Source} gently brushes a loose strand of hair away from {TargetPossessiveName} face.",
         },
         {
             key: "extraTuckHairBehindEar",
@@ -339,7 +345,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemHood"],
             targetSelf: false,
             selfText: "{Source} tucks a loose strand of hair behind their own ear.",
-            otherText: "{Source} gently tucks a loose strand of {Target}'s hair behind {Target}'s ear.",
+            otherText: "{Source} gently tucks a loose strand of {TargetPossessiveName} hair behind {TargetPossessiveName} ear.",
         },
         {
             key: "extraTwirlHair",
@@ -349,7 +355,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemHood"],
             targetSelf: false,
             selfText: "{Source} idly twirls a lock of their own hair around a finger.",
-            otherText: "{Source} playfully twirls a lock of {Target}'s hair around a finger.",
+            otherText: "{Source} playfully twirls a lock of {TargetPossessiveName} hair around a finger.",
         },
         {
             key: "extraFixCollar",
@@ -360,7 +366,7 @@ function SubbysPlushiesPageMain() {
             targetSelf: false,
             requiresOccupiedGroup: "ItemNeck",
             selfText: "{Source} carefully straightens their own collar.",
-            otherText: "{Source} carefully straightens {Target}'s collar.",
+            otherText: "{Source} carefully straightens {TargetPossessiveName} collar.",
         },
         {
             key: "extraTapHead",
@@ -391,7 +397,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemHood"],
             targetSelf: false,
             selfText: "{Source} covers their own ears with both hands.",
-            otherText: "{Source} gently covers {Target}'s ears with both hands.",
+            otherText: "{Source} gently covers {TargetPossessiveName} ears with both hands.",
         },
         {
             key: "extraRestChinShoulder",
@@ -401,7 +407,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemTorso"],
             targetSelf: false,
             selfText: "{Source} rests {SourcePossessive} chin against {SourcePossessive} own shoulder.",
-            otherText: "{Source} rests {SourcePossessive} chin on {Target}'s shoulder.",
+            otherText: "{Source} rests {SourcePossessive} chin on {TargetPossessiveName} shoulder.",
         },
         {
             key: "extraRestChinHead",
@@ -411,7 +417,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemHood"],
             targetSelf: false,
             selfText: "{Source} tries to rest {SourcePossessive} chin on {SourcePossessive} own head.",
-            otherText: "{Source} rests {SourcePossessive} chin gently on top of {Target}'s head.",
+            otherText: "{Source} rests {SourcePossessive} chin gently on top of {TargetPossessiveName} head.",
         },
         {
             key: "extraLinkArms",
@@ -426,13 +432,13 @@ function SubbysPlushiesPageMain() {
         {
             key: "extraRaiseArm",
             name: "SubbysPlushiesExtraRaiseArm",
-            label: "Raise Their Arm",
+            label: "Raise Both Arms",
             category: "extra",
             targets: ["ItemArms", "ItemHands"],
             targetSelf: false,
             effect: "raiseTargetArm",
-            selfText: "{Source} raises one of their own arms.",
-            otherText: "{Source} gently raises one of {Target}'s arms.",
+            selfText: "{Source} raises both arms.",
+            otherText: "{Target} raises both arms.",
         },
         {
             key: "extraBowTo",
@@ -506,12 +512,10 @@ function SubbysPlushiesPageMain() {
     const BACKUP_PROGRESS_SEAL_VERSION = 2;
     const BACKUP_PROGRESS_SEAL_KEY = ["Subbys", "Plushies", "portable", "progress", "v4", "89413"].join("|");
     const ROOM_MASCOT_CUSTOM_KEY = "SubbysPlushiesMascot";
-    const ROOM_MASCOT_CYCLE_MS = 60 * 60 * 1000;
-    const ROOM_MASCOT_CYCLE_SETTLE_MS = 15 * 1000;
-    const ROOM_MASCOT_CYCLE_CLAIM_CONTENT = "SubbysPlushiesMascotCycleClaim";
-    const ROOM_MASCOT_CYCLE_CLAIM_TAG = "SubbysPlushiesMascotCycleKey";
-    const ROOM_MASCOT_CYCLE_CLAIM_WAIT_MS = 3000;
-    const ROOM_MASCOT_CYCLE_CLAIM_TTL_MS = 30000;
+    // v3.1 removed automatic hourly mascot cycling. Keep the old hidden packet
+    // content string only so rooms with an older client do not leak legacy
+    // coordination packets into chat.
+    const LEGACY_ROOM_MASCOT_CYCLE_CLAIM_CONTENT = "SubbysPlushiesMascotCycleClaim";
     const ROOM_MASCOT_AFFECTION_MODIFIER = 1;
     const ROOM_MASCOT_CACHE_STORAGE_KEY = "SubbysPlushies:room-mascots:v1";
     const ROOM_MASCOT_POSITION_STORAGE_KEY = "SubbysPlushies:room-mascot-position:v1";
@@ -533,12 +537,13 @@ function SubbysPlushiesPageMain() {
         protectMe: false,
         jealousPlushie: false,
         showRoomMascot: true,
-        hourlyMascotCycle: true,
         autoUpdateChecks: true,
         idleAnimations: true,
         speechBubbles: true,
         showDragButton: true,
         extraActions: false,
+        sharedEmoteChains: true,
+        expressionReactions: true,
     });
     let IDLE_MIN_DELAY_MS = 22000;
     let IDLE_MAX_DELAY_MS = 48000;
@@ -754,16 +759,32 @@ function SubbysPlushiesPageMain() {
         { name: "Pink", image: plushAsset("pink.png") },
         { name: "Kyu", image: PLUSH_FALLBACK_IMAGE },
 
+        // Wire option 18 is the legacy Subbycat alias and must never move.
         { name: "Subbycat", image: plushAsset("subbycat.png"), wireAlias: true },
+
+        // New public plushies. Public options 18/19 map to wire options 19/20.
+        { name: "Rey", image: plushAsset("rey.png") },
+        { name: "Margot", image: plushAsset("margot.png") },
     ].map(Object.freeze));
 
-    const PUBLIC_PLUSH_COUNT = 18;
+    const PUBLIC_PLUSH_COUNT = 20;
     const SUBBYCAT_WIRE_OPTION = 18;
 
     const PLUSH_NAMES = Object.freeze(PLUSHES.map(plush => plush.name));
     const PLUSH_IMAGES = Object.freeze(PLUSHES.map(plush => plush.image));
 
-    let PLUSH_LORE = Object.freeze({});
+    const BUILTIN_PLUSH_LORE = Object.freeze({
+        Rey: Object.freeze({
+            title: "Rey",
+            text: "As far as Plushies go, the Rey plush is a creature of deep myth. She is seemingly everywhere and nowhere at once, dissolving into the velvet shadows of the realm only to materialize exactly when the cosmic seams of the world begin to fray. Rey only arrives when needed. She acts as a silent sentinel stitched into the dark, watching for the precise moment another plushie begins to pull at their own threads or treat themselves unfairly. To some, she is a cotton-stuffed savior; to others, a foe to be reckoned with. For sometimes the dark can wield the brightest light—or, in certain urgent cases, a very heavy, unyielding brick. Like most legendary plushies, however, Rey is rarely a solo act. If a Hira plushie is spotted roaming a button-littered back alley or brooding on a rooftop late at night, you can bet your last spool of thread that Rey is crouching nearby in the rafters. Because every soft-hearted plushie needs a savior to patch them up sometimes...",
+        }),
+        Margot: Object.freeze({
+            title: "???",
+            text: "",
+            hidden: true,
+        }),
+    });
+    let PLUSH_LORE = BUILTIN_PLUSH_LORE;
 
     const CHARACTER_MENU = Object.freeze([
         { label: "Subbycat", submenu: true },
@@ -779,6 +800,8 @@ function SubbysPlushiesPageMain() {
         { label: "Hira", option: 15 },
         { label: "Pink", option: 16 },
         { label: "Kyu", option: 17 },
+        { label: "Rey", option: 18 },
+        { label: "Margot", option: 19 },
     ].map(Object.freeze));
 
     const SUBBYCAT_MENU = Object.freeze([
@@ -937,6 +960,7 @@ function SubbysPlushiesPageMain() {
         Idle: Object.freeze({ x: 1040, y: 690, w: 280, h: 58 }),
         Speech: Object.freeze({ x: 1335, y: 690, w: 300, h: 58 }),
         EmotesSettings: Object.freeze({ x: 1650, y: 690, w: 300, h: 58 }),
+        ExtraActions: Object.freeze({ x: 1040, y: 770, w: 280, h: 58 }),
     });
 
     const USE_MENU_EMOTES = Object.freeze([
@@ -949,7 +973,7 @@ function SubbysPlushiesPageMain() {
 
     const EXTENSIONS_IDENTIFIER = "SubbysPlushies";
     const EXTENSIONS_BUTTON_TEXT = "Subby's Plushies";
-    const EXTENSIONS_TABS = Object.freeze(["status", "lore", "plushies", "history", "settings", "layout", "stats", "achievements", "backup", "commands"]);
+    const EXTENSIONS_TABS = Object.freeze(["status", "lore", "plushies", "history", "settings", "layout", "progress", "backup", "commands"]);
 
     const CURRENT_COMMAND_GROUPS = Object.freeze([
         Object.freeze({
@@ -973,7 +997,7 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushiesettings", description: "Open the Settings tab." }),
                 Object.freeze({ command: "/plushielayout", description: "Open the Layout customization tab." }),
                 Object.freeze({ command: "/plushieplushies", description: "Open the Plushies tab with relationships, favorites, emotes, and saved poses." }),
-                Object.freeze({ command: "/plushiehistory", description: "Open the History tab for mood and plushie battles." }),
+                Object.freeze({ command: "/plushiehistory", description: "Open the History tab for plushie battles." }),
                 Object.freeze({ command: "/plushiebackup", description: "Open the Backup / Restore tab." }),
                 Object.freeze({ command: "/plushiecommands", description: "Open the Commands tab directly." }),
                 Object.freeze({ command: "/plushiecommand", description: "Alias for /plushiecommands." }),
@@ -1009,6 +1033,8 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushieidle", description: "Toggle idle plushie wiggle animations." }),
                 Object.freeze({ command: "/plushiespeech", description: "Toggle local automatic speech bubbles." }),
                 Object.freeze({ command: "/plushieextraactions", description: "Toggle optional non-plush Extra Actions. Disabled by default." }),
+                Object.freeze({ command: "/plushiewavechain", description: "Toggle left-to-right shared Wave emote chains." }),
+                Object.freeze({ command: "/plushieexpressions", description: "Toggle short expression reactions to plushie and Extra Actions." }),
                 Object.freeze({ command: "/plushiespeak", description: "Force one local plushie speech bubble." }),
                 Object.freeze({ command: "/plushiebubble", description: "Alias for /plushiespeak." }),
                 Object.freeze({ command: "/plushiepurr", description: "Play the plushie purr sound locally." }),
@@ -1030,11 +1056,11 @@ function SubbysPlushiesPageMain() {
             ]),
         }),
         Object.freeze({
-            title: "Battle, Stats & Achievements",
+            title: "Battle & Progress",
             commands: Object.freeze([
                 Object.freeze({ command: "/plushiebattle [member/name]", description: "Challenge another player to a plushie battle; with no target, use the focused character when possible." }),
-                Object.freeze({ command: "/plushiestats", description: "Open the detailed Stats tab." }),
-                Object.freeze({ command: "/plushieachievements", description: "Open the detailed Achievements tab." }),
+                Object.freeze({ command: "/plushiestats", description: "Open Progress on Stats." }),
+                Object.freeze({ command: "/plushieachievements", description: "Open Progress on Achievements." }),
                 Object.freeze({ command: "/plushieach", description: "Short alias for /plushieachievements." }),
             ]),
         }),
@@ -1127,6 +1153,7 @@ function SubbysPlushiesPageMain() {
     let lastActivityMenuOrder = null;
     let pendingLocalCustomActivity = null;
     let customActivityEventSequence = 0;
+    const locallyRenderedCustomActionTokens = new Map();
     const seenOfferPromptTokens = new Map();
     let offerPromptElement = null;
     let offerSignalsReceived = 0;
@@ -1251,12 +1278,6 @@ function SubbysPlushiesPageMain() {
     let roomMascotAdminSnapshot = null;
     let roomMascotAdminPendingAction = null;
     let roomMascotDragSession = null;
-    let roomMascotCycleTimer = null;
-    let roomMascotCycleEligibleAt = 0;
-    let roomMascotCyclePendingUntil = 0;
-    let roomMascotCycleClaimTimer = null;
-    let roomMascotCycleClaimKey = null;
-    const roomMascotCycleClaims = new Map();
     let queuedRoomMascotPublish = null;
     let queuedRoomMascotPublishTimer = null;
     let lastUpdateInfo = null;
@@ -1283,6 +1304,8 @@ function SubbysPlushiesPageMain() {
     let manualPlushEmoteTimer = null;
     const remotePlushEmotes = new Map();
     const addonPresenceMembers = new Map();
+    const seenSharedWaveChains = new Map();
+    let lastSharedWaveStartedAt = 0;
     let lastAddonPresenceBroadcastAt = 0;
     const petSuitRenderStates = new Map();
     const manualPlushMainBounds = new Map();
@@ -1313,11 +1336,16 @@ function SubbysPlushiesPageMain() {
     let extensionsPanelElement = null;
     let extensionsPanelContent = null;
     let extensionsActiveTab = "status";
+    let extensionsProgressTab = "stats";
     let extensionsLoreSelectedName = null;
     let extensionsIntegrationTimer = null;
     let extensionsIntegrationInstalled = false;
     let extensionsNativeRegistered = false;
     let extensionsOpenedFromNativePreference = false;
+
+    let activitySearchInput = null;
+    let activitySearchQuery = "";
+    let activitySearchLastGroup = null;
 
     let nativeLayeringBridgeTimer = null;
     let nativeLayeringBridgeRoot = null;
@@ -1647,12 +1675,13 @@ function SubbysPlushiesPageMain() {
             protectMe: storedBoolean("protectMe"),
             jealousPlushie: storedBoolean("jealousPlushie"),
             showRoomMascot: storedBoolean("showRoomMascot"),
-            hourlyMascotCycle: storedBoolean("hourlyMascotCycle"),
             autoUpdateChecks: storedBoolean("autoUpdateChecks"),
             idleAnimations: storedBoolean("idleAnimations"),
             speechBubbles: storedBoolean("speechBubbles"),
             showDragButton: storedBoolean("showDragButton"),
             extraActions: storedBoolean("extraActions"),
+            sharedEmoteChains: storedBoolean("sharedEmoteChains"),
+            expressionReactions: storedBoolean("expressionReactions"),
             performanceMode: String(stored.performanceMode || "normal").toLowerCase() === "low" ? "low" : "normal",
         };
         return featureSettingsState;
@@ -1671,10 +1700,6 @@ function SubbysPlushiesPageMain() {
         if (key === "showDragButton") {
             if (settings[key]) refreshDragToggleButton();
             else removeDragToggleButton();
-        }
-        if (key === "hourlyMascotCycle") {
-            if (settings[key]) startRoomMascotCycleMonitor();
-            else stopRoomMascotCycleMonitor();
         }
         if (key === "extraActions") {
             syncExtraActionsAvailability("setting toggle");
@@ -1711,10 +1736,6 @@ function SubbysPlushiesPageMain() {
             scheduleActivityIntegrityCheck();
         }
 
-        if (roomMascotCycleTimer != null) {
-            stopRoomMascotCycleMonitor();
-            if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
-        }
         return true;
     }
 
@@ -4434,6 +4455,161 @@ function SubbysPlushiesPageMain() {
         return Number.isFinite(member) && addonPresenceMembers.has(member);
     }
 
+    function pruneSharedWaveChains(now = Date.now()) {
+        for (const [id, at] of seenSharedWaveChains) if (now - Number(at || 0) > 60000) seenSharedWaveChains.delete(id);
+    }
+
+    function sharedWaveCharacterX(C, fallbackIndex = 0) {
+        try {
+            const point = characterPointToMainCanvas(C, 500, 500);
+            if (Number.isFinite(point?.x)) return Number(point.x);
+        } catch (_) {}
+        const id = Number(C?.ID);
+        if (Number.isFinite(id)) return id * 1000;
+        return fallbackIndex * 1000;
+    }
+
+    function sharedWaveParticipantsLeftToRight() {
+        const chars = [];
+        const room = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
+        const all = [window.Player, ...room].filter(Boolean);
+        const seen = new Set();
+
+        for (let i = 0; i < all.length; i++) {
+            const C = all[i];
+            const member = Number(C?.MemberNumber);
+            if (!Number.isFinite(member) || seen.has(member)) continue;
+            seen.add(member);
+            chars.push({ member, x: sharedWaveCharacterX(C, i), index: i });
+        }
+
+        chars.sort((a, b) => a.x - b.x || a.index - b.index || a.member - b.member);
+        return chars.map(entry => entry.member);
+    }
+
+    function applySharedWavePose(C, durationMs) {
+        if (!C) return false;
+        return applyTemporaryRaisedArm(
+            C,
+            Math.max(900, Number(durationMs) || 2500),
+            "shared-wave"
+        );
+    }
+
+    function scheduleSharedWavePayload(payload) {
+        if (!getFeatureSettings().sharedEmoteChains || !payload || typeof payload !== "object") return false;
+
+        const id = String(payload.id || "");
+        const members = Array.isArray(payload.members)
+            ? [...new Set(payload.members.map(Number).filter(Number.isFinite))]
+            : [];
+        const startAt = Number(payload.startAt);
+
+        if (!id || !members.length || !Number.isFinite(startAt)) return false;
+
+        pruneSharedWaveChains();
+        if (seenSharedWaveChains.has(id)) return true;
+        seenSharedWaveChains.set(id, Date.now());
+
+        const localMember = Number(window.Player?.MemberNumber);
+
+        for (let index = 0; index < members.length; index++) {
+            const member = members[index];
+            const C =
+                Number.isFinite(localMember) && member === localMember
+                    ? window.Player
+                    : getRoomCharacterByMember(member);
+
+            if (!C) continue;
+
+            const delay = Math.max(
+                0,
+                startAt + index * SHARED_WAVE_STEP_MS - Date.now()
+            );
+            window.setTimeout(
+                () => applySharedWavePose(C, SHARED_WAVE_POSE_MS),
+                delay
+            );
+        }
+
+        return true;
+    }
+
+    function processSharedWaveChainPacket(data) {
+        if (!data || data.Type !== "Hidden" || data.Content !== SHARED_WAVE_CONTENT) return false;
+        const sender = Number(data.Sender);
+        if (Number.isFinite(sender)) rememberAddonPresence(sender, "wave-chain");
+        const raw = getDictionaryText(data, SHARED_WAVE_TAG);
+        if (!raw) return true;
+        try { scheduleSharedWavePayload(JSON.parse(raw)); } catch (_) {}
+        return true;
+    }
+
+    function actionLooksLikeWave(data) {
+        if (!isChatAction(data)) return false;
+        const spec = getCustomActivityFromAction(data);
+        if (spec?.key === "wave") return true;
+        return /\bwav(?:e|es|ed|ing)\b/i.test(actionSearchText(data));
+    }
+
+    function maybeStartSharedWaveChain(data) {
+        if (!getFeatureSettings().sharedEmoteChains || window.CurrentScreen !== "ChatRoom" || !actionLooksLikeWave(data)) return false;
+        const now = Date.now();
+        if (now - lastSharedWaveStartedAt < SHARED_WAVE_COOLDOWN_MS) return false;
+        lastSharedWaveStartedAt = now;
+        sendAddonPresence(false);
+        const members = sharedWaveParticipantsLeftToRight();
+        if (members.length < 2) return false;
+        const starter = Number(window.Player?.MemberNumber);
+        const payload = {
+            v: 1,
+            id: `${Number.isFinite(starter) ? starter : "local"}:${now}:${Math.random().toString(36).slice(2, 8)}`,
+            startAt: now + SHARED_WAVE_LEAD_MS,
+            members,
+        };
+        scheduleSharedWavePayload(payload);
+        try {
+            window.ServerSend("ChatRoomChat", {
+                Content: SHARED_WAVE_CONTENT,
+                Type: "Hidden",
+                Dictionary: [{ Tag: SHARED_WAVE_TAG, Text: JSON.stringify(payload) }],
+            });
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function expressionReactionTargetIsLocal(data) {
+        const context = getActionCharacterContext(data);
+        const localMember = Number(window.Player?.MemberNumber);
+        if (Number.isFinite(context.targetMember) && Number.isFinite(localMember)) return Number(context.targetMember) === localMember;
+        const target = normalizeDialogueName(context.targetName, "").toLowerCase();
+        if (!target) return false;
+        const localNames = [getCharacterDisplayName(window.Player), window.Player?.Name, window.Player?.AccountName]
+            .filter(Boolean).map(name => normalizeDialogueName(name, "").toLowerCase());
+        return localNames.includes(target);
+    }
+
+    function processExpressionReaction(data, spec) {
+        if (!getFeatureSettings().expressionReactions || !spec || !expressionReactionTargetIsLocal(data)) return false;
+        const sender = Number(data?.Sender);
+        const localMember = Number(window.Player?.MemberNumber);
+        if (Number.isFinite(sender) && Number.isFinite(localMember) && sender === localMember) return false;
+        if (typeof window.CharacterSetFacialExpression !== "function") return false;
+        try {
+            const gentle = !["bonk", "extraPointDramatically", "extraTapHead"].includes(spec.key);
+            window.CharacterSetFacialExpression(window.Player, "Blush", "Low", gentle ? 6 : 4);
+            window.CharacterSetFacialExpression(window.Player, "Mouth", "Grin", gentle ? 5 : 3);
+            if (typeof window.ChatRoomCharacterUpdate === "function") window.setTimeout(() => {
+                try { window.ChatRoomCharacterUpdate(window.Player); } catch (_) {}
+            }, 20);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
     function drawAddonPresenceIcon(C) {
         if (window.CurrentScreen !== "ChatRoom" || !characterHasAddonPresence(C)) return false;
         if (typeof window.ChatRoomHideIconState === "number" && window.ChatRoomHideIconState !== 0) return false;
@@ -4613,7 +4789,6 @@ function SubbysPlushiesPageMain() {
             refreshRoomMascotAdminButton();
             startPlushStatusIconMonitor();
             if (getFeatureSettings().idleAnimations && !isLowCpuMode()) scheduleNextIdleAnimation(1200);
-            if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
             scheduleRoomRosterEventCheck("tab visible", 0);
         }, { passive: true });
         return true;
@@ -5668,7 +5843,12 @@ function SubbysPlushiesPageMain() {
 
     function applyNormalizedGitDataFile(fileName, normalized) {
         if (!normalized) return false;
-        if (fileName === "lore.json") PLUSH_LORE = normalized.lore;
+        if (fileName === "lore.json") {
+            PLUSH_LORE = Object.freeze({
+                ...normalized.lore,
+                ...BUILTIN_PLUSH_LORE,
+            });
+        }
         else if (fileName === "speech.json") {
             SPEECH_BUBBLE_DURATION_MS = normalized.bubbleDurationMs;
             SPEECH_BUBBLE_Y_OFFSET_CSS_PX = normalized.bubbleYOffsetCssPx;
@@ -6061,7 +6241,6 @@ function SubbysPlushiesPageMain() {
         if (state?.name) cache[key] = cloneBackupValue(state);
         else delete cache[key];
         writeLocalJSON(ROOM_MASCOT_CACHE_STORAGE_KEY, cache);
-        if (getFeatureSettings().hourlyMascotCycle && window.CurrentScreen === "ChatRoom") scheduleRoomMascotCycleCheck();
         return true;
     }
 
@@ -6073,16 +6252,12 @@ function SubbysPlushiesPageMain() {
         const known = PLUSH_NAMES.find(entry => String(entry || "").toLowerCase() === name.trim().toLowerCase());
         if (!known) return null;
         const member = Number(raw?.memberNumber);
-        const nextCycleAt = Number(raw?.nextCycleAt);
         const affectionModifier = Number(raw?.affectionModifier);
-        const lastAutoCycleKey = typeof raw?.lastAutoCycleKey === "string" ? raw.lastAutoCycleKey : null;
         return {
             name: known,
             setBy: typeof raw?.setBy === "string" && raw.setBy.trim() ? raw.setBy.trim() : "room admin",
             memberNumber: Number.isFinite(member) ? member : null,
             at: typeof raw?.at === "string" ? raw.at : null,
-            nextCycleAt: Number.isFinite(nextCycleAt) ? nextCycleAt : null,
-            lastAutoCycleKey,
             affectionModifier: Number.isFinite(affectionModifier) ? affectionModifier : ROOM_MASCOT_AFFECTION_MODIFIER,
             shared: true,
         };
@@ -6161,8 +6336,6 @@ function SubbysPlushiesPageMain() {
                 setBy: state.setBy || getCharacterDisplayName(window.Player) || "room admin",
                 memberNumber: Number(window.Player?.MemberNumber) || null,
                 at: state.at || new Date().toISOString(),
-                nextCycleAt: Number.isFinite(Number(state.nextCycleAt)) ? Number(state.nextCycleAt) : Date.now() + ROOM_MASCOT_CYCLE_MS,
-                lastAutoCycleKey: typeof state.lastAutoCycleKey === "string" ? state.lastAutoCycleKey : null,
                 affectionModifier: Number.isFinite(Number(state.affectionModifier)) ? Number(state.affectionModifier) : ROOM_MASCOT_AFFECTION_MODIFIER,
             };
         } else {
@@ -6223,208 +6396,15 @@ function SubbysPlushiesPageMain() {
         return publishRoomMascotSharedStateNow(state);
     }
 
-    function pruneRoomMascotCycleClaims() {
-        const now = Date.now();
-        const present = new Set((Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [])
-            .map(C => Number(C?.MemberNumber))
-            .filter(Number.isFinite));
-        const playerMember = Number(window.Player?.MemberNumber);
-        if (Number.isFinite(playerMember)) present.add(playerMember);
-        for (const [key, claims] of [...roomMascotCycleClaims.entries()]) {
-            for (const [member, at] of [...claims.entries()]) {
-                if (!present.has(member) || now - Number(at || 0) > ROOM_MASCOT_CYCLE_CLAIM_TTL_MS) claims.delete(member);
-            }
-            if (!claims.size) roomMascotCycleClaims.delete(key);
-        }
-    }
-
-    function roomMascotCycleKey(dueAt) {
-        const roomKey = currentRoomMascotCacheKey() || String(window.ChatRoomData?.Name || "room");
-        return `${roomKey}|${Math.trunc(Number(dueAt) || 0)}`;
-    }
-
-    function rememberRoomMascotCycleClaim(key, memberNumber, at = Date.now()) {
-        const cleanKey = String(key || "").trim();
-        const member = Number(memberNumber);
-        if (!cleanKey || !Number.isFinite(member) || !isRoomAdminMember(member)) return false;
-        pruneRoomMascotCycleClaims();
-        let claims = roomMascotCycleClaims.get(cleanKey);
-        if (!claims) {
-            claims = new Map();
-            roomMascotCycleClaims.set(cleanKey, claims);
-        }
-        claims.set(member, Number(at) || Date.now());
-        return true;
-    }
-
     function processRoomMascotCycleClaimPacket(data) {
-        if (!data || data.Type !== "Hidden" || data.Content !== ROOM_MASCOT_CYCLE_CLAIM_CONTENT) return false;
-        const sender = Number(data.Sender);
-        const key = getDictionaryText(data, ROOM_MASCOT_CYCLE_CLAIM_TAG);
-        if (!Number.isFinite(sender) || !key || !isRoomAdminMember(sender)) return true;
-        rememberRoomMascotCycleClaim(key, sender);
-        return true;
-    }
-
-    function sendRoomMascotCycleClaim(key) {
-        if (!canSetRoomMascot() || typeof window.ServerSend !== "function" || window.CurrentScreen !== "ChatRoom") return false;
-        const member = Number(window.Player?.MemberNumber);
-        if (!Number.isFinite(member)) return false;
-        rememberRoomMascotCycleClaim(key, member);
-        try {
-            window.ServerSend("ChatRoomChat", {
-                Content: ROOM_MASCOT_CYCLE_CLAIM_CONTENT,
-                Type: "Hidden",
-                Dictionary: [{ Tag: ROOM_MASCOT_CYCLE_CLAIM_TAG, Text: String(key) }],
-            });
-            return true;
-        } catch (_) {
-            return false;
-        }
-    }
-
-    function roomMascotCycleWinner(key) {
-        pruneRoomMascotCycleClaims();
-        const claims = roomMascotCycleClaims.get(String(key || ""));
-        if (!claims?.size) return null;
-        const present = new Set((Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [])
-            .map(C => Number(C?.MemberNumber))
-            .filter(Number.isFinite));
-        const playerMember = Number(window.Player?.MemberNumber);
-        if (Number.isFinite(playerMember)) present.add(playerMember);
-        const candidates = [...claims.keys()]
-            .filter(member => present.has(member) && isRoomAdminMember(member))
-            .sort((a, b) => a - b);
-        return candidates.length ? candidates[0] : null;
-    }
-
-    function stableMascotCycleIndex(key, length) {
-        if (!(length > 0)) return 0;
-        const input = String(key || "room mascot");
-        let hash = 2166136261;
-        for (let i = 0; i < input.length; i++) {
-            hash ^= input.charCodeAt(i);
-            hash = Math.imul(hash, 16777619);
-        }
-        return (hash >>> 0) % length;
-    }
-
-    function roomMascotCycleDueAt(state = roomMascotState) {
-        const explicit = Number(state?.nextCycleAt);
-        if (Number.isFinite(explicit) && explicit > 0) return explicit;
-        const setAt = Date.parse(String(state?.at || ""));
-        return Number.isFinite(setAt) ? setAt + ROOM_MASCOT_CYCLE_MS : 0;
-    }
-
-    function finalizeRoomMascotCycleClaim(key) {
-        if (roomMascotCycleClaimTimer != null) window.clearTimeout(roomMascotCycleClaimTimer);
-        roomMascotCycleClaimTimer = null;
-        if (roomMascotCycleClaimKey === key) roomMascotCycleClaimKey = null;
-        if (!getFeatureSettings().hourlyMascotCycle || window.CurrentScreen !== "ChatRoom") return false;
-
-        const now = Date.now();
-        const shared = roomMascotFromSharedRoomData();
-        if (!shared) {
-            roomMascotCyclePendingUntil = now + 60000;
-            scheduleRoomMascotCycleCheck();
-            return false;
-        }
-        roomMascotState = shared;
-        const state = shared;
-        const dueAt = roomMascotCycleDueAt(state);
-        const currentKey = roomMascotCycleKey(dueAt);
-        if (!dueAt || dueAt > now || currentKey !== key || state?.lastAutoCycleKey === key) {
-            scheduleRoomMascotCycleCheck();
-            return false;
-        }
-
-        const winner = roomMascotCycleWinner(key);
-        const playerMember = Number(window.Player?.MemberNumber);
-        if (!Number.isFinite(winner) || winner !== playerMember) {
-            // Give the elected client time to publish the room update before any
-            // retry. This prevents several addon users from taking turns cycling.
-            roomMascotCyclePendingUntil = now + 30000;
-            scheduleRoomMascotCycleCheck();
-            return false;
-        }
-
-        roomMascotCyclePendingUntil = now + 12000;
-        const changed = pickRandomRoomMascot({
-            hourlyCycle: true,
-            excludeName: state?.name || null,
-            nextCycleAt: now + ROOM_MASCOT_CYCLE_MS,
-            cycleKey: key,
-        });
-        scheduleRoomMascotCycleCheck();
-        return changed;
-    }
-
-    function maybeCycleRoomMascotHourly() {
-        if (!getFeatureSettings().hourlyMascotCycle || window.CurrentScreen !== "ChatRoom" || !canSetRoomMascot()) return false;
-        const now = Date.now();
-        if (now < roomMascotCycleEligibleAt || now < roomMascotCyclePendingUntil) return false;
-
-        const shared = roomMascotFromSharedRoomData();
-        if (!shared) {
-            roomMascotCyclePendingUntil = now + 60000;
-            scheduleRoomMascotCycleCheck();
-            return false;
-        }
-        roomMascotState = shared;
-        const state = shared;
-        const dueAt = roomMascotCycleDueAt(state);
-        if (!dueAt || dueAt > now) return false;
-        const key = roomMascotCycleKey(dueAt);
-        if (state?.lastAutoCycleKey === key) return false;
-        if (roomMascotCycleClaimKey === key && roomMascotCycleClaimTimer != null) return false;
-
-        roomMascotCycleClaimKey = key;
-        roomMascotCyclePendingUntil = now + ROOM_MASCOT_CYCLE_CLAIM_WAIT_MS + 1000;
-        sendRoomMascotCycleClaim(key);
-        roomMascotCycleClaimTimer = window.setTimeout(
-            () => finalizeRoomMascotCycleClaim(key),
-            ROOM_MASCOT_CYCLE_CLAIM_WAIT_MS
-        );
-        return true;
+        // Compatibility only: v3.1 never participates in or starts the old
+        // hourly mascot cycle, but silently consumes legacy hidden claims.
+        return !!data && data.Type === "Hidden" && data.Content === LEGACY_ROOM_MASCOT_CYCLE_CLAIM_CONTENT;
     }
 
     function stopRoomMascotCycleMonitor() {
-        if (roomMascotCycleTimer != null) window.clearTimeout(roomMascotCycleTimer);
-        if (roomMascotCycleClaimTimer != null) window.clearTimeout(roomMascotCycleClaimTimer);
-        roomMascotCycleTimer = null;
-        roomMascotCycleClaimTimer = null;
-        roomMascotCycleClaimKey = null;
-        roomMascotCyclePendingUntil = 0;
-        roomMascotCycleClaims.clear();
+        // Compatibility no-op retained for older cleanup call sites / APIs.
         return true;
-    }
-
-    function scheduleRoomMascotCycleCheck() {
-        if (roomMascotCycleTimer != null) window.clearTimeout(roomMascotCycleTimer);
-        roomMascotCycleTimer = null;
-        if (!getFeatureSettings().hourlyMascotCycle || document.hidden || window.CurrentScreen !== "ChatRoom") return false;
-
-        const now = Date.now();
-        const shared = roomMascotFromSharedRoomData();
-        if (shared) roomMascotState = shared;
-        const dueAt = roomMascotCycleDueAt(shared || roomMascotState);
-        let targetAt = Math.max(roomMascotCycleEligibleAt || now, roomMascotCyclePendingUntil || 0);
-        if (dueAt > now) targetAt = Math.max(targetAt, dueAt);
-        else if (!canSetRoomMascot()) targetAt = Math.max(targetAt, now + performanceInterval(60 * 1000, 3 * 60 * 1000));
-        else targetAt = Math.max(targetAt, now + 250);
-
-        roomMascotCycleTimer = window.setTimeout(() => {
-            roomMascotCycleTimer = null;
-            maybeCycleRoomMascotHourly();
-            scheduleRoomMascotCycleCheck();
-        }, Math.max(250, Math.min(0x7fffffff, targetAt - now + 25)));
-        return true;
-    }
-
-    function startRoomMascotCycleMonitor() {
-        if (!getFeatureSettings().hourlyMascotCycle) return false;
-        roomMascotCycleEligibleAt = Math.max(roomMascotCycleEligibleAt || 0, Date.now() + ROOM_MASCOT_CYCLE_SETTLE_MS);
-        return scheduleRoomMascotCycleCheck();
     }
 
     function mascotRenderIndex(name) {
@@ -6628,15 +6608,14 @@ function SubbysPlushiesPageMain() {
 
     function setRoomMascotByName(name, options = null) {
         const wanted = String(name || "").trim();
-        const known = PLUSH_NAMES.slice(0, PUBLIC_PLUSH_COUNT).find(entry => String(entry || "").toLowerCase() === wanted.toLowerCase());
+        const known = Array.from({ length: PUBLIC_PLUSH_COUNT }, (_, option) => publicPlushName(option))
+            .find(entry => String(entry || "").toLowerCase() === wanted.toLowerCase());
         if (!known) return false;
         if (!canSetRoomMascot()) {
             appendLocalInfoBox("Room mascot", ["Only a verified room admin can set the shared mascot."]);
             return false;
         }
         const randomPick = !!options?.randomPick;
-        const hourlyCycle = !!options?.hourlyCycle;
-        const nextCycleAt = Number(options?.nextCycleAt);
         const source = getCharacterDisplayName(window.Player) || "Someone";
         if (window.CurrentScreen === "ChatAdmin" && !roomMascotAdminDirty) {
             roomMascotAdminSnapshot = roomMascotFromSharedRoomData();
@@ -6646,8 +6625,6 @@ function SubbysPlushiesPageMain() {
             setBy: source,
             memberNumber: Number(window.Player?.MemberNumber) || null,
             at: new Date().toISOString(),
-            nextCycleAt: Number.isFinite(nextCycleAt) ? nextCycleAt : Date.now() + ROOM_MASCOT_CYCLE_MS,
-            lastAutoCycleKey: hourlyCycle && typeof options?.cycleKey === "string" ? options.cycleKey : null,
             affectionModifier: ROOM_MASCOT_AFFECTION_MODIFIER,
             shared: true,
         };
@@ -6655,22 +6632,18 @@ function SubbysPlushiesPageMain() {
         refreshRoomMascotOverlay();
         if (window.CurrentScreen === "ChatAdmin") {
             roomMascotAdminDirty = true;
-            roomMascotAdminPendingAction = { type: "set", source, name: known, randomPick, hourlyCycle };
+            roomMascotAdminPendingAction = { type: "set", source, name: known, randomPick };
             appendLocalInfoBox("Room mascot", [
-                hourlyCycle
-                    ? `${known} was chosen by the hourly mascot cycle. Use the room Save button to publish it.`
-                    : (randomPick
-                        ? `${known} was chosen randomly. Use the room Save button to publish it.`
-                        : `${known} selected. Use the room Save button to publish it.`),
+                randomPick
+                    ? `${known} was chosen randomly. Use the room Save button to publish it.`
+                    : `${known} selected. Use the room Save button to publish it.`,
             ]);
             return true;
         }
         const persisted = publishRoomMascotSharedState(roomMascotState);
-        sendStandaloneActionMessage(hourlyCycle
-            ? `${known} was chosen randomly as the room mascot plushie by the hourly cycle.`
-            : (randomPick
-                ? `${known} was chosen randomly as the room mascot plushie.`
-                : `${source} sets ${known} as the room mascot plushie.`));
+        sendStandaloneActionMessage(randomPick
+            ? `${known} was chosen randomly as the room mascot plushie.`
+            : `${source} sets ${known} as the room mascot plushie.`);
         if (!persisted) appendLocalInfoBox("Room mascot", ["Mascot was set locally, but the shared room-state update could not be sent."]);
         recordStat("mascot", 1, { plushName: known });
         return true;
@@ -6703,17 +6676,8 @@ function SubbysPlushiesPageMain() {
             appendLocalInfoBox("Room mascot", ["No plushies are available to choose from."]);
             return false;
         }
-        const cycleKey = typeof options?.cycleKey === "string" ? options.cycleKey : null;
-        const selectedIndex = cycleKey
-            ? stableMascotCycleIndex(cycleKey, choices.length)
-            : Math.floor(Math.random() * choices.length);
-        const selected = choices[selectedIndex];
-        return setRoomMascotByOption(selected.option, {
-            randomPick: true,
-            hourlyCycle: !!options?.hourlyCycle,
-            nextCycleAt: Number(options?.nextCycleAt),
-            cycleKey,
-        });
+        const selected = choices[Math.floor(Math.random() * choices.length)];
+        return setRoomMascotByOption(selected.option, { randomPick: true });
     }
 
     function closeRoomMascotPicker() {
@@ -6952,8 +6916,6 @@ function SubbysPlushiesPageMain() {
                 setBy: getCharacterDisplayName(sender) || "room admin",
                 memberNumber: senderMember,
                 at: new Date().toISOString(),
-                nextCycleAt: Date.now() + ROOM_MASCOT_CYCLE_MS,
-                lastAutoCycleKey: null,
                 affectionModifier: ROOM_MASCOT_AFFECTION_MODIFIER,
                 shared: true,
             };
@@ -6970,8 +6932,6 @@ function SubbysPlushiesPageMain() {
             setBy: String(set[1] || "Someone").trim(),
             memberNumber: senderMember,
             at: new Date().toISOString(),
-            nextCycleAt: Date.now() + ROOM_MASCOT_CYCLE_MS,
-            lastAutoCycleKey: null,
             affectionModifier: ROOM_MASCOT_AFFECTION_MODIFIER,
             shared: true,
         };
@@ -6985,13 +6945,10 @@ function SubbysPlushiesPageMain() {
             appendLocalInfoBox("Room mascot", ["No shared mascot is currently stored for this room."]);
             return null;
         }
-        const dueAt = roomMascotCycleDueAt(roomMascotState);
         appendLocalInfoBox("Room mascot", [
             `${roomMascotState.name} • set by ${roomMascotState.setBy || "room admin"}${roomMascotState.cached ? " • cached" : ""}`,
             `Mascot affection modifier: +${Number(roomMascotState.affectionModifier ?? ROOM_MASCOT_AFFECTION_MODIFIER) || 0}`,
-            getFeatureSettings().hourlyMascotCycle && dueAt
-                ? `Next hourly cycle: ${new Date(dueAt).toLocaleTimeString()}`
-                : `Hourly mascot cycle: ${getFeatureSettings().hourlyMascotCycle ? "waiting for an addon room admin" : "off"}`,
+            "Mascot changes are manual. The hourly automatic cycle was removed in v3.1.",
             `Picture: ${getFeatureSettings().showRoomMascot ? "visible" : "hidden locally"}`,
         ]);
         return { ...roomMascotState };
@@ -7609,8 +7566,10 @@ function SubbysPlushiesPageMain() {
             easyDragTarget: dragTargetLabel(getDragTargetGroup()),
             mascotPicture: settings.showRoomMascot,
             mascot: roomMascotState?.name || "None announced in this room",
-            hourlyMascotCycle: settings.hourlyMascotCycle,
             idleAnimations: settings.idleAnimations,
+            extraActions: settings.extraActions,
+            sharedEmoteChains: settings.sharedEmoteChains,
+            expressionReactions: settings.expressionReactions,
             speechBubbles: settings.speechBubbles,
             autoUpdateChecks: settings.autoUpdateChecks,
             performanceMode: settings.performanceMode,
@@ -7761,7 +7720,7 @@ function SubbysPlushiesPageMain() {
             seen.add(key);
             result.push(display);
         };
-        for (let i = 0; i < PUBLIC_PLUSH_COUNT; i++) add(PLUSH_NAMES[i]);
+        for (let option = 0; option < PUBLIC_PLUSH_COUNT; option++) add(publicPlushName(option));
         for (const key of Object.keys(PLUSH_LORE || {})) add(key);
         return result;
     }
@@ -7774,8 +7733,9 @@ function SubbysPlushiesPageMain() {
 
     function loreBrowseImage(name) {
         const wanted = normalizeLoreLookupKey(name);
-        for (let i = 0; i < PUBLIC_PLUSH_COUNT; i++) {
-            if (normalizeLoreLookupKey(PLUSH_NAMES[i]) === wanted) return uiPlushImageSource(i);
+        for (let option = 0; option < PUBLIC_PLUSH_COUNT; option++) {
+            const wire = publicToWirePlushOption(option);
+            if (normalizeLoreLookupKey(PLUSH_NAMES[wire]) === wanted) return uiPlushImageSource(wire);
         }
         return uiPlushImageSource(0);
     }
@@ -7845,7 +7805,8 @@ function SubbysPlushiesPageMain() {
         Object.assign(image.style, { width: "112px", height: "112px", objectFit: "contain", flex: "0 0 auto", filter: "none", mixBlendMode: "normal" });
         const headingWrap = document.createElement("div");
         const loreTitle = document.createElement("div");
-        loreTitle.textContent = lore?.title || "Lore unavailable";
+        const loreHidden = !!lore?.hidden;
+        loreTitle.textContent = loreHidden ? "Hidden lore" : (lore?.title || "Lore unavailable");
         Object.assign(loreTitle.style, { fontSize: "23px", fontWeight: "bold", lineHeight: "1.2" });
         const mood = getPlushMoodRecord(selected);
         const moodLine = document.createElement("div");
@@ -7856,7 +7817,9 @@ function SubbysPlushiesPageMain() {
         detail.appendChild(top);
 
         const body = document.createElement("div");
-        body.textContent = lore?.text || "Lore for this plushie has not been loaded yet. Use Reload Git data on the Status page if needed.";
+        body.textContent = loreHidden
+            ? `${selected}'s lore is hidden for now.`
+            : (lore?.text || "Lore for this plushie has not been loaded yet. Use Reload Git data on the Status page if needed.");
         Object.assign(body.style, { whiteSpace: "pre-wrap", lineHeight: "1.58", fontSize: "15px", overflowWrap: "anywhere" });
         detail.appendChild(body);
 
@@ -7903,9 +7866,11 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(enabled, "Easy Drag", status.easyDrag ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Easy Drag target", status.easyDragTarget);
         appendExtensionsKeyValue(enabled, "Mascot picture", status.mascotPicture ? "Visible" : "Hidden");
-        appendExtensionsKeyValue(enabled, "Hourly mascot cycle", status.hourlyMascotCycle ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Idle animations", status.idleAnimations ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Speech bubbles", status.speechBubbles ? "ON" : "Off");
+        appendExtensionsKeyValue(enabled, "Extra Actions", status.extraActions ? "ON" : "Off");
+        appendExtensionsKeyValue(enabled, "Shared emote chains", status.sharedEmoteChains ? "ON" : "Off");
+        appendExtensionsKeyValue(enabled, "Expression reactions", status.expressionReactions ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Automatic update checks", status.autoUpdateChecks ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Performance mode", status.performanceMode === "low" ? "Low CPU" : "Normal");
         container.appendChild(enabled);
@@ -7929,11 +7894,12 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow("Jealous Plushie", "Playful jealous reactions when you show affection to someone else.", settings.jealousPlushie, () => toggleFeatureSetting("jealousPlushie")),
             extensionsSettingRow("Easy Drag", "Drag anywhere on the character side to reposition the held plushie.", dragModeEnabled, () => toggleDragMode()),
             extensionsSettingRow("Hide Plushie Drag Button", "Hide the movable mouse button without disabling Easy Drag itself.", !settings.showDragButton, () => setFeatureSetting("showDragButton", !getFeatureSettings().showDragButton)),
-            extensionsSettingRow("Room Mascot Picture", "Show the room mascot picture locally in the chat area.", settings.showRoomMascot, () => setRoomMascotOverlayVisible(!getFeatureSettings().showRoomMascot)),
-            extensionsSettingRow("Hourly Mascot Cycle", "Once per hour, one elected addon room admin picks the next random mascot for everyone.", settings.hourlyMascotCycle, () => toggleFeatureSetting("hourlyMascotCycle")),
+            extensionsSettingRow("Room Mascot Picture", "Show the room mascot picture locally in the chat area. Mascot changes are manual in v3.1.", settings.showRoomMascot, () => setRoomMascotOverlayVisible(!getFeatureSettings().showRoomMascot)),
             extensionsSettingRow("Idle Animation", "Occasional lightweight local plush wiggles.", settings.idleAnimations, () => toggleFeatureSetting("idleAnimations")),
             extensionsSettingRow("Speech Bubbles", "Allow local mood-based plush speech bubbles.", settings.speechBubbles, () => toggleFeatureSetting("speechBubbles")),
             extensionsSettingRow("Extra Actions", "Adds optional non-plush social actions after all plushie actions. Disabled by default.", settings.extraActions, () => toggleFeatureSetting("extraActions")),
+            extensionsSettingRow("Shared Emote Chains", "A Wave from an addon user can ripple left-to-right through addon users in the room.", settings.sharedEmoteChains, () => toggleFeatureSetting("sharedEmoteChains")),
+            extensionsSettingRow("Expression Reactions", "Friendly plushie and Extra Actions can trigger short facial reactions on the recipient's own client.", settings.expressionReactions, () => toggleFeatureSetting("expressionReactions")),
             extensionsSettingRow("Automatic Update Checks", "Check the repository manifest at most once per day.", settings.autoUpdateChecks, () => toggleFeatureSetting("autoUpdateChecks"))
         );
         container.appendChild(section);
@@ -8333,18 +8299,6 @@ function SubbysPlushiesPageMain() {
     }
 
     function renderExtensionsHistory(container) {
-        const plushName = currentPlushName();
-        const mood = getPlushMoodRecord(plushName);
-        const moodSection = makeExtensionsSection(`Mood — ${plushName}`);
-        const moodSummary = document.createElement("div");
-        moodSummary.textContent = `${moodLabel(mood.score)} • ${mood.score}/100`;
-        Object.assign(moodSummary.style, { color: getExtensionsStyle().muted, fontSize: "12px", marginBottom: "9px" });
-        const historyDisabled = document.createElement("div");
-        historyDisabled.textContent = "Per-action mood history is disabled to reduce localStorage writes and keep the addon light.";
-        historyDisabled.style.color = getExtensionsStyle().muted;
-        moodSection.append(moodSummary, historyDisabled);
-        container.appendChild(moodSection);
-
         const battles = battleHistory(20).reverse();
         const battleSection = makeExtensionsSection("Battle history — last 20");
         if (!battles.length) {
@@ -8382,6 +8336,14 @@ function SubbysPlushiesPageMain() {
 
     function renderExtensionsStats(container) {
         const s = getStatsStore();
+        const plushName = currentPlushName();
+        const mood = getPlushMoodRecord(plushName);
+        const current = makeExtensionsSection(`Current plushie — ${plushName}`);
+        appendExtensionsKeyValue(current, "Mood", `${moodLabel(mood.score)} • ${mood.score}/100`);
+        const relationship = relationshipStatus(plushName);
+        appendExtensionsKeyValue(current, "Relationship", `${relationship.level} • ${relationship.interactions} interactions`);
+        container.appendChild(current);
+
         const summary = makeExtensionsSection("Lifetime local stats");
         appendExtensionsKeyValue(summary, "Interactions", s.totalInteractions);
         appendExtensionsKeyValue(summary, "Affectionate interactions", statAffectionCount(s));
@@ -8463,6 +8425,24 @@ function SubbysPlushiesPageMain() {
             section.appendChild(row);
         }
         container.appendChild(section);
+    }
+
+    function renderExtensionsProgress(container) {
+        const nav = document.createElement("div");
+        Object.assign(nav.style, { display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" });
+        const options = [
+            ["stats", "Stats"],
+            ["achievements", "Achievements"],
+        ];
+        for (const [key, label] of options) {
+            nav.appendChild(makeExtensionsButton(label, () => {
+                extensionsProgressTab = key;
+                renderExtensionsPanel();
+            }, { active: extensionsProgressTab === key }));
+        }
+        container.appendChild(nav);
+        if (extensionsProgressTab === "achievements") renderExtensionsAchievements(container);
+        else renderExtensionsStats(container);
     }
 
     function commandGroupsForDisplay() {
@@ -8577,8 +8557,7 @@ function SubbysPlushiesPageMain() {
         else if (extensionsActiveTab === "history") renderExtensionsHistory(extensionsPanelContent);
         else if (extensionsActiveTab === "settings") renderExtensionsSettings(extensionsPanelContent);
         else if (extensionsActiveTab === "layout") renderExtensionsLayout(extensionsPanelContent);
-        else if (extensionsActiveTab === "stats") renderExtensionsStats(extensionsPanelContent);
-        else if (extensionsActiveTab === "achievements") renderExtensionsAchievements(extensionsPanelContent);
+        else if (extensionsActiveTab === "progress") renderExtensionsProgress(extensionsPanelContent);
         else if (extensionsActiveTab === "backup") renderExtensionsBackup(extensionsPanelContent);
         else if (extensionsActiveTab === "commands") renderExtensionsCommands(extensionsPanelContent);
         else renderExtensionsStatus(extensionsPanelContent);
@@ -8649,7 +8628,13 @@ function SubbysPlushiesPageMain() {
     }
 
     function openExtensionsPanel(tab = "status", fromNativePreference = false) {
-        if (EXTENSIONS_TABS.includes(String(tab).toLowerCase())) extensionsActiveTab = String(tab).toLowerCase();
+        const requestedTab = String(tab || "status").toLowerCase();
+        if (requestedTab === "stats" || requestedTab === "achievements") {
+            extensionsProgressTab = requestedTab;
+            extensionsActiveTab = "progress";
+        } else if (EXTENSIONS_TABS.includes(requestedTab)) {
+            extensionsActiveTab = requestedTab;
+        }
         destroyExtensionsPanel();
         if (fromNativePreference) extensionsOpenedFromNativePreference = true;
         removeRoomMascotOverlay?.();
@@ -8705,7 +8690,7 @@ function SubbysPlushiesPageMain() {
             background: getExtensionsStyle().header,
             flexWrap: "wrap",
         });
-        const labels = { status: "Status", lore: "Lore", plushies: "Plushies", history: "History", settings: "Settings", layout: "Layout", stats: "Stats", achievements: "Achievements", backup: "Backup", commands: "Commands" };
+        const labels = { status: "Status", lore: "Lore", plushies: "Plushies", history: "History", settings: "Settings", layout: "Layout", progress: "Progress", backup: "Backup", commands: "Commands" };
         for (const tab of EXTENSIONS_TABS) {
             const button = makeExtensionsButton(labels[tab], () => {
                 extensionsActiveTab = tab;
@@ -9108,12 +9093,14 @@ function SubbysPlushiesPageMain() {
             });
             return true;
         }
-        if (command === "/plushiestats") { requireReady(() => openExtensionsPanel("stats")); return true; }
-        if (command === "/plushieachievements" || command === "/plushieach") { requireReady(() => openExtensionsPanel("achievements")); return true; }
+        if (command === "/plushiestats") { requireReady(() => { extensionsProgressTab = "stats"; openExtensionsPanel("progress"); }); return true; }
+        if (command === "/plushieachievements" || command === "/plushieach") { requireReady(() => { extensionsProgressTab = "achievements"; openExtensionsPanel("progress"); }); return true; }
         if (command === "/plushiespeak" || command === "/plushiebubble") { requireReady(() => showSpeechBubble(null, { force: true })); return true; }
         if (command === "/plushieidle") { requireReady(() => { const enabled = toggleFeatureSetting("idleAnimations"); appendLocalInfoBox("Idle Animation", [`Idle Animation is now ${enabled ? "ON" : "off"}.`]); }); return true; }
         if (command === "/plushiespeech") { requireReady(() => { const enabled = toggleFeatureSetting("speechBubbles"); appendLocalInfoBox("Speech Bubbles", [`Speech Bubbles are now ${enabled ? "ON" : "off"}.`]); }); return true; }
         if (command === "/plushieextraactions") { requireReady(() => { const enabled = toggleFeatureSetting("extraActions"); appendLocalInfoBox("Extra Actions", [`Extra Actions are now ${enabled ? "ON" : "off"}.`, enabled ? "Non-plush actions are appended after all plushie actions." : "Optional non-plush actions were removed from the activity list."], { compact: true }); }); return true; }
+        if (command === "/plushiewavechain") { requireReady(() => { const enabled = toggleFeatureSetting("sharedEmoteChains"); appendLocalInfoBox("Shared Emote Chains", [`Left-to-right Wave chains are now ${enabled ? "ON" : "off"}.`], { compact: true }); }); return true; }
+        if (command === "/plushieexpressions") { requireReady(() => { const enabled = toggleFeatureSetting("expressionReactions"); appendLocalInfoBox("Expression Reactions", [`Expression reactions are now ${enabled ? "ON" : "off"}.`], { compact: true }); }); return true; }
         if (command === "/plushiebattle" || command.startsWith("/plushiebattle ")) {
             requireReady(() => challengePlushBattle(command.slice("/plushiebattle".length).trim()));
             return true;
@@ -9125,11 +9112,13 @@ function SubbysPlushiesPageMain() {
                     `Protect Me: ${settings.protectMe ? "ON" : "off"}`,
                     `Jealous Plushie: ${settings.jealousPlushie ? "ON" : "off"}`,
                     `Easy Drag: ${dragModeEnabled ? "ON" : "off"}`,
-                    `Room mascot: ${roomMascotState?.name || "none"} (${settings.showRoomMascot ? "picture visible" : "picture hidden"}; hourly cycle ${settings.hourlyMascotCycle ? "ON" : "off"})`,
+                    `Room mascot: ${roomMascotState?.name || "none"} (${settings.showRoomMascot ? "picture visible" : "picture hidden"}; manual changes only)`,
                     `Automatic update checks: ${settings.autoUpdateChecks ? "ON" : "off"}`,
                     `Idle animations: ${settings.idleAnimations ? "ON" : "off"}`,
                     `Speech bubbles: ${settings.speechBubbles ? "ON" : "off"}`,
                     `Extra Actions: ${settings.extraActions ? "ON" : "off"}`,
+                    `Shared emote chains: ${settings.sharedEmoteChains ? "ON" : "off"}`,
+                    `Expression reactions: ${settings.expressionReactions ? "ON" : "off"}`,
                     `Performance mode: ${settings.performanceMode === "low" ? "Low CPU" : "Normal"}`,
                 ]);
             });
@@ -9403,6 +9392,7 @@ function SubbysPlushiesPageMain() {
 
         const direct = PLUGIN_ACTIVITY_BY_NAME.get(value);
         if (direct) return direct;
+        const compactValue = compactActivityName(value);
 
         const lower = value.toLowerCase();
         const compact = compactActivityName(value);
@@ -9675,60 +9665,321 @@ function SubbysPlushiesPageMain() {
     }
 
     function activePoseSnapshot(C) {
-        return Array.isArray(C?.ActivePose) ? C.ActivePose.map(value => String(value)) : [];
+        const value = C?.ActivePose;
+        if (Array.isArray(value)) return value.map(entry => String(entry)).filter(Boolean);
+        if (typeof value === "string" && value) return [value];
+        return [];
     }
 
-    function refreshExtraActionPose(C, sync = false) {
+    function characterPoseSnapshot(C) {
+        const value = C?.Pose;
+        if (Array.isArray(value)) return value.map(entry => String(entry)).filter(Boolean);
+        if (typeof value === "string" && value) return [value];
+        return null;
+    }
+
+    function activePoseSignature(C) {
+        return JSON.stringify(activePoseSnapshot(C));
+    }
+
+    function refreshExtraActionPose(C) {
         if (!C) return false;
+
+        // CharacterRefresh is required here. CharacterLoadCanvas alone can redraw
+        // the already-computed character without rebuilding the pose from ActivePose.
         try {
-            if (typeof window.CharacterLoadCanvas === "function") window.CharacterLoadCanvas(C);
-            else if (typeof window.CharacterRefresh === "function") window.CharacterRefresh(C, false);
-        } catch (_) {}
-        if (sync && C === window.Player && typeof window.ChatRoomCharacterUpdate === "function") {
-            try { window.ChatRoomCharacterUpdate(C); } catch (_) {}
+            if (typeof window.CharacterRefresh === "function") {
+                window.CharacterRefresh(C, false);
+                return true;
+            }
+        } catch (e) {
+            warn("CharacterRefresh failed for temporary arm pose:", e);
         }
-        return true;
+
+        try {
+            if (typeof window.CharacterLoadCanvas === "function") {
+                window.CharacterLoadCanvas(C);
+                return true;
+            }
+        } catch (e) {
+            warn("CharacterLoadCanvas fallback failed for temporary arm pose:", e);
+        }
+
+        return false;
     }
 
-    function applyTemporaryRaisedArm(C) {
-        if (!C) return false;
-        const key = extraActionCharacterKey(C);
-        const existing = extraRaisedArmSessions.get(key);
-        if (existing?.timer != null) window.clearTimeout(existing.timer);
+    function activePosesExactlyMatch(actual, desired) {
+        const left = [...new Set((Array.isArray(actual) ? actual : []).map(String).filter(Boolean))].sort();
+        const right = [...new Set((Array.isArray(desired) ? desired : []).map(String).filter(Boolean))].sort();
+        return left.length === right.length && left.every((pose, index) => pose === right[index]);
+    }
 
-        const before = existing?.before || activePoseSnapshot(C);
+    function setExtraActionActivePoses(C, poses) {
+        if (!C) return false;
+
+        const desired = [...new Set(
+            (Array.isArray(poses) ? poses : [])
+                .map(value => String(value || "").trim())
+                .filter(Boolean)
+        )];
+
         let applied = false;
+
         try {
             if (typeof window.CharacterSetActivePose === "function") {
-                window.CharacterSetActivePose(C, "OverTheHead");
-                applied = true;
+                window.CharacterSetActivePose(C, desired);
+                applied = activePosesExactlyMatch(activePoseSnapshot(C), desired);
             }
         } catch (_) {}
 
-        if (!applied || !activePoseSnapshot(C).includes("OverTheHead")) {
+        if (!applied && desired.length === 1) {
             try {
-                const current = activePoseSnapshot(C).filter(pose => pose !== "OverTheHead");
-                C.ActivePose = [...current, "OverTheHead"];
+                if (typeof window.CharacterSetActivePose === "function") {
+                    window.CharacterSetActivePose(C, desired[0]);
+                    applied = activePosesExactlyMatch(activePoseSnapshot(C), desired);
+                }
+            } catch (_) {}
+        }
+
+        if (!applied) {
+            try {
+                C.ActivePose = [...desired];
                 applied = true;
             } catch (_) {}
         }
+
         if (!applied) return false;
 
-        refreshExtraActionPose(C, C === window.Player);
-        const appliedSignature = JSON.stringify(activePoseSnapshot(C));
-        const session = { before: [...before], appliedSignature, timer: null };
+        refreshExtraActionPose(C);
+
+        if (activePosesExactlyMatch(activePoseSnapshot(C), desired)) return true;
+
+        try {
+            C.ActivePose = [...desired];
+            refreshExtraActionPose(C);
+        } catch (_) {}
+
+        return activePosesExactlyMatch(activePoseSnapshot(C), desired);
+    }
+
+    function diagnoseExtraActionArmPose(C, source = "diagnostic") {
+        if (!C) {
+            warn("Arm diagnostic could not resolve a character.");
+            return null;
+        }
+
+        let canChange = "unavailable";
+        try {
+            if (typeof window.CharacterCanChangeToPose === "function") {
+                canChange = window.CharacterCanChangeToPose(C, "OverTheHead");
+            }
+        } catch (e) {
+            canChange = `threw: ${String(e)}`;
+        }
+
+        const report = {
+            source,
+            name: C?.Nickname || C?.Name || C?.AccountName || "Unknown",
+            memberNumber: C?.MemberNumber ?? null,
+            activePose: activePoseSignature(C),
+            pose: JSON.stringify(characterPoseSnapshot(C)),
+            targetPose: "OverTheHead",
+            canChangeToPose: canChange,
+            CharacterSetActivePose: typeof window.CharacterSetActivePose,
+            CharacterCanChangeToPose: typeof window.CharacterCanChangeToPose,
+            CharacterRefresh: typeof window.CharacterRefresh,
+            CharacterLoadCanvas: typeof window.CharacterLoadCanvas,
+        };
+
+        try { console.table(report); } catch (_) { log("Arm diagnostic:", report); }
+        return report;
+    }
+
+    const EXTRA_ARM_RAISED_POSE = "OverTheHead";
+    const EXTRA_ARM_BASE_POSE = "BaseUpper";
+
+    function resetTemporaryArmsToBase(C, source = "temporary-arm-reset") {
+        if (!C) return false;
+
+        const applyNativeBaseUpper = () => {
+            let nativeSucceeded = false;
+
+            // BaseLower and BaseUpper are separate pose families. OverTheHead
+            // replaces BaseUpper; BaseLower is intentionally left untouched.
+            try {
+                if (typeof window.CharacterSetActivePose === "function") {
+                    window.CharacterSetActivePose(C, EXTRA_ARM_BASE_POSE, true);
+                    nativeSucceeded =
+                        activePoseSnapshot(C).includes(EXTRA_ARM_BASE_POSE) &&
+                        !activePoseSnapshot(C).includes(EXTRA_ARM_RAISED_POSE);
+                }
+            } catch (e) {
+                warn("BaseUpper pose reset failed:", e);
+            }
+
+            // Compatibility fallback for an addon that wraps CharacterSetActivePose
+            // without honoring the forced replacement. Replace only the upper pose;
+            // never rewrite C.Pose, since BC computes that from ActivePose + items.
+            if (!nativeSucceeded) {
+                try {
+                    const active = activePoseSnapshot(C)
+                        .filter(pose =>
+                            pose !== EXTRA_ARM_RAISED_POSE &&
+                            pose !== EXTRA_ARM_BASE_POSE
+                        );
+                    active.push(EXTRA_ARM_BASE_POSE);
+                    C.ActivePose = active;
+                } catch (_) {}
+            }
+
+            try {
+                if (typeof window.CharacterRefresh === "function") {
+                    window.CharacterRefresh(C, false);
+                } else if (typeof window.CharacterLoadCanvas === "function") {
+                    window.CharacterLoadCanvas(C);
+                }
+            } catch (_) {}
+
+            return (
+                activePoseSnapshot(C).includes(EXTRA_ARM_BASE_POSE) &&
+                !activePoseSnapshot(C).includes(EXTRA_ARM_RAISED_POSE)
+            );
+        };
+
+        // Reset immediately when the emote timer expires.
+        applyNativeBaseUpper();
+
+        // One short retry catches a late activity/server redraw without keeping a
+        // long-running pose-reset loop.
+        window.setTimeout(() => {
+            const key = extraActionCharacterKey(C);
+            if (extraRaisedArmSessions.has(key)) return;
+
+            applyNativeBaseUpper();
+
+            // Only the local player's authoritative pose should be published.
+            if (
+                C === window.Player &&
+                window.CurrentScreen === "ChatRoom" &&
+                typeof window.ChatRoomCharacterUpdate === "function"
+            ) {
+                try { window.ChatRoomCharacterUpdate(C); } catch (_) {}
+            }
+        }, 120);
+
+        log("Temporary raised arms reset to BaseUpper.", {
+            source,
+            memberNumber: C?.MemberNumber ?? null,
+            activePose: activePoseSnapshot(C),
+            pose: characterPoseSnapshot(C),
+        });
+
+        return true;
+    }
+
+    function forceRestoreTemporaryArmPose(C, _beforeState, source = "temporary-arm-restore") {
+        return resetTemporaryArmsToBase(C, source);
+    }
+
+    function applyTemporaryRaisedArm(C, durationMs = EXTRA_RAISE_ARM_DURATION_MS, source = "extra-action") {
+        if (!C) return false;
+
+        const key = extraActionCharacterKey(C);
+        const existing = extraRaisedArmSessions.get(key);
+
+        if (existing?.timer != null) {
+            window.clearTimeout(existing.timer);
+        }
+
+        // Preserve the original BC pose state from the FIRST animation in an
+        // overlapping ActivityRun/server-echo pair.
+        const beforeState = existing?.beforeState
+            ? {
+                activePose: [...existing.beforeState.activePose],
+                pose: Array.isArray(existing.beforeState.pose) ? [...existing.beforeState.pose] : null,
+            }
+            : {
+                activePose: activePoseSnapshot(C).filter(pose => pose !== EXTRA_ARM_RAISED_POSE),
+                pose: (() => {
+                    const pose = characterPoseSnapshot(C);
+                    return Array.isArray(pose)
+                        ? pose.filter(entry => entry !== EXTRA_ARM_RAISED_POSE)
+                        : null;
+                })(),
+            };
+
+        const desired = [...beforeState.activePose.filter(pose => pose !== EXTRA_ARM_RAISED_POSE && pose !== EXTRA_ARM_BASE_POSE), EXTRA_ARM_RAISED_POSE];
+
+        if (!setExtraActionActivePoses(C, desired)) {
+            extraRaisedArmSessions.delete(key);
+            diagnoseExtraActionArmPose(C, `${source}: pose rejected`);
+            return false;
+        }
+
+        // CharacterSetActivePose may also update C.Pose. That's fine while the
+        // animation is active; beforeState keeps the exact pre-animation copy.
+        const session = {
+            beforeState,
+            source,
+            timer: null,
+        };
+
         session.timer = window.setTimeout(() => {
             const current = extraRaisedArmSessions.get(key);
             if (current !== session) return;
+
             extraRaisedArmSessions.delete(key);
-            // Do not overwrite a pose the character changed after the action.
-            if (JSON.stringify(activePoseSnapshot(C)) !== session.appliedSignature) return;
-            try { C.ActivePose = [...session.before]; } catch (_) { return; }
-            refreshExtraActionPose(C, C === window.Player);
-        }, EXTRA_RAISE_ARM_DURATION_MS);
+            forceRestoreTemporaryArmPose(C, session.beforeState, source);
+        }, Math.max(900, Number(durationMs) || EXTRA_RAISE_ARM_DURATION_MS));
+
         extraRaisedArmSessions.set(key, session);
+
+        log("Temporary raised-arm pose applied.", {
+            source,
+            memberNumber: C?.MemberNumber ?? null,
+            beforeActivePose: beforeState.activePose,
+            beforePose: beforeState.pose,
+            activePose: activePoseSnapshot(C),
+            pose: characterPoseSnapshot(C),
+            durationMs: Math.max(900, Number(durationMs) || EXTRA_RAISE_ARM_DURATION_MS),
+        });
+
         return true;
     }
+
+    // Console helpers for testing the exact build without modifying room state.
+    window.SubbysPlushiesArmDiag = (memberNumber = window.Player?.MemberNumber) => {
+        const member = Number(memberNumber);
+        const C = Number.isFinite(member)
+            ? getRoomCharacterByMember(member)
+            : window.Player;
+        return diagnoseExtraActionArmPose(C, "console diagnostic");
+    };
+
+    window.SubbysPlushiesArmTest = (memberNumber = window.Player?.MemberNumber) => {
+        const member = Number(memberNumber);
+        const C = Number.isFinite(member)
+            ? getRoomCharacterByMember(member)
+            : window.Player;
+        if (!C) {
+            warn(`Arm test could not find member ${String(memberNumber)} in the room.`);
+            return false;
+        }
+        diagnoseExtraActionArmPose(C, "console test before");
+        return applyTemporaryRaisedArm(C, EXTRA_RAISE_ARM_DURATION_MS, "console test");
+    };
+
+    window.SubbysPlushiesArmReset = (memberNumber = window.Player?.MemberNumber) => {
+        const member = Number(memberNumber);
+        const C = Number.isFinite(member)
+            ? getRoomCharacterByMember(member)
+            : window.Player;
+        if (!C) {
+            warn(`Arm reset could not find member ${String(memberNumber)} in the room.`);
+            return false;
+        }
+        return resetTemporaryArmsToBase(C, "console reset");
+    };
 
     function processExtraActionEffect(data, spec = getCustomActivityFromAction(data)) {
         if (!isExtraActionSpec(spec) || !spec?.effect) return false;
@@ -9738,35 +9989,33 @@ function SubbysPlushiesPageMain() {
             ? getRoomCharacterByMember(context.targetMember)
             : null;
         if (!target) return false;
-        return applyTemporaryRaisedArm(target);
+        const localMember = Number(window.Player?.MemberNumber);
+        const targetMember = Number(target?.MemberNumber);
+        if (target === window.Player || (Number.isFinite(localMember) && targetMember === localMember)) {
+            return applyTemporaryRaisedArm(window.Player, EXTRA_RAISE_ARM_DURATION_MS, "raise-their-arm");
+        }
+        // Keep a local visual preview on the source/observer client. The target's own
+        // addon instance performs and synchronizes the authoritative five-second pose.
+        return applyTemporaryRaisedArm(target, EXTRA_RAISE_ARM_DURATION_MS, "raise-their-arm-preview");
     }
 
     function activityTemplate(spec, self, sourceCharacter, targetCharacter, sourceName, targetName, plushName) {
-        const sourcePronouns = characterPronouns(sourceCharacter);
-        const targetPronouns = characterPronouns(targetCharacter);
-        const ownerPronouns = self ? sourcePronouns : targetPronouns;
-        const namedPlush = String(plushName || currentPlushName() || "plushie");
+        const canonicalSource = getCharacterDisplayName(sourceCharacter) || normalizeDialogueName(sourceName, "Someone");
+        const canonicalTarget = getCharacterDisplayName(targetCharacter) || normalizeDialogueName(targetName, "someone");
 
         if (spec?.effect === "measureHeight" && !self && targetCharacter) {
-            return measureHeightActionText(sourceCharacter, targetCharacter, sourceName, targetName);
+            return measureHeightActionText(sourceCharacter, targetCharacter, canonicalSource, canonicalTarget);
         }
 
-        let template = self ? spec.selfText : (spec.otherText || spec.selfText);
-        template = template
-            .replaceAll("{SourceSubject}", sourcePronouns.subject)
-            .replaceAll("{SourceObject}", sourcePronouns.object)
-            .replaceAll("{SourcePossessive}", sourcePronouns.possessive)
-            .replaceAll("{SourceReflexive}", sourcePronouns.reflexive)
-            .replaceAll("{TargetSubject}", targetPronouns.subject)
-            .replaceAll("{TargetObject}", targetPronouns.object)
-            .replaceAll("{TargetPossessive}", targetPronouns.possessive)
-            .replaceAll("{TargetReflexive}", targetPronouns.reflexive)
-            .replaceAll("the plushie", `the ${namedPlush} plushie`)
-            .replaceAll("their", ownerPronouns.possessive)
-            .replaceAll("themself", ownerPronouns.reflexive)
-            .replaceAll("{Source}", sourceName || "Someone")
-            .replaceAll("{Target}", targetName || "someone");
-        return template;
+        const template = self ? spec.selfText : (spec.otherText || spec.selfText);
+        return renderNicknameAwareDialogue(template, {
+            self,
+            sourceCharacter,
+            targetCharacter,
+            sourceName: canonicalSource,
+            targetName: canonicalTarget,
+            plushName,
+        });
     }
 
     function getActionCharacterContext(data, fallbackTarget = null) {
@@ -9849,19 +10098,21 @@ function SubbysPlushiesPageMain() {
         const sourceCharacter = characterByMember(sourceMember);
         const targetCharacter = characterByMember(targetMember);
 
-        const sourceName =
+        const sourceNameRaw =
             getCharacterDisplayName(sourceCharacter) ||
             getDictionaryText(data, CUSTOM_ACTIVITY_SOURCE_NAME_TAG) ||
             textFromTags(["SourceCharacterName", "SourceCharacter"]) ||
             null;
 
-        const targetName =
+        const targetNameRaw =
             getCharacterDisplayName(targetCharacter) ||
             getDictionaryText(data, CUSTOM_ACTIVITY_TARGET_NAME_TAG) ||
             textFromTags(["DestinationCharacterName", "TargetCharacterName", "DestinationCharacter", "TargetCharacter"]) ||
             getCharacterDisplayName(fallbackTarget) ||
             null;
 
+        const sourceName = sourceNameRaw ? normalizeDialogueName(sourceNameRaw, "Someone") : null;
+        const targetName = targetNameRaw ? normalizeDialogueName(targetNameRaw, "someone") : null;
         return { sourceMember, targetMember, sourceName, targetName };
     }
 
@@ -9878,6 +10129,69 @@ function SubbysPlushiesPageMain() {
         if (name) return name;
         const accountName = typeof C?.AccountName === "string" ? C.AccountName.trim() : "";
         return accountName || null;
+    }
+
+    function normalizeDialogueName(value, fallback = "someone") {
+        let text = String(value || "").replace(/[\u2018\u2019]/g, "'").trim();
+        if (!text) return fallback;
+        // BC/addon activity dictionaries can hand us a display name that has
+        // already been made possessive, and stacked hooks can occasionally do it
+        // more than once ("Alessandro's's"). Canonicalize repeatedly, then let
+        // the dialogue engine add one possessive when the template asks for it.
+        for (let i = 0; i < 4; i++) {
+            if (/'s$/i.test(text)) {
+                text = text.slice(0, -2).trim();
+                continue;
+            }
+            if (/s'$/i.test(text)) {
+                text = text.slice(0, -1).trim();
+                continue;
+            }
+            break;
+        }
+        return text || fallback;
+    }
+
+    function dialoguePossessiveName(value) {
+        const name = normalizeDialogueName(value, "someone");
+        return /s$/i.test(name) ? `${name}'` : `${name}'s`;
+    }
+
+    function renderNicknameAwareDialogue(template, context = {}) {
+        const sourceName = normalizeDialogueName(context.sourceName, "Someone");
+        const targetName = normalizeDialogueName(context.targetName, "someone");
+        const sourcePronouns = context.sourcePronouns || characterPronouns(context.sourceCharacter);
+        const targetPronouns = context.targetPronouns || characterPronouns(context.targetCharacter);
+        const ownerPronouns = context.self ? sourcePronouns : targetPronouns;
+        const plushName = String(context.plushName || currentPlushName() || "plushie").trim() || "plushie";
+        const plushPhrase = /^plushie$/i.test(plushName) ? "the plushie" : `the ${plushName} plushie`;
+
+        let text = String(template || "")
+            .replaceAll("{SourceSubject}", sourcePronouns.subject)
+            .replaceAll("{SourceObject}", sourcePronouns.object)
+            .replaceAll("{SourcePossessive}", sourcePronouns.possessive)
+            .replaceAll("{SourceReflexive}", sourcePronouns.reflexive)
+            .replaceAll("{TargetSubject}", targetPronouns.subject)
+            .replaceAll("{TargetObject}", targetPronouns.object)
+            .replaceAll("{TargetPossessive}", targetPronouns.possessive)
+            .replaceAll("{TargetReflexive}", targetPronouns.reflexive)
+            .replaceAll("{SourcePossessiveName}", dialoguePossessiveName(sourceName))
+            .replaceAll("{TargetPossessiveName}", dialoguePossessiveName(targetName))
+            .replaceAll("{Plushie}", plushPhrase)
+            .replaceAll("the plushie", plushPhrase);
+
+        // Legacy templates may still use pronoun words instead of tokens. Limit
+        // these replacements to whole words so names are never modified.
+        text = text
+            .replace(/\btheir\b/g, ownerPronouns.possessive)
+            .replace(/\bthemself\b/g, ownerPronouns.reflexive)
+            .replaceAll("{Source}", sourceName)
+            .replaceAll("{Target}", targetName);
+
+        // Final safety net for old/third-party templates that append 's to an
+        // already-possessive target string. This never touches normal apostrophes.
+        text = text.replace(/([A-Za-z0-9_ -]+)'s's\b/g, "$1's");
+        return text;
     }
 
     function characterPronouns(C) {
@@ -10016,6 +10330,42 @@ function SubbysPlushiesPageMain() {
         return null;
     }
 
+    function pruneLocallyRenderedCustomActionTokens(now = Date.now()) {
+        for (const [token, at] of locallyRenderedCustomActionTokens) {
+            if (now - Number(at || 0) > 15000) locallyRenderedCustomActionTokens.delete(token);
+        }
+    }
+
+    function renderCustomActionLocally(data) {
+        if (!data) return false;
+
+        const token = getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG);
+        const message = getDictionaryText(data, "msg");
+        if (!token || !message) return false;
+
+        pruneLocallyRenderedCustomActionTokens();
+        locallyRenderedCustomActionTokens.set(token, Date.now());
+
+        // Do not feed the packet back through ChatRoomMessage. That path is designed
+        // for received packets and can drop a sender-authored Action without a full
+        // server envelope. Append the already-generated action text directly instead.
+        try {
+            if (typeof window.ChatRoomAppendChat === "function") {
+                const row = document.createElement("div");
+                row.className = "ChatMessage ChatMessageAction SubbysPlushiesLocalAction";
+                row.textContent = `(${message})`;
+                row.setAttribute("data-subbys-plushies-token", token);
+                window.ChatRoomAppendChat(row);
+                return true;
+            }
+        } catch (e) {
+            warn("Could not append outgoing custom activity locally:", e);
+        }
+
+        // Last-resort local fallback. This still guarantees the sender sees the text.
+        return appendLocalInfoBox("Subby's Plushies", [`(${message})`], { compact: true });
+    }
+
     function makeCustomActivityNetworkAction(originalData, spec, fallbackTarget = null) {
         const playerName = getCharacterDisplayName(window.Player) || "Someone";
         const playerMember = Number.isFinite(window.Player?.MemberNumber) ? window.Player.MemberNumber : null;
@@ -10027,6 +10377,14 @@ function SubbysPlushiesPageMain() {
 
         const sourceCharacter = window.Player;
         let targetCharacter = Number.isFinite(targetMember) ? getRoomCharacterByMember(targetMember) : fallbackTarget;
+        if (!targetCharacter && targetName) targetCharacter = getRoomCharacterByRenderedName(targetName);
+        if (targetCharacter) {
+            const canonicalTargetName = getCharacterDisplayName(targetCharacter);
+            if (canonicalTargetName) targetName = canonicalTargetName;
+            if (!Number.isFinite(targetMember) && Number.isFinite(Number(targetCharacter.MemberNumber))) targetMember = Number(targetCharacter.MemberNumber);
+        } else if (targetName) {
+            targetName = normalizeDialogueName(targetName, "someone");
+        }
 
         // Keep the proven 2.9.6 activity/chat flow. Only Measure Height gets this
         // extra target recovery step: if another addon/BC leaves us with a
@@ -12181,11 +12539,15 @@ function SubbysPlushiesPageMain() {
     }
 
     function publicToWirePlushOption(optionIndex) {
-        return optionIndex === 0 ? SUBBYCAT_WIRE_OPTION : optionIndex;
+        if (optionIndex === 0) return SUBBYCAT_WIRE_OPTION;
+        if (optionIndex >= SUBBYCAT_WIRE_OPTION) return optionIndex + 1;
+        return optionIndex;
     }
 
     function wireToPublicPlushOption(optionIndex) {
-        return optionIndex === SUBBYCAT_WIRE_OPTION ? 0 : optionIndex;
+        if (optionIndex === SUBBYCAT_WIRE_OPTION) return 0;
+        if (optionIndex > SUBBYCAT_WIRE_OPTION) return optionIndex - 1;
+        return optionIndex;
     }
 
     function setItemPlushState(item, optionIndex) {
@@ -12635,7 +12997,6 @@ function SubbysPlushiesPageMain() {
                 window.setTimeout(() => sendAddonPresence(true), 450);
                 if (!installedHooks.has("ChatRoomAppendChat")) window.setTimeout(() => ensureOfferChatObserver("ChatRoomSync fallback"), 0);
                 stopRoomMascotCycleMonitor();
-                if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
             };
             if (result && typeof result.then === "function") {
                 void result.then(
@@ -12649,8 +13010,7 @@ function SubbysPlushiesPageMain() {
                     sendAddonPresence(true);
                     if (!installedHooks.has("ChatRoomAppendChat")) ensureOfferChatObserver("ChatRoomSync fallback");
                     stopRoomMascotCycleMonitor();
-                    if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
-                }, 450);
+                    }, 450);
             }
             return result;
         })) hooked++;
@@ -12701,7 +13061,6 @@ function SubbysPlushiesPageMain() {
         const hooked = installRoomRosterEventHooks();
         window.setTimeout(() => recoverRoomMascotState({ allowCache: true }), 250);
         window.setTimeout(() => sendAddonPresence(true), 700);
-        if (getFeatureSettings().hourlyMascotCycle) startRoomMascotCycleMonitor();
 
         roomRosterWatchdog = window.setInterval(
             () => checkRoomRosterChange(isLowCpuMode() ? "10-minute watchdog" : "5-minute watchdog"),
@@ -12757,6 +13116,105 @@ function SubbysPlushiesPageMain() {
         return typeof name === "string" && EXTRA_ACTION_BY_NAME.has(name);
     }
 
+    function activitySearchEntryText(entry) {
+        const name = activityEntryName(entry) || "";
+        const spec = PLUGIN_ACTIVITY_BY_NAME.get(name);
+        const label = spec?.label || name.replace(/^SubbysPlushies(?:Extra)?/i, "").replace(/([a-z])([A-Z])/g, "$1 $2");
+        const targets = Array.isArray(entry?.Target) ? entry.Target : (Array.isArray(entry?.Activity?.Target) ? entry.Activity.Target : []);
+        return [name, label, ...targets].join(" ").toLowerCase();
+    }
+
+    function activitySearchMatches(entry) {
+        const terms = String(activitySearchQuery || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+        if (!terms.length) return true;
+        const text = activitySearchEntryText(entry);
+        return terms.every(term => text.includes(term));
+    }
+
+    function positionActivitySearchInput() {
+        if (!activitySearchInput?.isConnected) return false;
+        const canvas = window.MainCanvas || document.querySelector("canvas");
+        const rect = canvas?.getBoundingClientRect?.();
+        if (!rect || !rect.width || !rect.height) return false;
+        const sx = rect.width / 2000;
+        const sy = rect.height / 1000;
+        Object.assign(activitySearchInput.style, {
+            left: `${Math.round(rect.left + 1055 * sx)}px`,
+            top: `${Math.round(rect.top + 64 * sy)}px`,
+            width: `${Math.max(250, Math.round(835 * sx))}px`,
+            height: `${Math.max(30, Math.round(46 * sy))}px`,
+            fontSize: `${Math.max(13, Math.round(21 * Math.min(sx, sy)))}px`,
+        });
+        return true;
+    }
+
+    function reloadCurrentActivityMenu() {
+        try {
+            const mode = window.DialogMenuMode;
+            const mapping = window.DialogMenuMapping?.[mode];
+            if (typeof mapping?.Reload === "function") {
+                const result = mapping.Reload();
+                if (result && typeof result.catch === "function") result.catch(() => {});
+                return true;
+            }
+        } catch (_) {}
+        return false;
+    }
+
+    function removeActivitySearchInput(clearQuery = true) {
+        if (activitySearchInput?.isConnected) activitySearchInput.remove();
+        activitySearchInput = null;
+        activitySearchLastGroup = null;
+        if (clearQuery) activitySearchQuery = "";
+    }
+
+    function ensureActivitySearchInput(group = null) {
+        if (window.CurrentScreen !== "ChatRoom" || !window.DialogFocusCharacter) { removeActivitySearchInput(true); return false; }
+        activitySearchLastGroup = typeof group === "string" ? group : (group?.Name || activitySearchLastGroup);
+        if (!activitySearchInput?.isConnected) {
+            const input = document.createElement("input");
+            input.type = "search";
+            input.id = "SubbysPlushiesActivitySearch";
+            input.placeholder = "Search activities…";
+            input.autocomplete = "off";
+            input.spellcheck = false;
+            input.value = activitySearchQuery;
+            Object.assign(input.style, {
+                position: "fixed",
+                zIndex: "100000",
+                boxSizing: "border-box",
+                border: "2px solid #7d8799",
+                borderRadius: "8px",
+                padding: "5px 12px",
+                background: "rgba(20, 23, 30, 0.96)",
+                color: "#f3f5fa",
+                outline: "none",
+                fontFamily: "Arial, sans-serif",
+            });
+            input.addEventListener("input", () => {
+                activitySearchQuery = input.value;
+                reloadCurrentActivityMenu();
+            });
+            input.addEventListener("keydown", event => {
+                event.stopPropagation();
+                if (event.key === "Escape") {
+                    if (input.value) {
+                        input.value = "";
+                        activitySearchQuery = "";
+                        reloadCurrentActivityMenu();
+                    } else {
+                        input.blur();
+                    }
+                }
+            });
+            input.addEventListener("pointerdown", event => event.stopPropagation());
+            document.body.appendChild(input);
+            activitySearchInput = input;
+        }
+        positionActivitySearchInput();
+        return true;
+    }
+
     function installActivityMenuOrderingHook() {
         if (installedHooks.has("ActivityAllowedForGroup")) {
             activityMenuOrderHookInstalled = true;
@@ -12770,6 +13228,9 @@ function SubbysPlushiesPageMain() {
             const playerMember = Number(window.Player?.MemberNumber);
             const focused = window.DialogFocusCharacter;
             const selfTarget = focused === window.Player || (Number.isFinite(playerMember) && Number(focused?.MemberNumber) === playerMember);
+            const group = args?.[1];
+            ensureActivitySearchInput(group);
+
             const working = result.filter(entry => {
                 const name = entry?.Name || entry?.ActivityName || entry?.Activity?.Name || entry?.Activity;
                 if (selfTarget && name === CUSTOM_ACTIVITY_BY_KEY.get("offer")?.name) return false;
@@ -12777,9 +13238,11 @@ function SubbysPlushiesPageMain() {
                 if (extraSpec && !extraActionAvailableForTarget(extraSpec, focused)) return false;
                 return true;
             });
-            if (working.length < 2) return working;
 
-            if (!hugTightlyActivityEnabled && customActivityObjects.size === 0 && extraActionObjects.size === 0) return working;
+            const finish = entries => activitySearchQuery ? entries.filter(activitySearchMatches) : entries;
+            if (working.length < 2) return finish(working);
+
+            if (!hugTightlyActivityEnabled && customActivityObjects.size === 0 && extraActionObjects.size === 0) return finish(working);
 
             const normal = [];
             const plush = [];
@@ -12789,13 +13252,13 @@ function SubbysPlushiesPageMain() {
                 else if (isPlushMenuActivity(entry)) plush.push(entry);
                 else normal.push(entry);
             }
-            if (!plush.length && !extra.length) return working;
+            if (!plush.length && !extra.length) return finish(working);
 
             // Normal/base activities first, then all plushie activities, then optional
             // Extra Actions. This keeps Extra Actions visibly separated at the end.
             const reordered = normal.concat(plush, extra);
             const unchanged = reordered.length === working.length && reordered.every((entry, index) => entry === working[index]);
-            if (unchanged) return working;
+            if (unchanged) return finish(working);
 
             activityMenuOrderPassCount++;
             lastActivityMenuOrder = {
@@ -12806,12 +13269,18 @@ function SubbysPlushiesPageMain() {
                 normalCount: normal.length,
                 at: new Date().toISOString(),
             };
-            return reordered;
+            return finish(reordered);
         });
 
         activityMenuOrderHookInstalled = installed;
-        if (installed) log("Installed R132 final activity-list ordering hook (plush actions, then Extra Actions last).");
-        else warn("ActivityAllowedForGroup was unavailable; plush activity ordering was not installed.");
+        if (installed) {
+            installHook("DialogLeave", 10000, (args, next) => {
+                const result = next(args);
+                removeActivitySearchInput(true);
+                return result;
+            });
+            log("Installed R132 activity-list ordering + in-menu search hook (plush actions, then Extra Actions last).");
+        } else warn("ActivityAllowedForGroup was unavailable; plush activity ordering/search was not installed.");
         return installed;
     }
 
@@ -12941,6 +13410,22 @@ function SubbysPlushiesPageMain() {
             if (runBalanceEffect) {
                 window.setTimeout(startBalanceHeadMinigame, 120);
             }
+
+            // Do not depend on the server echo for the source client's visual effect.
+            // ActivityRun already gives us the real target Character, so Raise Their Arm
+            // can animate immediately and the network action remains responsible for
+            // making other addon clients reproduce the same temporary pose.
+            if (customSpec?.effect === "raiseTargetArm" && focusedTarget) {
+                window.setTimeout(
+                    () => applyTemporaryRaisedArm(
+                        focusedTarget,
+                        EXTRA_RAISE_ARM_DURATION_MS,
+                        "raise-their-arm-ActivityRun"
+                    ),
+                    0
+                );
+            }
+
             if (customSpec && !isExtraActionSpec(customSpec) && customSpec.effect !== "balanceHead") handleLocalPlushInteraction(customSpec.key);
             if (jealousReaction) window.setTimeout(() => triggerJealousReaction(jealousReaction.target, jealousReaction.activityName), 80);
 
@@ -13079,6 +13564,7 @@ function SubbysPlushiesPageMain() {
         const actionMessageHooked = installHook("ChatRoomMessage", 10000, (args, next) => {
             const data = args?.[0];
             if (processAddonPresencePacket(data)) return next(args);
+            if (processSharedWaveChainPacket(data)) return next(args);
             if (processRoomMascotCycleClaimPacket(data)) return next(args);
             if (processOfferDecisionSignal(data)) return next(args);
 
@@ -13096,9 +13582,21 @@ function SubbysPlushiesPageMain() {
             }
             if (!isChatAction(data)) return next(args);
 
+            const incomingCustomToken = getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG);
+            if (incomingCustomToken) {
+                pruneLocallyRenderedCustomActionTokens();
+                if (locallyRenderedCustomActionTokens.has(incomingCustomToken)) {
+                    return;
+                }
+            }
+
             maybeTrackBaseCuddleAchievement(data);
             const pluginActionSpec = getCustomActivityFromAction(data);
-            if (isExtraActionSpec(pluginActionSpec)) processExtraActionEffect(data, pluginActionSpec);
+            if (pluginActionSpec) processExpressionReaction(data, pluginActionSpec);
+            else if (isHugTightlyAction(data)) processExpressionReaction(data, { key: "hugTightly", category: "plushie" });
+            if (isExtraActionSpec(pluginActionSpec) && pluginActionSpec?.effect) {
+                window.setTimeout(() => processExtraActionEffect(data, pluginActionSpec), 0);
+            }
             const offerDecisionHandled = processOfferDecisionAction(data);
             const protectCandidate = getFeatureSettings().protectMe && actionLooksProtectable(data);
             const plushRelated = offerDecisionHandled || (!isExtraActionSpec(pluginActionSpec) && isPotentialPlushAction(data));
@@ -13135,8 +13633,6 @@ function SubbysPlushiesPageMain() {
                         setBy: roomMascotState.setBy || getCharacterDisplayName(window.Player) || "room admin",
                         memberNumber: Number(window.Player?.MemberNumber) || null,
                         at: roomMascotState.at || new Date().toISOString(),
-                        nextCycleAt: Number.isFinite(Number(roomMascotState.nextCycleAt)) ? Number(roomMascotState.nextCycleAt) : Date.now() + ROOM_MASCOT_CYCLE_MS,
-                        lastAutoCycleKey: typeof roomMascotState.lastAutoCycleKey === "string" ? roomMascotState.lastAutoCycleKey : null,
                         affectionModifier: Number.isFinite(Number(roomMascotState.affectionModifier)) ? Number(roomMascotState.affectionModifier) : ROOM_MASCOT_AFFECTION_MODIFIER,
                     };
                 } else if (roomMascotAdminDirty) {
@@ -13154,11 +13650,9 @@ function SubbysPlushiesPageMain() {
                     lastRoomMascotSharedSyncAt = Date.now();
                     if (pendingAction?.type === "set" && pendingAction.name) {
                         window.setTimeout(() => {
-                            sendStandaloneActionMessage(pendingAction.hourlyCycle
-                                ? `${pendingAction.name} was chosen randomly as the room mascot plushie by the hourly cycle.`
-                                : (pendingAction.randomPick
-                                    ? `${pendingAction.name} was chosen randomly as the room mascot plushie.`
-                                    : `${pendingAction.source || "Someone"} sets ${pendingAction.name} as the room mascot plushie.`));
+                            sendStandaloneActionMessage(pendingAction.randomPick
+                                ? `${pendingAction.name} was chosen randomly as the room mascot plushie.`
+                                : `${pendingAction.source || "Someone"} sets ${pendingAction.name} as the room mascot plushie.`);
                             recordStat("mascot", 1, { plushName: pendingAction.name });
                             window.setTimeout(trackRoomAchievements, 50);
                         }, 0);
@@ -13170,15 +13664,30 @@ function SubbysPlushiesPageMain() {
                 }
                 return result;
             }
-            const outgoingAction = messageType === "ChatRoomChat" && isChatAction(originalData);
-
-            if (!outgoingAction) return next(args);
-
             const now = Date.now();
             const pendingHugTightly = now <= pendingLocalHugTightlyUntil;
             const pendingCustom = !!pendingLocalCustomActivity && pendingLocalCustomActivity.until >= now;
+            const pendingSpec = pendingCustom
+                ? PLUGIN_ACTIVITY_BY_KEY.get(pendingLocalCustomActivity.key)
+                : null;
+
+            // ActivityRun is the authoritative signal for one of our activities.
+            // Some R132 activity paths reach ServerSend before BC has finalized the
+            // packet as Type:"Action". If a Subby's Plushies activity is pending,
+            // normalize it anyway instead of silently passing the generic BC packet.
+            const outgoingAction =
+                messageType === "ChatRoomChat" &&
+                (isChatAction(originalData) || pendingHugTightly || !!pendingSpec);
+
+            if (!outgoingAction) return next(args);
+
+            const nativeWaveCandidate =
+                getFeatureSettings().sharedEmoteChains &&
+                (pendingSpec?.key === "wave" || actionLooksLikeWave(originalData));
             if (!hugTightlyActivityEnabled && customActivityObjects.size === 0 && extraActionObjects.size === 0 && !pendingHugTightly && !pendingCustom) {
-                return next(args);
+                const result = next(args);
+                if (nativeWaveCandidate) window.setTimeout(() => maybeStartSharedWaveChain(originalData), 0);
+                return result;
             }
 
             let nextArgs = args;
@@ -13195,10 +13704,6 @@ function SubbysPlushiesPageMain() {
                 void playPurrSfx(token, "outgoing Hug Tightly action");
             } else {
                 const directSpec = getCustomActivityFromAction(originalData);
-                const pendingSpec =
-                    pendingCustom
-                        ? PLUGIN_ACTIVITY_BY_KEY.get(pendingLocalCustomActivity.key)
-                        : null;
                 const customSpec = directSpec || pendingSpec;
 
                 if (customSpec) {
@@ -13226,11 +13731,25 @@ function SubbysPlushiesPageMain() {
                 }
             }
 
-            if (nextArgs === args && !outgoingHugTightly) return next(args);
+            if (nextArgs === args && !outgoingHugTightly) {
+                const result = next(args);
+                if (nativeWaveCandidate) window.setTimeout(() => maybeStartSharedWaveChain(originalData), 0);
+                return result;
+            }
 
+            const sentActionData = nextArgs?.[1] || originalData;
+            const sentCustomSpec = getCustomActivityFromAction(sentActionData);
+            const startWaveChain = getFeatureSettings().sharedEmoteChains && actionLooksLikeWave(sentActionData);
             captureVisiblePlushStates();
             const result = next(nextArgs);
 
+            if (
+                sentCustomSpec &&
+                ["wave", "extraRaiseArm", "extraMeasureHeight"].includes(sentCustomSpec.key)
+            ) {
+                window.setTimeout(() => renderCustomActionLocally(sentActionData), 0);
+            }
+            if (startWaveChain) window.setTimeout(() => maybeStartSharedWaveChain(sentActionData), 0);
             scheduleActionRecovery("outgoing plush Action");
             return result;
         });
@@ -14106,9 +14625,19 @@ function SubbysPlushiesPageMain() {
 
         function bcActivityTemplate(spec, self) {
             const template = self ? spec.selfText : (spec.otherText || spec.selfText);
+            const plushName = String(currentPlushName() || "plushie").trim() || "plushie";
+            const plushPhrase = /^plushie$/i.test(plushName) ? "the plushie" : `the ${plushName} plushie`;
+            // This text is only BC's local/fallback activity dictionary. The
+            // outgoing packet is still normalized by the nickname-aware engine.
+            // Resolve plush tokens here too so even a fallback never regresses to
+            // generic "the plushie" wording or leaks raw template placeholders.
             return template
                 .replaceAll("{Source}", "SourceCharacter")
-                .replaceAll("{Target}", "DestinationCharacter");
+                .replaceAll("{Target}", "DestinationCharacter")
+                .replaceAll("{SourcePossessiveName}", "SourceCharacter")
+                .replaceAll("{TargetPossessiveName}", "DestinationCharacter")
+                .replaceAll("{Plushie}", plushPhrase)
+                .replaceAll("the plushie", plushPhrase);
         }
 
         const activityHooked = installHook("ActivityDictionaryText", 1000, (args, next) => {
@@ -14129,7 +14658,7 @@ function SubbysPlushiesPageMain() {
             if (isHug) {
                 if (/^label-/i.test(key)) return HUG_TIGHTLY_ACTIVITY_LABEL;
                 if (/^chat(?:self|other)-/i.test(key)) {
-                    return "SourceCharacter hugs the plushie tightly.";
+                    return `SourceCharacter hugs the ${currentPlushName()} plushie tightly.`;
                 }
                 return HUG_TIGHTLY_ACTIVITY_LABEL;
             }
@@ -15000,6 +15529,7 @@ function SubbysPlushiesPageMain() {
             drawButton(FEATURE_MENU.Idle, `Idle Animation: ${settings.idleAnimations ? "ON" : "off"}`, settings.idleAnimations);
             drawButton(FEATURE_MENU.Speech, `Speech Bubbles: ${settings.speechBubbles ? "ON" : "off"}`, settings.speechBubbles);
             drawButton(FEATURE_MENU.EmotesSettings, "Emotes");
+            drawButton(FEATURE_MENU.ExtraActions, `Extra Actions: ${settings.extraActions ? "ON" : "off"}`, settings.extraActions);
             drawButton(FEATURE_MENU.Protect, `Protect Me: ${settings.protectMe ? "ON" : "off"}`, settings.protectMe);
             drawButton(FEATURE_MENU.Jealous, `Jealous: ${settings.jealousPlushie ? "ON" : "off"}`, settings.jealousPlushie);
             drawButton(FEATURE_MENU.Drag, `Drag UI: ${dragModeEnabled ? "ON" : "off"}`, dragModeEnabled);
@@ -15096,6 +15626,7 @@ function SubbysPlushiesPageMain() {
                 plushMenuPage = "emotes";
                 return true;
             }
+            if (mouseInRect(FEATURE_MENU.ExtraActions)) { toggleFeatureSetting("extraActions"); return true; }
             if (mouseInRect(FEATURE_MENU.Protect)) { toggleFeatureSetting("protectMe"); return true; }
             if (mouseInRect(FEATURE_MENU.Jealous)) { toggleFeatureSetting("jealousPlushie"); return true; }
             if (mouseInRect(FEATURE_MENU.Drag)) { openDragUi(); return true; }
@@ -15938,7 +16469,7 @@ function SubbysPlushiesPageMain() {
 
     window.SubbysPlushies = {
         version: VERSION,
-        apiVersion: 1,
+        apiVersion: 2,
         get ready() { return ready; },
         get failed() { return failed; },
         getHeld: pluginApiHeldSnapshot,
@@ -15948,6 +16479,11 @@ function SubbysPlushiesPageMain() {
         getBattleHistory: limit => battleHistory(limit),
         getPerformanceMode: () => isLowCpuMode() ? "low" : "normal",
         setPerformanceMode,
+        dialogue: Object.freeze({
+            name: value => normalizeDialogueName(value, "someone"),
+            possessive: dialoguePossessiveName,
+            render: (template, context) => renderNicknameAwareDialogue(template, context || {}),
+        }),
         showEmote: triggerPlushEmote,
         on: onPluginApiEvent,
         off: offPluginApiEvent,
@@ -16126,7 +16662,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.0.0";
+    const VERSION = "3.1.4";
     const BRIDGE_ATTR = "data-subbys-plushies-page-bridge";
     const BRIDGE_VALUE = `v${VERSION}`;
 
