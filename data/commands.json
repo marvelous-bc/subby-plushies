@@ -1,7 +1,5 @@
 {
-  "schemaVersion": 1,
-  "pluginVersion": "2.3.7.18",
-  "generatedFrom": "CURRENT_COMMAND_GROUPS in SubbysPlushies.user.js",
+  "version": "3.1.21",
   "groups": [
     {
       "title": "General",
@@ -41,11 +39,11 @@
       ]
     },
     {
-      "title": "Extensions Tabs",
+      "title": "Extensions & Navigation",
       "commands": [
         {
           "command": "/plushieextensions",
-          "description": "Open the Subby's Plushies Extensions control center on Settings."
+          "description": "Open the Subby's Plushies Extensions control center on Settings → General."
         },
         {
           "command": "/plushiestatus",
@@ -53,23 +51,23 @@
         },
         {
           "command": "/plushiesettings",
-          "description": "Open the Settings tab."
+          "description": "Open Settings → General."
         },
         {
           "command": "/plushielayout",
-          "description": "Open the Layout customization tab."
+          "description": "Open Settings → Layout customization."
         },
         {
           "command": "/plushieplushies",
-          "description": "Open the Plushies tab with relationships, favorites, emotes, and saved poses."
+          "description": "Open Progress → Plushies with relationships, favorites, emotes, and saved poses."
         },
         {
           "command": "/plushiehistory",
-          "description": "Open the History tab for mood and plushie battles."
+          "description": "Open Progress → Battle History."
         },
         {
           "command": "/plushiebackup",
-          "description": "Open the Backup / Restore tab."
+          "description": "Open Progress → Backup / Restore."
         },
         {
           "command": "/plushiecommands",
@@ -118,7 +116,7 @@
         },
         {
           "command": "/plushieposes",
-          "description": "Open the Plushies tab at the saved-pose controls."
+          "description": "Open Progress → Plushies at the saved-pose controls."
         },
         {
           "command": "/plushieposesave <1|2|3>",
@@ -172,6 +170,22 @@
         {
           "command": "/plushiespeech",
           "description": "Toggle local automatic speech bubbles."
+        },
+        {
+          "command": "/plushieextraactions",
+          "description": "Toggle optional non-plush Extra Actions. Disabled by default."
+        },
+        {
+          "command": "/plushiewavechain",
+          "description": "Toggle left-to-right shared Wave emote chains."
+        },
+        {
+          "command": "/plushieignoreposes",
+          "description": "Toggle ignoring pose-changing plugin emotes such as Wave and Raise Both Arms."
+        },
+        {
+          "command": "/plushieexpressions",
+          "description": "Toggle short expression reactions to plushie and Extra Actions."
         },
         {
           "command": "/plushiespeak",
@@ -233,7 +247,7 @@
       ]
     },
     {
-      "title": "Battle, Stats & Achievements",
+      "title": "Battle & Progress",
       "commands": [
         {
           "command": "/plushiebattle [member/name]",
@@ -241,11 +255,11 @@
         },
         {
           "command": "/plushiestats",
-          "description": "Open the detailed Stats tab."
+          "description": "Open Progress → Stats."
         },
         {
           "command": "/plushieachievements",
-          "description": "Open the detailed Achievements tab."
+          "description": "Open Progress → Achievements."
         },
         {
           "command": "/plushieach",
@@ -284,6 +298,10 @@
         {
           "command": "/plushiedatareload",
           "description": "Force-refresh validated data files from GitHub."
+        },
+        {
+          "command": "/plushieversion",
+          "description": "Show the currently running addon version and pose-safety status."
         },
         {
           "command": "/plushiedebug",
