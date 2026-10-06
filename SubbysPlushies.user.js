@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.1.9
+// @version      3.1.12
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @released     2026-10-05
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.1.9";
+    const VERSION = "3.1.12";
     const BUILD_DATE = "2026-10-05";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
@@ -10336,34 +10336,69 @@ function SubbysPlushiesPageMain() {
         }
     }
 
+    function customActionChatRowExists(token) {
+        if (!token || typeof document === "undefined") return false;
+        try {
+            const rows = document.querySelectorAll("[data-subbys-plushies-token]");
+            for (const row of rows) {
+                if (row.getAttribute("data-subbys-plushies-token") === token) return true;
+            }
+        } catch (_) {}
+        return false;
+    }
+
     function renderCustomActionLocally(data) {
         if (!data) return false;
 
         const token = getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG);
-        const message = getDictionaryText(data, "msg");
+        const message =
+            getDictionaryText(data, "msg") ||
+            (typeof data?.Content === "string" && data.Content !== "Beep" ? data.Content : "");
+
         if (!token || !message) return false;
 
         pruneLocallyRenderedCustomActionTokens();
-        locallyRenderedCustomActionTokens.set(token, Date.now());
 
-        // Do not feed the packet back through ChatRoomMessage. That path is designed
-        // for received packets and can drop a sender-authored Action without a full
-        // server envelope. Append the already-generated action text directly instead.
+        // A token is not enough to prove the row actually rendered. Only suppress
+        // a duplicate if the matching DOM row really exists.
+        if (customActionChatRowExists(token)) {
+            locallyRenderedCustomActionTokens.set(token, Date.now());
+            return true;
+        }
+
         try {
             if (typeof window.ChatRoomAppendChat === "function") {
                 const row = document.createElement("div");
+
+                // This is intentionally the exact simple class combination used by
+                // the working Measure Height sender-side fix.
                 row.className = "ChatMessage ChatMessageAction SubbysPlushiesLocalAction";
                 row.textContent = `(${message})`;
                 row.setAttribute("data-subbys-plushies-token", token);
+
                 window.ChatRoomAppendChat(row);
-                return true;
+
+                // Only mark the token after attempting the append. If another addon
+                // removed/suppressed the row, a later retry remains allowed.
+                if (row.isConnected || customActionChatRowExists(token)) {
+                    locallyRenderedCustomActionTokens.set(token, Date.now());
+                    return true;
+                }
             }
         } catch (e) {
-            warn("Could not append outgoing custom activity locally:", e);
+            warn("Could not append custom activity chat row:", e);
         }
 
-        // Last-resort local fallback. This still guarantees the sender sees the text.
-        return appendLocalInfoBox("Subby's Plushies", [`(${message})`], { compact: true });
+        // Fallback is intentionally separate from the token map. If it succeeds,
+        // the actor still sees the generated action even when ChatRoomAppendChat
+        // has been replaced by another addon.
+        const fallback = appendLocalInfoBox(
+            "Subby's Plushies",
+            [`(${message})`],
+            { compact: true }
+        );
+        if (fallback) locallyRenderedCustomActionTokens.set(token, Date.now());
+        return !!fallback;
     }
 
     function makeCustomActivityNetworkAction(originalData, spec, fallbackTarget = null) {
@@ -13585,13 +13620,25 @@ function SubbysPlushiesPageMain() {
             const incomingCustomToken = getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG);
             if (incomingCustomToken) {
                 pruneLocallyRenderedCustomActionTokens();
-                if (locallyRenderedCustomActionTokens.has(incomingCustomToken)) {
+                if (
+                    locallyRenderedCustomActionTokens.has(incomingCustomToken) &&
+                    customActionChatRowExists(incomingCustomToken)
+                ) {
                     return;
                 }
             }
 
             maybeTrackBaseCuddleAchievement(data);
             const pluginActionSpec = getCustomActivityFromAction(data);
+
+            // All nickname/pronoun-aware Subby's Plushies activities use our own
+            // deterministic chat renderer. R132's synthetic Action+Beep path can
+            // silently drop these rows depending on the original activity packet.
+            const customActionRendered =
+                !!pluginActionSpec &&
+                !!incomingCustomToken &&
+                renderCustomActionLocally(data);
+
             if (pluginActionSpec) processExpressionReaction(data, pluginActionSpec);
             else if (isHugTightlyAction(data)) processExpressionReaction(data, { key: "hugTightly", category: "plushie" });
             if (isExtraActionSpec(pluginActionSpec) && pluginActionSpec?.effect) {
@@ -13610,6 +13657,15 @@ function SubbysPlushiesPageMain() {
                 processBattleAction(data);
                 maybePromptOfferRecipient(data);
                 captureVisiblePlushStates();
+            }
+
+            // We already rendered our generated custom activity text above.
+            // Do not pass that same synthetic Beep action into BC's renderer,
+            // otherwise compatible clients can get duplicates while other R132
+            // packet shapes can still get no row at all.
+            if (customActionRendered) {
+                if (plushRelated) scheduleActionRecovery("ChatRoomMessage custom plush Action");
+                return;
             }
 
             const result = next(args);
@@ -13691,6 +13747,7 @@ function SubbysPlushiesPageMain() {
             }
 
             let nextArgs = args;
+            let outgoingCustomActionData = null;
             const packetLooksPlush = isPotentialPlushAction(originalData);
             const outgoingHugTightly = pendingHugTightly || (packetLooksPlush && isHugTightlyAction(originalData));
             if (outgoingHugTightly) {
@@ -13717,6 +13774,7 @@ function SubbysPlushiesPageMain() {
                     const normalized = makeCustomActivityNetworkAction(originalData, customSpec, fallbackTarget);
                     nextArgs = args.slice();
                     nextArgs[1] = normalized.data;
+                    outgoingCustomActionData = normalized.data;
 
                     if (!isExtraActionSpec(customSpec) && Number.isFinite(normalized.targetMember) && !normalized.isSelf) trackSocialPlayer(normalized.targetMember);
                     if (customSpec.key === "offer" && Number.isFinite(normalized.targetMember) && !normalized.isSelf) {
@@ -13738,17 +13796,21 @@ function SubbysPlushiesPageMain() {
             }
 
             const sentActionData = nextArgs?.[1] || originalData;
-            const sentCustomSpec = getCustomActivityFromAction(sentActionData);
             const startWaveChain = getFeatureSettings().sharedEmoteChains && actionLooksLikeWave(sentActionData);
             captureVisiblePlushStates();
             const result = next(nextArgs);
 
-            if (
-                sentCustomSpec &&
-                ["wave", "extraRaiseArm", "extraMeasureHeight"].includes(sentCustomSpec.key)
-            ) {
-                window.setTimeout(() => renderCustomActionLocally(sentActionData), 0);
+            // Proven sender-side path from the working Measure Height fix:
+            // let BC finish sending first, then append the generated action row on
+            // the next event-loop tick. This avoids ChatRoomAppendChat suppression
+            // while ServerSend/ActivityRun is still on the call stack.
+            if (outgoingCustomActionData) {
+                window.setTimeout(
+                    () => renderCustomActionLocally(outgoingCustomActionData),
+                    0
+                );
             }
+
             if (startWaveChain) window.setTimeout(() => maybeStartSharedWaveChain(sentActionData), 0);
             scheduleActionRecovery("outgoing plush Action");
             return result;
@@ -16662,7 +16724,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.1.4";
+    const VERSION = "3.1.12";
     const BRIDGE_ATTR = "data-subbys-plushies-page-bridge";
     const BRIDGE_VALUE = `v${VERSION}`;
 
