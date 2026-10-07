@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.1.32
+// @version      3.1.35
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @released     2026-10-06
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -26,7 +26,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.1.32";
+    const VERSION = "3.1.35";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -37,7 +37,7 @@ function SubbysPlushiesPageMain() {
             document.documentElement?.setAttribute("data-subbys-plushies-load-source", "direct");
         }
     } catch (_) {}
-    const BUILD_DATE = "2026-10-05";
+    const BUILD_DATE = "2026-10-06";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -792,7 +792,7 @@ function SubbysPlushiesPageMain() {
 
     const PLUSHES = Object.freeze([
         { name: "Subbycat", image: plushAsset("subbycat.png") },
-        { name: "Ale", image: plushAsset("subbyale.png") },
+        { name: "Ale", image: plushAsset("ale.png") },
         { name: "M", image: plushAsset("M.png?rev=1.5.49") },
         { name: "Izneas", image: plushAsset("izneas.png") },
         { name: "Lyra", image: plushAsset("lyra.png") },
@@ -813,12 +813,13 @@ function SubbysPlushiesPageMain() {
         // Wire option 18 is the legacy Subbycat alias and must never move.
         { name: "Subbycat", image: plushAsset("subbycat.png"), wireAlias: true },
 
-        // New public plushies. Public options 18/19 map to wire options 19/20.
+        // New public plushies. Public options 18/19/20 map to wire options 19/20/21.
         { name: "Rey", image: plushAsset("rey.png") },
         { name: "Margot", image: plushAsset("margot.png") },
+        { name: "Mara", image: plushAsset("mara.png") },
     ].map(Object.freeze));
 
-    const PUBLIC_PLUSH_COUNT = 20;
+    const PUBLIC_PLUSH_COUNT = 21;
     const SUBBYCAT_WIRE_OPTION = 18;
 
     const PLUSH_NAMES = Object.freeze(PLUSHES.map(plush => plush.name));
@@ -830,6 +831,11 @@ function SubbysPlushiesPageMain() {
             text: "As far as Plushies go, the Rey plush is a creature of deep myth. She is seemingly everywhere and nowhere at once, dissolving into the velvet shadows of the realm only to materialize exactly when the cosmic seams of the world begin to fray. Rey only arrives when needed. She acts as a silent sentinel stitched into the dark, watching for the precise moment another plushie begins to pull at their own threads or treat themselves unfairly. To some, she is a cotton-stuffed savior; to others, a foe to be reckoned with. For sometimes the dark can wield the brightest light—or, in certain urgent cases, a very heavy, unyielding brick. Like most legendary plushies, however, Rey is rarely a solo act. If a Hira plushie is spotted roaming a button-littered back alley or brooding on a rooftop late at night, you can bet your last spool of thread that Rey is crouching nearby in the rafters. Because every soft-hearted plushie needs a savior to patch them up sometimes...",
         }),
         Margot: Object.freeze({
+            title: "???",
+            text: "",
+            hidden: true,
+        }),
+        Mara: Object.freeze({
             title: "???",
             text: "",
             hidden: true,
@@ -853,6 +859,7 @@ function SubbysPlushiesPageMain() {
         { label: "Kyu", option: 17 },
         { label: "Rey", option: 18 },
         { label: "Margot", option: 19 },
+        { label: "Mara", option: 20 },
     ].map(Object.freeze));
 
     const SUBBYCAT_MENU = Object.freeze([
@@ -4686,11 +4693,12 @@ function SubbysPlushiesPageMain() {
         }
     }
 
-    // Native addon badge anchor in character coordinates.
-    // Center it above the head instead of the upper-right status area so it
-    // does not overlap AFK / typing / wardrobe / other native status bubbles.
-    const ADDON_PRESENCE_ICON_CHARACTER_X = 229;
-    const ADDON_PRESENCE_ICON_CHARACTER_Y = -104;
+    // Presence badge placement is based on BC's ChatRoom character SLOT, not
+    // on the character body's height/pose transform. This is important in
+    // crowded rooms where BC uses multiple rows: every badge stays in the same
+    // top addon-icon band as WCE/other room icons.
+    const ADDON_PRESENCE_ICON_SLOT_X = 229;
+    const ADDON_PRESENCE_ICON_SLOT_TOP = 4;
     const ADDON_PRESENCE_ICON_CHARACTER_SIZE = 42;
     const ADDON_PRESENCE_ICON_ALPHA = 0.55;
 
@@ -4721,33 +4729,72 @@ function SubbysPlushiesPageMain() {
     }
 
     function nativePresenceIconRect(C) {
-        const topLeft = characterPointToMainCanvas(
-            C,
-            ADDON_PRESENCE_ICON_CHARACTER_X,
-            ADDON_PRESENCE_ICON_CHARACTER_Y
-        );
+        const draw = characterChatRoomDraw(C);
+
+        // Correct crowded-room path: DrawCharacter's x/y are the origin of the
+        // character's room slot. Do not apply CharacterAppearanceYOffset or
+        // HeightRatio here, because those move the body inside the slot and are
+        // exactly what caused the addon badge to drift away from WCE's icon row.
+        if (
+            draw &&
+            Number.isFinite(Number(draw.x)) &&
+            Number.isFinite(Number(draw.y)) &&
+            Number.isFinite(Number(draw.zoom)) &&
+            Number(draw.zoom) > 0
+        ) {
+            const zoom = Number(draw.zoom);
+            const rawLeft = Number(draw.x) + ADDON_PRESENCE_ICON_SLOT_X * zoom;
+            const rawTop = Number(draw.y) + ADDON_PRESENCE_ICON_SLOT_TOP;
+            const rawRight = Number(draw.x) +
+                (ADDON_PRESENCE_ICON_SLOT_X + ADDON_PRESENCE_ICON_CHARACTER_SIZE) * zoom;
+            const rawBottom = Number(draw.y) +
+                ADDON_PRESENCE_ICON_SLOT_TOP +
+                ADDON_PRESENCE_ICON_CHARACTER_SIZE * zoom;
+
+            const topLeft = applyDrawMatrix(draw, rawLeft, rawTop);
+            const rightPoint = applyDrawMatrix(draw, rawRight, rawTop);
+            const bottomPoint = applyDrawMatrix(draw, rawLeft, rawBottom);
+
+            const projectedWidth = Math.hypot(
+                rightPoint.x - topLeft.x,
+                rightPoint.y - topLeft.y
+            );
+            const projectedHeight = Math.hypot(
+                bottomPoint.x - topLeft.x,
+                bottomPoint.y - topLeft.y
+            );
+
+            if (
+                [topLeft.x, topLeft.y, projectedWidth, projectedHeight]
+                    .every(Number.isFinite)
+            ) {
+                return {
+                    x: topLeft.x,
+                    y: topLeft.y,
+                    width: Math.max(18, Math.min(44, projectedWidth)),
+                    height: Math.max(18, Math.min(44, projectedHeight)),
+                };
+            }
+        }
+
+        // Conservative fallback for the very first frame before DrawCharacter
+        // placement has been captured.
+        const topLeft = characterPointToMainCanvas(C, ADDON_PRESENCE_ICON_SLOT_X, 0);
         const xPoint = characterPointToMainCanvas(
             C,
-            ADDON_PRESENCE_ICON_CHARACTER_X + ADDON_PRESENCE_ICON_CHARACTER_SIZE,
-            ADDON_PRESENCE_ICON_CHARACTER_Y
+            ADDON_PRESENCE_ICON_SLOT_X + ADDON_PRESENCE_ICON_CHARACTER_SIZE,
+            0
         );
-        const yPoint = characterPointToMainCanvas(
-            C,
-            ADDON_PRESENCE_ICON_CHARACTER_X,
-            ADDON_PRESENCE_ICON_CHARACTER_Y + ADDON_PRESENCE_ICON_CHARACTER_SIZE
-        );
+        if (!topLeft || !xPoint) return null;
 
-        if (!topLeft || !xPoint || !yPoint) return null;
-
-        const projectedWidth = Math.hypot(xPoint.x - topLeft.x, xPoint.y - topLeft.y);
-        const projectedHeight = Math.hypot(yPoint.x - topLeft.x, yPoint.y - topLeft.y);
-        if (![topLeft.x, topLeft.y, projectedWidth, projectedHeight].every(Number.isFinite)) return null;
+        const size = Math.hypot(xPoint.x - topLeft.x, xPoint.y - topLeft.y);
+        if (![topLeft.x, topLeft.y, size].every(Number.isFinite)) return null;
 
         return {
             x: topLeft.x,
-            y: topLeft.y,
-            width: Math.max(20, Math.min(44, projectedWidth)),
-            height: Math.max(20, Math.min(44, projectedHeight)),
+            y: Math.max(0, topLeft.y + ADDON_PRESENCE_ICON_SLOT_TOP),
+            width: Math.max(18, Math.min(44, size)),
+            height: Math.max(18, Math.min(44, size)),
         };
     }
 
@@ -4914,8 +4961,9 @@ function SubbysPlushiesPageMain() {
             localRect: C ? nativePresenceIconRect(C) : null,
             asset: "assets/plushies/subbycat.png",
             anchor: {
-                x: ADDON_PRESENCE_ICON_CHARACTER_X,
-                y: ADDON_PRESENCE_ICON_CHARACTER_Y,
+                mode: "chatroom-slot-top",
+                slotX: ADDON_PRESENCE_ICON_SLOT_X,
+                slotTop: ADDON_PRESENCE_ICON_SLOT_TOP,
                 size: ADDON_PRESENCE_ICON_CHARACTER_SIZE,
                 alpha: ADDON_PRESENCE_ICON_ALPHA,
             },
@@ -10823,58 +10871,138 @@ function SubbysPlushiesPageMain() {
         return false;
     }
 
+    function customActionExpectedMessage(data) {
+        return (
+            getDictionaryText(data, "msg") ||
+            (typeof data?.Content === "string" && data.Content !== "Beep" ? data.Content : "")
+        );
+    }
+
+    function normalizeActionChatText(value) {
+        let text = String(value || "").replace(/\s+/g, " ").trim();
+        if (text.startsWith("(") && text.endsWith(")")) {
+            text = text.slice(1, -1).trim();
+        }
+        return text;
+    }
+
+    function customActionChatRoot() {
+        return (
+            document.getElementById("TextAreaChatLog") ||
+            document.querySelector("#TextAreaChatLog") ||
+            null
+        );
+    }
+
+    function currentActionRows() {
+        const root = customActionChatRoot();
+        if (!root) return [];
+        try {
+            return Array.from(root.querySelectorAll(".ChatMessageAction"));
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function findMatchingNativeActionRow(message, onlyRows = null) {
+        const expected = normalizeActionChatText(message);
+        if (!expected) return null;
+
+        const rows = Array.isArray(onlyRows) ? onlyRows : currentActionRows();
+        for (let i = rows.length - 1; i >= 0; i--) {
+            const row = rows[i];
+            if (!row) continue;
+            if (normalizeActionChatText(row.textContent) === expected) return row;
+        }
+        return null;
+    }
+
+    function tagNativeCustomActionRow(row, token) {
+        if (!row || !token) return false;
+        try {
+            row.setAttribute("data-subbys-plushies-token", token);
+            locallyRenderedCustomActionTokens.set(token, Date.now());
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function adoptNativeCustomActionRow(data, rowsBefore = null) {
+        const token = getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG);
+        const message = customActionExpectedMessage(data);
+        if (!token || !message) return false;
+
+        const beforeSet = rowsBefore instanceof Set ? rowsBefore : null;
+        const rows = currentActionRows();
+        const candidates = beforeSet ? rows.filter(row => !beforeSet.has(row)) : rows;
+        const row =
+            findMatchingNativeActionRow(message, candidates) ||
+            findMatchingNativeActionRow(message, rows);
+
+        if (!row) return false;
+        return tagNativeCustomActionRow(row, token);
+    }
+
     function renderCustomActionLocally(data) {
         if (!data) return false;
 
         const token = getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG);
-        const message =
-            getDictionaryText(data, "msg") ||
-            (typeof data?.Content === "string" && data.Content !== "Beep" ? data.Content : "");
-
+        const message = customActionExpectedMessage(data);
         if (!token || !message) return false;
 
         pruneLocallyRenderedCustomActionTokens();
 
-        // A token is not enough to prove the row actually rendered. Only suppress
-        // a duplicate if the matching DOM row really exists.
         if (customActionChatRowExists(token)) {
             locallyRenderedCustomActionTokens.set(token, Date.now());
             return true;
         }
 
+        // Before creating anything ourselves, adopt a row that BC already
+        // rendered through its normal Type:"Action" pipeline.
+        if (adoptNativeCustomActionRow(data)) return true;
+
         try {
             if (typeof window.ChatRoomAppendChat === "function") {
                 const row = document.createElement("div");
 
-                // This is intentionally the exact simple class combination used by
-                // the working Measure Height sender-side fix.
-                row.className = "ChatMessage ChatMessageAction SubbysPlushiesLocalAction";
+                // Emergency fallback only. Use BC's native Action class and
+                // metadata shape; never render this as an Emote (/me) row.
+                row.className = "ChatMessage ChatMessageAction";
                 row.textContent = `(${message})`;
                 row.setAttribute("data-subbys-plushies-token", token);
 
+                const sourceMember =
+                    Number(getDictionaryMemberNumber(data, CUSTOM_ACTIVITY_SOURCE_MEMBER_TAG)) ||
+                    Number(data?.Sender);
+                const targetMember =
+                    Number(getDictionaryMemberNumber(data, CUSTOM_ACTIVITY_TARGET_MEMBER_TAG)) ||
+                    Number(data?.Target);
+
+                if (Number.isFinite(sourceMember) && sourceMember > 0) {
+                    row.dataset.sender = String(sourceMember);
+                }
+                if (Number.isFinite(targetMember) && targetMember > 0) {
+                    row.dataset.target = String(targetMember);
+                }
+                try {
+                    if (typeof window.ChatRoomCurrentTime === "function") {
+                        row.dataset.time = String(window.ChatRoomCurrentTime());
+                    }
+                } catch (_) {}
+
                 window.ChatRoomAppendChat(row);
 
-                // Only mark the token after attempting the append. If another addon
-                // removed/suppressed the row, a later retry remains allowed.
                 if (row.isConnected || customActionChatRowExists(token)) {
                     locallyRenderedCustomActionTokens.set(token, Date.now());
                     return true;
                 }
             }
         } catch (e) {
-            warn("Could not append custom activity chat row:", e);
+            warn("Could not append native-style custom activity row:", e);
         }
 
-        // Fallback is intentionally separate from the token map. If it succeeds,
-        // the actor still sees the generated action even when ChatRoomAppendChat
-        // has been replaced by another addon.
-        const fallback = appendLocalInfoBox(
-            "Subby's Plushies",
-            [`(${message})`],
-            { compact: true }
-        );
-        if (fallback) locallyRenderedCustomActionTokens.set(token, Date.now());
-        return !!fallback;
+        return false;
     }
 
     function makeCustomActivityNetworkAction(originalData, spec, fallbackTarget = null) {
@@ -13832,7 +13960,12 @@ function SubbysPlushiesPageMain() {
                     dragSession || dragModeEnabled
                 );
                 const petSuitFallback = isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C));
-                needsExactProjection = isOurs(held) || hasRemoteEmote || hasLocalOverlay || petSuitFallback;
+                needsExactProjection =
+                    isOurs(held) ||
+                    hasRemoteEmote ||
+                    hasLocalOverlay ||
+                    petSuitFallback ||
+                    characterHasAddonPresence(C);
 
                 if (Number.isFinite(x) && Number.isFinite(y) && (needsExactProjection || characterHasAddonPresence(C))) {
                     const placement = { x, y, zoom, matrix: currentCanvasTransformSnapshot(), at: Date.now() };
@@ -14117,13 +14250,15 @@ function SubbysPlushiesPageMain() {
             maybeTrackBaseCuddleAchievement(data);
             const pluginActionSpec = getCustomActivityFromAction(data);
 
-            // All nickname/pronoun-aware Subby's Plushies activities use our own
-            // deterministic chat renderer. R132's synthetic Action+Beep path can
-            // silently drop these rows depending on the original activity packet.
-            const customActionRendered =
-                !!pluginActionSpec &&
-                !!incomingCustomToken &&
-                renderCustomActionLocally(data);
+            // Custom activities are real BC Type:"Action" packets. Do NOT render
+            // them as a local /me-style row here. Snapshot the existing action
+            // rows, let Bondage Club's own ChatRoomMessage renderer handle the
+            // packet, then tag the row it produced. A manual Action-class fallback
+            // is used only if BC genuinely produced no matching action row.
+            const nativeActionRowsBefore =
+                pluginActionSpec && incomingCustomToken
+                    ? new Set(currentActionRows())
+                    : null;
 
             if (pluginActionSpec) processExpressionReaction(data, pluginActionSpec);
             else if (isHugTightlyAction(data)) processExpressionReaction(data, { key: "hugTightly", category: "plushie" });
@@ -14145,16 +14280,18 @@ function SubbysPlushiesPageMain() {
                 captureVisiblePlushStates();
             }
 
-            // We already rendered our generated custom activity text above.
-            // Do not pass that same synthetic Beep action into BC's renderer,
-            // otherwise compatible clients can get duplicates while other R132
-            // packet shapes can still get no row at all.
-            if (customActionRendered) {
-                if (plushRelated) scheduleActionRecovery("ChatRoomMessage custom plush Action");
-                return;
-            }
-
             const result = next(args);
+
+            if (pluginActionSpec && incomingCustomToken) {
+                const adopted = adoptNativeCustomActionRow(data, nativeActionRowsBefore);
+                if (!adopted) {
+                    window.setTimeout(() => {
+                        if (!customActionChatRowExists(incomingCustomToken)) {
+                            renderCustomActionLocally(data);
+                        }
+                    }, 40);
+                }
+            }
 
             if (plushRelated) scheduleActionRecovery("ChatRoomMessage plush Action");
             return result;
@@ -14286,15 +14423,22 @@ function SubbysPlushiesPageMain() {
             captureVisiblePlushStates();
             const result = next(nextArgs);
 
-            // Proven sender-side path from the working Measure Height fix:
-            // let BC finish sending first, then append the generated action row on
-            // the next event-loop tick. This avoids ChatRoomAppendChat suppression
-            // while ServerSend/ActivityRun is still on the call stack.
+            // Prefer the server echo + BC's native Type:"Action" renderer.
+            // Only synthesize a local Action row if no matching native row arrived.
             if (outgoingCustomActionData) {
-                window.setTimeout(
-                    () => renderCustomActionLocally(outgoingCustomActionData),
-                    0
+                const outgoingToken = getDictionaryText(
+                    outgoingCustomActionData,
+                    CUSTOM_ACTIVITY_TOKEN_TAG
                 );
+                window.setTimeout(() => {
+                    if (
+                        outgoingToken &&
+                        !customActionChatRowExists(outgoingToken) &&
+                        !adoptNativeCustomActionRow(outgoingCustomActionData)
+                    ) {
+                        renderCustomActionLocally(outgoingCustomActionData);
+                    }
+                }, 350);
             }
 
             if (startWaveChain) window.setTimeout(() => maybeStartSharedWaveChain(sentActionData), 0);
@@ -17255,7 +17399,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.1.32";
+    const VERSION = "3.1.35";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
