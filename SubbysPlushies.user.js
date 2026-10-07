@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.1.35
+// @version      3.2
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @released     2026-10-06
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -26,7 +26,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.1.35";
+    const VERSION = "3.2";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -45,11 +45,6 @@ function SubbysPlushiesPageMain() {
     const GROUP = "ItemHandheld";
     const ADDON_GROUP = "ItemAddon";
     const PLUSH_GROUPS = Object.freeze([GROUP, ADDON_GROUP]);
-    // DOGS (Devious Obligate Great Stuff) represents its custom Devious Padlock
-    // with a normal BC base lock plus Property.Name = "DeviousPadlock". DOGS'
-    // InventoryLock hook only writes that marker when the item argument is an
-    // Item object, not when callers pass a group-name string. The bridge below
-    // normalizes only our two plushie groups before DOGS sees the lock call.
     const DOGS_DEVIOUS_PADLOCK_NAME = "DeviousPadlock";
     const DOGS_COMPAT_HOOK_PRIORITY = 1000000;
     const DOGS_COMPAT_SDK_RETRY_DELAYS_MS = Object.freeze([500, 1000, 2000, 4000, 8000, 16000, 30000]);
@@ -87,8 +82,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} rubs their cheek against {Plushie}.",
-            otherText: "{Source} leans in with {Plushie} so {Target} can rub their cheek against it.",
+            selfText: "{Source} rubs {SourcePossessive} cheek against {Plushie}.",
+            otherText: "{Source} leans in with {Plushie} so {Target} can rub {TargetPossessive} cheek against it.",
         },
         {
             key: "cuddleChest",
@@ -97,7 +92,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemTorso", "ItemBreast"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} snuggles their chest against {Plushie}.",
+            selfText: "{Source} snuggles {SourcePossessive} chest against {Plushie}.",
             otherText: "{Source} leans close with {Plushie} so {Target} can snuggle against it.",
         },
         {
@@ -134,7 +129,7 @@ function SubbysPlushiesPageMain() {
             label: "Hide Behind Plushie",
             targets: ["ItemMouth", "ItemHood"],
             targetSelf: true,
-            selfText: "{Source} hides their face behind {Plushie}.",
+            selfText: "{Source} hides {SourcePossessive} face behind {Plushie}.",
             otherText: "{Source} playfully hides {Plushie} in front of {TargetPossessiveName} face.",
             effect: "hideBehindFace",
         },
@@ -165,8 +160,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemNose", "ItemMouth"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} gently boops their nose against {Plushie}.",
-            otherText: "{Source} leans in with {Plushie} so {Target} can gently boop it with their nose.",
+            selfText: "{Source} gently boops {SourcePossessive} nose against {Plushie}.",
+            otherText: "{Source} leans in with {Plushie} so {Target} can gently boop it with {TargetPossessive} nose.",
         },
         {
             key: "cheekRest",
@@ -175,8 +170,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemMouth"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} rests their cheek against {Plushie}.",
-            otherText: "{Source} leans close with {Plushie} so {Target} can rest their cheek against it.",
+            selfText: "{Source} rests {SourcePossessive} cheek against {Plushie}.",
+            otherText: "{Source} leans close with {Plushie} so {Target} can rest {TargetPossessive} cheek against it.",
         },
         {
             key: "foreheadBump",
@@ -185,8 +180,8 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemHood"],
             targetSelf: true,
             handsFree: true,
-            selfText: "{Source} gently bumps their forehead against {Plushie}.",
-            otherText: "{Source} leans in with {Plushie} so {Target} can gently bump their forehead against it.",
+            selfText: "{Source} gently bumps {SourcePossessive} forehead against {Plushie}.",
+            otherText: "{Source} leans in with {Plushie} so {Target} can gently bump {TargetPossessive} forehead against it.",
         },
         {
             key: "snugglePlushie",
@@ -204,7 +199,7 @@ function SubbysPlushiesPageMain() {
             label: "Bonk With Plushie",
             targets: ["ItemHood", "ItemMouth"],
             targetSelf: true,
-            selfText: "{Source} gently bonks themself with {Plushie}.",
+            selfText: "{Source} gently bonks {SourceReflexive} with {Plushie}.",
             otherText: "{Source} gently bonks {Target} with {Plushie}.",
         },
         {
@@ -213,7 +208,7 @@ function SubbysPlushiesPageMain() {
             label: "Balance Plushie on Head",
             targets: ["ItemHood"],
             targetSelf: true,
-            selfText: "{Source} tries to balance {Plushie} on their head.",
+            selfText: "{Source} tries to balance {Plushie} on {SourcePossessive} head.",
             otherText: "{Source} tries to balance {Plushie} on {TargetPossessiveName} head.",
             effect: "balanceHead",
         },
@@ -252,7 +247,7 @@ function SubbysPlushiesPageMain() {
             label: "Squeeze Cheeks With Plushie",
             targets: ["ItemMouth"],
             targetSelf: false,
-            selfText: "{Source} gently squishes their cheeks with {Plushie}.",
+            selfText: "{Source} gently squishes {SourcePossessive} cheeks with {Plushie}.",
             otherText: "{Source} gently squishes {TargetPossessiveName} cheeks with {Plushie}.",
         },
         {
@@ -266,8 +261,6 @@ function SubbysPlushiesPageMain() {
         },
     ].map(spec => Object.freeze(spec)));
 
-    // Optional non-plush activities. These are globally available only when the
-    // Extra Actions setting is enabled, and are always ordered after plushie actions.
     const EXTRA_ACTIONS = Object.freeze([
         {
             key: "extraRuffleHair",
@@ -276,7 +269,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemHood"],
             targetSelf: false,
-            selfText: "{Source} playfully ruffles their own hair.",
+            selfText: "{Source} playfully ruffles {SourcePossessive} own hair.",
             otherText: "{Source} playfully ruffles {TargetPossessiveName} hair.",
         },
         {
@@ -286,7 +279,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemTorso"],
             targetSelf: false,
-            selfText: "{Source} gives their own shoulder a reassuring squeeze.",
+            selfText: "{Source} gives {SourcePossessive} own shoulder a reassuring squeeze.",
             otherText: "{Source} gives {TargetPossessiveName} shoulder a reassuring squeeze.",
         },
         {
@@ -296,7 +289,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemTorso"],
             targetSelf: false,
-            selfText: "{Source} taps their own shoulder.",
+            selfText: "{Source} taps {SourcePossessive} own shoulder.",
             otherText: "{Source} taps {Target} lightly on the shoulder.",
         },
         {
@@ -306,7 +299,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemMouth"],
             targetSelf: false,
-            selfText: "{Source} gently squishes their own cheek.",
+            selfText: "{Source} gently squishes {SourcePossessive} own cheek.",
             otherText: "{Source} gently squishes {TargetPossessiveName} cheek.",
         },
         {
@@ -316,7 +309,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemMouth"],
             targetSelf: false,
-            selfText: "{Source} softly pats their own cheek.",
+            selfText: "{Source} softly pats {SourcePossessive} own cheek.",
             otherText: "{Source} softly pats {TargetPossessiveName} cheek.",
         },
         {
@@ -326,7 +319,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemMouth"],
             targetSelf: false,
-            selfText: "{Source} gently cups their own cheek with one hand.",
+            selfText: "{Source} gently cups {SourcePossessive} own cheek with one hand.",
             otherText: "{Source} gently cups {TargetPossessiveName} cheek with one hand.",
         },
         {
@@ -336,7 +329,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemMouth"],
             targetSelf: false,
-            selfText: "{Source} gently brushes the back of a hand across their own cheek.",
+            selfText: "{Source} gently brushes the back of a hand across {SourcePossessive} own cheek.",
             otherText: "{Source} gently brushes the back of a hand across {TargetPossessiveName} cheek.",
         },
         {
@@ -346,7 +339,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemHood"],
             targetSelf: false,
-            selfText: "{Source} brushes a loose strand of hair away from their own face.",
+            selfText: "{Source} brushes a loose strand of hair away from {SourcePossessive} own face.",
             otherText: "{Source} gently brushes a loose strand of hair away from {TargetPossessiveName} face.",
         },
         {
@@ -356,7 +349,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemHood"],
             targetSelf: false,
-            selfText: "{Source} tucks a loose strand of hair behind their own ear.",
+            selfText: "{Source} tucks a loose strand of hair behind {SourcePossessive} own ear.",
             otherText: "{Source} gently tucks a loose strand of {TargetPossessiveName} hair behind {TargetPossessiveName} ear.",
         },
         {
@@ -366,7 +359,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemHood"],
             targetSelf: false,
-            selfText: "{Source} idly twirls a lock of their own hair around a finger.",
+            selfText: "{Source} idly twirls a lock of {SourcePossessive} own hair around a finger.",
             otherText: "{Source} playfully twirls a lock of {TargetPossessiveName} hair around a finger.",
         },
         {
@@ -377,7 +370,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemNeck"],
             targetSelf: false,
             requiresOccupiedGroup: "ItemNeck",
-            selfText: "{Source} carefully straightens their own collar.",
+            selfText: "{Source} carefully straightens {SourcePossessive} own collar.",
             otherText: "{Source} carefully straightens {TargetPossessiveName} collar.",
         },
         {
@@ -387,7 +380,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemHood"],
             targetSelf: false,
-            selfText: "{Source} gives themself a light tap on the head.",
+            selfText: "{Source} gives {SourceReflexive} a light tap on the head.",
             otherText: "{Source} gives {Target} a light tap on the head.",
         },
         {
@@ -398,7 +391,7 @@ function SubbysPlushiesPageMain() {
             targets: ["ItemHood", "ItemTorso"],
             targetSelf: false,
             effect: "measureHeight",
-            selfText: "{Source} tries to measure their own height.",
+            selfText: "{Source} tries to measure {SourcePossessive} own height.",
             otherText: "{Source} compares height with {Target}.",
         },
         {
@@ -408,7 +401,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemHood"],
             targetSelf: false,
-            selfText: "{Source} covers their own ears with both hands.",
+            selfText: "{Source} covers {SourcePossessive} own ears with both hands.",
             otherText: "{Source} gently covers {TargetPossessiveName} ears with both hands.",
         },
         {
@@ -438,7 +431,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemArms", "ItemTorso"],
             targetSelf: false,
-            selfText: "{Source} folds their own arms together.",
+            selfText: "{Source} folds {SourcePossessive} own arms together.",
             otherText: "{Source} links arms with {Target}.",
         },
         {
@@ -459,7 +452,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemTorso"],
             targetSelf: false,
-            selfText: "{Source} gives themself an unnecessarily formal bow.",
+            selfText: "{Source} gives {SourceReflexive} an unnecessarily formal bow.",
             otherText: "{Source} gives {Target} a graceful bow.",
         },
         {
@@ -469,7 +462,7 @@ function SubbysPlushiesPageMain() {
             category: "extra",
             targets: ["ItemTorso", "ItemHood"],
             targetSelf: false,
-            selfText: "{Source} points dramatically at themself.",
+            selfText: "{Source} points dramatically at {SourceReflexive}.",
             otherText: "{Source} points dramatically at {Target}.",
         },
     ].map(spec => Object.freeze(spec)));
@@ -545,7 +538,6 @@ function SubbysPlushiesPageMain() {
     const FEATURE_SETTINGS_STORAGE_KEY = "SubbysPlushies:feature-settings:v1";
     const LAYOUT_SETTINGS_STORAGE_KEY = "SubbysPlushies:layout-settings:v1";
     const MOOD_STORAGE_KEY = "SubbysPlushies:moods:v1";
-    const MOOD_HISTORY_STORAGE_KEY = "SubbysPlushies:mood-history:v1";
     const BATTLE_HISTORY_STORAGE_KEY_PREFIX = "SubbysPlushies:battle-history:v2:";
     const BATTLE_STATS_STORAGE_KEY_PREFIX = "SubbysPlushies:battle-stats:v2:";
     const STATS_STORAGE_KEY = "SubbysPlushies:stats:v1";
@@ -557,10 +549,6 @@ function SubbysPlushiesPageMain() {
     const BACKUP_PROGRESS_SEAL_VERSION = 2;
     const BACKUP_PROGRESS_SEAL_KEY = ["Subbys", "Plushies", "portable", "progress", "v4", "89413"].join("|");
     const ROOM_MASCOT_CUSTOM_KEY = "SubbysPlushiesMascot";
-    // v3.1 removed automatic hourly mascot cycling. Keep the old hidden packet
-    // content string only so rooms with an older client do not leak legacy
-    // coordination packets into chat.
-    const LEGACY_ROOM_MASCOT_CYCLE_CLAIM_CONTENT = "SubbysPlushiesMascotCycleClaim";
     const ROOM_MASCOT_AFFECTION_MODIFIER = 1;
     const ROOM_MASCOT_CACHE_STORAGE_KEY = "SubbysPlushies:room-mascots:v1";
     const ROOM_MASCOT_POSITION_STORAGE_KEY = "SubbysPlushies:room-mascot-position:v1";
@@ -776,8 +764,6 @@ function SubbysPlushiesPageMain() {
     const SFX_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/sfx`;
     const plushAsset = fileName => `${PLUSH_ASSET_ROOT}/${fileName}`;
 
-    // Shared activity artwork. Every custom action resolves to one of these
-    // three images, or to the default Subbycat artwork.
     const HAIR_ACTION_ICON_URL = plushAsset("hairaction.png");
     const FACE_ACTION_ICON_URL = plushAsset("faceaction.png");
     const POINTING_ACTION_ICON_URL = plushAsset("pointing.png");
@@ -810,10 +796,8 @@ function SubbysPlushiesPageMain() {
         { name: "Pink", image: plushAsset("pink.png") },
         { name: "Kyu", image: PLUSH_FALLBACK_IMAGE },
 
-        // Wire option 18 is the legacy Subbycat alias and must never move.
         { name: "Subbycat", image: plushAsset("subbycat.png"), wireAlias: true },
 
-        // New public plushies. Public options 18/19/20 map to wire options 19/20/21.
         { name: "Rey", image: plushAsset("rey.png") },
         { name: "Margot", image: plushAsset("margot.png") },
         { name: "Mara", image: plushAsset("mara.png") },
@@ -1143,10 +1127,7 @@ function SubbysPlushiesPageMain() {
         }),
     ]);
 
-    // Git-backed commands.json may add documentation entries, but the current
-    // executable command list above always remains authoritative for the UI/help.
     let EXTENSIONS_COMMAND_GROUPS = CURRENT_COMMAND_GROUPS;
-
 
     const SIZE_TOKENS = Object.freeze(["Normal", "Small", "Large", "XLarge"]);
     const assetBaseForGroup = groupName => `Assets/${FAMILY}/${groupName}/${ASSET_NAME}`;
@@ -1164,10 +1145,6 @@ function SubbysPlushiesPageMain() {
     let faceActionIconImage = null;
     let pointingActionIconImage = null;
 
-    // DOM/UI previews should never mistake the lazy-render placeholder for the
-    // plushie's real artwork. Use a prepared optimized render when available;
-    // otherwise point the UI directly at the original GitHub asset. This keeps
-    // canvas rendering lazy without showing Subbycat as every unloaded plushie.
     function uiPlushImageSource(optionIndex) {
         const index = Math.trunc(Number(optionIndex));
         if (!Number.isFinite(index) || index < 0 || index >= PLUSH_IMAGES.length) {
@@ -1293,7 +1270,6 @@ function SubbysPlushiesPageMain() {
     let featureSettingsState = null;
     let layoutSettingsState = null;
     let moodState = null;
-    let moodHistoryState = null;
     let battleHistoryState = null;
     let battleHistoryStateMember = null;
     let battleStatsState = null;
@@ -1314,10 +1290,6 @@ function SubbysPlushiesPageMain() {
     let lastDragSnap = null;
     let dragHandlersInstalled = false;
 
-    // Overlay positioning uses authoritative visual bounds instead of trying to
-    // re-derive BC/WCE layer translation math. During Easy Drag we move these
-    // bounds by the exact MainCanvas pointer delta; after release the final
-    // correction is retained for the exact item transform.
     const directDragOverlayBoundsByGroup = new Map();
     const directDragOverlayErrorByGroup = new Map();
     let dragToggleButton = null;
@@ -1373,12 +1345,12 @@ function SubbysPlushiesPageMain() {
     let nativePresenceDrawCount = 0;
     let nativePresenceDrawMethod = "uninitialized";
     let nativePresenceChatRoomRunHooked = false;
+    let nativePresenceFrameGeneration = 0;
     const petSuitRenderStates = new Map();
     const manualPlushMainBounds = new Map();
     const canvasOverlayImageCache = new Map();
     const lastCharacterChatRoomDraw = new Map();
     const exactCharacterCanvasProjection = new Map();
-
 
     let backupImportInput = null;
     let lastPlayerChatRoomDraw = null;
@@ -1575,9 +1547,6 @@ function SubbysPlushiesPageMain() {
             : itemOrGroup;
         if (!isOurs(item)) return next(args);
 
-        // DOGS' own InventoryLock hook preserves the custom lock marker only on
-        // object-form items. Convert the group-name overload to that form before
-        // handing control down the hook chain. BC supports both overloads.
         const forwarded = Array.isArray(args) ? args.slice() : Array.from(args || []);
         const convertedGroupToItem = typeof itemOrGroup === "string";
         if (convertedGroupToItem) forwarded[1] = item;
@@ -1586,10 +1555,6 @@ function SubbysPlushiesPageMain() {
         const property = getProperty(item);
         let markerRestored = false;
 
-        // Normally DOGS sets this marker itself. This post-call guard covers a
-        // mixed load order where its hook ran but a later validator retained only
-        // the base BC lock. We never change LockedBy, ownership, key holders, or
-        // DOGS storage; this only restores DOGS' identifying marker on our item.
         if (property && itemHasActiveLock(item) && property.Name !== DOGS_DEVIOUS_PADLOCK_NAME) {
             property.Name = DOGS_DEVIOUS_PADLOCK_NAME;
             markerRestored = true;
@@ -1605,8 +1570,6 @@ function SubbysPlushiesPageMain() {
             at: new Date().toISOString(),
         };
 
-        // If the marker had to be repaired locally, publish the corrected item on
-        // the next task. DOGS' normal path does not need this extra update.
         if (markerRestored && C === window.Player && window.CurrentScreen === "ChatRoom") {
             window.setTimeout(() => {
                 try {
@@ -1661,8 +1624,6 @@ function SubbysPlushiesPageMain() {
                         "late SDK high-priority bridge"
                     )) return;
                 } catch (_) {
-                    // The main addon may have registered between retries. Try its
-                    // API if available, otherwise keep the direct fallback.
                     if (modApi && installDogsCompatibilitySdkHook(modApi, "main SDK high-priority bridge")) return;
                 }
             }
@@ -1776,12 +1737,8 @@ function SubbysPlushiesPageMain() {
             for (const [sessionKey, session] of [...extraRaisedArmSessions.entries()]) {
                 if (session?.timer != null) window.clearTimeout(session.timer);
                 extraRaisedArmSessions.delete(sessionKey);
-            }
-
-            if (typeof resetTemporaryArmsToBase === "function") {
-                if (window.Player) resetTemporaryArmsToBase(window.Player, "pose-safety enabled");
-                for (const C of Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : []) {
-                    if (C && C !== window.Player) resetTemporaryArmsToBase(C, "pose-safety enabled");
+                if (session?.character) {
+                    forceRestoreTemporaryArmPose(session.character, session.beforeState, "pose-safety enabled");
                 }
             }
         }
@@ -2041,13 +1998,6 @@ function SubbysPlushiesPageMain() {
         return unsubscribe;
     }
 
-    function getMoodHistoryStore() {
-        if (moodHistoryState) return moodHistoryState;
-        try { window.localStorage?.removeItem(MOOD_HISTORY_STORAGE_KEY); } catch (_) {}
-        moodHistoryState = {};
-        return moodHistoryState;
-    }
-
     function moodReasonLabel(reason) {
         const key = String(reason || "interaction").trim();
         const map = {
@@ -2062,14 +2012,6 @@ function SubbysPlushiesPageMain() {
         if (key.startsWith("jealous:")) return "Jealous";
         if (key.startsWith("protect me:")) return "Protect Me";
         return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, char => char.toUpperCase());
-    }
-
-    function recordMoodHistory() {
-        return null;
-    }
-
-    function moodHistoryFor() {
-        return [];
     }
 
     function currentAccountMemberNumber() {
@@ -2403,7 +2345,6 @@ function SubbysPlushiesPageMain() {
                     history: cloneBackupValue(getBattleHistoryStore()),
                 },
                 moods: cloneBackupValue(getMoodStore()),
-                moodHistory: cloneBackupValue(getMoodHistoryStore()),
                 favorites: cloneBackupValue(getFavoritesStore()),
                 layouts: layout,
                 themes: {
@@ -2450,7 +2391,6 @@ function SubbysPlushiesPageMain() {
 
         const writes = [
             [MOOD_STORAGE_KEY, safeObject(data.moods)],
-            [MOOD_HISTORY_STORAGE_KEY, safeObject(data.moodHistory)],
             [FAVORITES_STORAGE_KEY, safeObject(data.favorites)],
             [LAYOUT_SETTINGS_STORAGE_KEY, layout],
             [FEATURE_SETTINGS_STORAGE_KEY, safeObject(data.featureSettings)],
@@ -2489,7 +2429,6 @@ function SubbysPlushiesPageMain() {
         featureSettingsState = null;
         layoutSettingsState = null;
         moodState = null;
-        moodHistoryState = null;
         battleHistoryState = null;
         battleHistoryStateMember = null;
         battleStatsState = null;
@@ -2592,8 +2531,6 @@ function SubbysPlushiesPageMain() {
         record.decayBaseScore = clampMood(record.decayBaseScore);
         const last = Number(record.updatedAt) || now;
 
-        // Equipped plushies are protected from affection decay. Touch the decay
-        // clock occasionally so a held plush never accumulates a hidden 8-hour loss.
         if (isPlushNameEquippedLocally(name)) {
             if (now - last >= MOOD_HELD_CLOCK_WRITE_MS) {
                 record.updatedAt = now;
@@ -2609,15 +2546,13 @@ function SubbysPlushiesPageMain() {
             if (record.score > MOOD_DRIFT_TARGET) {
                 record.score = clampMood(Math.max(MOOD_DRIFT_TARGET, record.score - steps * MOOD_DRIFT_STEP));
             }
-            // Preserve the partial remainder so decay is exactly once per 8-hour block.
             record.updatedAt = last + steps * MOOD_DRIFT_EVERY_MS;
             store[name] = record;
             scheduleMoodStoreSave();
             const appliedDelta = record.score - beforeScore;
             if (appliedDelta) {
-                const historyEntry = recordMoodHistory(name, appliedDelta, "idle decay", record.score, now);
                 lastMoodChange = { name, delta: appliedDelta, reason: "idle decay", score: record.score, at: new Date(now).toISOString() };
-                emitPluginApiEvent("mood", { plushName: name, delta: appliedDelta, reason: "Idle decay", score: record.score, historyEntry });
+                emitPluginApiEvent("mood", { plushName: name, delta: appliedDelta, reason: "Idle decay", score: record.score });
             }
         }
         return record;
@@ -2646,10 +2581,9 @@ function SubbysPlushiesPageMain() {
         record.updatedAt = Date.now();
         store[name] = record;
         scheduleMoodStoreSave();
-        const historyEntry = recordMoodHistory(name, effectiveDelta, reason, record.score);
         lastMoodChange = { name, delta: effectiveDelta, baseDelta: delta, mascotModifier, reason, score: record.score, at: new Date().toISOString() };
         refreshPlushStatusIcon();
-        emitPluginApiEvent("mood", { plushName: name, delta: effectiveDelta, baseDelta: delta, mascotModifier, reason: moodReasonLabel(reason), score: record.score, historyEntry });
+        emitPluginApiEvent("mood", { plushName: name, delta: effectiveDelta, baseDelta: delta, mascotModifier, reason: moodReasonLabel(reason), score: record.score });
         trackMoodAchievementTransition(name, beforeScore, record.score);
         return record;
     }
@@ -2878,48 +2812,19 @@ function SubbysPlushiesPageMain() {
         return Math.round((next - previous) / 86400000);
     }
 
-    function streakMetricsFromLegacyDays(days) {
-        const sorted = [...new Set(days)].filter(day => /^\d{4}-\d{2}-\d{2}$/.test(day)).sort();
-        let currentStreak = 0;
-        let longestStreak = 0;
-        let previousDay = "";
-        for (const day of sorted) {
-            currentStreak = previousDay && interactionDayDifference(previousDay, day) === 1 ? currentStreak + 1 : 1;
-            longestStreak = Math.max(longestStreak, currentStreak);
-            previousDay = day;
-        }
-        return {
-            count: sorted.length,
-            lastDay: sorted[sorted.length - 1] || "",
-            currentStreak,
-            longestStreak,
-        };
-    }
-
     function interactionDayRecord(value) {
-        if (value && typeof value === "object" && !Array.isArray(value) && Number.isFinite(Number(value.count))) {
-            const count = Math.max(0, Math.floor(Number(value.count) || 0));
-            const lastDay = String(value.lastDay || "");
-            const storedCurrent = Number(value.currentStreak);
-            const storedLongest = Number(value.longestStreak);
-
-            // v2.3.7.17 compact records did not store streaks. We cannot safely
-            // reconstruct a historical consecutive streak from count + lastDay,
-            // so migrate conservatively from the next interaction onward.
-            const currentStreak = Number.isFinite(storedCurrent)
-                ? Math.max(0, Math.floor(storedCurrent))
-                : (count > 0 && lastDay ? 1 : 0);
-            const longestStreak = Number.isFinite(storedLongest)
-                ? Math.max(currentStreak, Math.floor(storedLongest))
-                : currentStreak;
-
-            return { count, lastDay, currentStreak, longestStreak };
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+            return { count: 0, lastDay: "", currentStreak: 0, longestStreak: 0 };
         }
 
-        const legacyDays = value && typeof value === "object" && !Array.isArray(value)
-            ? Object.keys(value).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key))
-            : [];
-        return streakMetricsFromLegacyDays(legacyDays);
+        const count = Math.max(0, Math.floor(Number(value.count) || 0));
+        const lastDay = /^\d{4}-\d{2}-\d{2}$/.test(String(value.lastDay || ""))
+            ? String(value.lastDay)
+            : "";
+        const currentStreak = Math.max(0, Math.floor(Number(value.currentStreak) || 0));
+        const longestStreak = Math.max(currentStreak, Math.floor(Number(value.longestStreak) || 0));
+
+        return { count, lastDay, currentStreak, longestStreak };
     }
 
     function maxInteractionDaysForOnePlush(stats = getStatsStore()) {
@@ -2994,13 +2899,6 @@ function SubbysPlushiesPageMain() {
             dayRecord.longestStreak = Math.max(dayRecord.longestStreak, dayRecord.currentStreak);
             dayRecord.lastDay = today;
             p.interactionDays[plushName] = dayRecord;
-        } else if (
-            storedDayRecord !== dayRecord &&
-            (!Number.isFinite(Number(storedDayRecord?.count)) ||
-             !Number.isFinite(Number(storedDayRecord?.currentStreak)) ||
-             !Number.isFinite(Number(storedDayRecord?.longestStreak)))
-        ) {
-            p.interactionDays[plushName] = dayRecord;
         }
         if (actionKey === "bonk") {
             p.bonkedPlushies[plushName] = 1;
@@ -3021,7 +2919,6 @@ function SubbysPlushiesPageMain() {
             const addon = achievementSession.interactionByGroup.get(ADDON_GROUP);
             if (!p.doubleTrouble && hand && addon && now - hand.at <= 30000 && now - addon.at <= 30000 && normalizeLoreLookupKey(hand.name) !== normalizeLoreLookupKey(addon.name)) p.doubleTrouble = 1;
         }
-        // recordStat() queues the single stats save + achievement pass for this interaction.
     }
 
     function trackMoodAchievementTransition(plushName, beforeScore, afterScore) {
@@ -3456,8 +3353,6 @@ function SubbysPlushiesPageMain() {
             }
         } catch (_) {}
 
-        // BC's expanded character canvas historically reserves 150px below the
-        // normal 1000px character space; infer the upper overflow from the source.
         const inferred = height - 1000 - 150;
         return inferred > 0 && inferred < 1200 ? inferred : 600;
     }
@@ -3470,8 +3365,6 @@ function SubbysPlushiesPageMain() {
         const y = Number(characterY);
         if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
 
-        // Character asset coordinates use (0,0) at the normal character's top-left.
-        // Expanded BC character canvases store that at +CanvasUpperOverflow.
         const sourceX = x;
         const sourceY = y + characterCanvasUpperOverflow(projection);
 
@@ -3739,8 +3632,6 @@ function SubbysPlushiesPageMain() {
         const xVec = { x: xPoint.x - center.x, y: xPoint.y - center.y };
         const yVec = { x: yPoint.x - center.x, y: yPoint.y - center.y };
 
-        // These are the exact same vectors used to paint the visible fallback.
-        // Reuse them for bubbles/status instead of calculating another position.
         storeManualPlushMainBounds(C, item, center, xVec, yVec);
 
         const width = Math.max(8, Math.hypot(xVec.x, xVec.y) * 2);
@@ -3948,8 +3839,6 @@ function SubbysPlushiesPageMain() {
         const entry = directDragOverlayBoundsByGroup.get(groupName);
         if (!entry || entry.transformSignature !== plushTransformSignature(item)) return null;
 
-        // Rebase the saved correction on the current character placement. This
-        // keeps it usable after responsive-room/WCE redraws.
         const calculated = calculatedPlushScreenBounds(C, item);
         const calculatedMain = screenBoundsToMainBounds(calculated);
         if (!calculatedMain) return mainBoundsToScreenBounds(entry.bounds);
@@ -4011,8 +3900,6 @@ function SubbysPlushiesPageMain() {
             at: Date.now(),
         });
 
-        // Learn only the residual of the fallback projection. Native Layering
-        // changes after an Easy Drag can then reuse this empirical correction.
         if (transform) {
             const previous = directDragOverlayErrorByGroup.get(groupName) || {};
             const next = { ...previous };
@@ -4041,9 +3928,6 @@ function SubbysPlushiesPageMain() {
         const unitY = characterPointToMainCanvas(C, originX, originY + 1);
         if (!origin || !unitX || !unitY) return null;
 
-        // R132 LayerTranslationX/Y are applied after the character-height scale.
-        // Normal character-point projection includes HeightRatio, so remove that
-        // factor from the translation basis only.
         const ratio = layerTranslationHeightRatio(C);
         const tx = Number(translationX) || 0;
         const ty = Number(translationY) || 0;
@@ -4079,9 +3963,6 @@ function SubbysPlushiesPageMain() {
         const halfWidth = PLUSH_RENDER.Width * scaleX / 2;
         const halfHeight = PLUSH_RENDER.Height * scaleY / 2;
 
-        // Project the un-translated layer through the normal character pipeline.
-        // LayerTranslation is added separately because BC applies it after
-        // HeightRatio scaling.
         const baseCenterX = PLUSH_RENDER.Left + PLUSH_RENDER.Width / 2;
         const baseCenterY = PLUSH_RENDER.Top + PLUSH_RENDER.Height / 2;
         const radians = (Number(transform.Rotation) || 0) * Math.PI / 180;
@@ -4141,8 +4022,6 @@ function SubbysPlushiesPageMain() {
 
         const groupName = item?.Asset?.Group?.Name || GROUP;
 
-        // While Easy Drag is active, move the overlay by exactly the same
-        // MainCanvas pointer delta as the drag gesture.
         if (C === window.Player &&
             dragSession?.groupName === groupName &&
             dragSession.overlayCurrentMainBounds) {
@@ -4150,16 +4029,12 @@ function SubbysPlushiesPageMain() {
             if (activeDragBounds) return activeDragBounds;
         }
 
-        // If a pet suit / arm restraint forces our manual visible-plush render,
-        // use that exact drawn rectangle.
         const manual = manualPlushScreenBounds(C, item);
         if (manual) return manual;
 
-        // Preserve the exact final correction from Easy Drag after release.
         const direct = dragOverlayBoundsForItem(C, item);
         if (direct) return direct;
 
-        // Native projection is now only a fallback.
         const calculated = calculatedPlushScreenBounds(C, item);
         return applyLearnedOverlayError(C, item, calculated);
     }
@@ -4635,14 +4510,28 @@ function SubbysPlushiesPageMain() {
         return /\bwav(?:e|es|ed|ing)\b/i.test(actionSearchText(data));
     }
 
-    function maybeStartSharedWaveChain(data) {
-        if (!getFeatureSettings().sharedEmoteChains || window.CurrentScreen !== "ChatRoom" || !actionLooksLikeWave(data)) return false;
+    function maybeStartSharedWaveChain(data, force = false) {
+        if (window.CurrentScreen !== "ChatRoom") return false;
+        if (!force && !actionLooksLikeWave(data)) return false;
+
+        const settings = getFeatureSettings();
+        if (!settings.sharedEmoteChains) {
+            if (force && window.Player) return applySharedWavePose(window.Player, SHARED_WAVE_POSE_MS);
+            return false;
+        }
+
         const now = Date.now();
         if (now - lastSharedWaveStartedAt < SHARED_WAVE_COOLDOWN_MS) return false;
+
+        const members = sharedWaveParticipantsLeftToRight();
+        if (members.length < 2) {
+            lastSharedWaveStartedAt = now;
+            return window.Player ? applySharedWavePose(window.Player, SHARED_WAVE_POSE_MS) : false;
+        }
+
         lastSharedWaveStartedAt = now;
         sendAddonPresence(false);
-        const members = sharedWaveParticipantsLeftToRight();
-        if (members.length < 2) return false;
+
         const starter = Number(window.Player?.MemberNumber);
         const payload = {
             v: 1,
@@ -4650,7 +4539,9 @@ function SubbysPlushiesPageMain() {
             startAt: now + SHARED_WAVE_LEAD_MS,
             members,
         };
+
         scheduleSharedWavePayload(payload);
+
         try {
             window.ServerSend("ChatRoomChat", {
                 Content: SHARED_WAVE_CONTENT,
@@ -4659,7 +4550,7 @@ function SubbysPlushiesPageMain() {
             });
             return true;
         } catch (_) {
-            return false;
+            return true;
         }
     }
 
@@ -4693,18 +4584,12 @@ function SubbysPlushiesPageMain() {
         }
     }
 
-    // Presence badge placement is based on BC's ChatRoom character SLOT, not
-    // on the character body's height/pose transform. This is important in
-    // crowded rooms where BC uses multiple rows: every badge stays in the same
-    // top addon-icon band as WCE/other room icons.
     const ADDON_PRESENCE_ICON_SLOT_X = 229;
     const ADDON_PRESENCE_ICON_SLOT_TOP = 4;
     const ADDON_PRESENCE_ICON_CHARACTER_SIZE = 42;
     const ADDON_PRESENCE_ICON_ALPHA = 0.55;
 
     function addonPresenceIconHiddenByNativeUI() {
-        // Behave like the native/BCX character icon overlay: when BC hides room
-        // character icons, this addon marker hides with them.
         const state = Number(window.ChatRoomHideIconState);
         return Number.isFinite(state) && state !== 0;
     }
@@ -4715,7 +4600,6 @@ function SubbysPlushiesPageMain() {
         const member = Number(C?.MemberNumber);
         const localMember = Number(window.Player?.MemberNumber);
 
-        // Keep the BCX behavior of not exposing addon markers for ghosted users.
         if (
             Number.isFinite(member) &&
             member !== localMember &&
@@ -4731,10 +4615,8 @@ function SubbysPlushiesPageMain() {
     function nativePresenceIconRect(C) {
         const draw = characterChatRoomDraw(C);
 
-        // Correct crowded-room path: DrawCharacter's x/y are the origin of the
-        // character's room slot. Do not apply CharacterAppearanceYOffset or
-        // HeightRatio here, because those move the body inside the slot and are
-        // exactly what caused the addon badge to drift away from WCE's icon row.
+        if (!draw || draw.presenceFrameGeneration !== nativePresenceFrameGeneration) return null;
+
         if (
             draw &&
             Number.isFinite(Number(draw.x)) &&
@@ -4745,57 +4627,18 @@ function SubbysPlushiesPageMain() {
             const zoom = Number(draw.zoom);
             const rawLeft = Number(draw.x) + ADDON_PRESENCE_ICON_SLOT_X * zoom;
             const rawTop = Number(draw.y) + ADDON_PRESENCE_ICON_SLOT_TOP;
-            const rawRight = Number(draw.x) +
-                (ADDON_PRESENCE_ICON_SLOT_X + ADDON_PRESENCE_ICON_CHARACTER_SIZE) * zoom;
-            const rawBottom = Number(draw.y) +
-                ADDON_PRESENCE_ICON_SLOT_TOP +
-                ADDON_PRESENCE_ICON_CHARACTER_SIZE * zoom;
-
-            const topLeft = applyDrawMatrix(draw, rawLeft, rawTop);
-            const rightPoint = applyDrawMatrix(draw, rawRight, rawTop);
-            const bottomPoint = applyDrawMatrix(draw, rawLeft, rawBottom);
-
-            const projectedWidth = Math.hypot(
-                rightPoint.x - topLeft.x,
-                rightPoint.y - topLeft.y
-            );
-            const projectedHeight = Math.hypot(
-                bottomPoint.x - topLeft.x,
-                bottomPoint.y - topLeft.y
-            );
-
-            if (
-                [topLeft.x, topLeft.y, projectedWidth, projectedHeight]
-                    .every(Number.isFinite)
-            ) {
+            const size = ADDON_PRESENCE_ICON_CHARACTER_SIZE * zoom;
+            if ([rawLeft, rawTop, size].every(Number.isFinite)) {
                 return {
-                    x: topLeft.x,
-                    y: topLeft.y,
-                    width: Math.max(18, Math.min(44, projectedWidth)),
-                    height: Math.max(18, Math.min(44, projectedHeight)),
+                    x: rawLeft,
+                    y: rawTop,
+                    width: Math.max(18, Math.min(44, size)),
+                    height: Math.max(18, Math.min(44, size)),
                 };
             }
         }
 
-        // Conservative fallback for the very first frame before DrawCharacter
-        // placement has been captured.
-        const topLeft = characterPointToMainCanvas(C, ADDON_PRESENCE_ICON_SLOT_X, 0);
-        const xPoint = characterPointToMainCanvas(
-            C,
-            ADDON_PRESENCE_ICON_SLOT_X + ADDON_PRESENCE_ICON_CHARACTER_SIZE,
-            0
-        );
-        if (!topLeft || !xPoint) return null;
-
-        const size = Math.hypot(xPoint.x - topLeft.x, xPoint.y - topLeft.y);
-        if (![topLeft.x, topLeft.y, size].every(Number.isFinite)) return null;
-
-        return {
-            x: topLeft.x,
-            y: Math.max(0, topLeft.y + ADDON_PRESENCE_ICON_SLOT_TOP),
-            width: Math.max(18, Math.min(44, size)),
-            height: Math.max(18, Math.min(44, size)),
-        };
+        return null;
     }
 
     function drawAddonPresenceIconNative(C) {
@@ -4810,13 +4653,9 @@ function SubbysPlushiesPageMain() {
         const rect = nativePresenceIconRect(C);
         if (!rect) return false;
 
-        // renderImages[0] is the prepared data URL generated from
-        // assets/plushies/subbycat.png.
         const source = renderImages[0] || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
         if (!source) return false;
 
-        // Primary path: Bondage Club's own image draw helper, matching the way BCX
-        // uses BC drawing primitives for in-game UI.
         try {
             if (typeof window.DrawImageEx === "function") {
                 window.DrawImageEx(source, rect.x, rect.y, {
@@ -4833,8 +4672,6 @@ function SubbysPlushiesPageMain() {
             nativePresenceDrawMethod = "DrawImageEx failed";
         }
 
-        // Compatibility path: keep the same semi-transparent appearance even
-        // when DrawImageEx is unavailable.
         const ctx = window.MainCanvas;
         const image = getCanvasOverlayImage(source);
 
@@ -4855,8 +4692,6 @@ function SubbysPlushiesPageMain() {
             }
         }
 
-        // Last resort only. DrawImageResize has no alpha option in BC, so this
-        // path is used only if neither transparency-capable renderer is available.
         try {
             if (typeof window.DrawImageResize === "function") {
                 window.DrawImageResize(source, rect.x, rect.y, rect.width, rect.height);
@@ -4904,13 +4739,12 @@ function SubbysPlushiesPageMain() {
     function installNativeAddonPresenceOverlayHook() {
         if (nativePresenceChatRoomRunHooked) return true;
 
-        // BC-native frame boundary:
-        // 1) let ChatRoomRun draw the complete room, characters and native icons;
-        // 2) draw the addon marker on MainCanvas with BC's DrawImageEx.
-        //
-        // This is intentionally NOT part of DrawCharacter. The previous approach
-        // was erased by later character/UI rendering in the same frame.
         const hooked = installHook("ChatRoomRun", 10000, (args, next) => {
+            nativePresenceFrameGeneration++;
+            if (!Number.isSafeInteger(nativePresenceFrameGeneration) || nativePresenceFrameGeneration >= Number.MAX_SAFE_INTEGER - 1) {
+                nativePresenceFrameGeneration = 1;
+            }
+
             const result = next(args);
             try {
                 pruneAddonPresence();
@@ -5095,7 +4929,6 @@ function SubbysPlushiesPageMain() {
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
                 cancelIdleAnimation(false);
-                stopRoomMascotCycleMonitor();
                 if (hugTightlyActivityMonitor != null) {
                     window.clearTimeout(hugTightlyActivityMonitor);
                     hugTightlyActivityMonitor = null;
@@ -6727,17 +6560,6 @@ function SubbysPlushiesPageMain() {
         return publishRoomMascotSharedStateNow(state);
     }
 
-    function processRoomMascotCycleClaimPacket(data) {
-        // Compatibility only: v3.1 never participates in or starts the old
-        // hourly mascot cycle, but silently consumes legacy hidden claims.
-        return !!data && data.Type === "Hidden" && data.Content === LEGACY_ROOM_MASCOT_CYCLE_CLAIM_CONTENT;
-    }
-
-    function stopRoomMascotCycleMonitor() {
-        // Compatibility no-op retained for older cleanup call sites / APIs.
-        return true;
-    }
-
     function mascotRenderIndex(name) {
         const wanted = String(name || "").trim().toLowerCase();
         if (!wanted) return -1;
@@ -6878,9 +6700,6 @@ function SubbysPlushiesPageMain() {
             roomMascotOverlayImage = image;
             roomMascotOverlayLabel = label;
         }
-        // Keep the mascot's apparent size stable when the browser zoom level
-        // changes. devicePixelRatio tracks desktop browser zoom in Chromium/
-        // Firefox; neutralize that factor before applying responsive canvas size.
         const currentDpr = Math.max(0.1, Number(window.devicePixelRatio) || ROOM_MASCOT_BASE_DEVICE_PIXEL_RATIO);
         const browserZoomRatio = currentDpr / ROOM_MASCOT_BASE_DEVICE_PIXEL_RATIO;
         const zoomNeutralWidth = rect.width * browserZoomRatio;
@@ -7279,7 +7098,6 @@ function SubbysPlushiesPageMain() {
         appendLocalInfoBox("Room mascot", [
             `${roomMascotState.name} • set by ${roomMascotState.setBy || "room admin"}${roomMascotState.cached ? " • cached" : ""}`,
             `Mascot affection modifier: +${Number(roomMascotState.affectionModifier ?? ROOM_MASCOT_AFFECTION_MODIFIER) || 0}`,
-            "Mascot changes are manual. The hourly automatic cycle was removed in v3.1.",
             `Picture: ${getFeatureSettings().showRoomMascot ? "visible" : "hidden locally"}`,
         ]);
         return { ...roomMascotState };
@@ -7582,8 +7400,6 @@ function SubbysPlushiesPageMain() {
                     TranslationY: nearest.snap.TranslationY,
                 });
 
-                // Keep the small snap adjustment in the same empirically observed
-                // movement space as the drag itself.
                 const finalTransform = readActivePlushLayerTransform(current);
                 const last = session.lastPoint;
                 if (session.overlayCurrentMainBounds && beforeSnap && finalTransform && last) {
@@ -7627,8 +7443,6 @@ function SubbysPlushiesPageMain() {
         if (!cancelled) commitDirectDragOverlayBounds(session, current);
         else directDragOverlayBoundsByGroup.delete(session.groupName);
 
-        // Keep the active drag geometry available until the final correction is
-        // committed, then clear the session.
         dragSession = null;
 
         rebuildCharacterCanvas(
@@ -8239,7 +8053,7 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow("Jealous Plushie", "Playful jealous reactions when you show affection to someone else.", settings.jealousPlushie, () => toggleFeatureSetting("jealousPlushie")),
             extensionsSettingRow("Easy Drag", "Drag anywhere on the character side to reposition the held plushie.", dragModeEnabled, () => toggleDragMode()),
             extensionsSettingRow("Hide Plushie Drag Button", "Hide the movable mouse button without disabling Easy Drag itself.", !settings.showDragButton, () => setFeatureSetting("showDragButton", !getFeatureSettings().showDragButton)),
-            extensionsSettingRow("Room Mascot Picture", "Show the room mascot picture locally in the chat area. Mascot changes are manual in v3.1.", settings.showRoomMascot, () => setRoomMascotOverlayVisible(!getFeatureSettings().showRoomMascot)),
+            extensionsSettingRow("Room Mascot Picture", "Show the room mascot picture locally in the chat area.", settings.showRoomMascot, () => setRoomMascotOverlayVisible(!getFeatureSettings().showRoomMascot)),
             extensionsSettingRow("Idle Animation", "Occasional lightweight local plush wiggles.", settings.idleAnimations, () => toggleFeatureSetting("idleAnimations")),
             extensionsSettingRow("Speech Bubbles", "Allow local mood-based plush speech bubbles.", settings.speechBubbles, () => toggleFeatureSetting("speechBubbles")),
             extensionsSettingRow("Extra Actions", "Adds optional non-plush social actions after all plushie actions. Disabled by default.", settings.extraActions, () => toggleFeatureSetting("extraActions")),
@@ -8843,8 +8657,6 @@ function SubbysPlushiesPageMain() {
             if (base) documentedBases.add(base);
         }
 
-        // commands.json is allowed to contribute documentation for genuinely new
-        // command bases, but it cannot replace or duplicate this build's commands.
         for (const externalGroup of cloneGroups(EXTENSIONS_COMMAND_GROUPS)) {
             const additions = externalGroup.commands.filter(entry => {
                 const base = commandBase(entry.command);
@@ -9981,7 +9793,6 @@ function SubbysPlushiesPageMain() {
     function normalizeHeightMultiplierCandidate(value) {
         let numeric = Number(value);
         if (!Number.isFinite(numeric) || numeric <= 0) return null;
-        // Some extensions store percentages (for example 110 for 110%).
         if (numeric > 10 && numeric <= 400) numeric /= 100;
         return numeric >= 0.25 && numeric <= 4 ? numeric : null;
     }
@@ -10021,9 +9832,6 @@ function SubbysPlushiesPageMain() {
             if (candidate != null) return candidate;
         }
 
-        // Echo builds have used different storage shapes over time. Search only
-        // explicitly Echo-named character containers so this never mistakes BC's
-        // native HeightRatio for an addon multiplier.
         try {
             for (const [key, value] of Object.entries(C)) {
                 if (!/echo/i.test(key)) continue;
@@ -10032,7 +9840,6 @@ function SubbysPlushiesPageMain() {
             }
         } catch (_) {}
 
-        // Some Echo features store extension data on an equipped item's Property.
         try {
             for (const item of Array.isArray(C.Appearance) ? C.Appearance : []) {
                 const marker = [
@@ -10047,7 +9854,6 @@ function SubbysPlushiesPageMain() {
             }
         } catch (_) {}
 
-        // Support public/global Echo APIs if the installed build exposes one.
         const member = Number(C?.MemberNumber);
         const globalFunctionNames = [
             "EchoGetHeightMultiplier", "ECHOGetHeightMultiplier",
@@ -10063,8 +9869,6 @@ function SubbysPlushiesPageMain() {
             } catch (_) {}
         }
 
-        // Last-resort compatibility for Echo versions that expose one namespaced
-        // object instead of a fixed API. This runs only when Measure Height is used.
         try {
             let inspected = 0;
             for (const key of Object.keys(window)) {
@@ -10108,7 +9912,7 @@ function SubbysPlushiesPageMain() {
         const percentDifference = Math.abs(signedDifference) / average * 100;
 
         if (percentDifference < 1.5) {
-            return `${sourceLabel} measures height with ${targetLabel} and finds they are almost exactly the same height.`;
+            return `${sourceLabel} measures height with ${targetLabel} and finds both are almost exactly the same height.`;
         }
 
         const sourceTaller = signedDifference > 0;
@@ -10166,8 +9970,6 @@ function SubbysPlushiesPageMain() {
     function refreshExtraActionPose(C) {
         if (!C) return false;
 
-        // CharacterRefresh is required here. CharacterLoadCanvas alone can redraw
-        // the already-computed character without rebuilding the pose from ActivePose.
         try {
             if (typeof window.CharacterRefresh === "function") {
                 window.CharacterRefresh(C, false);
@@ -10279,76 +10081,47 @@ function SubbysPlushiesPageMain() {
     const EXTRA_ARM_RAISED_POSE = "OverTheHead";
     const EXTRA_ARM_BASE_POSE = "BaseUpper";
 
+    function activePosesWithUpperBodyPose(poses, upperPose) {
+        const result = (Array.isArray(poses) ? poses : [])
+            .map(value => String(value || "").trim())
+            .filter(Boolean)
+            .filter(pose =>
+                pose !== EXTRA_ARM_RAISED_POSE &&
+                pose !== EXTRA_ARM_BASE_POSE
+            );
+        if (upperPose) result.push(upperPose);
+        return [...new Set(result)];
+    }
+
+    function syncTemporaryArmPose(C) {
+        if (
+            C === window.Player &&
+            window.CurrentScreen === "ChatRoom" &&
+            typeof window.ChatRoomCharacterUpdate === "function"
+        ) {
+            try { window.ChatRoomCharacterUpdate(C); } catch (_) {}
+        }
+    }
+
     function resetTemporaryArmsToBase(C, source = "temporary-arm-reset") {
         if (!C) return false;
 
-        const applyNativeBaseUpper = () => {
-            let nativeSucceeded = false;
+        const desired = activePosesWithUpperBodyPose(
+            activePoseSnapshot(C),
+            EXTRA_ARM_BASE_POSE
+        );
 
-            // BaseLower and BaseUpper are separate pose families. OverTheHead
-            // replaces BaseUpper; BaseLower is intentionally left untouched.
-            try {
-                if (typeof window.CharacterSetActivePose === "function") {
-                    window.CharacterSetActivePose(C, EXTRA_ARM_BASE_POSE, true);
-                    nativeSucceeded =
-                        activePoseSnapshot(C).includes(EXTRA_ARM_BASE_POSE) &&
-                        !activePoseSnapshot(C).includes(EXTRA_ARM_RAISED_POSE);
-                }
-            } catch (e) {
-                warn("BaseUpper pose reset failed:", e);
-            }
+        const applied = setExtraActionActivePoses(C, desired);
+        if (!applied) return false;
 
-            // Compatibility fallback for an addon that wraps CharacterSetActivePose
-            // without honoring the forced replacement. Replace only the upper pose;
-            // never rewrite C.Pose, since BC computes that from ActivePose + items.
-            if (!nativeSucceeded) {
-                try {
-                    const active = activePoseSnapshot(C)
-                        .filter(pose =>
-                            pose !== EXTRA_ARM_RAISED_POSE &&
-                            pose !== EXTRA_ARM_BASE_POSE
-                        );
-                    active.push(EXTRA_ARM_BASE_POSE);
-                    C.ActivePose = active;
-                } catch (_) {}
-            }
-
-            try {
-                if (typeof window.CharacterRefresh === "function") {
-                    window.CharacterRefresh(C, false);
-                } else if (typeof window.CharacterLoadCanvas === "function") {
-                    window.CharacterLoadCanvas(C);
-                }
-            } catch (_) {}
-
-            return (
-                activePoseSnapshot(C).includes(EXTRA_ARM_BASE_POSE) &&
-                !activePoseSnapshot(C).includes(EXTRA_ARM_RAISED_POSE)
-            );
-        };
-
-        // Reset immediately when the emote timer expires.
-        applyNativeBaseUpper();
-
-        // One short retry catches a late activity/server redraw without keeping a
-        // long-running pose-reset loop.
         window.setTimeout(() => {
             const key = extraActionCharacterKey(C);
             if (extraRaisedArmSessions.has(key)) return;
-
-            applyNativeBaseUpper();
-
-            // Only the local player's authoritative pose should be published.
-            if (
-                C === window.Player &&
-                window.CurrentScreen === "ChatRoom" &&
-                typeof window.ChatRoomCharacterUpdate === "function"
-            ) {
-                try { window.ChatRoomCharacterUpdate(C); } catch (_) {}
-            }
+            setExtraActionActivePoses(C, desired);
+            syncTemporaryArmPose(C);
         }, 120);
 
-        log("Temporary raised arms reset to BaseUpper.", {
+        log("Temporary raised arms reset.", {
             source,
             memberNumber: C?.MemberNumber ?? null,
             activePose: activePoseSnapshot(C),
@@ -10358,15 +10131,37 @@ function SubbysPlushiesPageMain() {
         return true;
     }
 
-    function forceRestoreTemporaryArmPose(C, _beforeState, source = "temporary-arm-restore") {
-        return resetTemporaryArmsToBase(C, source);
+    function forceRestoreTemporaryArmPose(C, beforeState, source = "temporary-arm-restore") {
+        if (!C) return false;
+
+        const desired = Array.isArray(beforeState?.activePose)
+            ? [...beforeState.activePose]
+            : activePosesWithUpperBodyPose(activePoseSnapshot(C), EXTRA_ARM_BASE_POSE);
+
+        const applied = setExtraActionActivePoses(C, desired);
+        if (!applied) return false;
+
+        window.setTimeout(() => {
+            const key = extraActionCharacterKey(C);
+            if (extraRaisedArmSessions.has(key)) return;
+            setExtraActionActivePoses(C, desired);
+            syncTemporaryArmPose(C);
+        }, 120);
+
+        log("Temporary raised-arm pose restored.", {
+            source,
+            memberNumber: C?.MemberNumber ?? null,
+            restoredActivePose: desired,
+            activePose: activePoseSnapshot(C),
+            pose: characterPoseSnapshot(C),
+        });
+
+        return true;
     }
 
     function applyTemporaryRaisedArm(C, durationMs = EXTRA_RAISE_ARM_DURATION_MS, source = "extra-action") {
         if (!C) return false;
 
-        // Local opt-out: keep the chat action but ignore every pose-changing
-        // effect owned by this feature. Currently this covers Wave and Raise Both Arms.
         if (getFeatureSettings().ignorePoseChangingEmotes) {
             log("Ignored pose-changing emote.", {
                 source,
@@ -10382,53 +10177,25 @@ function SubbysPlushiesPageMain() {
             window.clearTimeout(existing.timer);
         }
 
-        // Preserve the original BC pose state from the FIRST animation in an
-        // overlapping ActivityRun/server-echo pair.
         const beforeState = existing?.beforeState
             ? {
                 activePose: [...existing.beforeState.activePose],
                 pose: Array.isArray(existing.beforeState.pose) ? [...existing.beforeState.pose] : null,
             }
             : {
-                activePose: activePoseSnapshot(C).filter(pose => pose !== EXTRA_ARM_RAISED_POSE),
+                activePose: [...activePoseSnapshot(C)],
                 pose: (() => {
                     const pose = characterPoseSnapshot(C);
-                    return Array.isArray(pose)
-                        ? pose.filter(entry => entry !== EXTRA_ARM_RAISED_POSE)
-                        : null;
+                    return Array.isArray(pose) ? [...pose] : null;
                 })(),
             };
 
-        // IMPORTANT: change only the UPPER-body pose family.
-        // Passing the entire ActivePose array through CharacterSetActivePose can
-        // cause BC to re-evaluate lower-body pose compatibility and stand a
-        // kneeling/sitting character up. A single OverTheHead pose with ForceChange
-        // replaces BaseUpper while preserving Kneel/BaseLower/etc.
-        let applied = false;
-        try {
-            if (typeof window.CharacterSetActivePose === "function") {
-                window.CharacterSetActivePose(C, EXTRA_ARM_RAISED_POSE, true);
-                applied = activePoseSnapshot(C).includes(EXTRA_ARM_RAISED_POSE);
-            }
-        } catch (e) {
-            warn("Could not apply upper-body raised-arm pose:", e);
-        }
+        const raisedActivePoses = activePosesWithUpperBodyPose(
+            activePoseSnapshot(C),
+            EXTRA_ARM_RAISED_POSE
+        );
 
-        // Compatibility fallback: replace ONLY the known upper-body pose entries
-        // in ActivePose. Preserve every lower-body pose exactly as-is.
-        if (!applied) {
-            try {
-                const active = activePoseSnapshot(C)
-                    .filter(pose =>
-                        pose !== EXTRA_ARM_RAISED_POSE &&
-                        pose !== EXTRA_ARM_BASE_POSE
-                    );
-                active.push(EXTRA_ARM_RAISED_POSE);
-                C.ActivePose = active;
-                refreshExtraActionPose(C);
-                applied = activePoseSnapshot(C).includes(EXTRA_ARM_RAISED_POSE);
-            } catch (_) {}
-        }
+        const applied = setExtraActionActivePoses(C, raisedActivePoses);
 
         if (!applied) {
             extraRaisedArmSessions.delete(key);
@@ -10439,6 +10206,7 @@ function SubbysPlushiesPageMain() {
         const session = {
             beforeState,
             source,
+            character: C,
             timer: null,
         };
 
@@ -10465,7 +10233,6 @@ function SubbysPlushiesPageMain() {
         return true;
     }
 
-    // Console helpers for testing the exact build without modifying room state.
     window.SubbysPlushiesArmDiag = (memberNumber = window.Player?.MemberNumber) => {
         const member = Number(memberNumber);
         const C = Number.isFinite(member)
@@ -10512,8 +10279,6 @@ function SubbysPlushiesPageMain() {
         if (target === window.Player || (Number.isFinite(localMember) && targetMember === localMember)) {
             return applyTemporaryRaisedArm(window.Player, EXTRA_RAISE_ARM_DURATION_MS, "raise-their-arm");
         }
-        // Keep a local visual preview on the source/observer client. The target's own
-        // addon instance performs and synchronizes the authoritative five-second pose.
         return applyTemporaryRaisedArm(target, EXTRA_RAISE_ARM_DURATION_MS, "raise-their-arm-preview");
     }
 
@@ -10634,11 +10399,6 @@ function SubbysPlushiesPageMain() {
         return { sourceMember, targetMember, sourceName, targetName };
     }
 
-    // Text generated by Subby's Plushies uses BC's native nickname when one is
-    // set, then falls back to the character/account name. We deliberately read
-    // the character data directly instead of CharacterNickname(), because BCX
-    // can hook that helper and substitute a local alias that other players do
-    // not share. Aliases are still accepted for target searching only.
     function getCharacterDisplayName(C) {
         if (!C) return null;
         const nickname = typeof C?.Nickname === "string" ? C.Nickname.trim() : "";
@@ -10652,10 +10412,6 @@ function SubbysPlushiesPageMain() {
     function normalizeDialogueName(value, fallback = "someone") {
         let text = String(value || "").replace(/[\u2018\u2019]/g, "'").trim();
         if (!text) return fallback;
-        // BC/addon activity dictionaries can hand us a display name that has
-        // already been made possessive, and stacked hooks can occasionally do it
-        // more than once ("Alessandro's's"). Canonicalize repeatedly, then let
-        // the dialogue engine add one possessive when the template asks for it.
         for (let i = 0; i < 4; i++) {
             if (/'s$/i.test(text)) {
                 text = text.slice(0, -2).trim();
@@ -10683,9 +10439,6 @@ function SubbysPlushiesPageMain() {
         const ownerPronouns = context.self ? sourcePronouns : targetPronouns;
         const plushName = String(context.plushName || currentPlushName() || "plushie").trim() || "plushie";
 
-        // The equipped plushie belongs to the SOURCE/acting character, even when
-        // the activity targets somebody else.  Use the actor's real BC pronouns:
-        // "her Subbycat plushie", "his Rey plushie", "their Margot plushie".
         const plushPhrase = /^plushie$/i.test(plushName)
             ? `${sourcePronouns.possessive} plushie`
             : `${sourcePronouns.possessive} ${plushName} plushie`;
@@ -10704,33 +10457,74 @@ function SubbysPlushiesPageMain() {
             .replaceAll("{Plushie}", plushPhrase)
             .replaceAll("the plushie", plushPhrase);
 
-        // Legacy templates may still use pronoun words instead of tokens. Limit
-        // these replacements to whole words so names are never modified.
         text = text
-            .replace(/\btheir\b/g, ownerPronouns.possessive)
-            .replace(/\bthemself\b/g, ownerPronouns.reflexive)
+            .replace(/\btheir\b/gi, ownerPronouns.possessive)
+            .replace(/\btheirs\b/gi, ownerPronouns.possessive === "his" ? "his" : `${ownerPronouns.possessive}s`)
+            .replace(/\bthey\b/gi, ownerPronouns.subject)
+            .replace(/\bthem\b/gi, ownerPronouns.object)
+            .replace(/\bthemselves\b/gi, ownerPronouns.reflexive)
+            .replace(/\bthemself\b/gi, ownerPronouns.reflexive)
             .replaceAll("{Source}", sourceName)
             .replaceAll("{Target}", targetName);
 
-        // Final safety net for old/third-party templates that append 's to an
-        // already-possessive target string. This never touches normal apostrophes.
         text = text.replace(/([A-Za-z0-9_ -]+)'s's\b/g, "$1's");
         return text;
     }
 
     function characterPronouns(C) {
-        if (!C) return { subject: "they", object: "them", possessive: "their", reflexive: "themself" };
-        const gender = String(C?.Gender || C?.gender || "").trim().toLowerCase();
-        const preference = String(C?.Pronoun || C?.Pronouns || C?.pronoun || "").trim().toLowerCase();
-        const value = `${gender} ${preference}`;
-        if (/\b(m|male|man|masculine|he|him|hehim)\b/.test(value)) {
-            return { subject: "he", object: "him", possessive: "his", reflexive: "himself" };
+        const SHE = Object.freeze({ subject: "she", object: "her", possessive: "her", reflexive: "herself" });
+        const HE = Object.freeze({ subject: "he", object: "him", possessive: "his", reflexive: "himself" });
+
+        const appearanceFamilies = Array.isArray(C?.Appearance)
+            ? C.Appearance
+                .map(item => item?.Asset?.Family || item?.Asset?.Group?.Family || "")
+                .filter(Boolean)
+            : [];
+
+        const raw = [
+            C?.Gender,
+            C?.gender,
+            C?.Pronoun,
+            C?.Pronouns,
+            C?.pronoun,
+            C?.AssetFamily,
+            C?.AssetFamilyName,
+            C?.Family,
+            ...appearanceFamilies,
+        ]
+            .filter(value => value != null && String(value).trim())
+            .map(value => String(value).trim().toLowerCase())
+            .join(" ");
+
+        if (
+            raw.includes("female3dcg") ||
+            /(^|[^a-z])(f|female|woman|feminine|she|her|sheher|she\/her)([^a-z]|$)/.test(raw)
+        ) {
+            return SHE;
         }
-        if (/\b(f|female|woman|feminine|she|her|sheher)\b/.test(value)) {
-            return { subject: "she", object: "her", possessive: "her", reflexive: "herself" };
+        if (
+            raw.includes("male3dcg") ||
+            /(^|[^a-z])(m|male|man|masculine|he|him|hehim|he\/him)([^a-z]|$)/.test(raw)
+        ) {
+            return HE;
         }
-        return { subject: "they", object: "them", possessive: "their", reflexive: "themself" };
+
+        return SHE;
     }
+
+    window.SubbysPlushiesPronounDiag = (memberNumber = window.Player?.MemberNumber) => {
+        const member = Number(memberNumber);
+        const C = Number.isFinite(member) ? getRoomCharacterByMember(member) : window.Player;
+        const result = {
+            memberNumber: Number.isFinite(Number(C?.MemberNumber)) ? Number(C.MemberNumber) : null,
+            name: getCharacterDisplayName(C),
+            gender: C?.Gender ?? C?.gender ?? null,
+            assetFamily: C?.AssetFamily ?? C?.AssetFamilyName ?? C?.Family ?? null,
+            pronouns: characterPronouns(C),
+        };
+        console.table(result);
+        return result;
+    };
 
     function looksLikeCharacter(value) {
         return !!value &&
@@ -10834,11 +10628,6 @@ function SubbysPlushiesPageMain() {
         const raw = String(value || "").trim();
         if (!raw) return null;
 
-        // BC can render DestinationCharacter as a possessive display string in
-        // activity packets (for example "Marvelousi's"). Measure Height needs
-        // the real Character object so it can read HeightRatio / Echo scaling.
-        // Normalize the possessive only for lookup; emitted text always uses the
-        // character object's native BC nickname/name.
         const variants = new Set([raw.toLocaleLowerCase()]);
         if (/[’']s$/i.test(raw)) variants.add(raw.slice(0, -2).trim().toLocaleLowerCase());
         if (/s[’']$/i.test(raw)) variants.add(raw.slice(0, -1).trim().toLocaleLowerCase());
@@ -10958,16 +10747,12 @@ function SubbysPlushiesPageMain() {
             return true;
         }
 
-        // Before creating anything ourselves, adopt a row that BC already
-        // rendered through its normal Type:"Action" pipeline.
         if (adoptNativeCustomActionRow(data)) return true;
 
         try {
             if (typeof window.ChatRoomAppendChat === "function") {
                 const row = document.createElement("div");
 
-                // Emergency fallback only. Use BC's native Action class and
-                // metadata shape; never render this as an Emote (/me) row.
                 row.className = "ChatMessage ChatMessageAction";
                 row.textContent = `(${message})`;
                 row.setAttribute("data-subbys-plushies-token", token);
@@ -11025,10 +10810,6 @@ function SubbysPlushiesPageMain() {
             targetName = normalizeDialogueName(targetName, "someone");
         }
 
-        // Keep the proven 2.9.6 activity/chat flow. Only Measure Height gets this
-        // extra target recovery step: if another addon/BC leaves us with a
-        // rendered possessive name instead of a MemberNumber, resolve that name
-        // back to the room Character before building the dynamic height message.
         if (spec?.effect === "measureHeight" && !targetCharacter) {
             targetCharacter = getRoomCharacterByRenderedName(targetName);
         }
@@ -12073,7 +11854,8 @@ function SubbysPlushiesPageMain() {
 
         const message = document.createElement("div");
         message.className = "SubbysPlushiesOfferMessage";
-        message.textContent = `(${sourceLabel} is offering you their plushie.)`;
+        const sourcePronouns = characterPronouns(getRoomCharacterByMember(sourceMember));
+        message.textContent = `(${sourceLabel} is offering you ${sourcePronouns.possessive} plushie.)`;
 
         const question = document.createElement("div");
         question.className = "SubbysPlushiesOfferQuestion";
@@ -12524,7 +12306,8 @@ function SubbysPlushiesPageMain() {
                 handleLocalPlushInteraction("balanceHead");
                 markProgress("balanceBestSeconds", earnedSeconds);
                 appendLocalInfoBox("Balance Plushie", [`Balanced for ${earnedSeconds} seconds!${earnedSeconds >= 20 ? " Maximum balance reached!" : ""}`], { compact: true });
-                sendStandaloneActionMessage(`${source} manages to balance the ${currentPlushName()} plushie on their head for ${earnedSeconds} seconds.`);
+                const sourcePronouns = characterPronouns(window.Player);
+                sendStandaloneActionMessage(`${source} manages to balance the ${currentPlushName()} plushie on ${sourcePronouns.possessive} head for ${earnedSeconds} seconds.`);
                 return true;
             }
             return false;
@@ -13107,9 +12890,6 @@ function SubbysPlushiesPageMain() {
     function itemHasActiveLock(item) {
         const property = item?.Property;
         if (!property || typeof property !== "object") return false;
-        // DOGS intentionally keeps a normal BC base lock in LockedBy while
-        // Property.Name identifies the custom Devious Padlock. Treat that marker
-        // as locked even during a transient BC effect refresh.
         if (property.Name === DOGS_DEVIOUS_PADLOCK_NAME) return true;
         try {
             if (typeof window.InventoryItemHasEffect === "function" && window.InventoryItemHasEffect(item, "Lock", true)) return true;
@@ -13621,7 +13401,6 @@ function SubbysPlushiesPageMain() {
 
         if (installHook("ChatRoomLeave", 10000, (args, next) => {
             cacheRoomMascotState(roomMascotState);
-            stopRoomMascotCycleMonitor();
             const result = next(args);
             roomRosterSignature = null;
             achievementSession.protectCountInRoom = 0;
@@ -13646,7 +13425,6 @@ function SubbysPlushiesPageMain() {
                 window.setTimeout(() => trackRoomAchievements(), 900);
                 window.setTimeout(() => sendAddonPresence(true), 450);
                 if (!installedHooks.has("ChatRoomAppendChat")) window.setTimeout(() => ensureOfferChatObserver("ChatRoomSync fallback"), 0);
-                stopRoomMascotCycleMonitor();
             };
             if (result && typeof result.then === "function") {
                 void result.then(
@@ -13659,8 +13437,7 @@ function SubbysPlushiesPageMain() {
                     recoverRoomMascotState({ allowCache: true });
                     sendAddonPresence(true);
                     if (!installedHooks.has("ChatRoomAppendChat")) ensureOfferChatObserver("ChatRoomSync fallback");
-                    stopRoomMascotCycleMonitor();
-                    }, 450);
+                        }, 450);
             }
             return result;
         })) hooked++;
@@ -13702,6 +13479,8 @@ function SubbysPlushiesPageMain() {
 
     function startRoomRosterMonitor() {
         if (roomRosterWatchdog != null) return;
+
+        installNativeAddonPresenceOverlayHook();
 
         roomRosterSignature = currentRoomRosterSignature();
         achievementSession.protectCountInRoom = 0;
@@ -13904,8 +13683,6 @@ function SubbysPlushiesPageMain() {
             }
             if (!plush.length && !extra.length) return finish(working);
 
-            // Normal/base activities first, then all plushie activities, then optional
-            // Extra Actions. This keeps Extra Actions visibly separated at the end.
             const reordered = normal.concat(plush, extra);
             const unchanged = reordered.length === working.length && reordered.every((entry, index) => entry === working[index]);
             if (unchanged) return finish(working);
@@ -13960,27 +13737,33 @@ function SubbysPlushiesPageMain() {
                     dragSession || dragModeEnabled
                 );
                 const petSuitFallback = isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C));
-                needsExactProjection =
+
+                needsExactProjection = false;
+
+                const hasAddonPresence = characterHasAddonPresence(C);
+                const needsPlacement =
                     isOurs(held) ||
                     hasRemoteEmote ||
                     hasLocalOverlay ||
                     petSuitFallback ||
-                    characterHasAddonPresence(C);
+                    hasAddonPresence;
 
-                if (Number.isFinite(x) && Number.isFinite(y) && (needsExactProjection || characterHasAddonPresence(C))) {
-                    const placement = { x, y, zoom, matrix: currentCanvasTransformSnapshot(), at: Date.now() };
+                if (Number.isFinite(x) && Number.isFinite(y) && needsPlacement) {
+                    const placement = {
+                        x,
+                        y,
+                        zoom,
+                        matrix: currentCanvasTransformSnapshot(),
+                        at: Date.now(),
+                        presenceFrameGeneration: nativePresenceFrameGeneration,
+                    };
                     if (samePlayer) lastPlayerChatRoomDraw = placement;
                     if (Number.isFinite(member)) lastCharacterChatRoomDraw.set(member, placement);
                 }
             }
 
-            let result;
-            if (C && window.CurrentScreen === "ChatRoom" && needsExactProjection) {
-                result = captureExactCharacterProjection(C, () => next(args));
-            } else {
-                if (C) exactCharacterCanvasProjection.delete(characterProjectionKey(C));
-                result = next(args);
-            }
+            if (C) exactCharacterCanvasProjection.delete(characterProjectionKey(C));
+            const result = next(args);
 
             if (C && window.CurrentScreen === "ChatRoom") {
                 if (isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C))) drawPetSuitPlushCanvasOverlay(C);
@@ -14065,10 +13848,6 @@ function SubbysPlushiesPageMain() {
                 window.setTimeout(startBalanceHeadMinigame, 120);
             }
 
-            // Do not depend on the server echo for the source client's visual effect.
-            // ActivityRun already gives us the real target Character, so Raise Their Arm
-            // can animate immediately and the network action remains responsible for
-            // making other addon clients reproduce the same temporary pose.
             if (customSpec?.effect === "raiseTargetArm" && focusedTarget) {
                 window.setTimeout(
                     () => applyTemporaryRaisedArm(
@@ -14078,6 +13857,10 @@ function SubbysPlushiesPageMain() {
                     ),
                     0
                 );
+            }
+
+            if (customSpec?.key === "wave") {
+                window.setTimeout(() => maybeStartSharedWaveChain(null, true), 0);
             }
 
             if (customSpec && !isExtraActionSpec(customSpec) && customSpec.effect !== "balanceHead") handleLocalPlushInteraction(customSpec.key);
@@ -14219,7 +14002,6 @@ function SubbysPlushiesPageMain() {
             const data = args?.[0];
             if (processAddonPresencePacket(data)) return next(args);
             if (processSharedWaveChainPacket(data)) return next(args);
-            if (processRoomMascotCycleClaimPacket(data)) return next(args);
             if (processOfferDecisionSignal(data)) return next(args);
 
             const hiddenBattleData = data?.Type === "Hidden" ? battleDataFromAction(data) : null;
@@ -14250,11 +14032,6 @@ function SubbysPlushiesPageMain() {
             maybeTrackBaseCuddleAchievement(data);
             const pluginActionSpec = getCustomActivityFromAction(data);
 
-            // Custom activities are real BC Type:"Action" packets. Do NOT render
-            // them as a local /me-style row here. Snapshot the existing action
-            // rows, let Bondage Club's own ChatRoomMessage renderer handle the
-            // packet, then tag the row it produced. A manual Action-class fallback
-            // is used only if BC genuinely produced no matching action row.
             const nativeActionRowsBefore =
                 pluginActionSpec && incomingCustomToken
                     ? new Set(currentActionRows())
@@ -14350,10 +14127,6 @@ function SubbysPlushiesPageMain() {
                 ? PLUGIN_ACTIVITY_BY_KEY.get(pendingLocalCustomActivity.key)
                 : null;
 
-            // ActivityRun is the authoritative signal for one of our activities.
-            // Some R132 activity paths reach ServerSend before BC has finalized the
-            // packet as Type:"Action". If a Subby's Plushies activity is pending,
-            // normalize it anyway instead of silently passing the generic BC packet.
             const outgoingAction =
                 messageType === "ChatRoomChat" &&
                 (isChatAction(originalData) || pendingHugTightly || !!pendingSpec);
@@ -14423,8 +14196,6 @@ function SubbysPlushiesPageMain() {
             captureVisiblePlushStates();
             const result = next(nextArgs);
 
-            // Prefer the server echo + BC's native Type:"Action" renderer.
-            // Only synthesize a local Action row if no matching native row arrived.
             if (outgoingCustomActionData) {
                 const outgoingToken = getDictionaryText(
                     outgoingCustomActionData,
@@ -14452,7 +14223,7 @@ function SubbysPlushiesPageMain() {
 
         log(
             `Installed plush-state persistence hooks: ActivityAllowedForGroup=${activityOrderHooked}, ` +
-            `DrawCharacter=${drawCharacterHooked}, CharacterOverlay=${characterOverlayHooked}, ActivityRun=${activityRunHooked}, CharacterRefresh=${refreshHooked}, ChatAppend=${chatAppendHooked}, ` +
+            `DrawCharacter=disabled, CharacterOverlay(ModSDK)=${characterOverlayHooked}, ActivityRun=${activityRunHooked}, CharacterRefresh=${refreshHooked}, ChatAppend=${chatAppendHooked}, ` +
             `ChatRoomCharacterUpdate=${updateHooked}, ` +
             `ChatRoomMessage=${actionMessageHooked}, ServerSend=${serverSendHooked}, ` +
             `RoomRosterEvents=${roomRosterEventHookCount}, watchdog=60s (no forced Action refresh).`
@@ -15341,9 +15112,6 @@ function SubbysPlushiesPageMain() {
                 ? "SourceCharacter's plushie"
                 : `SourceCharacter's ${plushName} plushie`;
 
-            // This is only BC's local/fallback dictionary text. The normal outgoing
-            // packet uses renderNicknameAwareDialogue and therefore emits the
-            // actor's actual her/his/their pronoun.
             return template
                 .replaceAll("{Source}", "SourceCharacter")
                 .replaceAll("{Target}", "DestinationCharacter")
@@ -15430,7 +15198,6 @@ function SubbysPlushiesPageMain() {
         return value;
     }
 
-
     function plushOptionFromNativeImagePath(source) {
         const normalized = normalizeAssetImagePath(source);
         if (typeof normalized !== "string" || !normalized.includes(ASSET_NAME)) return -1;
@@ -15474,8 +15241,6 @@ function SubbysPlushiesPageMain() {
                 continue;
             }
             try {
-                // resolvedImage is a data URL, so the source hook passes it through
-                // untouched. This updates BC's already-cached Image object in place.
                 image.src = resolvedImage;
                 changed = true;
             } catch (_) {}
@@ -15522,7 +15287,6 @@ function SubbysPlushiesPageMain() {
             compactNormalized.includes("hugtightlyitem") ||
             compactNormalized.includes("subbysplushieshugtightly")
         ) {
-            // Hug Tightly does not belong to hair/face/pointing, so use Subbycat.
             return renderFallbackImage || PLUSH_FALLBACK_IMAGE || source;
         }
 
@@ -15648,9 +15412,6 @@ function SubbysPlushiesPageMain() {
     function installImageMappingHooks() {
         const nativeImageHook = installNativeImageElementHook();
 
-        // Do not globally wrap Canvas/OffscreenCanvas drawImage here.
-        // Native layer translation has different height-scaling semantics and is
-        // handled explicitly by the overlay projection helpers below.
         let fallbackHook = null;
         if (!nativeImageHook) {
             const candidates = [
@@ -17180,7 +16941,6 @@ function SubbysPlushiesPageMain() {
                 stats: getStatsStore(),
                 idleAnimationActive: !!activeIdleAnimationSession,
                 lastBattleResult,
-                moodHistoryEntries: moodHistoryFor(currentPlushName(), 40).length,
                 battleHistoryEntries: battleHistory(20).length,
                 gitData: { ...gitDataState, status: gitDataStatusText() },
             },
@@ -17211,7 +16971,6 @@ function SubbysPlushiesPageMain() {
         get failed() { return failed; },
         getHeld: pluginApiHeldSnapshot,
         getMood: name => { const record = getPlushMoodRecord(name || currentPlushName()); return Object.freeze({ name: name || currentPlushName(), ...record, label: moodLabel(record.score) }); },
-        getMoodHistory: (name, limit) => moodHistoryFor(name || currentPlushName(), limit),
         getRelationship: name => relationshipStatus(name || currentPlushName()),
         getBattleHistory: limit => battleHistory(limit),
         getPerformanceMode: () => isLowCpuMode() ? "low" : "normal",
@@ -17440,8 +17199,6 @@ function SubbysPlushiesPageMain() {
     async function bootstrap() {
         exposeBootstrapDiag("waiting-for-bc");
 
-        // BCX-style startup principle: run in Bondage Club's own JavaScript world
-        // and wait until the game globals exist before installing hooks.
         for (let attempt = 0; attempt < 240; attempt++) {
             if (pageGlobalsVisible()) {
                 exposeBootstrapDiag("starting-main");
