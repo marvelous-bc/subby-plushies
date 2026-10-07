@@ -1,5 +1,9 @@
+
+    
+  
 {
-  "version": "3.2",
+  "version": "3.2.0.2",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Version 3.2 release using the working presence-icon implementation, with the current arm pose, wave, pronoun, plushie, and cleanup changes."
+  "notes": "BCX-safe lightweight build: removed Subby's Plushies DrawCharacter and ChatRoomRun hooks and restored the ModSDK ChatRoomDrawCharacterOverlay presence renderer while preserving the v3.2 lightweight optimizations and current feature fixes."
 }
+
