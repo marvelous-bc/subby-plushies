@@ -1,6 +1,5 @@
 {
-  "version": "3.1.32",
-  "released": "2026-10-06",
+  "version": "3.2",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Added Subbycat plug-in icon."
+  "notes": "Version 3.2 release using the working presence-icon implementation, with the current arm pose, wave, pronoun, plushie, and cleanup changes."
 }
