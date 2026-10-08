@@ -1,9 +1,5 @@
-
-    
-  
 {
-  "version": "3.2.0.2",
+  "version": "3.3",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "BCX-safe lightweight build: removed Subby's Plushies DrawCharacter and ChatRoomRun hooks and restored the ModSDK ChatRoomDrawCharacterOverlay presence renderer while preserving the v3.2 lightweight optimizations and current feature fixes."
+  "notes": "Public v3.3 release: Added opt-in character-name highlighting in chat (off by default); optimized overall performance and reduced background work; fixed and made the Subbycat addon presence icon more lightweight; fixed known/reported errors, including custom-action crashes and duplicate self-action messages."
 }
-
