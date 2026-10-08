@@ -2,9 +2,9 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.2
+// @version      3.3
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
-// @released     2026-10-06
+// @released     2026-10-07
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -26,7 +26,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.2";
+    const VERSION = "3.3";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -37,7 +37,7 @@ function SubbysPlushiesPageMain() {
             document.documentElement?.setAttribute("data-subbys-plushies-load-source", "direct");
         }
     } catch (_) {}
-    const BUILD_DATE = "2026-10-06";
+    const BUILD_DATE = "2026-10-07";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -526,8 +526,8 @@ function SubbysPlushiesPageMain() {
 
     let HIDE_BEHIND_DURATION_MS = 8000;
 
-    const ACTIVITY_INTEGRITY_INTERVAL_MS = 60 * 1000;
-    const ROOM_ROSTER_WATCHDOG_INTERVAL_MS = 5 * 60 * 1000;
+    const ACTIVITY_INTEGRITY_INTERVAL_MS = 5 * 60 * 1000;
+    const ROOM_ROSTER_WATCHDOG_INTERVAL_MS = 10 * 60 * 1000;
     const LAYERING_BRIDGE_MONITOR_INTERVAL_MS = 1000;
     let HIDE_BEHIND_FACE_TRANSFORM = Object.freeze({
         TranslationX: 0,
@@ -578,9 +578,10 @@ function SubbysPlushiesPageMain() {
         sharedEmoteChains: true,
         expressionReactions: true,
         ignorePoseChangingEmotes: false,
+        highlightMyName: false,
     });
-    let IDLE_MIN_DELAY_MS = 22000;
-    let IDLE_MAX_DELAY_MS = 48000;
+    let IDLE_MIN_DELAY_MS = 60000;
+    let IDLE_MAX_DELAY_MS = 120000;
     let SPEECH_BUBBLE_DURATION_MS = 3400;
     let SPEECH_BUBBLE_Y_OFFSET_CSS_PX = 5;
     let SPEECH_INTERACTION_ACTIONS = Object.freeze(["pet", "pat", "cuddleChest", "kissPlushie", "noseBoop", "cheekRest", "foreheadBump", "snugglePlushie"]);
@@ -1001,6 +1002,7 @@ function SubbysPlushiesPageMain() {
         Speech: Object.freeze({ x: 1335, y: 690, w: 300, h: 58 }),
         EmotesSettings: Object.freeze({ x: 1650, y: 690, w: 300, h: 58 }),
         ExtraActions: Object.freeze({ x: 1040, y: 770, w: 280, h: 58 }),
+        HighlightMyName: Object.freeze({ x: 1335, y: 770, w: 300, h: 58 }),
         IgnorePoseChanges: Object.freeze({ x: 1650, y: 770, w: 300, h: 58 }),
         SettingsBack: Object.freeze({ x: 1640, y: 103, w: 235, h: 38 }),
     });
@@ -1193,6 +1195,9 @@ function SubbysPlushiesPageMain() {
     let pendingLocalCustomActivity = null;
     let customActivityEventSequence = 0;
     const locallyRenderedCustomActionTokens = new Map();
+    const receivedCustomActionTokens = new Map();
+    let activeCustomActionRender = null;
+    let recentSelfCustomActionSend = null;
     const seenOfferPromptTokens = new Map();
     let offerPromptElement = null;
     let offerSignalsReceived = 0;
@@ -1345,12 +1350,15 @@ function SubbysPlushiesPageMain() {
     let nativePresenceDrawCount = 0;
     let nativePresenceDrawMethod = "uninitialized";
     let nativePresenceChatRoomRunHooked = false;
-    let nativePresenceFrameGeneration = 0;
+    let nativePresenceOverlayRetryTimer = null;
+    let nativePresenceOverlayRetryAttempt = 0;
+    const NATIVE_PRESENCE_OVERLAY_RETRY_DELAYS_MS = Object.freeze([
+        100, 250, 500, 1000, 2000, 4000, 8000, 15000, 30000
+    ]);
     const petSuitRenderStates = new Map();
     const manualPlushMainBounds = new Map();
     const canvasOverlayImageCache = new Map();
     const lastCharacterChatRoomDraw = new Map();
-    const exactCharacterCanvasProjection = new Map();
 
     let backupImportInput = null;
     let lastPlayerChatRoomDraw = null;
@@ -1711,6 +1719,7 @@ function SubbysPlushiesPageMain() {
             sharedEmoteChains: storedBoolean("sharedEmoteChains"),
             expressionReactions: storedBoolean("expressionReactions"),
             ignorePoseChangingEmotes: storedBoolean("ignorePoseChangingEmotes"),
+            highlightMyName: Object.prototype.hasOwnProperty.call(stored, "highlightMyName") ? !!stored.highlightMyName : false,
             performanceMode: String(stored.performanceMode || "normal").toLowerCase() === "low" ? "low" : "normal",
         };
         return featureSettingsState;
@@ -1726,6 +1735,10 @@ function SubbysPlushiesPageMain() {
             else cancelIdleAnimation(false);
         }
         if (key === "speechBubbles" && !settings[key]) removeSpeechBubble();
+        if (key === "highlightMyName") {
+            if (settings[key]) highlightMyNameInVisibleChat();
+            else clearMyNameHighlights();
+        }
         if (key === "showDragButton") {
             if (settings[key]) refreshDragToggleButton();
             else removeDragToggleButton();
@@ -3217,199 +3230,6 @@ function SubbysPlushiesPageMain() {
         };
     }
 
-    function characterProjectionKey(C) {
-        const member = Number(C?.MemberNumber);
-        if (Number.isFinite(member)) return `member:${member}`;
-        if (C === window.Player) return "player";
-        return `character:${String(C?.ID ?? C?.Name ?? "unknown")}`;
-    }
-
-    function matrixSnapshotFromContext(ctx) {
-        if (!ctx || typeof ctx.getTransform !== "function") return null;
-        try {
-            const matrix = ctx.getTransform();
-            const values = [matrix?.a, matrix?.b, matrix?.c, matrix?.d, matrix?.e, matrix?.f].map(Number);
-            if (!values.every(Number.isFinite)) return null;
-            return { a: values[0], b: values[1], c: values[2], d: values[3], e: values[4], f: values[5] };
-        } catch (_) {
-            return null;
-        }
-    }
-
-    function normalizeDrawImageProjection(source, args, matrix) {
-        const sourceWidth = Number(source?.width ?? source?.naturalWidth);
-        const sourceHeight = Number(source?.height ?? source?.naturalHeight);
-        if (!Number.isFinite(sourceWidth) || sourceWidth <= 0 || !Number.isFinite(sourceHeight) || sourceHeight <= 0) return null;
-
-        let sx = 0, sy = 0, sw = sourceWidth, sh = sourceHeight;
-        let dx, dy, dw, dh;
-
-        if (args.length === 3) {
-            dx = Number(args[1]);
-            dy = Number(args[2]);
-            dw = sourceWidth;
-            dh = sourceHeight;
-        } else if (args.length === 5) {
-            dx = Number(args[1]);
-            dy = Number(args[2]);
-            dw = Number(args[3]);
-            dh = Number(args[4]);
-        } else if (args.length >= 9) {
-            sx = Number(args[1]);
-            sy = Number(args[2]);
-            sw = Number(args[3]);
-            sh = Number(args[4]);
-            dx = Number(args[5]);
-            dy = Number(args[6]);
-            dw = Number(args[7]);
-            dh = Number(args[8]);
-        } else {
-            return null;
-        }
-
-        if (![sx, sy, sw, sh, dx, dy, dw, dh].every(Number.isFinite) || sw === 0 || sh === 0) return null;
-
-        return {
-            source,
-            sourceWidth,
-            sourceHeight,
-            sx, sy, sw, sh,
-            dx, dy, dw, dh,
-            matrix,
-            at: Date.now(),
-        };
-    }
-
-    function characterCanvasCandidateScore(C, source, projection) {
-        if (!source || !projection) return -Infinity;
-        let score = 0;
-
-        const direct = [
-            C?.Canvas,
-            C?.CanvasBlink,
-            C?.CanvasTemp,
-            C?.CanvasStatic,
-        ].filter(Boolean);
-        if (direct.includes(source)) score += 1000;
-
-        const width = projection.sourceWidth;
-        const height = projection.sourceHeight;
-        if (width >= 450 && width <= 600) score += 120;
-        if (height >= 900) score += 120;
-
-        const destArea = Math.abs(projection.dw * projection.dh);
-        if (destArea > 100000) score += Math.min(100, destArea / 10000);
-
-        return score;
-    }
-
-    function captureExactCharacterProjection(C, next) {
-        const ctx = window.MainCanvas;
-        if (!C || !ctx || typeof ctx.drawImage !== "function" || typeof next !== "function") return next();
-
-        const original = ctx.drawImage;
-        let best = null;
-        let bestScore = -Infinity;
-        let wrapped = false;
-
-        try {
-            ctx.drawImage = function (...drawArgs) {
-                try {
-                    const source = drawArgs[0];
-                    const projection = normalizeDrawImageProjection(source, drawArgs, matrixSnapshotFromContext(ctx));
-                    const score = characterCanvasCandidateScore(C, source, projection);
-                    if (projection && score > bestScore) {
-                        best = projection;
-                        bestScore = score;
-                    }
-                } catch (_) {}
-                return original.apply(this, drawArgs);
-            };
-            wrapped = ctx.drawImage !== original;
-        } catch (_) {}
-
-        let result;
-        try {
-            result = next();
-        } finally {
-            if (wrapped) {
-                try { ctx.drawImage = original; } catch (_) {}
-            }
-        }
-
-        if (best && bestScore >= 100) {
-            exactCharacterCanvasProjection.set(characterProjectionKey(C), best);
-        }
-        return result;
-    }
-
-    function characterCanvasUpperOverflow(projection) {
-        const height = Number(projection?.sourceHeight) || 0;
-        if (height <= 1050) return 0;
-
-        try {
-            if (typeof CanvasUpperOverflow === "number" && Number.isFinite(CanvasUpperOverflow)) {
-                return Number(CanvasUpperOverflow);
-            }
-        } catch (_) {}
-
-        const inferred = height - 1000 - 150;
-        return inferred > 0 && inferred < 1200 ? inferred : 600;
-    }
-
-    function exactCharacterPointToMainCanvas(C, characterX, characterY) {
-        const projection = exactCharacterCanvasProjection.get(characterProjectionKey(C));
-        if (!projection) return null;
-
-        const x = Number(characterX);
-        const y = Number(characterY);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-
-        const sourceX = x;
-        const sourceY = y + characterCanvasUpperOverflow(projection);
-
-        const unitX = (sourceX - projection.sx) / projection.sw;
-        const unitY = (sourceY - projection.sy) / projection.sh;
-        const destX = projection.dx + unitX * projection.dw;
-        const destY = projection.dy + unitY * projection.dh;
-
-        const matrix = projection.matrix;
-        if (!matrix) return { x: destX, y: destY };
-        return {
-            x: matrix.a * destX + matrix.c * destY + matrix.e,
-            y: matrix.b * destX + matrix.d * destY + matrix.f,
-        };
-    }
-
-    function exactMainCanvasPointToCharacter(C, mainX, mainY) {
-        const projection = exactCharacterCanvasProjection.get(characterProjectionKey(C));
-        if (!projection) return null;
-
-        let x = Number(mainX);
-        let y = Number(mainY);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-
-        const matrix = projection.matrix;
-        if (matrix) {
-            const det = matrix.a * matrix.d - matrix.b * matrix.c;
-            if (!Number.isFinite(det) || Math.abs(det) < 1e-8) return null;
-            const px = x - matrix.e;
-            const py = y - matrix.f;
-            x = (matrix.d * px - matrix.c * py) / det;
-            y = (-matrix.b * px + matrix.a * py) / det;
-        }
-
-        const unitX = (x - projection.dx) / projection.dw;
-        const unitY = (y - projection.dy) / projection.dh;
-        const sourceX = projection.sx + unitX * projection.sw;
-        const sourceY = projection.sy + unitY * projection.sh;
-
-        return {
-            x: sourceX,
-            y: sourceY - characterCanvasUpperOverflow(projection),
-        };
-    }
-
     function characterDrawMetrics(C, draw) {
         if (!draw || !Number.isFinite(draw.x) || !Number.isFinite(draw.y) || !Number.isFinite(draw.zoom)) return null;
         let heightRatio = Number(C?.HeightRatio);
@@ -3441,9 +3261,6 @@ function SubbysPlushiesPageMain() {
     }
 
     function characterPointToMainCanvas(C, characterX, characterY) {
-        const exact = exactCharacterPointToMainCanvas(C, characterX, characterY);
-        if (exact) return exact;
-
         const draw = characterChatRoomDraw(C);
         let mainX = Number(characterX);
         let mainY = Number(characterY);
@@ -3481,9 +3298,6 @@ function SubbysPlushiesPageMain() {
         const logicalHeight = Number(canvas.height) || 1000;
         const mainX = (event.clientX - rect.left) * logicalWidth / rect.width;
         const mainY = (event.clientY - rect.top) * logicalHeight / rect.height;
-
-        const exact = exactMainCanvasPointToCharacter(C, mainX, mainY);
-        if (exact) return { canvas, x: exact.x, y: exact.y, mainX, mainY };
 
         const draw = characterChatRoomDraw(C);
         const untransformed = invertDrawMatrix(draw, mainX, mainY);
@@ -3795,6 +3609,13 @@ function SubbysPlushiesPageMain() {
                 { x: bounds.left, y: bounds.bottom },
             ]).map(point => ({ x: Number(point.x) + x, y: Number(point.y) + y }));
         return boundsFromCanvasPoints(points);
+    }
+
+    function characterProjectionKey(C) {
+        const member = Number(C?.MemberNumber);
+        if (Number.isFinite(member)) return `member:${member}`;
+        if (C === window.Player) return "player";
+        return `character:${String(C?.ID ?? C?.Name ?? "unknown")}`;
     }
 
     function overlayBoundsKey(C, item) {
@@ -4277,7 +4098,6 @@ function SubbysPlushiesPageMain() {
         for (const member of [...remotePlushEmotes.keys()]) removeRemotePlushEmote(member);
         clearPetSuitPlushOverlays();
         lastCharacterChatRoomDraw.clear();
-        exactCharacterCanvasProjection.clear();
     }
 
     function positionRemotePlushEmote(memberNumber) {
@@ -4612,10 +4432,9 @@ function SubbysPlushiesPageMain() {
         return true;
     }
 
-    function nativePresenceIconRect(C) {
-        const draw = characterChatRoomDraw(C);
-
-        if (!draw || draw.presenceFrameGeneration !== nativePresenceFrameGeneration) return null;
+    function nativePresenceIconRect(C, placement = null) {
+        const draw = placement || characterChatRoomDraw(C);
+        if (!draw || !Number.isFinite(Number(draw.at)) || Date.now() - draw.at > 1200) return null;
 
         if (
             draw &&
@@ -4641,7 +4460,76 @@ function SubbysPlushiesPageMain() {
         return null;
     }
 
-    function drawAddonPresenceIconNative(C) {
+    const nativePresenceDomBadges = new Map();
+    const nativePresencePendingOverlayWork = new Map();
+    const nativePresenceCaptureTimes = new Map();
+    let nativePresenceBadgePruneTimer = null;
+    let nativePresenceOverlayWorkRaf = 0;
+
+    function nativePresenceBadgeKey(C) {
+        const member = Number(C?.MemberNumber);
+        if (Number.isFinite(member)) return `member:${member}`;
+        return C === window.Player ? "player" : null;
+    }
+
+    function nativePresenceCanvasElement() {
+        return document.getElementById("MainCanvas") || document.querySelector("canvas");
+    }
+
+    function ensureNativePresenceDomBadge(C) {
+        const key = nativePresenceBadgeKey(C);
+        if (!key) return null;
+
+        const existing = nativePresenceDomBadges.get(key);
+        if (existing?.isConnected) return existing;
+
+        const image = document.createElement("img");
+        image.className = "SubbysPlushiesPresenceBadge";
+        image.alt = "";
+        image.draggable = false;
+        image.src = PLUSH_FALLBACK_IMAGE;
+        Object.assign(image.style, {
+            position: "fixed",
+            display: "none",
+            pointerEvents: "none",
+            userSelect: "none",
+            objectFit: "contain",
+            opacity: String(ADDON_PRESENCE_ICON_ALPHA),
+            zIndex: "2147482000",
+            margin: "0",
+            padding: "0",
+            border: "0",
+            background: "transparent",
+            transformOrigin: "top left",
+        });
+
+        document.body.appendChild(image);
+        nativePresenceDomBadges.set(key, image);
+        return image;
+    }
+
+    function hideNativePresenceDomBadges(remove = false) {
+        for (const [key, image] of nativePresenceDomBadges) {
+            if (!image) {
+                nativePresenceDomBadges.delete(key);
+                continue;
+            }
+            if (remove) {
+                try { image.remove(); } catch (_) {}
+                nativePresenceDomBadges.delete(key);
+            } else {
+                image.style.display = "none";
+            }
+        }
+        if (remove) {
+            nativePresencePendingOverlayWork.clear();
+            nativePresenceCaptureTimes.clear();
+            lastCharacterChatRoomDraw.clear();
+            lastPlayerChatRoomDraw = null;
+        }
+    }
+
+    function positionNativePresenceDomBadge(C, placement) {
         if (
             window.CurrentScreen !== "ChatRoom" ||
             addonPresenceIconHiddenByNativeUI() ||
@@ -4650,113 +4538,232 @@ function SubbysPlushiesPageMain() {
             return false;
         }
 
-        const rect = nativePresenceIconRect(C);
-        if (!rect) return false;
+        const logicalRect = nativePresenceIconRect(C, placement);
+        if (!logicalRect) return false;
 
-        const source = renderImages[0] || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
-        if (!source) return false;
+        const canvas = nativePresenceCanvasElement();
+        const screenRect = canvas?.getBoundingClientRect?.();
+        if (!canvas || !screenRect || screenRect.width <= 0 || screenRect.height <= 0) return false;
 
-        try {
-            if (typeof window.DrawImageEx === "function") {
-                window.DrawImageEx(source, rect.x, rect.y, {
-                    Alpha: ADDON_PRESENCE_ICON_ALPHA,
-                    Width: rect.width,
-                    Height: rect.height,
-                });
-                nativePresenceDrawMethod = "DrawImageEx";
-                nativePresenceDrawCount++;
-                lastNativePresenceDrawAt = Date.now();
-                return true;
-            }
-        } catch (e) {
-            nativePresenceDrawMethod = "DrawImageEx failed";
-        }
+        const logicalWidth = Number(canvas.width) || 2000;
+        const logicalHeight = Number(canvas.height) || 1000;
+        const scaleX = screenRect.width / logicalWidth;
+        const scaleY = screenRect.height / logicalHeight;
 
-        const ctx = window.MainCanvas;
-        const image = getCanvasOverlayImage(source);
+        const left = screenRect.left + logicalRect.x * scaleX;
+        const top = screenRect.top + logicalRect.y * scaleY;
+        const width = Math.max(14, logicalRect.width * scaleX);
+        const height = Math.max(14, logicalRect.height * scaleY);
 
-        if (ctx && image && typeof ctx.drawImage === "function") {
-            try {
-                ctx.save();
-                if (typeof ctx.setTransform === "function") ctx.setTransform(1, 0, 0, 1, 0, 0);
-                ctx.globalAlpha = ADDON_PRESENCE_ICON_ALPHA;
-                ctx.drawImage(image, rect.x, rect.y, rect.width, rect.height);
-                ctx.restore();
+        if (![left, top, width, height].every(Number.isFinite)) return false;
 
-                nativePresenceDrawMethod = "MainCanvas transparent fallback";
-                nativePresenceDrawCount++;
-                lastNativePresenceDrawAt = Date.now();
-                return true;
-            } catch (_) {
-                try { ctx.restore(); } catch (_) {}
-            }
-        }
+        const image = ensureNativePresenceDomBadge(C);
+        if (!image) return false;
 
-        try {
-            if (typeof window.DrawImageResize === "function") {
-                window.DrawImageResize(source, rect.x, rect.y, rect.width, rect.height);
-                nativePresenceDrawMethod = "DrawImageResize opaque last resort";
-                nativePresenceDrawCount++;
-                lastNativePresenceDrawAt = Date.now();
-                return true;
-            }
-        } catch (_) {}
+        image.dataset.lastSubbysDrawAt = String(placement.at || Date.now());
+        Object.assign(image.style, {
+            display: "block",
+            left: `${Math.round(left)}px`,
+            top: `${Math.round(top)}px`,
+            width: `${Math.round(width)}px`,
+            height: `${Math.round(height)}px`,
+        });
 
-        return false;
+        nativePresenceDrawMethod = "DOM overlay after character render";
+        nativePresenceDrawCount++;
+        lastNativePresenceDrawAt = Date.now();
+        return true;
     }
 
-    function drawAllAddonPresenceIconsNative() {
+    function flushNativePresenceOverlayWork() {
+        nativePresenceOverlayWorkRaf = 0;
+
         if (
             window.CurrentScreen !== "ChatRoom" ||
             addonPresenceIconHiddenByNativeUI()
         ) {
-            return 0;
+            nativePresencePendingOverlayWork.clear();
+            hideNativePresenceDomBadges(false);
+            return;
         }
 
-        const localMember = Number(window.Player?.MemberNumber);
-        if (Number.isFinite(localMember)) rememberAddonPresence(localMember, VERSION);
+        const pending = [...nativePresencePendingOverlayWork.values()];
+        nativePresencePendingOverlayWork.clear();
+        for (const entry of pending) {
+            const C = entry?.C;
+            const placement = entry?.placement;
+            if (!C || !placement) continue;
 
-        const all = [
-            window.Player,
-            ...(Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : []),
-        ].filter(Boolean);
+            try {
+                rememberVisibleOverlayPlacement(C, placement);
+                refreshCharacterPlushOverlaysFromNativeOverlay(C, placement);
 
-        const seen = new Set();
-        let drawn = 0;
-
-        for (const C of all) {
-            const member = Number(C?.MemberNumber);
-            const key = Number.isFinite(member) ? `member:${member}` : C;
-            if (seen.has(key)) continue;
-            seen.add(key);
-
-            if (addonPresenceCharacterVisible(C) && drawAddonPresenceIconNative(C)) drawn++;
+                if (addonPresenceCharacterVisible(C)) positionNativePresenceDomBadge(C, placement);
+            } catch (e) {
+                warn("Deferred character-overlay plush rendering failed:", e);
+            }
         }
 
-        return drawn;
+        pruneNativePresenceDomBadges();
     }
 
-    function installNativeAddonPresenceOverlayHook() {
-        if (nativePresenceChatRoomRunHooked) return true;
-
-        const hooked = installHook("ChatRoomRun", 10000, (args, next) => {
-            nativePresenceFrameGeneration++;
-            if (!Number.isSafeInteger(nativePresenceFrameGeneration) || nativePresenceFrameGeneration >= Number.MAX_SAFE_INTEGER - 1) {
-                nativePresenceFrameGeneration = 1;
+    function pruneNativePresenceDomBadges() {
+        const inRoom = window.CurrentScreen === "ChatRoom" && !document.hidden &&
+            !addonPresenceIconHiddenByNativeUI();
+        const now = Date.now();
+        const roster = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
+        const localMember = Number(window.Player?.MemberNumber);
+        for (const [key, image] of nativePresenceDomBadges) {
+            if (!image?.isConnected) {
+                nativePresenceDomBadges.delete(key);
+                continue;
             }
+            const member = key.startsWith("member:") ? Number(key.slice(7)) : NaN;
+            const C = Number.isFinite(member) && member === localMember
+                ? window.Player
+                : roster.find(p => Number(p?.MemberNumber) === member);
+            const last = Number(image.dataset.lastSubbysDrawAt) || 0;
+            if (!inRoom || !C || !addonPresenceCharacterVisible(C) || now - last > 1200) {
+                image.style.display = "none";
+            }
+        }
+    }
 
+    function queueNativePresenceOverlayWork(C, placement) {
+        if (!C || !placement) return false;
+        const key = nativePresenceBadgeKey(C) || C;
+        nativePresencePendingOverlayWork.set(key, { C, placement });
+
+        if (!nativePresenceOverlayWorkRaf) {
+            nativePresenceOverlayWorkRaf = requestAnimationFrame(flushNativePresenceOverlayWork);
+        }
+        return true;
+    }
+
+    let lastNativePresenceOverlayContext = null;
+
+    function rememberVisibleOverlayPlacement(C, placement) {
+        if (!C || !placement) return false;
+        const member = Number(C.MemberNumber);
+        const playerMember = Number(window.Player?.MemberNumber);
+        const samePlayer = C === window.Player ||
+            (Number.isFinite(playerMember) && member === playerMember);
+        if (samePlayer) lastPlayerChatRoomDraw = placement;
+        if (Number.isFinite(member)) lastCharacterChatRoomDraw.set(member, placement);
+        return true;
+    }
+
+    function refreshCharacterPlushOverlaysFromNativeOverlay(C, placement) {
+        if (!C || !placement || window.CurrentScreen !== "ChatRoom") return false;
+        rememberVisibleOverlayPlacement(C, placement);
+
+        const handheld = getHandheldItem(C);
+        if (isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C))) {
+            try { drawPetSuitPlushCanvasOverlay(C); } catch (_) {}
+        }
+
+        const member = Number(C.MemberNumber);
+        const playerMember = Number(window.Player?.MemberNumber);
+        const samePlayer = C === window.Player ||
+            (Number.isFinite(playerMember) && member === playerMember);
+
+        if (samePlayer && (speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected)) {
+            const dragTarget = getDragTargetItem();
+            const signatureItem = isOurs(dragTarget) ? dragTarget : getHeld(C);
+            const signature = plushOverlayPositionSignature(C, signatureItem);
+            if (signature && signature !== localOverlayPositionSignature) {
+                localOverlayPositionSignature = signature;
+                scheduleLocalOverlayReposition();
+            }
+        } else if (Number.isFinite(member)) {
+            const remote = remotePlushEmotes.get(member);
+            if (remote) {
+                const signature = plushOverlayPositionSignature(C, getHeld(C));
+                if (signature && signature !== remote.positionSignature) {
+                    remote.positionSignature = signature;
+                    requestAnimationFrame(() => positionRemotePlushEmote(member));
+                }
+            }
+        }
+        return true;
+    }
+
+    function scheduleNativeAddonPresenceOverlayRetry(reason = "character drawing unavailable") {
+        if (nativePresenceChatRoomRunHooked || nativePresenceOverlayRetryTimer != null) return false;
+        const index = Math.min(nativePresenceOverlayRetryAttempt, NATIVE_PRESENCE_OVERLAY_RETRY_DELAYS_MS.length - 1);
+        const delay = NATIVE_PRESENCE_OVERLAY_RETRY_DELAYS_MS[index];
+        nativePresenceOverlayRetryAttempt++;
+        nativePresenceOverlayRetryTimer = window.setTimeout(() => {
+            nativePresenceOverlayRetryTimer = null;
+            if (!nativePresenceChatRoomRunHooked && !installNativeAddonPresenceOverlayHook({ scheduleRetry: false })) {
+                scheduleNativeAddonPresenceOverlayRetry(reason);
+            }
+        }, delay);
+        return true;
+    }
+
+    function installNativeAddonPresenceOverlayHook({ scheduleRetry = true } = {}) {
+        if (nativePresenceChatRoomRunHooked) return true;
+        if (typeof window.DrawCharacter !== "function") {
+            if (scheduleRetry) scheduleNativeAddonPresenceOverlayRetry("DrawCharacter unavailable");
+            return false;
+        }
+
+        const hooked = installHook("DrawCharacter", 10000, (args, next) => {
+            let C = null;
+            let placement = null;
+            if (window.CurrentScreen === "ChatRoom") {
+                C = args?.[0] || null;
+                const member = Number(C?.MemberNumber);
+                const isPlayer = C === window.Player ||
+                    (Number.isFinite(member) && member === Number(window.Player?.MemberNumber));
+                const inRoom = isPlayer ||
+                    (Number.isFinite(member) && Array.isArray(window.ChatRoomCharacter) &&
+                     window.ChatRoomCharacter.some(p => Number(p?.MemberNumber) === member));
+                if (C && inRoom) {
+                    const x = Number(args?.[1]);
+                    const y = Number(args?.[2]);
+                    const zoom = args?.[3] == null ? 1 : Number(args[3]);
+                    if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(zoom) &&
+                        x > -2200 && x < 4200 && y > -2200 && y < 2500 && zoom > 0.03 && zoom < 8) {
+                        placement = { x, y, zoom, matrix: null, at: Date.now(), source: "DrawCharacter" };
+                    }
+                }
+            }
             const result = next(args);
-            try {
-                pruneAddonPresence();
-                drawAllAddonPresenceIconsNative();
-            } catch (e) {
-                warn("Native addon-presence overlay draw failed:", e);
+            if (placement) {
+                rememberVisibleOverlayPlacement(C, placement);
+                const key = nativePresenceBadgeKey(C);
+                const last = nativePresenceCaptureTimes.get(key) || 0;
+                if (placement.at - last >= 100 || !last) {
+                    nativePresenceCaptureTimes.set(key, placement.at);
+                    queueNativePresenceOverlayWork(C, placement);
+                }
+                lastNativePresenceOverlayContext = {
+                    member: Number(C.MemberNumber) || null,
+                    x: placement.x,
+                    y: placement.y,
+                    zoom: placement.zoom,
+                    source: placement.source,
+                    at: placement.at,
+                };
             }
             return result;
         });
-
         nativePresenceChatRoomRunHooked = hooked;
-        return hooked;
+        if (!hooked) {
+            if (scheduleRetry) scheduleNativeAddonPresenceOverlayRetry("DrawCharacter hook not ready");
+            return false;
+        }
+        nativePresenceOverlayRetryAttempt = 0;
+        if (nativePresenceOverlayRetryTimer != null) {
+            window.clearTimeout(nativePresenceOverlayRetryTimer);
+            nativePresenceOverlayRetryTimer = null;
+        }
+        if (nativePresenceBadgePruneTimer == null) {
+            nativePresenceBadgePruneTimer = window.setInterval(pruneNativePresenceDomBadges, 500);
+        }
+        return true;
     }
 
     window.SubbysPlushiesDialogueTest = (actionKey = "pet") => {
@@ -4784,7 +4791,20 @@ function SubbysPlushiesPageMain() {
             localMember: Number(window.Player?.MemberNumber) || null,
             localPresence: !!C && characterHasAddonPresence(C),
             knownPresenceMembers: [...addonPresenceMembers.keys()],
-            chatRoomRunHooked: nativePresenceChatRoomRunHooked,
+            characterOverlayHooked: nativePresenceChatRoomRunHooked,
+            renderBackend: nativePresenceChatRoomRunHooked ? "ModSDK DrawCharacter position capture + deferred DOM badges" : "waiting-for-DrawCharacter",
+            overlayFunctionAvailable: typeof window.DrawCharacter === "function",
+            badgeCount: nativePresenceDomBadges.size,
+            visibleBadgeCount: [...nativePresenceDomBadges.values()].filter(img => img?.isConnected && img.style.display !== "none").length,
+            overlayRetryAttempt: nativePresenceOverlayRetryAttempt,
+            overlayRetryPending: nativePresenceOverlayRetryTimer != null,
+            renderModSdkHooksBySubbysPlushies: {
+                DrawCharacter: installedHooks.has("DrawCharacter"),
+                ChatRoomRun: installedHooks.has("ChatRoomRun"),
+                ChatRoomDrawCharacterOverlay: false,
+            },
+            directCoreRenderOverwrites: { DrawCharacter: false, ChatRoomRun: false },
+            lastOverlayContext: lastNativePresenceOverlayContext,
             ChatRoomRun: typeof window.ChatRoomRun,
             DrawImageEx: typeof window.DrawImageEx,
             DrawImageResize: typeof window.DrawImageResize,
@@ -6053,6 +6073,7 @@ function SubbysPlushiesPageMain() {
                 ignorePoseChangingEmotes: Object.prototype.hasOwnProperty.call(normalized.featureDefaults, "ignorePoseChangingEmotes")
                     ? !!normalized.featureDefaults.ignorePoseChangingEmotes
                     : false,
+                highlightMyName: false,
             });
         } else if (fileName === "idle.json") {
             IDLE_MIN_DELAY_MS = Math.min(normalized.minDelayMs, normalized.maxDelayMs);
@@ -7717,6 +7738,7 @@ function SubbysPlushiesPageMain() {
             expressionReactions: settings.expressionReactions,
             ignorePoseChangingEmotes: settings.ignorePoseChangingEmotes,
             speechBubbles: settings.speechBubbles,
+            highlightMyName: settings.highlightMyName,
             autoUpdateChecks: settings.autoUpdateChecks,
             performanceMode: settings.performanceMode,
             activities: `${hugTightlyActivityRegistration || "inactive"} / ${customActivitiesRegistration || "inactive"}`,
@@ -8014,6 +8036,7 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(enabled, "Mascot picture", status.mascotPicture ? "Visible" : "Hidden");
         appendExtensionsKeyValue(enabled, "Idle animations", status.idleAnimations ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Speech bubbles", status.speechBubbles ? "ON" : "Off");
+        appendExtensionsKeyValue(enabled, "Highlight my name", status.highlightMyName ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Extra Actions", status.extraActions ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Shared emote chains", status.sharedEmoteChains ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Ignore pose-changing emotes", status.ignorePoseChangingEmotes ? "ON" : "Off");
@@ -8056,6 +8079,7 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow("Room Mascot Picture", "Show the room mascot picture locally in the chat area.", settings.showRoomMascot, () => setRoomMascotOverlayVisible(!getFeatureSettings().showRoomMascot)),
             extensionsSettingRow("Idle Animation", "Occasional lightweight local plush wiggles.", settings.idleAnimations, () => toggleFeatureSetting("idleAnimations")),
             extensionsSettingRow("Speech Bubbles", "Allow local mood-based plush speech bubbles.", settings.speechBubbles, () => toggleFeatureSetting("speechBubbles")),
+            extensionsSettingRow("Highlight My Name", "Locally highlight mentions of your character display name in chat (not your account name). Off by default.", settings.highlightMyName, () => toggleFeatureSetting("highlightMyName")),
             extensionsSettingRow("Extra Actions", "Adds optional non-plush social actions after all plushie actions. Disabled by default.", settings.extraActions, () => toggleFeatureSetting("extraActions")),
             extensionsSettingRow("Shared Emote Chains", "A Wave from an addon user can ripple left-to-right through addon users in the room.", settings.sharedEmoteChains, () => toggleFeatureSetting("sharedEmoteChains")),
             extensionsSettingRow("Expression Reactions", "Friendly plushie and Extra Actions can trigger short facial reactions on the recipient's own client.", settings.expressionReactions, () => toggleFeatureSetting("expressionReactions")),
@@ -10647,6 +10671,18 @@ function SubbysPlushiesPageMain() {
         for (const [token, at] of locallyRenderedCustomActionTokens) {
             if (now - Number(at || 0) > 15000) locallyRenderedCustomActionTokens.delete(token);
         }
+        for (const [token, at] of receivedCustomActionTokens) {
+            if (now - Number(at || 0) > 15000) receivedCustomActionTokens.delete(token);
+        }
+    }
+
+    function acceptIncomingCustomActionToken(token) {
+        if (!token) return true;
+        const now = Date.now();
+        pruneLocallyRenderedCustomActionTokens(now);
+        if (receivedCustomActionTokens.has(token)) return false;
+        receivedCustomActionTokens.set(token, now);
+        return true;
     }
 
     function customActionChatRowExists(token) {
@@ -10725,9 +10761,7 @@ function SubbysPlushiesPageMain() {
         const beforeSet = rowsBefore instanceof Set ? rowsBefore : null;
         const rows = currentActionRows();
         const candidates = beforeSet ? rows.filter(row => !beforeSet.has(row)) : rows;
-        const row =
-            findMatchingNativeActionRow(message, candidates) ||
-            findMatchingNativeActionRow(message, rows);
+        const row = findMatchingNativeActionRow(message, candidates);
 
         if (!row) return false;
         return tagNativeCustomActionRow(row, token);
@@ -11408,6 +11442,124 @@ function SubbysPlushiesPageMain() {
         );
     }
 
+    const MY_NAME_HIGHLIGHT_CLASS = "SubbysPlushiesMyNameHighlight";
+    const MY_NAME_HIGHLIGHT_IGNORE_SELECTOR = [
+        "a", "button", "input", "textarea", "select", "script", "style", "code",
+        ".ChatMessageName", ".ChatMessageSender", ".ChatMessageUsername",
+        ".ChatMessageHeader", ".ChatMessageTime", ".ChatMessageTimestamp",
+        ".ReplyButton", ".SubbysPlushiesOfferControls",
+        ".SubbysPlushiesOfferPrompt", "." + MY_NAME_HIGHLIGHT_CLASS,
+        "[contenteditable]"
+    ].join(",");
+
+    function myCharacterMentionName() {
+        const player = window.Player;
+        const nickname = typeof player?.Nickname === "string" ? player.Nickname.trim() : "";
+        const characterName = typeof player?.Name === "string" ? player.Name.trim() : "";
+        const name = nickname || characterName;
+        return name.length >= 2 && name.length <= 80 ? name : "";
+    }
+
+    function myNameMentionPattern(name) {
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp("(^|[^\\p{L}\\p{N}_])(" + escaped + ")(?=$|[^\\p{L}\\p{N}_])", "giu");
+    }
+
+    function clearMyNameHighlights() {
+        const root = getOfferChatRoot();
+        if (!root) return;
+        const marks = root.querySelectorAll("." + MY_NAME_HIGHLIGHT_CLASS);
+        for (const mark of marks) {
+            const parent = mark.parentNode;
+            if (!parent) continue;
+            mark.replaceWith(document.createTextNode(mark.textContent || ""));
+            parent.normalize();
+        }
+    }
+
+    function highlightMyNameInRow(row, name, matcher) {
+        if (!(row instanceof Element) || !name || !matcher) return 0;
+        if (!row.classList.contains("ChatMessage") ||
+            row.classList.contains("ChatMessageLocalMessage") ||
+            row.classList.contains("SubbysPlushiesOfferPrompt")) return 0;
+
+        const nodes = [];
+        const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode() && nodes.length < 120) {
+            const node = walker.currentNode;
+            const parent = node.parentElement;
+            if (!parent || parent.closest(MY_NAME_HIGHLIGHT_IGNORE_SELECTOR)) continue;
+            const content = node.nodeValue || "";
+            if (content.length > 8192 || !content.toLocaleLowerCase().includes(name.toLocaleLowerCase())) continue;
+            nodes.push(node);
+        }
+
+        let highlighted = 0;
+        for (const node of nodes) {
+            const original = node.nodeValue || "";
+            const fragments = document.createDocumentFragment();
+            let cursor = 0;
+            let matches = 0;
+            matcher.lastIndex = 0;
+            for (let match; matches < 50 && (match = matcher.exec(original)); ) {
+                const matchStart = match.index + match[1].length;
+                const matchEnd = matchStart + match[2].length;
+                if (matchStart < cursor) continue;
+                fragments.appendChild(document.createTextNode(original.slice(cursor, matchStart)));
+                const highlight = document.createElement("mark");
+                highlight.className = MY_NAME_HIGHLIGHT_CLASS;
+                highlight.textContent = match[2];
+                Object.assign(highlight.style, {
+                    background: "rgba(255, 218, 85, 0.92)",
+                    color: "#241800",
+                    fontWeight: "bold",
+                    borderRadius: "3px",
+                    padding: "0 2px",
+                });
+                fragments.appendChild(highlight);
+                cursor = matchEnd;
+                matches++;
+                highlighted++;
+            }
+            if (!matches) continue;
+            fragments.appendChild(document.createTextNode(original.slice(cursor)));
+            node.replaceWith(fragments);
+        }
+        return highlighted;
+    }
+
+    function highlightMyNameInAppendedChat(node) {
+        if (!getFeatureSettings().highlightMyName || window.CurrentScreen !== "ChatRoom") return 0;
+        const root = getOfferChatRoot();
+        if (!root || !(node instanceof Element) || !root.contains(node)) return 0;
+        const name = myCharacterMentionName();
+        if (!name) return 0;
+        const matcher = myNameMentionPattern(name);
+        const rows = node.matches(".ChatMessage")
+            ? [node]
+            : Array.from(node.querySelectorAll(".ChatMessage"));
+        const parentRow = node.closest(".ChatMessage");
+        if (parentRow && !rows.includes(parentRow)) rows.unshift(parentRow);
+        let matches = 0;
+        for (const row of rows.slice(0, 20)) matches += highlightMyNameInRow(row, name, matcher);
+        return matches;
+    }
+
+    function highlightMyNameInVisibleChat() {
+        if (!getFeatureSettings().highlightMyName || window.CurrentScreen !== "ChatRoom") return 0;
+        const root = getOfferChatRoot();
+        const name = myCharacterMentionName();
+        if (!root || !name) return 0;
+        clearMyNameHighlights();
+        const rows = root.querySelectorAll(".ChatMessage");
+        const matcher = myNameMentionPattern(name);
+        let matches = 0;
+        for (const row of Array.from(rows).slice(-250)) {
+            matches += highlightMyNameInRow(row, name, matcher);
+        }
+        return matches;
+    }
+
     function normalizeOfferName(value) {
         return String(value || "")
             .replace(/[\u2018\u2019]/g, "'")
@@ -11780,7 +11932,10 @@ function SubbysPlushiesPageMain() {
         const observer = new MutationObserver(mutations => {
             for (const mutation of mutations) {
                 if (mutation.type === "childList") {
-                    for (const node of mutation.addedNodes) inspectOfferMutationNode(node, root);
+                    for (const node of mutation.addedNodes) {
+                        inspectOfferMutationNode(node, root);
+                        if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
+                    }
                 }
             }
         });
@@ -12639,8 +12794,8 @@ function SubbysPlushiesPageMain() {
             if (!document.hidden) {
                 lastActivityMonitorHeldState = isOurs(getHeld(window.Player));
                 lastActivityMonitorFullCheckAt = Date.now();
-                syncHugTightlyActivityAvailability("60-second integrity check");
-                syncExtraActionsAvailability("60-second integrity check");
+                syncHugTightlyActivityAvailability("periodic integrity check");
+                syncExtraActionsAvailability("periodic integrity check");
             }
             scheduleActivityIntegrityCheck(document.hidden ? ACTIVITY_INTEGRITY_INTERVAL_MS * 5 : ACTIVITY_INTEGRITY_INTERVAL_MS);
         }, Math.max(1000, Number(delay) || ACTIVITY_INTEGRITY_INTERVAL_MS));
@@ -12661,6 +12816,21 @@ function SubbysPlushiesPageMain() {
         if (!Array.isArray(dictionary)) return null;
         const entry = dictionary.find(item => item?.Tag === tag);
         return typeof entry?.Text === "string" ? entry.Text : null;
+    }
+
+    function getDictionaryMemberNumber(data, tag) {
+        const dictionary = data?.Dictionary;
+        if (!Array.isArray(dictionary)) return null;
+        const entry = dictionary.find(item => item?.Tag === tag);
+        if (!entry) return null;
+        for (const value of [entry.MemberNumber, entry.Text]) {
+            if (typeof value !== "string" && typeof value !== "number") continue;
+            const candidate = String(value).trim();
+            if (!/^[0-9]+$/.test(candidate)) continue;
+            const member = Number(candidate);
+            if (Number.isSafeInteger(member) && member > 0) return member;
+        }
+        return null;
     }
 
     function getHugTightlyToken(data) {
@@ -13409,6 +13579,11 @@ function SubbysPlushiesPageMain() {
             removeRoomMascotOverlay();
             clearRemotePlushEmotes();
             addonPresenceMembers.clear();
+            receivedCustomActionTokens.clear();
+            locallyRenderedCustomActionTokens.clear();
+            recentSelfCustomActionSend = null;
+            activeCustomActionRender = null;
+            hideNativePresenceDomBadges(true);
             clearPetSuitPlushOverlays();
             stopOfferChatObserver();
             pruneRememberedPlushStates(false);
@@ -13495,7 +13670,7 @@ function SubbysPlushiesPageMain() {
             () => checkRoomRosterChange(isLowCpuMode() ? "10-minute watchdog" : "5-minute watchdog"),
             performanceInterval(ROOM_ROSTER_WATCHDOG_INTERVAL_MS, ROOM_ROSTER_WATCHDOG_INTERVAL_MS * 2)
         );
-        log(`Started event-driven room roster recovery (${hooked} hook(s), ${isLowCpuMode() ? "10m" : "5m"} watchdog).`);
+        log(`Started event-driven room roster recovery (${hooked} hook(s), ${isLowCpuMode() ? "20m" : "10m"} watchdog).`);
     }
 
     function isChatAction(data) {
@@ -13714,83 +13889,8 @@ function SubbysPlushiesPageMain() {
     function installPlushStateHooks() {
         const activityOrderHooked = installActivityMenuOrderingHook();
 
-        const drawCharacterHooked = installHook("DrawCharacter", 10000, (args, next) => {
-            const C = args?.[0];
-            const playerMember = Number(window.Player?.MemberNumber);
-            const member = Number(C?.MemberNumber);
-            const samePlayer = C === window.Player ||
-                (Number.isFinite(playerMember) && member === playerMember);
-
-            let held = null;
-            let handheld = null;
-            let needsExactProjection = false;
-            if (C && window.CurrentScreen === "ChatRoom") {
-                held = getHeld(C);
-                handheld = getHandheldItem(C);
-                const x = Number(args?.[1]);
-                const y = Number(args?.[2]);
-                const zoomArg = args?.[3] == null ? 1 : Number(args[3]);
-                const zoom = Number.isFinite(zoomArg) && zoomArg > 0 ? zoomArg : 1;
-                const hasRemoteEmote = Number.isFinite(member) && remotePlushEmotes.has(member);
-                const hasLocalOverlay = samePlayer && (
-                    speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected ||
-                    dragSession || dragModeEnabled
-                );
-                const petSuitFallback = isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C));
-
-                needsExactProjection = false;
-
-                const hasAddonPresence = characterHasAddonPresence(C);
-                const needsPlacement =
-                    isOurs(held) ||
-                    hasRemoteEmote ||
-                    hasLocalOverlay ||
-                    petSuitFallback ||
-                    hasAddonPresence;
-
-                if (Number.isFinite(x) && Number.isFinite(y) && needsPlacement) {
-                    const placement = {
-                        x,
-                        y,
-                        zoom,
-                        matrix: currentCanvasTransformSnapshot(),
-                        at: Date.now(),
-                        presenceFrameGeneration: nativePresenceFrameGeneration,
-                    };
-                    if (samePlayer) lastPlayerChatRoomDraw = placement;
-                    if (Number.isFinite(member)) lastCharacterChatRoomDraw.set(member, placement);
-                }
-            }
-
-            if (C) exactCharacterCanvasProjection.delete(characterProjectionKey(C));
-            const result = next(args);
-
-            if (C && window.CurrentScreen === "ChatRoom") {
-                if (isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C))) drawPetSuitPlushCanvasOverlay(C);
-            }
-
-            if (samePlayer && (speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected)) {
-                const signatureItem = isOurs(getDragTargetItem()) ? getDragTargetItem() : getHeld(C);
-                const signature = plushOverlayPositionSignature(C, signatureItem);
-                if (signature && signature !== localOverlayPositionSignature) {
-                    localOverlayPositionSignature = signature;
-                    scheduleLocalOverlayReposition();
-                }
-            }
-            if (!samePlayer && Number.isFinite(member)) {
-                const remote = remotePlushEmotes.get(member);
-                if (remote) {
-                    const signature = plushOverlayPositionSignature(C, getHeld(C));
-                    if (signature && signature !== remote.positionSignature) {
-                        remote.positionSignature = signature;
-                        requestAnimationFrame(() => positionRemotePlushEmote(member));
-                    }
-                }
-            }
-            return result;
-        });
-
-        const characterOverlayHooked = installNativeAddonPresenceOverlayHook();
+        const drawCharacterHooked = installNativeAddonPresenceOverlayHook();
+        const characterOverlayHooked = false;
 
         const activityRunHooked = installHook("ActivityRun", 10000, (args, next) => {
             if (!hugTightlyActivityEnabled && customActivityObjects.size === 0 && extraActionObjects.size === 0) return next(args);
@@ -13991,8 +14091,21 @@ function SubbysPlushiesPageMain() {
 
         const chatAppendHooked = installHook("ChatRoomAppendChat", 10000, (args, next) => {
             const node = args?.[0];
+            const active = activeCustomActionRender;
+            if (
+                active &&
+                node instanceof Element &&
+                node.classList.contains("ChatMessageAction") &&
+                normalizeActionChatText(node.textContent) === active.message
+            ) {
+                if (customActionChatRowExists(active.token)) return;
+                tagNativeCustomActionRow(node, active.token);
+            }
             const result = next(args);
-            if (node && window.CurrentScreen === "ChatRoom") inspectOfferMutationNode(node, getOfferChatRoot());
+            if (node && window.CurrentScreen === "ChatRoom") {
+                inspectOfferMutationNode(node, getOfferChatRoot());
+                if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
+            }
             return result;
         });
         if (chatAppendHooked) stopOfferChatObserver();
@@ -14020,13 +14133,11 @@ function SubbysPlushiesPageMain() {
 
             const incomingCustomToken = getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG);
             if (incomingCustomToken) {
-                pruneLocallyRenderedCustomActionTokens();
+                if (!acceptIncomingCustomActionToken(incomingCustomToken)) return;
                 if (
                     locallyRenderedCustomActionTokens.has(incomingCustomToken) &&
                     customActionChatRowExists(incomingCustomToken)
-                ) {
-                    return;
-                }
+                ) return;
             }
 
             maybeTrackBaseCuddleAchievement(data);
@@ -14045,7 +14156,7 @@ function SubbysPlushiesPageMain() {
             const offerDecisionHandled = processOfferDecisionAction(data);
             const protectCandidate = getFeatureSettings().protectMe && actionLooksProtectable(data);
             const plushRelated = offerDecisionHandled || (!isExtraActionSpec(pluginActionSpec) && isPotentialPlushAction(data));
-            if (!plushRelated && !protectCandidate) return next(args);
+            if (!plushRelated && !protectCandidate && !(pluginActionSpec && incomingCustomToken)) return next(args);
 
             const hugTightly = plushRelated && isHugTightlyAction(data);
 
@@ -14057,7 +14168,19 @@ function SubbysPlushiesPageMain() {
                 captureVisiblePlushStates();
             }
 
-            const result = next(args);
+            const previousActionRender = activeCustomActionRender;
+            if (pluginActionSpec && incomingCustomToken) {
+                activeCustomActionRender = {
+                    token: incomingCustomToken,
+                    message: normalizeActionChatText(customActionExpectedMessage(data)),
+                };
+            }
+            let result;
+            try {
+                result = next(args);
+            } finally {
+                activeCustomActionRender = previousActionRender;
+            }
 
             if (pluginActionSpec && incomingCustomToken) {
                 const adopted = adoptNativeCustomActionRow(data, nativeActionRowsBefore);
@@ -14066,7 +14189,7 @@ function SubbysPlushiesPageMain() {
                         if (!customActionChatRowExists(incomingCustomToken)) {
                             renderCustomActionLocally(data);
                         }
-                    }, 40);
+                    }, 300);
                 }
             }
 
@@ -14168,9 +14291,19 @@ function SubbysPlushiesPageMain() {
                     pendingLocalCustomActivity = null;
 
                     const normalized = makeCustomActivityNetworkAction(originalData, customSpec, fallbackTarget);
+                    if (normalized.isSelf) {
+                        const fingerprint = `${customSpec.key}:${Number(window.Player?.MemberNumber)}:${normalized.targetMember ?? "self"}`;
+                        if (
+                            recentSelfCustomActionSend?.fingerprint === fingerprint &&
+                            Date.now() - recentSelfCustomActionSend.at < 160
+                        ) {
+                            return;
+                        }
+                        recentSelfCustomActionSend = { fingerprint, at: Date.now() };
+                    }
                     nextArgs = args.slice();
                     nextArgs[1] = normalized.data;
-                    outgoingCustomActionData = normalized.data;
+                    outgoingCustomActionData = normalized.isSelf ? null : normalized.data;
 
                     if (!isExtraActionSpec(customSpec) && Number.isFinite(normalized.targetMember) && !normalized.isSelf) trackSocialPlayer(normalized.targetMember);
                     if (customSpec.key === "offer" && Number.isFinite(normalized.targetMember) && !normalized.isSelf) {
@@ -16014,6 +16147,7 @@ function SubbysPlushiesPageMain() {
             drawButton(FEATURE_MENU.Speech, `Speech Bubbles: ${settings.speechBubbles ? "ON" : "off"}`, settings.speechBubbles);
             drawButton(FEATURE_MENU.EmotesSettings, "Emotes");
             drawButton(FEATURE_MENU.ExtraActions, `Extra Actions: ${settings.extraActions ? "ON" : "off"}`, settings.extraActions);
+            drawButton(FEATURE_MENU.HighlightMyName, `Highlight My Name: ${settings.highlightMyName ? "ON" : "off"}`, settings.highlightMyName);
             drawButton(
                 FEATURE_MENU.IgnorePoseChanges,
                 `Ignore Pose Changes: ${settings.ignorePoseChangingEmotes ? "ON" : "off"}`,
@@ -16115,6 +16249,7 @@ function SubbysPlushiesPageMain() {
                 return true;
             }
             if (mouseInRect(FEATURE_MENU.ExtraActions)) { toggleFeatureSetting("extraActions"); return true; }
+            if (mouseInRect(FEATURE_MENU.HighlightMyName)) { toggleFeatureSetting("highlightMyName"); return true; }
             if (mouseInRect(FEATURE_MENU.IgnorePoseChanges)) { toggleFeatureSetting("ignorePoseChangingEmotes"); return true; }
             if (mouseInRect(FEATURE_MENU.Protect)) { toggleFeatureSetting("protectMe"); return true; }
             if (mouseInRect(FEATURE_MENU.Jealous)) { toggleFeatureSetting("jealousPlushie"); return true; }
@@ -16823,6 +16958,15 @@ function SubbysPlushiesPageMain() {
                 localMember: Number(window.Player?.MemberNumber) || null,
                 localPresence: !!window.Player && characterHasAddonPresence(window.Player),
                 nativeOverlayHooked: nativePresenceChatRoomRunHooked,
+                renderBackend: nativePresenceChatRoomRunHooked ? "ModSDK DrawCharacter position capture + deferred DOM badges" : "waiting-for-DrawCharacter",
+            overlayFunctionAvailable: typeof window.DrawCharacter === "function",
+            overlayRetryAttempt: nativePresenceOverlayRetryAttempt,
+            overlayRetryPending: nativePresenceOverlayRetryTimer != null,
+                drawCharacterIsModSdkHookedBySubbysPlushies: installedHooks.has("DrawCharacter"),
+                chatRoomRunIsModSdkHookedBySubbysPlushies: installedHooks.has("ChatRoomRun"),
+                characterOverlayIsModSdkHookedBySubbysPlushies: false,
+                directCoreRenderOverwrites: { DrawCharacter: false, ChatRoomRun: false },
+                lastOverlayContext: lastNativePresenceOverlayContext,
                 drawMethod: nativePresenceDrawMethod,
                 drawCount: nativePresenceDrawCount,
                 lastDrawAt: lastNativePresenceDrawAt || null,
@@ -17158,7 +17302,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.1.35";
+    const VERSION = "3.3";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
