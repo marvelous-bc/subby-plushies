@@ -2,9 +2,9 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.3
+// @version      3.3.1
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
-// @released     2026-10-07
+// @released     2026-10-08
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -26,7 +26,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.3";
+    const VERSION = "3.3.1";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -41,6 +41,7 @@ function SubbysPlushiesPageMain() {
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
+    const LORE_VISIBLE = false;
     const FAMILY = "Female3DCG";
     const GROUP = "ItemHandheld";
     const ADDON_GROUP = "ItemAddon";
@@ -802,9 +803,10 @@ function SubbysPlushiesPageMain() {
         { name: "Rey", image: plushAsset("rey.png") },
         { name: "Margot", image: plushAsset("margot.png") },
         { name: "Mara", image: plushAsset("mara.png") },
+        { name: "Eva", image: plushAsset("eva.png") },
     ].map(Object.freeze));
 
-    const PUBLIC_PLUSH_COUNT = 21;
+    const PUBLIC_PLUSH_COUNT = 22;
     const SUBBYCAT_WIRE_OPTION = 18;
 
     const PLUSH_NAMES = Object.freeze(PLUSHES.map(plush => plush.name));
@@ -845,6 +847,7 @@ function SubbysPlushiesPageMain() {
         { label: "Rey", option: 18 },
         { label: "Margot", option: 19 },
         { label: "Mara", option: 20 },
+        { label: "Eva", option: 21 },
     ].map(Object.freeze));
 
     const SUBBYCAT_MENU = Object.freeze([
@@ -1017,7 +1020,7 @@ function SubbysPlushiesPageMain() {
 
     const EXTENSIONS_IDENTIFIER = "SubbysPlushies";
     const EXTENSIONS_BUTTON_TEXT = "Subby's Plushies";
-    const EXTENSIONS_TABS = Object.freeze(["status", "lore", "settings", "progress", "commands"]);
+    const EXTENSIONS_TABS = Object.freeze(["status", "settings", "progress", "commands"]);
 
     const CURRENT_COMMAND_GROUPS = Object.freeze([
         Object.freeze({
@@ -1069,7 +1072,6 @@ function SubbysPlushiesPageMain() {
             commands: Object.freeze([
                 Object.freeze({ command: "/plushiemood", description: "Show the held plushie's mood, relationship, and quick info." }),
                 Object.freeze({ command: "/plushieinfo", description: "Alias for /plushiemood." }),
-                Object.freeze({ command: "/plushielore", description: "Open the Lore browser on the held plushie." }),
                 Object.freeze({ command: "/plushiefavorite", description: "Toggle the held plushie as a favorite." }),
                 Object.freeze({ command: "/plushieemote <happy|angry|sleepy|protective|sulky>", description: "Show a 15-second room-synced plushie emote and bubble." }),
                 Object.freeze({ command: "/plushieprotect", description: "Toggle Protect Me mode." }),
@@ -4975,20 +4977,18 @@ function SubbysPlushiesPageMain() {
 
     function showCurrentPlushInfo() {
         const name = currentPlushName();
-        const lore = getPlushLore(name) || { title: "Plushie", text: "Lore is not available yet. The addon will use the validated Git copy when it is online or cached." };
         const mood = getPlushMoodRecord(name);
         const relationship = relationshipStatus(name);
         const mascot = roomMascotState?.name
             ? `Room mascot: ${roomMascotState.name}${normalizeLoreLookupKey(roomMascotState.name) === normalizeLoreLookupKey(name) ? ` • +${ROOM_MASCOT_AFFECTION_MODIFIER} affection modifier` : ""}`
             : "Room mascot: none";
-        appendLocalInfoBox(`${name} — ${lore.title}`, [
-            lore.text,
+        appendLocalInfoBox(`${name} — Plushie Info`, [
             `Mood: ${moodLabel(mood.score)} (${mood.score}/100) • interactions: ${mood.interactions}`,
             `Relationship: ${relationship.level} (${relationship.interactions})${relationship.nextLevel ? ` • ${relationship.remaining} to ${relationship.nextLevel}` : " • max"} • ${isPlushSleepy(name) ? "sleeping zZ" : "awake"}`,
             `Protect Me: ${getFeatureSettings().protectMe ? "ON" : "off"} • Jealous Plushie: ${getFeatureSettings().jealousPlushie ? "ON" : "off"}`,
             mascot,
         ]);
-        return { name, lore, mood: { ...mood } };
+        return { name, mood: { ...mood }, relationship: { ...relationship } };
     }
 
     function handleLocalPlushInteraction(key) {
@@ -7909,6 +7909,7 @@ function SubbysPlushiesPageMain() {
     }
 
     function selectExtensionsLore(name) {
+        if (!LORE_VISIBLE) return null; // Preserve the browser for a future release.
         const names = loreBrowseNames();
         const resolved = resolveLoreBrowseName(name, names) || names[0] || "Subbycat";
         extensionsLoreSelectedName = resolved;
@@ -7918,6 +7919,7 @@ function SubbysPlushiesPageMain() {
     }
 
     function openLoreBrowser(name = null, fromNativePreference = false) {
+        if (!LORE_VISIBLE) return false; // Hidden for now, including legacy API calls.
         const names = loreBrowseNames();
         const heldName = isOurs(getHeld(window.Player)) ? currentPlushName() : null;
         extensionsLoreSelectedName = resolveLoreBrowseName(name, names) || resolveLoreBrowseName(heldName, names) || extensionsLoreSelectedName || names[0] || "Subbycat";
@@ -8129,7 +8131,6 @@ function SubbysPlushiesPageMain() {
         Object.assign(buttons.style, { display: "flex", flexWrap: "wrap", gap: "10px" });
         buttons.append(
             makeExtensionsButton("Check Update Now", () => { void checkForUpdates({ silent: false }).finally(renderExtensionsPanel); }),
-            makeExtensionsButton("Open Lore Browser", () => openLoreBrowser(currentPlushName())),
             makeExtensionsButton("Reset Plush Position", () => { closeExtensionsPanel(); resetPosition(); })
         );
         utility.appendChild(buttons);
@@ -8200,7 +8201,6 @@ function SubbysPlushiesPageMain() {
         Object.assign(controls.style, { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "9px" });
         controls.append(
             makeExtensionsButton(isFavoritePlush(name) ? "★ Favorite" : "☆ Add Favorite", () => { toggleFavoritePlush(name); renderExtensionsPanel(); }, { active: isFavoritePlush(name) }),
-            makeExtensionsButton("Open Lore", () => openLoreBrowser(name)),
             makeExtensionsButton("Wake", () => { touchPlushRelationship(name, { increment: 0, wake: true }); renderExtensionsPanel(); })
         );
         info.append(title, lines, controls);
@@ -8266,7 +8266,14 @@ function SubbysPlushiesPageMain() {
             const favoriteButtons = document.createElement("div");
             Object.assign(favoriteButtons.style, { display: "flex", flexWrap: "wrap", gap: "7px" });
             for (const favorite of favoriteNames) {
-                favoriteButtons.appendChild(makeExtensionsButton(`★ ${favorite}`, () => openLoreBrowser(favorite)));
+                favoriteButtons.appendChild(makeExtensionsButton(`★ ${favorite}`, () => {
+                    const record = getPlushMoodRecord(favorite);
+                    const bond = relationshipStatus(favorite);
+                    appendLocalInfoBox(`${favorite} — Plushie Info`, [
+                        `Mood: ${moodLabel(record.score)} (${record.score}/100)`,
+                        `Relationship: ${bond.level} (${bond.interactions} interactions)`,
+                    ], { compact: true });
+                }));
             }
             favorites.appendChild(favoriteButtons);
         }
@@ -8352,12 +8359,6 @@ function SubbysPlushiesPageMain() {
                 "Choose a cozy or compact spacing style for this control center.",
                 settings.extensionsDensity === "compact" ? "Compact" : "Cozy",
                 () => setLayoutSetting("extensionsDensity", settings.extensionsDensity === "compact" ? "cozy" : "compact")
-            ),
-            choiceRow(
-                "Lore list side",
-                "Put the plushie list on the left or right side of the Lore browser.",
-                settings.loreListSide === "right" ? "Right" : "Left",
-                () => setLayoutSetting("loreListSide", settings.loreListSide === "right" ? "left" : "right")
             )
         );
         container.appendChild(section);
@@ -8670,7 +8671,7 @@ function SubbysPlushiesPageMain() {
                     command: String(Array.isArray(entry) ? entry[0] : entry?.command || "").trim(),
                     description: String(Array.isArray(entry) ? entry[1] : entry?.description || "").trim(),
                 }))
-                .filter(entry => entry.command.startsWith("/") && entry.description),
+                .filter(entry => entry.command.startsWith("/") && entry.description && !/^\/plushielore(?:\s|$)/i.test(entry.command)),
         })).filter(group => group.commands.length);
 
         const groups = cloneGroups(CURRENT_COMMAND_GROUPS);
@@ -8735,7 +8736,7 @@ function SubbysPlushiesPageMain() {
         });
 
         const navigation = document.createElement("div");
-        navigation.textContent = "Navigation: Settings → General / Layout • Progress → Stats / Achievements / Plushies / Battle History / Backup • Lore remains top-level.";
+        navigation.textContent = "Navigation: Settings → General / Layout • Progress → Stats / Achievements / Plushies / Battle History / Backup.";
         Object.assign(navigation.style, {
             color: getExtensionsStyle().muted,
             lineHeight: "1.4",
@@ -8809,8 +8810,8 @@ function SubbysPlushiesPageMain() {
         applyExtensionsPanelTheme();
         extensionsPanelContent.innerHTML = "";
         extensionsPanelElement.style.font = `${extensionsLayoutMetrics().fontSize}px Arial, sans-serif`;
-        if (extensionsActiveTab === "lore") renderExtensionsLore(extensionsPanelContent);
-        else if (extensionsActiveTab === "settings") renderExtensionsSettings(extensionsPanelContent);
+        if (extensionsActiveTab === "lore") extensionsActiveTab = "status";
+        if (extensionsActiveTab === "settings") renderExtensionsSettings(extensionsPanelContent);
         else if (extensionsActiveTab === "progress") renderExtensionsProgress(extensionsPanelContent);
         else if (extensionsActiveTab === "commands") renderExtensionsCommands(extensionsPanelContent);
         else renderExtensionsStatus(extensionsPanelContent);
@@ -8881,7 +8882,7 @@ function SubbysPlushiesPageMain() {
     }
 
     function openExtensionsPanel(tab = "status", fromNativePreference = false) {
-        const requestedTab = String(tab || "status").toLowerCase();
+        const requestedTab = String(tab || "status").toLowerCase() === "lore" ? "status" : String(tab || "status").toLowerCase();
 
         if (requestedTab === "layout") {
             extensionsSettingsTab = "layout";
@@ -8961,7 +8962,7 @@ function SubbysPlushiesPageMain() {
             background: getExtensionsStyle().header,
             flexWrap: "wrap",
         });
-        const labels = { status: "Status", lore: "Lore", settings: "Settings", progress: "Progress", commands: "Commands" };
+        const labels = { status: "Status", settings: "Settings", progress: "Progress", commands: "Commands" };
         for (const tab of EXTENSIONS_TABS) {
             const button = makeExtensionsButton(labels[tab], () => {
                 extensionsActiveTab = tab;
@@ -9289,7 +9290,7 @@ function SubbysPlushiesPageMain() {
             return true;
         }
         if (command === "/plushielore") {
-            requireReady(() => openLoreBrowser(currentPlushName()));
+            requireReady(() => appendLocalInfoBox("Subby's Plushies", ["Lore is hidden for now."], { compact: true }));
             return true;
         }
         if (command === "/plushiemood" || command === "/plushieinfo") {
@@ -17154,7 +17155,7 @@ function SubbysPlushiesPageMain() {
         emote: triggerPlushEmote,
         idle: runIdleAnimation,
         battle: challengePlushBattle,
-        lore: () => openLoreBrowser(currentPlushName()),
+        lore: () => false,
         petAnimation: animatePetting,
         drag: enabled => setDragMode(enabled !== false),
         snap: snapCurrentPlushTo,
@@ -17302,7 +17303,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.3";
+    const VERSION = "3.3.1";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
