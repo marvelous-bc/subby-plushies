@@ -1,6 +1,5 @@
 {
-  "version": "3.3",
+  "version": "3.3.2",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Public v3.3 release: Added opt-in character-name highlighting in chat (off by default); optimized overall performance and reduced background work; fixed and made the Subbycat addon presence icon more lightweight; fixed known/reported errors, including custom-action crashes and duplicate self-action messages.",
-  "sha256": "8d7026806e3214893fbd835fe77d310bfcfb18059ef3c729aac0baee06e008ad"
+  "notes": "Removed snap points and drag-release auto-snapping to prevent unwanted jumps and reduce drag completion work. Kept manual drag, native Move/Resize, saved poses, Eva (eva.png), and Lore hidden."
 }

@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.3.1
+// @version      3.3.2
 // @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
 // @released     2026-10-08
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -26,7 +26,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.3.1";
+    const VERSION = "3.3.2";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -719,15 +719,6 @@ function SubbysPlushiesPageMain() {
     ]);
     const BUILTIN_ACHIEVEMENTS = ACHIEVEMENTS;
 
-    let PLUSH_SNAP_POINTS = Object.freeze([
-        Object.freeze({ name: "Hands", TranslationX: 0, TranslationY: 0 }),
-        Object.freeze({ name: "Chest", TranslationX: 0, TranslationY: -48 }),
-        Object.freeze({ name: "Face", TranslationX: 0, TranslationY: -105 }),
-        Object.freeze({ name: "Head", TranslationX: 0, TranslationY: -170 }),
-        Object.freeze({ name: "Left Shoulder", TranslationX: -92, TranslationY: -88 }),
-        Object.freeze({ name: "Right Shoulder", TranslationX: 92, TranslationY: -88 }),
-    ]);
-    let DRAG_SNAP_RADIUS = 34;
     const ROOM_MASCOT_SET_RE = /(.+?)\s+sets\s+(.+?)\s+as\s+the\s+room\s+mascot\s+plushie\.?/i;
     const ROOM_MASCOT_RANDOM_RE = /(.+?)\s+was\s+chosen\s+randomly\s+as\s+the\s+room\s+mascot\s+plushie\.?/i;
     const ROOM_MASCOT_CLEAR_RE = /(.+?)\s+clears\s+the\s+room\s+mascot\s+plushie\.?/i;
@@ -1059,7 +1050,6 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushiehands", description: "Reset the plushie to its default hands position." }),
                 Object.freeze({ command: "/plushiecenter", description: "Alias for /plushiehands." }),
                 Object.freeze({ command: "/plushiedrag [on|off]", description: "Toggle Easy Drag, or explicitly turn it on/off." }),
-                Object.freeze({ command: "/plushiesnap <point>", description: "Snap to hands, chest, face, head, left shoulder, or right shoulder." }),
                 Object.freeze({ command: "/plushiebalance", description: "Open the progressive Balance on Head minigame (8–20 seconds)." }),
                 Object.freeze({ command: "/plushieposes", description: "Open the Plushies tab at the saved-pose controls." }),
                 Object.freeze({ command: "/plushieposesave <1|2|3>", description: "Save the current plushie's X/Y position, scale, and rotation to a pose slot." }),
@@ -1294,7 +1284,6 @@ function SubbysPlushiesPageMain() {
     let dragModeEnabled = false;
     let dragSession = null;
     let dragFrameRequest = null;
-    let lastDragSnap = null;
     let dragHandlersInstalled = false;
 
     const directDragOverlayBoundsByGroup = new Map();
@@ -5892,7 +5881,7 @@ function SubbysPlushiesPageMain() {
                 for (const entry of group.commands.slice(0, 100)) {
                     const command = gitDataString(entry?.command, "", 180);
                     const description = gitDataString(entry?.description, "", 600);
-                    if (!command.startsWith("/") || !description) continue;
+                    if (!command.startsWith("/") || !description || /^\/plushiesnap(?:\s|$)/i.test(command)) continue;
                     commands.push(Object.freeze({ command, description }));
                 }
                 if (commands.length) groups.push(Object.freeze({ title, commands: Object.freeze(commands) }));
@@ -5901,15 +5890,6 @@ function SubbysPlushiesPageMain() {
         }
 
         if (fileName === "poses.json") {
-            if (!Array.isArray(payload.snapPoints)) return null;
-            const points = [];
-            for (const entry of payload.snapPoints.slice(0, 50)) {
-                const name = gitDataString(entry?.name, "", 100);
-                const x = Number(entry?.TranslationX), y = Number(entry?.TranslationY);
-                if (!name || !Number.isFinite(x) || !Number.isFinite(y)) continue;
-                points.push(Object.freeze({ name, TranslationX: x, TranslationY: y }));
-            }
-            if (!points.length) return null;
             const temporary = gitDataPlainObject(payload.temporaryPoses) ? payload.temporaryPoses : {};
             const normalizePose = (entry, fallbackDuration, fallbackTransform) => {
                 if (!gitDataPlainObject(entry)) return { durationMs: fallbackDuration, transform: fallbackTransform };
@@ -5923,8 +5903,6 @@ function SubbysPlushiesPageMain() {
                 };
             };
             return {
-                snapRadius: gitDataFinite(payload.snapRadius, DRAG_SNAP_RADIUS, 1, 500),
-                snapPoints: Object.freeze(points),
                 balanceHead: normalizePose(temporary.balanceHead, BALANCE_HEAD_DURATION_MS, BALANCE_HEAD_TRANSFORM),
                 hideBehind: normalizePose(temporary.hideBehindFace, HIDE_BEHIND_DURATION_MS, HIDE_BEHIND_FACE_TRANSFORM),
             };
@@ -6061,8 +6039,6 @@ function SubbysPlushiesPageMain() {
             EXTENSIONS_COMMAND_GROUPS = normalized.groups;
             plushieCommandAutocompleteCache = null;
         } else if (fileName === "poses.json") {
-            DRAG_SNAP_RADIUS = normalized.snapRadius;
-            PLUSH_SNAP_POINTS = normalized.snapPoints;
             BALANCE_HEAD_DURATION_MS = normalized.balanceHead.durationMs;
             BALANCE_HEAD_TRANSFORM = normalized.balanceHead.transform;
             HIDE_BEHIND_DURATION_MS = normalized.hideBehind.durationMs;
@@ -7173,42 +7149,6 @@ function SubbysPlushiesPageMain() {
         };
     }
 
-    function nearestPlushSnap(transform) {
-        let best = null;
-        for (const snap of PLUSH_SNAP_POINTS) {
-            const dx = transform.TranslationX - snap.TranslationX;
-            const dy = transform.TranslationY - snap.TranslationY;
-            const distance = Math.hypot(dx, dy);
-            if (!best || distance < best.distance) best = { snap, distance };
-        }
-        return best && best.distance <= DRAG_SNAP_RADIUS ? best : null;
-    }
-
-    function snapCurrentPlushTo(name) {
-        const wanted = String(name || "").trim().toLowerCase();
-        if (!wanted) return false;
-        const snap = PLUSH_SNAP_POINTS.find(point => point.name.toLowerCase() === wanted) ||
-            PLUSH_SNAP_POINTS.find(point => point.name.toLowerCase().includes(wanted));
-        if (!snap) {
-            appendLocalInfoBox("Plush snap", [`Unknown snap point: ${name}`, `Available: ${PLUSH_SNAP_POINTS.map(point => point.name).join(", ")}`]);
-            return false;
-        }
-        const item = getHeld(window.Player);
-        const layerName = getActivePlushLayerName(item);
-        if (!isOurs(item) || !layerName) return false;
-        if (activeBalanceHeadSession) restoreActiveBalanceHead("manual snap");
-        if (activeHideBehindSession) restoreActiveHideBehind("manual snap");
-        if (activeProtectSession) restoreActiveProtect("manual snap");
-        const currentTransform = readActivePlushLayerTransform(item) || { ...DEFAULT_TRANSFORM };
-        setPlushLayerTransform(item, layerName, { ...currentTransform, TranslationX: snap.TranslationX, TranslationY: snap.TranslationY });
-        compactPlushLayerTransformsToActive(item, readActivePlushLayerTransform(item));
-        rememberCharacterPlushState(window.Player, item);
-        rebuildCharacterCanvas(window.Player, `snap ${snap.name}`);
-        try { if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(window.Player); } catch (_) {}
-        lastDragSnap = { name: snap.name, distance: 0, at: new Date().toISOString() };
-        return true;
-    }
-
     function plushNameForItem(item) {
         if (!isOurs(item)) return "Plushie";
         const option = canonicalWirePlushOption(getItemPlushOption(item));
@@ -7410,51 +7350,6 @@ function SubbysPlushiesPageMain() {
         if (cancelled) {
             setPlushLayerTransform(current, session.layerName, { ...session.base });
             session.overlayCurrentMainBounds = cloneBounds(session.overlayStartMainBounds);
-        } else {
-            const beforeSnap = readActivePlushLayerTransform(current);
-            const nearest = beforeSnap ? nearestPlushSnap(beforeSnap) : null;
-
-            if (nearest) {
-                setPlushLayerTransform(current, session.layerName, {
-                    ...beforeSnap,
-                    TranslationX: nearest.snap.TranslationX,
-                    TranslationY: nearest.snap.TranslationY,
-                });
-
-                const finalTransform = readActivePlushLayerTransform(current);
-                const last = session.lastPoint;
-                if (session.overlayCurrentMainBounds && beforeSnap && finalTransform && last) {
-                    let snapMainX = 0;
-                    let snapMainY = 0;
-                    const observedTX = Number(beforeSnap.TranslationX) - Number(session.base.TranslationX);
-                    const observedTY = Number(beforeSnap.TranslationY) - Number(session.base.TranslationY);
-                    const observedMainX = Number(last.mainX) - Number(session.startMainX);
-                    const observedMainY = Number(last.mainY) - Number(session.startMainY);
-
-                    if (Math.abs(observedTX) >= 1 && Number.isFinite(observedMainX)) {
-                        snapMainX = (Number(finalTransform.TranslationX) - Number(beforeSnap.TranslationX)) *
-                            (observedMainX / observedTX);
-                    }
-                    if (Math.abs(observedTY) >= 1 && Number.isFinite(observedMainY)) {
-                        snapMainY = (Number(finalTransform.TranslationY) - Number(beforeSnap.TranslationY)) *
-                            (observedMainY / observedTY);
-                    }
-
-                    session.overlayCurrentMainBounds = translateMainBounds(
-                        session.overlayCurrentMainBounds,
-                        snapMainX,
-                        snapMainY
-                    );
-                }
-
-                lastDragSnap = {
-                    name: nearest.snap.name,
-                    distance: nearest.distance,
-                    at: new Date().toISOString(),
-                };
-            } else {
-                lastDragSnap = { name: null, at: new Date().toISOString() };
-            }
         }
 
         compactPlushLayerTransformsToActive(current, readActivePlushLayerTransform(current));
@@ -9112,7 +9007,6 @@ function SubbysPlushiesPageMain() {
             ["/plushieposesave ", ["1", "2", "3"]],
             ["/plushieposeload ", ["1", "2", "3"]],
             ["/plushieposeclear ", ["1", "2", "3"]],
-            ["/plushiesnap ", PLUSH_SNAP_POINTS.map(point => String(point.name || "").toLowerCase())],
         ];
         for (const [prefix, values] of argumentGroups) {
             if (lower.startsWith(prefix)) {
@@ -9324,10 +9218,6 @@ function SubbysPlushiesPageMain() {
                         : "Normal character clicks are restored.",
                 ]);
             });
-            return true;
-        }
-        if (command.startsWith("/plushiesnap ")) {
-            requireReady(() => snapCurrentPlushTo(command.slice("/plushiesnap ".length)));
             return true;
         }
         if (command === "/plushiemascothide") {
@@ -17079,7 +16969,6 @@ function SubbysPlushiesPageMain() {
                 currentMood: { name: currentPlushName(), ...getPlushMoodRecord() },
                 activeProtectSession: !!activeProtectSession,
                 dragModeEnabled,
-                lastDragSnap,
                 roomMascotState,
                 lastUpdateInfo,
                 lastMoodChange,
@@ -17158,7 +17047,6 @@ function SubbysPlushiesPageMain() {
         lore: () => false,
         petAnimation: animatePetting,
         drag: enabled => setDragMode(enabled !== false),
-        snap: snapCurrentPlushTo,
         savePose: saveCurrentPose,
         applyPose: applySavedPose,
         clearPose: clearSavedPose,
@@ -17303,7 +17191,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.3.1";
+    const VERSION = "3.3.2";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
