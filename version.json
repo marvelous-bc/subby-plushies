@@ -1,5 +1,6 @@
 {
   "version": "3.3.2",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Removed snap points and drag-release auto-snapping to prevent unwanted jumps and reduce drag completion work. Kept manual drag, native Move/Resize, saved poses, Eva (eva.png), and Lore hidden."
+  "notes": "v3.3.2: Removed snap points and drag-release auto-snapping. Includes Eva plushie (assets/plushies/eva.png), keeps Lore hidden, and preserves manual drag, native Move/Resize, and saved poses. Includes the performance, presence-icon, name-highlight, and error fixes from v3.3.",
+  "sha256": "d9e07faa5e50ab7a5b198c7d8856575d855539616ced5f177b003a28ffae26f1"
 }
