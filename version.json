@@ -1,6 +1,5 @@
 {
-  "version": "3.3.2",
-  "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "v3.3.2: Removed snap points and drag-release auto-snapping. Includes Eva plushie (assets/plushies/eva.png), keeps Lore hidden, and preserves manual drag, native Move/Resize, and saved poses. Includes the performance, presence-icon, name-highlight, and error fixes from v3.3.",
-  "sha256": "d9e07faa5e50ab7a5b198c7d8856575d855539616ced5f177b003a28ffae26f1"
+  "version": "3.3.5-beta.1",
+  "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/beta/SubbysPlushies.user.js",
+  "notes": "Beta: bundled Subby's Wardrobe curated accessories (Cat-Ear Headband and Heart Charm Necklace) with the full v3.3.4 Plushies base. Lore, Eva, no-snap dragging and existing features retained. Experimental appearance assets may not persist or sync to users without the mod."
 }
