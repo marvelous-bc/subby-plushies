@@ -1,5 +1,5 @@
 {
-  "version": "3.3.5",
+  "version": "3.4.3",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Stable release of Subby's Plushies + Wardrobe without the Cozy Robe. Only Cat-Ear Headband and Heart Charm remain as native, multicolor, repositionable items. Preserves existing Plushies features, Eva and Lore; all assets load from the main branch."
+  "notes": "Draped Wrap Dress default fit calibrated to supplied 155 cm BC/Echo −40 setup: source PNG and all four native color layers resized uniformly from 330×440 to 310×414 (94%), default X85 Y167. Retains native BC height scaling instead of double-scaling with Echo; preserves manual offsets, Cloth slot, zones and layer priorities. Adds diagnostic SubbysWardrobeCurated.heightFit(). Previous manual Echo item scale 0.94 should be reset to 1.0."
 }

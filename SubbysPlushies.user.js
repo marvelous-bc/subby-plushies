@@ -2,8 +2,8 @@
 // @name         BC - Subby's Plushies + Wardrobe
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.4.0
-// @description  Subby’s Plushies + Wardrobe: native draped wrap dress with four color zones, custom accessories, lazy assets and the zone editor
+// @version      3.4.3
+// @description  Subby’s Plushies + Wardrobe: height-compatible native draped dress, four color zones, accessories, lazy assets and zone editor
 // @released     2026-10-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.4.0";
+    const VERSION = "3.4.3";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -764,7 +764,7 @@ function SubbysPlushiesPageMain() {
     const WARDROBE_ITEMS = Object.freeze([
         Object.freeze({"name": "SubbyCatHeadband", "title": "Subby's Plush Cat-Ear Headband", "group": "HairAccessory2", "top": 50, "left": 168, "width": 183, "height": 100, "priority": 55, "colorZones": ["OuterEars", "InnerEars", "Headband", "Bow"], "defaultColors": ["#BB8CCC", "#F2C1D6", "#B58ACA", "#E58DBA"]}),
         Object.freeze({"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]}),
-        Object.freeze({"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Suit","top":170,"left":85,"width":330,"height":440,"priority":38,"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]})
+        Object.freeze({"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Cloth","top":167,"left":85,"width":310,"height":414,"priority":38,"layerPriorities":{"Fabric":29},"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]})
     ]);
     const WARDROBE_IMAGE_BY_NAME = new Map(WARDROBE_ITEMS.map(entry =>
         [entry.name, `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(entry.name)}.png`]));
@@ -831,6 +831,13 @@ function SubbysPlushiesPageMain() {
                     if (previous[entry.name] && typeof previous[entry.name] === "object")
                         saved[entry.name] = previous[entry.name];
                 }
+            }
+            // v3.4.3 changes only the dress's native baseline from Y 170 to Y 167.
+            // Forget the exact old default; preserve genuinely customized fits.
+            const dressSaved = saved.SubbyDrapedWrapDress;
+            if (dressSaved && Number(dressSaved.left) === 85 &&
+                (Number(dressSaved.top) === 170 || Number(dressSaved.top) === 167)) {
+                delete saved.SubbyDrapedWrapDress;
             }
             window.localStorage?.setItem(WARDROBE_PLACEMENT_STORAGE_KEY, JSON.stringify(saved));
             return saved;
@@ -1009,6 +1016,29 @@ function SubbysPlushiesPageMain() {
             displayText: wardrobeResolveMissingVisibleLabel,
             get methods() { return [...wardrobeState.methods]; },
             get assets() { return WARDROBE_ITEMS.map(wardrobeCatalogStatus); },
+            // BC scales native clothing and the whole character together.
+            // This is diagnostic only; do not add a second scale for Echo.
+            heightFit: (name = "SubbyDrapedWrapDress", C = window.Player) => {
+                const entry = WARDROBE_ITEMS.find(item => item.name === name);
+                if (!entry || !C) return null;
+                const ratio = Number(C.HeightRatio);
+                const proportion = Number(C.HeightRatioProportion);
+                const modifier = Number(C.HeightModifier);
+                const validRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : null;
+                return {
+                    asset: entry.name,
+                    slot: entry.group,
+                    nativePlacement: wardrobePlacement(entry),
+                    nativeSprite: {width: entry.width, height: entry.height},
+                    bcHeightRatio: validRatio,
+                    bcHeightRatioProportion: Number.isFinite(proportion) ? proportion : null,
+                    bcHeightModifier: Number.isFinite(modifier) ? modifier : null,
+                    sourceReference: {bcCm: 155, echoControl: -40, bakedArtworkScale: 0.94},
+                    scaleStrategy: "native-character-canvas; no extra per-item scale",
+                    echoControlVerified: false,
+                    note: "BC scales native layers with the character. Echo's -40 transform requires live verification; do not double-scale."
+                };
+            },
             diagnose: () => WARDROBE_ITEMS.map(wardrobeCatalogStatus),
             get nativePicker() { return wardrobeNativePickerDiagnostics(); },
             syncNativePicker: () => wardrobeSyncNativePicker(),
@@ -8634,7 +8664,7 @@ function SubbysPlushiesPageMain() {
     function renderExtensionsWardrobe(container) {
         const section = makeExtensionsSection("Subby's Wardrobe • clothing and accessories");
         const intro = document.createElement("div");
-        intro.textContent = "The Headband, Heart Charm and Draped Wrap Dress appear in BC's normal Appearance picker (Hair Accessory 2, Necklace, and Suit). Each uses one GitHub PNG with independent color zones. Positioning moves the clothing, not the character. Other viewers need the matching plugin and assets.";
+        intro.textContent = "The Headband, Heart Charm and Draped Wrap Dress appear in BC's normal Appearance picker (Hair Accessory 2, Necklace, and Upper Clothing). Each uses one GitHub PNG with independent color zones. Positioning moves the clothing, not the character. Other viewers need the matching plugin and assets.";
         Object.assign(intro.style, { color: getExtensionsStyle().muted, marginBottom: "12px", lineHeight: "1.45" });
         section.appendChild(intro);
         for (const entry of WARDROBE_ITEMS) {
@@ -16863,6 +16893,7 @@ function SubbysPlushiesPageMain() {
             spriteSize: { width: entry.width, height: entry.height },
             colorZones: [...entry.colorZones],
             colorableLayerCount: asset?.ColorableLayerCount ?? 0,
+            layerPriorities: asset?.Layer?.map(layer => ({ zone: layer?.Name, priority: layer?.Priority ?? asset?.Priority ?? null })) || [],
             colors: wardrobeGetColors(entry.name),
             heightModifier: asset?.HeightModifier ?? null,
             overrideHeight: asset?.OverrideHeight ?? null,
@@ -17133,6 +17164,32 @@ function SubbysPlushiesPageMain() {
         }
     }
 
+    // Individual native BC layers can draw at their own priorities. Keep the
+    // Fabric zone/color slot intact: only its Z-order differs from the suit.
+    function wardrobeNativeLayerDefinition(entry, zone) {
+        const layer = { Name: zone, AllowColorize: true };
+        const priority = entry.layerPriorities?.[zone];
+        if (Number.isInteger(priority)) layer.Priority = priority;
+        return layer;
+    }
+
+    function wardrobeRepairLayerPriorities(entry, asset) {
+        if (!Array.isArray(asset?.Layer)) return false;
+        let changed = false;
+        for (let i = 0; i < entry.colorZones.length; i++) {
+            const layer = asset.Layer[i];
+            if (!layer || layer.Name !== entry.colorZones[i]) continue;
+            const priority = entry.layerPriorities?.[layer.Name];
+            // Only override targeted layers; leave all other zones' native
+            // priority and all BC/other-mod drawing groups alone.
+            if (Number.isInteger(priority) && layer.Priority !== priority) {
+                layer.Priority = priority;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
     function setupWardrobeAssets() {
         wardrobeState.attempted = true;
         wardrobeState.status = "registering";
@@ -17163,7 +17220,7 @@ function SubbysPlushiesPageMain() {
                         ParentGroup: {},
                         DefaultColor: [...entry.defaultColors],
                         ColorableLayerCount: entry.colorZones.length,
-                        Layer: entry.colorZones.map(zone => ({ Name: zone, AllowColorize: true })),
+                        Layer: entry.colorZones.map(zone => wardrobeNativeLayerDefinition(entry, zone)),
                     };
                     callAssetAdd(definition, runtimeGroup, entry.group, null);
                     asset = window.AssetGet(FAMILY, entry.group, entry.name);
@@ -17179,8 +17236,11 @@ function SubbysPlushiesPageMain() {
                 // unless this was the legacy single-layer beta asset.
                 if (!Array.isArray(asset.Layer) || asset.Layer.length !== entry.colorZones.length ||
                     entry.colorZones.some((zone, i) => asset.Layer[i]?.Name !== zone)) {
-                    asset.Layer = entry.colorZones.map(zone => ({ Name: zone, AllowColorize: true }));
+                    asset.Layer = entry.colorZones.map(zone => wardrobeNativeLayerDefinition(entry, zone));
                 }
+                // Also repair the native BC AssetAdd-normalized layers when the
+                // asset was already registered in this page session.
+                wardrobeRepairLayerPriorities(entry, asset);
                 ensureWardrobePickerCatalog(asset, runtimeGroup, entry);
                 wardrobeNeutralizeHeight(entry);
                 wardrobeState.registered.push(entry.name);
@@ -18714,7 +18774,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.4.0";
+    const VERSION = "3.4.3";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
