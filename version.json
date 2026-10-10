@@ -1,5 +1,5 @@
 {
-  "version": "3.4.4",
+  "version": "3.4.6",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Color Zone Editor upgrades: 15\u2013800% zoom with Fit/100% and Ctrl+wheel, canvas-space brush/erase cursor highlight, hand/Space/middle-button panning, continuous interpolated strokes, 12-step undo/redo, larger brush, selected-zone/artwork-only overlays and keyboard shortcuts. Preserves BC native Cloth dress positioning/height compatibility, all four dress colors, headband, necklace, and original color-layers.json."
+  "notes": "Dress color-zone seam cleanup: rebuilt the Draped Wrap Dress color masks so soft edges are preserved, neighboring zones overlap slightly instead of leaving gaps, and recoloring no longer shows black separator seams between zones. Includes the prior per-layer Move/Resize wardrobe fix and keeps existing priorities, slots, and editor improvements."
 }

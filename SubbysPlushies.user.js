@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.4.4";
+    const VERSION = "3.4.6";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -766,6 +766,7 @@ function SubbysPlushiesPageMain() {
         Object.freeze({"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]}),
         Object.freeze({"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Cloth","top":167,"left":85,"width":310,"height":414,"priority":38,"layerPriorities":{"Fabric":29},"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]})
     ]);
+    const WARDROBE_ITEM_NAME_SET = new Set(WARDROBE_ITEMS.map(entry => entry.name));
     const WARDROBE_IMAGE_BY_NAME = new Map(WARDROBE_ITEMS.map(entry =>
         [entry.name, `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(entry.name)}.png`]));
     const WARDROBE_LAYER_IMAGES = new Map(WARDROBE_ITEMS.map(entry =>
@@ -983,7 +984,7 @@ function SubbysPlushiesPageMain() {
     Object.defineProperty(window, "SubbysWardrobeCurated", {
         configurable: true,
         value: Object.freeze({
-            version: "0.4.1",
+            version: "0.4.2",
             get registered() { return [...wardrobeState.registered]; },
             get errors() { return [...wardrobeState.errors]; },
             get status() { return wardrobeState.status; },
@@ -15320,6 +15321,65 @@ function SubbysPlushiesPageMain() {
         return { C, item };
     }
 
+    function isWardrobeManagedItem(item) {
+        const asset = item?.Asset;
+        return !!asset && asset.Group && WARDROBE_ITEM_NAME_SET.has(asset.Name) && WARDROBE_ITEMS.some(entry => entry.name === asset.Name && entry.group === asset.Group.Name);
+    }
+
+    function getFocusedManagedLayeringItem() {
+        const C = window.DialogFocusCharacter || window.Player;
+        const focusItem = window.DialogFocusItem;
+        if (isOurs(focusItem) || isWardrobeManagedItem(focusItem)) return { C, item: focusItem };
+        const held = getHeld(C);
+        if (isOurs(held)) return { C, item: held };
+        return { C, item: null };
+    }
+
+    function managedLayerNames(item) {
+        if (!item?.Asset) return [];
+        if (isOurs(item)) {
+            return getVisiblePlushLayers(item).map(layer => layer?.Name).filter(Boolean);
+        }
+        if (isWardrobeManagedItem(item)) {
+            return Array.isArray(item.Asset.Layer) ? item.Asset.Layer.map(layer => layer?.Name).filter(Boolean) : [];
+        }
+        return [];
+    }
+
+    function hasManagedLayerSpecificTransform(item) {
+        const property = getProperty(item);
+        if (!property) return false;
+        const layerNames = new Set(managedLayerNames(item));
+        if (!layerNames.size) return false;
+        return Object.values(NATIVE_LAYER_PROPERTY_BY_TRANSFORM).some(layerProperty => {
+            const record = property[layerProperty];
+            if (!record || typeof record !== "object" || Array.isArray(record)) return false;
+            return Object.entries(record).some(([layerName, value]) => layerNames.has(layerName) && Number.isFinite(value));
+        });
+    }
+
+    function nativeTransformIsDefault(item) {
+        const transform = readNativeItemTransform(item);
+        if (!transform) return true;
+        return NATIVE_LAYER_TRANSFORM_KEYS.every(key => transform[key] === DEFAULT_TRANSFORM[key]);
+    }
+
+    function canonicalizeWardrobeLayerTransforms(C, item, reason = "Move / Resize canonicalize", publish = true) {
+        if (!C || !isWardrobeManagedItem(item)) return false;
+        const property = getProperty(item);
+        if (!property) return false;
+        const hasLayerSpecific = hasManagedLayerSpecificTransform(item);
+        const needsReset = !nativeTransformIsDefault(item);
+        if (!hasLayerSpecific || !needsReset) return false;
+        resetGenericNativeTransform(item);
+        rebuildCharacterCanvas(C, reason);
+        if (publish && C === window.Player) {
+            try { if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(C); }
+            catch (e) { warn(`Could not publish wardrobe Move / Resize values (${reason}):`, e); }
+        }
+        return true;
+    }
+
     function currentPlushOption() {
         const wireOption = getItemPlushOption(getFocusedPlushItem().item);
         return wireToPublicPlushOption(wireOption);
@@ -15713,23 +15773,32 @@ function SubbysPlushiesPageMain() {
             if (event.type === "input" && inputType !== "range") return;
 
             nativeLayeringInputEvents++;
-            const focused = getFocusedPlushItem();
-            if (!focused.C || !isOurs(focused.item)) return;
-            const signatureBefore = nativeItemTransformSignature(focused.item);
+            const focused = getFocusedManagedLayeringItem();
+            if (!focused.C || !(isOurs(focused.item) || isWardrobeManagedItem(focused.item))) return;
+            const signatureBefore = focused.item ? nativeItemTransformSignature(focused.item) : null;
             const eventType = event.type;
             const inferredField = inferNativeLayeringInputField(input, root, api).field;
 
             window.setTimeout(() => {
-                const current = getFocusedPlushItem();
-                if (!current.C || !isOurs(current.item)) return;
-                applyNativeLayeringInputFallback(input, root, api, current.item, signatureBefore);
-                mirrorNativeTransformToActivePlushLayer(
-                    current.C,
-                    current.item,
-                    `Move / Resize ${eventType}`,
-                    eventType === "change",
-                    inferredField ? [inferredField] : null
-                );
+                const current = getFocusedManagedLayeringItem();
+                if (!current.C || !(isOurs(current.item) || isWardrobeManagedItem(current.item))) return;
+                if (isOurs(current.item)) {
+                    applyNativeLayeringInputFallback(input, root, api, current.item, signatureBefore);
+                    mirrorNativeTransformToActivePlushLayer(
+                        current.C,
+                        current.item,
+                        `Move / Resize ${eventType}`,
+                        eventType === "change",
+                        inferredField ? [inferredField] : null
+                    );
+                } else if (isWardrobeManagedItem(current.item)) {
+                    canonicalizeWardrobeLayerTransforms(
+                        current.C,
+                        current.item,
+                        `Move / Resize ${eventType}`,
+                        eventType === "change"
+                    );
+                }
             }, 0);
         };
 
@@ -15743,23 +15812,28 @@ function SubbysPlushiesPageMain() {
 
         const original = api.Resize;
         const wrapped = function (...args) {
-            const beforeFocused = getFocusedPlushItem();
-            const beforeTransform = beforeFocused.C && isOurs(beforeFocused.item)
-                ? readNativeItemTransform(beforeFocused.item)
-                : null;
+            const beforeFocused = getFocusedManagedLayeringItem();
+            const managedBefore = beforeFocused.C && (isOurs(beforeFocused.item) || isWardrobeManagedItem(beforeFocused.item));
+            const beforeTransform = managedBefore ? readNativeItemTransform(beforeFocused.item) : null;
 
             const result = original.apply(this, args);
             window.setTimeout(() => {
-                const { C, item } = getFocusedPlushItem();
-                if (!C || !isOurs(item)) return;
+                const { C, item } = getFocusedManagedLayeringItem();
+                if (!C || !(isOurs(item) || isWardrobeManagedItem(item))) return;
 
                 const afterTransform = readNativeItemTransform(item);
                 const changedFields = beforeTransform && afterTransform
                     ? NATIVE_LAYER_TRANSFORM_KEYS.filter(field => beforeTransform[field] !== afterTransform[field])
                     : [];
 
-                if (changedFields.length) {
-                    mirrorNativeTransformToActivePlushLayer(C, item, "Layering.Resize", true, changedFields);
+                if (isOurs(item)) {
+                    if (changedFields.length) {
+                        mirrorNativeTransformToActivePlushLayer(C, item, "Layering.Resize", true, changedFields);
+                    }
+                } else if (isWardrobeManagedItem(item)) {
+                    if (changedFields.length || hasManagedLayerSpecificTransform(item)) {
+                        canonicalizeWardrobeLayerTransforms(C, item, "Layering.Resize", true);
+                    }
                 }
             }, 0);
             return result;
@@ -18987,7 +19061,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.4.4";
+    const VERSION = "3.4.6";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
