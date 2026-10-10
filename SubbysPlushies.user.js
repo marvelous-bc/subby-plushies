@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies + Wardrobe
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.3.6
+// @version      3.3.7
 // @description  Subby’s Plushies + Wardrobe: multicolor cat-ear headband and heart charm, Lore, Eva, plushie interactions, and native BC item integration
 // @released     2026-10-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.3.6";
+    const VERSION = "3.3.7";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -981,7 +981,8 @@ function SubbysPlushiesPageMain() {
             get imageStatus() { return { ready: wardrobeLayersReady, error: wardrobeLayersError, source: WARDROBE_LAYERS_URL }; },
             reloadImages: async () => {
                 if (!(await loadWardrobeColorLayers())) return false;
-                if (wardrobeState.status === "images-unavailable") setupWardrobeAssets();
+                if (!wardrobeState.attempted) setupWardrobeAssets();
+                wardrobeSyncNativePicker();
                 try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
                 if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
                 return true;
@@ -1003,6 +1004,8 @@ function SubbysPlushiesPageMain() {
             get methods() { return [...wardrobeState.methods]; },
             get assets() { return WARDROBE_ITEMS.map(wardrobeCatalogStatus); },
             diagnose: () => WARDROBE_ITEMS.map(wardrobeCatalogStatus),
+            get nativePicker() { return wardrobeNativePickerDiagnostics(); },
+            syncNativePicker: () => wardrobeSyncNativePicker(),
             wear: name => wardrobeWearByName(name),
             remove: name => wardrobeRemoveByName(name),
             placement: name => { const entry = wardrobeEntryByName(name); return entry ? wardrobePlacement(entry) : null; },
@@ -8291,7 +8294,7 @@ function SubbysPlushiesPageMain() {
     function renderExtensionsWardrobe(container) {
         const section = makeExtensionsSection("Subby's Wardrobe • accessories");
         const intro = document.createElement("div");
-        intro.textContent = "Two accessories with one source PNG each on GitHub and six independent color zones in shared JSON. Position controls adjust the accessories, not your character. Other viewers need the matching plugin.";
+        intro.textContent = "These two accessories also appear in BC's normal Appearance picker under Hair Accessory 2 and Necklace. This panel offers extra positioning controls. Each item uses one GitHub PNG and independent color zones; other viewers need the matching plugin.";
         Object.assign(intro.style, { color: getExtensionsStyle().muted, marginBottom: "12px", lineHeight: "1.45" });
         section.appendChild(intro);
         for (const entry of WARDROBE_ITEMS) {
@@ -16482,7 +16485,7 @@ function SubbysPlushiesPageMain() {
             inGlobalCatalog: Array.isArray(window.Asset) && window.Asset.some(same),
             inGroupCatalog: Array.isArray(group?.Asset) && group.Asset.some(same),
             groupCategory: group?.Category || null,
-            groupCustomizable: group?.AllowCustomize !== false,
+            groupCustomizable: group?.AllowCustomize === true,
             value: asset?.Value ?? null,
             description: asset?.Description ?? null,
             placement: wardrobePlacement(entry),
@@ -16513,6 +16516,136 @@ function SubbysPlushiesPageMain() {
         if (Array.isArray(window.Asset) && !status.inGlobalCatalog) throw new Error("Asset missing from global Appearance item catalog");
         if (Array.isArray(group.Asset) && !status.inGroupCatalog) throw new Error("Asset missing from group Appearance item catalog");
         return status;
+    }
+
+    // Native Wardrobe / Appearance catalog support. BC and some UI mods cache
+    // appearance choices when opening the item picker; adding an asset to
+    // AssetGet after that point does not necessarily update an existing screen.
+    // This adapter only touches our two names, without replacing game draw code.
+    const wardrobeNativePickerHooks = new Set();
+    const wardrobeNativePickerState = { addedToCachedLists: 0, lastSync: null };
+    let wardrobePickerSyncActive = false;
+
+    function wardrobeCachedAppearanceLists() {
+        const candidates = [];
+        // Older appearance screens store this as a top-level lexical variable,
+        // while some integrations expose their own copy on window.
+        try {
+            if (typeof AppearanceAssets !== "undefined" && Array.isArray(AppearanceAssets)) {
+                candidates.push(AppearanceAssets);
+            }
+        } catch (_) {}
+        try {
+            if (Array.isArray(window.AppearanceAssets) && !candidates.includes(window.AppearanceAssets)) {
+                candidates.push(window.AppearanceAssets);
+            }
+        } catch (_) {}
+        return candidates;
+    }
+
+    function wardrobeSyncNativePicker() {
+        if (wardrobePickerSyncActive || !wardrobeState.attempted) return false;
+        wardrobePickerSyncActive = true;
+        let changed = false;
+        try {
+            const assetTable = Array.isArray(window.Asset) ? window.Asset : null;
+            const cachedLists = wardrobeCachedAppearanceLists();
+            for (const entry of WARDROBE_ITEMS) {
+                const group = findRuntimeAssetGroup(entry.group);
+                const asset = window.AssetGet?.(FAMILY, entry.group, entry.name);
+                if (!group || !asset) continue;
+                // These are clothing groups; they must be user-customizable to
+                // be offered in the built-in Appearance editor. Never change
+                // the category or unrelated groups.
+                if (group.Category === "Appearance" && group.AllowCustomize !== true) {
+                    group.AllowCustomize = true;
+                    changed = true;
+                }
+                if (group.Category === "Appearance" && group.Clothing !== true) {
+                    group.Clothing = true; // Allows saving/access in outfit Wardrobe slots.
+                    changed = true;
+                }
+                asset.Group = group;
+                asset.Description = entry.title;
+                asset.Value = 0; // Available in the native clothing menu without a shop purchase.
+                const same = item => item?.Name === entry.name && item?.Group?.Name === entry.group;
+                if (assetTable) {
+                    const index = assetTable.findIndex(same);
+                    if (index < 0) { assetTable.push(asset); changed = true; }
+                    else if (assetTable[index] !== asset) { assetTable[index] = asset; changed = true; }
+                }
+                if (Array.isArray(group.Asset)) {
+                    const index = group.Asset.findIndex(same);
+                    if (index < 0) { group.Asset.push(asset); changed = true; }
+                    else if (group.Asset[index] !== asset) { group.Asset[index] = asset; changed = true; }
+                }
+                // Refresh an already opened classic Appearance selector. All
+                // items within this group retain their original order.
+                for (const groups of cachedLists) {
+                    const view = groups.find(current => current?.Group?.Name === entry.group);
+                    if (view && Array.isArray(view.Assets)) {
+                        const index = view.Assets.findIndex(same);
+                        if (index < 0) {
+                            view.Assets.push(asset);
+                            wardrobeNativePickerState.addedToCachedLists++;
+                            changed = true;
+                        } else if (view.Assets[index] !== asset) {
+                            view.Assets[index] = asset;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            wardrobeNativePickerState.lastSync = Date.now();
+        } finally {
+            wardrobePickerSyncActive = false;
+        }
+        return changed;
+    }
+
+    function wardrobeNativePickerDiagnostics() {
+        const groups = wardrobeCachedAppearanceLists();
+        return {
+            hookNames: [...wardrobeNativePickerHooks],
+            cachedAppearanceLists: groups.length,
+            addedToCachedLists: wardrobeNativePickerState.addedToCachedLists,
+            lastSync: wardrobeNativePickerState.lastSync,
+            entries: WARDROBE_ITEMS.map(entry => {
+                const group = findRuntimeAssetGroup(entry.group);
+                const asset = window.AssetGet?.(FAMILY, entry.group, entry.name);
+                return {
+                    name: entry.name, group: entry.group,
+                    registered: !!asset,
+                    category: group?.Category ?? null,
+                    customizable: group?.AllowCustomize === true,
+                    clothing: group?.Clothing === true,
+                    globalCatalog: Array.isArray(window.Asset) && window.Asset.some(a => a === asset),
+                    groupCatalog: Array.isArray(group?.Asset) && group.Asset.some(a => a === asset),
+                    cachedPicker: groups.length ? groups.some(list =>
+                        list.some(view => view?.Group?.Name === entry.group &&
+                            Array.isArray(view.Assets) && view.Assets.some(a => a === asset))) : null,
+                };
+            }),
+        };
+    }
+
+    function installWardrobeNativePickerHooks() {
+        // Hook list-building, not its draw functions, to remain compatible with BCX.
+        // Different BC versions expose different entry points; hook what's present.
+        for (const name of ["AppearanceBuildAssets", "CharacterAppearanceLoadCharacter", "AppearanceLoad", "AppearanceItemLoad"]) {
+            if (wardrobeNativePickerHooks.has(name) || typeof window[name] !== "function") continue;
+            try {
+                const installed = installHook(name, 10000, (args, next) => {
+                    wardrobeSyncNativePicker();
+                    const result = next(args);
+                    wardrobeSyncNativePicker();
+                    return result;
+                });
+                if (installed) wardrobeNativePickerHooks.add(name);
+            } catch (e) { warn(`Wardrobe native picker hook ${name} unavailable:`, e); }
+        }
+        wardrobeSyncNativePicker();
+        return wardrobeNativePickerHooks.size > 0;
     }
 
     function wardrobeEntryByName(name) {
@@ -16681,6 +16814,7 @@ function SubbysPlushiesPageMain() {
         }
         wardrobeRepairLayerNamesCache();
         for (const entry of WARDROBE_ITEMS) wardrobeRepairAssetText(entry);
+        wardrobeSyncNativePicker();
         wardrobeState.status = wardrobeState.registered.length === WARDROBE_ITEMS.length
             ? "registered-native" : (wardrobeState.registered.length ? "partial" : "failed");
         log(`Wardrobe ${wardrobeState.status}: ${wardrobeState.registered.join(", ") || "none"}.`);
@@ -18142,11 +18276,27 @@ function SubbysPlushiesPageMain() {
         installAssetTextHook();
         installWardrobeLayerTextHook();
         installWardrobeVisibleLabelFix();
+        // Register in BC's native Appearance catalog BEFORE waiting for network
+        // color data. Otherwise BC can cache the clothing picker without us.
+        // The source PNG previews are served from GitHub, while individual
+        // recolorable layers are populated asynchronously after registration.
+        setupWardrobeAssets();
+        installWardrobeNativePickerHooks();
+        // Some BC builds load their Appearance editor later than the asset table.
+        // Bounded one-shot retries, no permanent frame loop or polling observer.
+        for (const delay of [1000, 4000, 12000]) {
+            window.setTimeout(() => installWardrobeNativePickerHooks(), delay);
+        }
         const wardrobeImagesLoaded = await wardrobeEarlyLayerPromise;
-        // Register accessories only when the color layers are available.
-        // Otherwise they cannot render; leave Plushies working even if GitHub fails.
-        if (wardrobeImagesLoaded) setupWardrobeAssets();
-        else wardrobeState.status = "images-unavailable";
+        if (wardrobeImagesLoaded) {
+            wardrobeSyncNativePicker();
+            try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
+        } else {
+            // Keep the items selectable for when GitHub responds, but report
+            // that the color layers (and therefore their render) are unavailable.
+            wardrobeState.errors.push(`Color layers unavailable: ${wardrobeLayersError || "remote request failed"}`);
+            warn("Wardrobe items registered, but remote color artwork is not ready:", wardrobeLayersError);
+        }
 
         await prepareRenderImages();
         setupNativeAsset();
@@ -18186,7 +18336,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.3.5";
+    const VERSION = "3.3.7";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
