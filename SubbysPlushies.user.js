@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies + Wardrobe
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.4.4
+// @version      3.4.8
 // @description  Subby’s Plushies + Wardrobe: height-compatible native draped dress, four color zones, accessories, lazy assets and zone editor
 // @released     2026-10-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.4.7";
+    const VERSION = "3.4.8";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -764,7 +764,7 @@ function SubbysPlushiesPageMain() {
     const WARDROBE_ITEMS = Object.freeze([
         Object.freeze({"name": "SubbyCatHeadband", "title": "Subby's Plush Cat-Ear Headband", "group": "HairAccessory2", "top": 50, "left": 168, "width": 183, "height": 100, "priority": 55, "colorZones": ["OuterEars", "InnerEars", "Headband", "Bow"], "defaultColors": ["#BB8CCC", "#F2C1D6", "#B58ACA", "#E58DBA"]}),
         Object.freeze({"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]}),
-        Object.freeze({"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Cloth","top":167,"left":85,"width":310,"height":414,"priority":38,"layerPriorities":{"Fabric":29},"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]})
+        Object.freeze({"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Cloth","top":182,"left":90,"width":279,"height":373,"priority":38,"layerPriorities":{"Fabric":29},"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]})
     ]);
     const WARDROBE_ITEM_NAME_SET = new Set(WARDROBE_ITEMS.map(entry => entry.name));
     const WARDROBE_IMAGE_BY_NAME = new Map(WARDROBE_ITEMS.map(entry =>
@@ -833,8 +833,8 @@ function SubbysPlushiesPageMain() {
                         saved[entry.name] = previous[entry.name];
                 }
             }
-            // v3.4.4 changes only the dress's native baseline from Y 170 to Y 167.
-            // Forget the exact old default; preserve genuinely customized fits.
+            // v3.4.8 updates the native dress baseline for 155 cm / Echo -40.
+            // Forget exact old defaults without overwriting genuinely custom fits.
             const dressSaved = saved.SubbyDrapedWrapDress;
             if (dressSaved && Number(dressSaved.left) === 85 &&
                 (Number(dressSaved.top) === 170 || Number(dressSaved.top) === 167)) {
@@ -1034,10 +1034,10 @@ function SubbysPlushiesPageMain() {
                     bcHeightRatio: validRatio,
                     bcHeightRatioProportion: Number.isFinite(proportion) ? proportion : null,
                     bcHeightModifier: Number.isFinite(modifier) ? modifier : null,
-                    sourceReference: {bcCm: 155, echoControl: -40, bakedArtworkScale: 0.94},
+                    sourceReference: {bcCm: 155, echoControl: -40, oldArtworkScale: 0.94, newBakeRelativeToPrevious: 0.90, nativeAnchor: {x: 90, y: 182}},
                     scaleStrategy: "native-character-canvas; no extra per-item scale",
                     echoControlVerified: false,
-                    note: "BC scales native layers with the character. Echo's -40 transform requires live verification; do not double-scale."
+                    note: "New default is baked in for the 155cm/Echo -40 reference. Clear an old 0.90 manual Move/Resize scale to avoid double-scaling; other heights need live calibration."
                 };
             },
             diagnose: () => WARDROBE_ITEMS.map(wardrobeCatalogStatus),
@@ -1048,6 +1048,7 @@ function SubbysPlushiesPageMain() {
             placement: name => { const entry = wardrobeEntryByName(name); return entry ? wardrobePlacement(entry) : null; },
             move: (name, dx = 0, dy = 0) => wardrobeSetPlacement(name, dx, dy),
             resetPlacement: name => wardrobeSetPlacement(name, 0, 0, true),
+            resetMoveResize: name => wardrobeResetMoveResize(name),
             getColors: name => wardrobeGetColors(name),
             setColors: (name, values) => wardrobeSetColors(name, values),
             // Use in console to confirm BC's exact generated layer paths.
@@ -8915,6 +8916,12 @@ function SubbysPlushiesPageMain() {
                 ["← Left", -10, 0], ["Right →", 10, 0], ["↑ Up", 0, -10], ["Down ↓", 0, 10],
             ]) positionControls.appendChild(makeExtensionsButton(label, () => wardrobeSetPlacement(entry.name, dx, dy)));
             positionControls.appendChild(makeExtensionsButton("Reset Default Fit", () => wardrobeSetPlacement(entry.name, 0, 0, true)));
+            if (entry.name === "SubbyDrapedWrapDress") {
+                const button = makeExtensionsButton("Clear old Move / Resize", () => wardrobeResetMoveResize(entry.name));
+                button.title = "Use the new built-in dress size instead of an old manual X/Y/Scale adjustment. This clears only the selected equipped dress's Move / Resize overrides.";
+                button.disabled = !wardrobeEquippedItem(entry);
+                positionControls.appendChild(button);
+            }
             const colorControls = document.createElement("div");
             Object.assign(colorControls.style, { display: "flex", flexWrap: "wrap", gap: "12px", padding: "8px 0" });
             const currentColors = wardrobeGetColors(entry.name);
@@ -17400,6 +17407,32 @@ function SubbysPlushiesPageMain() {
         return [...next];
     }
 
+    // Clear old BC/Echo Move / Resize overrides ONLY when the user requests it.
+    // New v3.4.8 PNG/asset dimensions already bake in the requested 0.90 fit;
+    // preserving a prior 0.90 scale would make the outfit 0.81 of the v3.4.7 size.
+    function wardrobeResetMoveResize(name) {
+        const entry = wardrobeEntryByName(name);
+        const item = entry && wardrobeEquippedItem(entry);
+        if (!item) return false;
+        const property = item.Property;
+        if (!property || typeof property !== "object" || Array.isArray(property)) return true;
+        let changed = false;
+        for (const key of ["TranslationX", "TranslationY", "ScaleX", "ScaleY", "Rotation",
+            "LayerTranslationX", "LayerTranslationY", "LayerScaleX", "LayerScaleY", "LayerRotation"]) {
+            if (Object.prototype.hasOwnProperty.call(property, key)) {
+                delete property[key];
+                changed = true;
+            }
+        }
+        if (changed) {
+            try { window.CharacterRefresh?.(window.Player, false, false); } catch (_) {}
+            try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
+            try { if (window.CurrentScreen === "ChatRoom") window.ChatRoomCharacterUpdate?.(window.Player); } catch (_) {}
+        }
+        if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+        return true;
+    }
+
     // Explicit on-demand actions; never auto-wear or modify a user's outfits.
     function wardrobeWearByName(name) {
         const entry = wardrobeEntryByName(name);
@@ -19061,7 +19094,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.4.7";
+    const VERSION = "3.4.8";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 

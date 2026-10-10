@@ -1,5 +1,5 @@
 {
-  "version": "3.4.7",
+  "version": "3.4.8",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Critical visibility fix: v3.4.6 mistakenly saved dress recolor layers with maximum alpha=1/255. Restores correct 8-bit opacity and uses gentle alpha-conserving cross-zone feathering at the dress seams. No change to clothing priorities, positions, item groups, or image dimensions; retains v3.4.5 per-layer transform fix."
+  "notes": "Draped Wrap Dress reference fit updated for BC 155 cm with Echo -40: native X90/Y182 and resampled 279x373 sprite (90% of v3.4.7). All four color masks rebuilt at the matching size, preserving opacity, overlap and priorities. Adds a user-controlled Clear old Move / Resize action to avoid double-scaling existing saved outfit edits; preserves all other clothing and plushie features. Fixes stale userscript @version header."
 }
