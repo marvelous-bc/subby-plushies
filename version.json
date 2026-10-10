@@ -1,5 +1,5 @@
 {
-  "version": "3.4.6",
+  "version": "3.4.7",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Dress color-zone seam cleanup: rebuilt the Draped Wrap Dress color masks so soft edges are preserved, neighboring zones overlap slightly instead of leaving gaps, and recoloring no longer shows black separator seams between zones. Includes the prior per-layer Move/Resize wardrobe fix and keeps existing priorities, slots, and editor improvements."
+  "notes": "Critical visibility fix: v3.4.6 mistakenly saved dress recolor layers with maximum alpha=1/255. Restores correct 8-bit opacity and uses gentle alpha-conserving cross-zone feathering at the dress seams. No change to clothing priorities, positions, item groups, or image dimensions; retains v3.4.5 per-layer transform fix."
 }
