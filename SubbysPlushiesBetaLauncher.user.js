@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies + Wardrobe (Beta Launcher)
 // @namespace    subbycat.subbysplushies.beta-live-loader
 // @author       Marvelous
-// @version      1.0.0-beta.1
+// @version      1.0.0
 // @description  Loads the latest beta Subby's Plushies + Wardrobe from GitHub on every BC page load; no SHA-256 maintenance needed.
 // @homepageURL  https://github.com/marvelous-bc/subby-plushies
 // @supportURL   https://github.com/marvelous-bc/subby-plushies/issues
@@ -36,7 +36,7 @@
     // script should be enabled in the userscript manager: this launcher.
     if (window[LOADER_KEY]) return;
     const status = {
-        loaderVersion: "1.0.0-beta.1",
+        loaderVersion: "1.0.0",
         phase: "starting",
         version: null,
         transport: "fetch",
@@ -96,7 +96,7 @@
     // executing the entire plugin twice while attempting alternate injection routes.
     function markedSource(code, marker) {
         const markerLine = `window[${JSON.stringify(EXEC_KEY)}] = ${JSON.stringify(marker)};\n`;
-        return `${markerLine}${code}\n//# sourceURL=SubbysPlushies-GitHub-Live.user.js\n`;
+        return `${markerLine}${code}\n//# sourceURL=SubbysPlushies-GitHub-Beta-Live.user.js\n`;
     }
 
     function injectInline(code, marker) {

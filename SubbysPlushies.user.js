@@ -1,14 +1,14 @@
 // ==UserScript==
-// @name         BC - Subby's Plushies + Wardrobe
-// @namespace    subbycat.subbysplushies
+// @name         BC - Subby's Plushies + Wardrobe (Beta)
+// @namespace    subbycat.subbysplushies.beta
 // @author	     Marvelous
-// @version      3.3.6
-// @description  Subby’s Plushies + Wardrobe: multicolor cat-ear headband and heart charm, Lore, Eva, plushie interactions, and native BC item integration
+// @version      3.5.0-beta.1
+// @description  Subby’s Plushies + Wardrobe: custom zones, smart fill, pose PNGs, local preview and studio tools
 // @released     2026-10-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
-// @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
-// @downloadURL   https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
+// @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/beta/SubbysPlushies.user.js
+// @downloadURL   https://raw.githubusercontent.com/marvelous-bc/subby-plushies/beta/SubbysPlushies.user.js
 // @match        https://bondageprojects.elementfx.com/R*
 // @match        https://www.bondageprojects.elementfx.com/R*
 // @match        https://bondageeurope.com/*/BondageClub/
@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.3.6";
+    const VERSION = "3.5.0-beta.1";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -592,10 +592,10 @@ function SubbysPlushiesPageMain() {
     const BATTLE_CHALLENGE_RE = /(.+?)\((\d+)\) challenges (.+?)\((\d+)\) to a plushie battle with (.+?)\./i;
     const BATTLE_RESULT_RE = /Plushie battle result: (.+?)\((\d+)\) \[([^\]]+)\] (wins|loses|draws) against (.+?)\((\d+)\) \[([^\]]+)\]\. Scores (\d+)-(\d+)\./i;
     // Public and beta branches track their own update-check clock.
-    const UPDATE_CHECK_STORAGE_KEY = "SubbysPlushies:main:last-update-check:v1";
+    const UPDATE_CHECK_STORAGE_KEY = "SubbysPlushies:beta:last-update-check:v1";
     const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-    const UPDATE_REPOSITORY_API = "https://api.github.com/repos/marvelous-bc/subby-plushies/contents/?ref=main";
-    const UPDATE_REPOSITORY_PAGE = "https://github.com/marvelous-bc/subby-plushies/tree/main";
+    const UPDATE_REPOSITORY_API = "https://api.github.com/repos/marvelous-bc/subby-plushies/contents/?ref=beta";
+    const UPDATE_REPOSITORY_PAGE = "https://github.com/marvelous-bc/subby-plushies/tree/beta";
 
     let PROTECT_DURATION_MS = 2800;
     let PROTECT_TRANSFORM = Object.freeze({
@@ -734,11 +734,11 @@ function SubbysPlushiesPageMain() {
 
     console.log(`[Subby v${VERSION}] Userscript injected.`);
 
-    const REPOSITORY_RAW_ROOT = "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main";
+    const REPOSITORY_RAW_ROOT = "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/beta";
     const DATA_INDEX_URL = `${REPOSITORY_RAW_ROOT}/data/index.json`;
     const GIT_DATA_SCHEMA_VERSION = 1;
-    const GIT_DATA_CACHE_KEY = "SubbysPlushies:main:git-data-cache:v1";
-    const GIT_DATA_LAST_CHECK_KEY = "SubbysPlushies:main:git-data-last-check:v1";
+    const GIT_DATA_CACHE_KEY = "SubbysPlushies:beta:git-data-cache:v1";
+    const GIT_DATA_LAST_CHECK_KEY = "SubbysPlushies:beta:git-data-last-check:v1";
     const GIT_DATA_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
     const GIT_DATA_FILES = Object.freeze([
         "lore.json",
@@ -756,20 +756,32 @@ function SubbysPlushiesPageMain() {
     const UPDATE_MANIFEST_URL = `${REPOSITORY_RAW_ROOT}/version.json`;
     const PLUSH_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/plushies`;
 
-    // Two Wardrobe accessory PNGs are hosted on GitHub, even when the
-    // userscript runs locally. Their six recolorable BC layers come from the
-    // shared remote color-layers.json; no clothing pose assets are registered.
+    // Three wardrobe PNGs are hosted on GitHub, even when the script runs
+    // locally. BC layers are supplied by shared color-layers.json (schema v2).
     // Uses Plushies' existing image-source mapper (no raw drawing overrides).
     const WARDROBE_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/wardrobe`;
     const WARDROBE_LAYERS_URL = `${REPOSITORY_RAW_ROOT}/data/wardrobe/color-layers.json`;
-    const WARDROBE_ITEMS = Object.freeze([
-        Object.freeze({"name": "SubbyCatHeadband", "title": "Subby's Plush Cat-Ear Headband", "group": "HairAccessory2", "top": 50, "left": 168, "width": 183, "height": 100, "priority": 55, "colorZones": ["OuterEars", "InnerEars", "Headband", "Bow"], "defaultColors": ["#BB8CCC", "#F2C1D6", "#B58ACA", "#E58DBA"]}),
-        Object.freeze({"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]})
-    ]);
+    const WARDROBE_ITEMS = [
+        {"name": "SubbyCatHeadband", "title": "Subby's Plush Cat-Ear Headband", "group": "HairAccessory2", "top": 50, "left": 168, "width": 183, "height": 100, "priority": 55, "colorZones": ["OuterEars", "InnerEars", "Headband", "Bow"], "defaultColors": ["#BB8CCC", "#F2C1D6", "#B58ACA", "#E58DBA"]},
+        {"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]},
+        {"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Cloth","top":182,"left":90,"width":279,"height":373,"priority":38,"layerPriorities":{"Fabric":29},"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]}
+    ];
+    const WARDROBE_ITEM_NAME_SET = new Set(WARDROBE_ITEMS.map(entry => entry.name));
     const WARDROBE_IMAGE_BY_NAME = new Map(WARDROBE_ITEMS.map(entry =>
         [entry.name, `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(entry.name)}.png`]));
-    const WARDROBE_LAYER_IMAGES = new Map(WARDROBE_ITEMS.map(entry =>
-        [entry.name, new Map()]));
+    const WARDROBE_LAYER_IMAGES = new Map(WARDROBE_ITEMS.map(entry => [entry.name, new Map()]));
+    // Optional pose art follows the same per-zone native path lookup as standing.
+    const WARDROBE_POSE_IMAGES = new Map();
+    const WARDROBE_SLOTS = new Set(["Cloth", "Suit", "ClothLower", "Necklace", "HairAccessory2", "HairAccessory1", "Bra", "Panties", "Socks", "Shoes"]);
+    const WARDROBE_POSES = ["Standing", "ArmsUp", "ArmsUpWide", "ArmsBehind", "Kneel", "AllFours"];
+    const WARDROBE_NATIVE_POSE = Object.freeze({
+        ArmsUp: "ArmsUp", OverTheHead: "ArmsUp", ArmsRaised: "ArmsUp",
+        ArmsUpWide: "ArmsUpWide", Yoked: "ArmsUpWide", SpreadEagle: "ArmsUpWide",
+        ArmsBehind: "ArmsBehind", BackBoxTie: "ArmsBehind", BackElbowTouch: "ArmsBehind",
+        Kneel: "Kneel", KneelingSpread: "Kneel", LegsClosed: "Kneel",
+        AllFours: "AllFours", Hogtied: "AllFours"
+    });
+    let wardrobeLayerManifest = null;
     let wardrobeLayersReady = false;
     let wardrobeLayersError = null;
     async function loadWardrobeColorLayers() {
@@ -783,9 +795,10 @@ function SubbysPlushiesPageMain() {
                 throw new Error("Unsupported Wardrobe layer manifest (requires schema v2)");
             }
             const pending = [];
-            const loadZones = (entry, zones) => {
+            const metadata = [];
+            const loadZones = (entry, zones, names) => {
                 const result = new Map();
-                for (const zone of entry.colorZones) {
+                for (const zone of names) {
                     const value = zones?.[zone];
                     if (typeof value !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(value) || value.length < 100) {
                         throw new Error(`Invalid ${entry.name}/${zone} artwork`);
@@ -799,11 +812,49 @@ function SubbysPlushiesPageMain() {
                 if (!remote || remote.width !== entry.width || remote.height !== entry.height) {
                     throw new Error(`Missing/mismatched zone artwork for ${entry.name}`);
                 }
-                const zones = loadZones(entry, remote.zones);
-                pending.push([entry.name, zones]);
+                const names = Array.isArray(remote.zoneOrder) ? remote.zoneOrder : entry.colorZones;
+                if (!Array.isArray(names) || !names.length || names.length > 16 ||
+                    new Set(names).size !== names.length ||
+                    names.some(name => typeof name !== "string" || !/^[A-Za-z][A-Za-z0-9]{0,31}$/.test(name))) {
+                    throw new Error(`Invalid color-zone names/order for ${entry.name}`);
+                }
+                const slot = remote.slot || entry.group;
+                if (!WARDROBE_SLOTS.has(slot)) throw new Error(`Unsupported native slot ${slot}`);
+                const zones = loadZones(entry, remote.zones, names);
+                const poses = new Map();
+                if (remote.poses && typeof remote.poses === "object") {
+                    for (const [pose, spec] of Object.entries(remote.poses)) {
+                        if (!WARDROBE_POSES.includes(pose) || pose === "Standing" || !spec ||
+                            spec.width !== entry.width || spec.height !== entry.height ||
+                            !spec.zones || typeof spec.file !== "string" ||
+                            spec.file !== `${entry.name}_${pose}.png`) {
+                            throw new Error(`Invalid pose metadata for ${entry.name}/${pose}`);
+                        }
+                        poses.set(pose, { file: spec.file, layers: loadZones(entry, spec.zones, names) });
+                    }
+                }
+                pending.push([entry.name, zones, poses]);
+                metadata.push([entry, names, slot, poses]);
             }
-            // Commit only after validating both accessories and all six color zones.
-            for (const [name, zones] of pending) WARDROBE_LAYER_IMAGES.set(name, zones);
+            // Commit metadata atomically after validation; no partial modifications.
+            const remoteColorValue = (name, zone) => {
+                const color = payload.items?.[name]?.zoneColors?.[zone];
+                return typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) ? color.toUpperCase() : null;
+            };
+            for (const [entry, names, slot, poses] of metadata) {
+                const previous = new Map(entry.colorZones.map((name, i) => [name, entry.defaultColors[i]]));
+                entry.colorZones = [...names];
+                entry.defaultColors = names.map(name => (
+                    typeof remoteColorValue(entry.name, name) === "string" ? remoteColorValue(entry.name, name) : previous.get(name) || "#FFFFFF"));
+                entry.layerPriorities = payload.items[entry.name]?.layerPriorities || entry.layerPriorities || {};
+                entry.group = slot;
+                entry.poses = poses;
+            }
+            for (const [name, zones, poses] of pending) {
+                WARDROBE_LAYER_IMAGES.set(name, zones);
+                WARDROBE_POSE_IMAGES.set(name, poses);
+            }
+            wardrobeLayerManifest = payload;
             wardrobeLayersReady = true;
             wardrobeLayersError = null;
             return true;
@@ -829,6 +880,13 @@ function SubbysPlushiesPageMain() {
                     if (previous[entry.name] && typeof previous[entry.name] === "object")
                         saved[entry.name] = previous[entry.name];
                 }
+            }
+            // v3.4.8 updated the native dress baseline for 155 cm / Echo -40.
+            // Forget exact old defaults without overwriting genuinely custom fits.
+            const dressSaved = saved.SubbyDrapedWrapDress;
+            if (dressSaved && Number(dressSaved.left) === 85 &&
+                (Number(dressSaved.top) === 170 || Number(dressSaved.top) === 167)) {
+                delete saved.SubbyDrapedWrapDress;
             }
             window.localStorage?.setItem(WARDROBE_PLACEMENT_STORAGE_KEY, JSON.stringify(saved));
             return saved;
@@ -952,9 +1010,27 @@ function SubbysPlushiesPageMain() {
             const image = WARDROBE_IMAGE_BY_NAME.get(entry.name);
             if (filename === `${entry.name}.png` || filename === `${entry.name}_Preview.png` ||
                 suffix === `Preview/${entry.name}.png` || suffix === `Preview/${entry.name}_0.png`) {
-                return image || null;
+                // BC's pose router may request a pose-folder copy of the base item.
+                const folderPose = normalized.split("/").find(part => WARDROBE_POSES.includes(part));
+                const posed = WARDROBE_POSE_IMAGES.get(entry.name)?.get(folderPose);
+                return posed ? `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(posed.file)}` : image || null;
             }
-            const layerImages = WARDROBE_LAYER_IMAGES.get(entry.name);
+            const poseByFolder = normalized.split("/").map(part => part.toLowerCase());
+            let pose = "Standing";
+            for (const candidate of WARDROBE_POSES.slice(1)) {
+                if (poseByFolder.includes(candidate.toLowerCase()) ||
+                    filename.toLowerCase().includes(`_${candidate.toLowerCase()}_`) ||
+                    filename.toLowerCase().endsWith(`_${candidate.toLowerCase()}.png`)) pose = candidate;
+            }
+            // BC may ask for original pose names (e.g. OverTheHead) before mapping.
+            for (const [nativePose, mapped] of Object.entries(WARDROBE_NATIVE_POSE)) {
+                if (poseByFolder.includes(nativePose.toLowerCase())) pose = mapped;
+            }
+            const poseInfo = WARDROBE_POSE_IMAGES.get(entry.name)?.get(pose);
+            const layerImages = poseInfo?.layers || WARDROBE_LAYER_IMAGES.get(entry.name);
+            if (pose !== "Standing" && filename === `${entry.name}_${pose}.png`) {
+                return poseInfo ? `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(poseInfo.file)}` : image;
+            }
             for (const zone of entry.colorZones) {
                 if (filename === `${entry.name}_${zone}.png` ||
                     filename === `${entry.name}_${zone}_0.png` ||
@@ -974,14 +1050,19 @@ function SubbysPlushiesPageMain() {
     Object.defineProperty(window, "SubbysWardrobeCurated", {
         configurable: true,
         value: Object.freeze({
-            version: "0.4.1",
+            version: "0.4.2",
             get registered() { return [...wardrobeState.registered]; },
             get errors() { return [...wardrobeState.errors]; },
             get status() { return wardrobeState.status; },
             get imageStatus() { return { ready: wardrobeLayersReady, error: wardrobeLayersError, source: WARDROBE_LAYERS_URL }; },
+            editColorZones: name => {
+                const entry = WARDROBE_ITEMS.find(item => item.name === name);
+                return entry ? openWardrobeColorZoneEditor(entry) : false;
+            },
             reloadImages: async () => {
                 if (!(await loadWardrobeColorLayers())) return false;
-                if (wardrobeState.status === "images-unavailable") setupWardrobeAssets();
+                if (!wardrobeState.attempted) setupWardrobeAssets();
+                wardrobeSyncNativePicker();
                 try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
                 if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
                 return true;
@@ -1002,12 +1083,38 @@ function SubbysPlushiesPageMain() {
             displayText: wardrobeResolveMissingVisibleLabel,
             get methods() { return [...wardrobeState.methods]; },
             get assets() { return WARDROBE_ITEMS.map(wardrobeCatalogStatus); },
+            // BC scales native clothing and the whole character together.
+            // This is diagnostic only; do not add a second scale for Echo.
+            heightFit: (name = "SubbyDrapedWrapDress", C = window.Player) => {
+                const entry = WARDROBE_ITEMS.find(item => item.name === name);
+                if (!entry || !C) return null;
+                const ratio = Number(C.HeightRatio);
+                const proportion = Number(C.HeightRatioProportion);
+                const modifier = Number(C.HeightModifier);
+                const validRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : null;
+                return {
+                    asset: entry.name,
+                    slot: entry.group,
+                    nativePlacement: wardrobePlacement(entry),
+                    nativeSprite: {width: entry.width, height: entry.height},
+                    bcHeightRatio: validRatio,
+                    bcHeightRatioProportion: Number.isFinite(proportion) ? proportion : null,
+                    bcHeightModifier: Number.isFinite(modifier) ? modifier : null,
+                    sourceReference: {bcCm: 155, echoControl: -40, oldArtworkScale: 0.94, newBakeRelativeToPrevious: 0.90, nativeAnchor: {x: 90, y: 182}},
+                    scaleStrategy: "native-character-canvas; no extra per-item scale",
+                    echoControlVerified: false,
+                    note: "New default is baked in for the 155cm/Echo -40 reference. Clear an old 0.90 manual Move/Resize scale to avoid double-scaling; other heights need live calibration."
+                };
+            },
             diagnose: () => WARDROBE_ITEMS.map(wardrobeCatalogStatus),
+            get nativePicker() { return wardrobeNativePickerDiagnostics(); },
+            syncNativePicker: () => wardrobeSyncNativePicker(),
             wear: name => wardrobeWearByName(name),
             remove: name => wardrobeRemoveByName(name),
             placement: name => { const entry = wardrobeEntryByName(name); return entry ? wardrobePlacement(entry) : null; },
             move: (name, dx = 0, dy = 0) => wardrobeSetPlacement(name, dx, dy),
             resetPlacement: name => wardrobeSetPlacement(name, 0, 0, true),
+            resetMoveResize: name => wardrobeResetMoveResize(name),
             getColors: name => wardrobeGetColors(name),
             setColors: (name, values) => wardrobeSetColors(name, values),
             // Use in console to confirm BC's exact generated layer paths.
@@ -4217,6 +4324,7 @@ function SubbysPlushiesPageMain() {
     }
 
     function scheduleLocalOverlayReposition() {
+        if (!plushScreenVisible()) return;
         if (localOverlayRepositionFrame != null) return;
         localOverlayRepositionFrame = requestAnimationFrame(() => {
             localOverlayRepositionFrame = null;
@@ -4230,7 +4338,7 @@ function SubbysPlushiesPageMain() {
 
     function refreshPlushStatusIcon() {
         const targetItem = statusOverlayTargetItem();
-        if (window.CurrentScreen !== "ChatRoom" || !isOurs(targetItem)) {
+        if (!plushScreenVisible() || !isOurs(targetItem)) {
             removePlushStatusIcon();
             schedulePlushStatusSleepRefresh(targetItem);
             return false;
@@ -4720,6 +4828,7 @@ function SubbysPlushiesPageMain() {
     const nativePresenceDomBadges = new Map();
     const nativePresencePendingOverlayWork = new Map();
     const nativePresenceCaptureTimes = new Map();
+    const nativePresenceEffectProbeTimes = new Map();
     let nativePresenceBadgePruneTimer = null;
     let nativePresenceOverlayWorkRaf = 0;
     // The addon indicator is a hover-only decoration, never a permanent badge.
@@ -4783,6 +4892,14 @@ function SubbysPlushiesPageMain() {
 
     function refreshNativePresenceBadgeHover() {
         nativePresenceHoveredKey = nativePresenceHoveredCharacterKey();
+        if (nativePresenceHoveredKey && !nativePresenceDomBadges.has(nativePresenceHoveredKey)) {
+            const key = nativePresenceHoveredKey;
+            const members = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
+            const C = key === nativePresenceBadgeKey(window.Player) ? window.Player :
+                members.find(member => nativePresenceBadgeKey(member) === key);
+            const placement = C && characterChatRoomDraw(C);
+            if (C && placement && Date.now() - Number(placement.at) <= 1200) positionNativePresenceDomBadge(C, placement);
+        }
         const now = Date.now();
         for (const [key, image] of nativePresenceDomBadges) {
             if (!image?.isConnected) continue;
@@ -4877,10 +4994,13 @@ function SubbysPlushiesPageMain() {
             }
         }
         if (remove) {
+            if (nativePresenceBadgePruneTimer != null) window.clearTimeout(nativePresenceBadgePruneTimer);
+            nativePresenceBadgePruneTimer = null;
             nativePresenceHoverPointer = null;
             nativePresenceHoveredKey = null;
             nativePresencePendingOverlayWork.clear();
             nativePresenceCaptureTimes.clear();
+            nativePresenceEffectProbeTimes.clear();
             lastCharacterChatRoomDraw.clear();
             lastPlayerChatRoomDraw = null;
         }
@@ -4914,6 +5034,8 @@ function SubbysPlushiesPageMain() {
 
         if (![left, top, width, height].every(Number.isFinite)) return false;
 
+        // Do not allocate DOM badges for all remote members every render.
+        if (nativePresenceHoveredKey !== nativePresenceBadgeKey(C)) return false;
         const image = ensureNativePresenceDomBadge(C);
         if (!image) return false;
 
@@ -4926,6 +5048,7 @@ function SubbysPlushiesPageMain() {
             height: `${Math.round(height)}px`,
         });
 
+        if (nativePresenceHoveredKey) scheduleNativeBadgeExpiry();
         nativePresenceDrawMethod = "DOM overlay after character render";
         nativePresenceDrawCount++;
         lastNativePresenceDrawAt = Date.now();
@@ -4936,7 +5059,7 @@ function SubbysPlushiesPageMain() {
         nativePresenceOverlayWorkRaf = 0;
 
         if (
-            window.CurrentScreen !== "ChatRoom" ||
+            !plushScreenVisible() ||
             addonPresenceIconHiddenByNativeUI()
         ) {
             nativePresencePendingOverlayWork.clear();
@@ -4963,7 +5086,11 @@ function SubbysPlushiesPageMain() {
 
         // The mouse may already be over a player when the next draw is queued.
         refreshNativePresenceBadgeHover();
-        pruneNativePresenceDomBadges();
+        const now = Date.now();
+        if (now - (flushNativePresenceOverlayWork.lastPruneAt || 0) > 1200) {
+            flushNativePresenceOverlayWork.lastPruneAt = now;
+            pruneNativePresenceDomBadges();
+        }
     }
 
     function pruneNativePresenceDomBadges() {
@@ -4990,8 +5117,18 @@ function SubbysPlushiesPageMain() {
         if (inRoom && nativePresenceHoverPointer) refreshNativePresenceBadgeHover();
     }
 
+    function scheduleNativeBadgeExpiry() {
+        if (nativePresenceBadgePruneTimer != null || !nativePresenceHoveredKey || !nativePresenceDomBadges.size) return;
+        nativePresenceBadgePruneTimer = window.setTimeout(() => {
+            nativePresenceBadgePruneTimer = null;
+            pruneNativePresenceDomBadges();
+            // Keep the stale-badge safeguard while hovered only. No idle loop.
+            if (nativePresenceHoveredKey && nativePresenceDomBadges.size) scheduleNativeBadgeExpiry();
+        }, 1500);
+    }
+
     function queueNativePresenceOverlayWork(C, placement) {
-        if (!C || !placement) return false;
+        if (!C || !placement || !plushScreenVisible()) return false;
         const key = nativePresenceBadgeKey(C) || C;
         nativePresencePendingOverlayWork.set(key, { C, placement });
 
@@ -5095,8 +5232,22 @@ function SubbysPlushiesPageMain() {
             if (placement) {
                 rememberVisibleOverlayPlacement(C, placement);
                 const key = nativePresenceBadgeKey(C);
+                const member = Number(C.MemberNumber);
+                const local = C === window.Player || member === Number(window.Player?.MemberNumber);
+                // Detect restraint overlays once every 1.5s when idle, not on
+                // every native DrawCharacter invocation for each remote avatar.
+                const activeRestraintOverlay = !!petSuitRenderStates.get(petSuitOverlayKey(C))?.active;
+                const lastProbe = nativePresenceEffectProbeTimes.get(key) || 0;
+                let newlyRestrained = false;
+                if (!activeRestraintOverlay && placement.at - lastProbe >= 1500) {
+                    nativePresenceEffectProbeTimes.set(key, placement.at);
+                    newlyRestrained = !!characterPetSuitItem(C) && isOurs(getHandheldItem(C));
+                }
+                const needsOverlay = !!nativePresenceHoverPointer || activeRestraintOverlay || newlyRestrained ||
+                    (Number.isFinite(member) && remotePlushEmotes.has(member)) ||
+                    (local && (speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected));
                 const last = nativePresenceCaptureTimes.get(key) || 0;
-                if (placement.at - last >= 100 || !last) {
+                if (needsOverlay && (placement.at - last >= 100 || !last)) {
                     nativePresenceCaptureTimes.set(key, placement.at);
                     queueNativePresenceOverlayWork(C, placement);
                 }
@@ -5122,11 +5273,16 @@ function SubbysPlushiesPageMain() {
             nativePresenceOverlayRetryTimer = null;
         }
         installNativePresenceBadgeHoverListeners();
-        if (nativePresenceBadgePruneTimer == null) {
-            nativePresenceBadgePruneTimer = window.setInterval(pruneNativePresenceDomBadges, 500);
-        }
         return true;
     }
+
+    window.SubbysPlushiesPerformanceDiag = () => ({
+        visible: plushScreenVisible(), loadedPlushImages: renderImages.filter(image => image && image !== renderFallbackImage).length,
+        pendingPlushLoads: renderImagePromises.size, pendingActionIcons: actionIconLoads.size, pendingCanvasRedraws: dirtyPlushCharacters.size,
+        activePresenceBadges: nativePresenceDomBadges.size,
+        queuedPresenceDraws: nativePresencePendingOverlayWork.size,
+        cachedLore: (gitDataState.loadedFiles || []).includes("lore.json"),
+    });
 
     window.SubbysPlushiesDialogueTest = (actionKey = "pet") => {
         const spec = PLUGIN_ACTIVITY_BY_KEY.get(String(actionKey || "pet"));
@@ -5294,13 +5450,22 @@ function SubbysPlushiesPageMain() {
         return true;
     }
 
+    function plushScreenVisible() {
+        if (document.hidden || window.CurrentScreen !== "ChatRoom") return false;
+        const canvas = document.getElementById("MainCanvas");
+        if (!canvas || typeof canvas.getBoundingClientRect !== "function") return true;
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        return rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
+    }
+
     function scheduleNextIdleAnimation(delay = null) {
         if (idleAnimationTimer != null) window.clearTimeout(idleAnimationTimer);
-        if (!getFeatureSettings().idleAnimations || isLowCpuMode() || document.hidden) { idleAnimationTimer = null; return false; }
+        if (!getFeatureSettings().idleAnimations || isLowCpuMode() || !plushScreenVisible()) { idleAnimationTimer = null; return false; }
         const wait = Number.isFinite(delay) ? Math.max(500, delay) : IDLE_MIN_DELAY_MS + Math.random() * (IDLE_MAX_DELAY_MS - IDLE_MIN_DELAY_MS);
         idleAnimationTimer = window.setTimeout(() => {
             idleAnimationTimer = null;
-            runIdleAnimation();
+            if (plushScreenVisible()) runIdleAnimation();
             scheduleNextIdleAnimation();
         }, wait);
         return true;
@@ -5311,6 +5476,16 @@ function SubbysPlushiesPageMain() {
     function installVisibilityPerformanceHooks() {
         if (visibilityPerformanceHooksInstalled) return true;
         visibilityPerformanceHooksInstalled = true;
+        const resumeIfVisible = () => {
+            if (!plushScreenVisible()) return;
+            if (getFeatureSettings().idleAnimations && !isLowCpuMode() && idleAnimationTimer == null)
+                scheduleNextIdleAnimation(1200);
+            scheduleDirtyPlushRender();
+            scheduleLocalOverlayReposition();
+            scheduleNativePresenceBadgeHoverRefresh();
+        };
+        window.addEventListener("scroll", resumeIfVisible, {passive:true});
+        window.addEventListener("resize", resumeIfVisible, {passive:true});
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
                 cancelIdleAnimation(false);
@@ -5339,6 +5514,7 @@ function SubbysPlushiesPageMain() {
     }
 
     function showCurrentPlushInfo() {
+        void ensureRemotePlushLore();
         const name = currentPlushName();
         const lore = getPlushLore(name) || { title: "Plushie", text: "Lore is not available yet. The addon will use the validated Git copy when it is online or cached." };
         const mood = getPlushMoodRecord(name);
@@ -6516,7 +6692,7 @@ function SubbysPlushiesPageMain() {
         return "Built-in fallback";
     }
 
-    async function refreshGitDataFromGitHub({ force = false, silent = true } = {}) {
+    async function refreshGitDataFromGitHub({ force = false, silent = true, includeLore = false } = {}) {
         if (gitDataRefreshPromise) return gitDataRefreshPromise;
         if (!force) {
             let lastCheck = 0;
@@ -6537,7 +6713,7 @@ function SubbysPlushiesPageMain() {
                 const loaded = [];
                 const failures = [];
 
-                const results = await Promise.allSettled(GIT_DATA_FILES.map(async fileName => {
+                const results = await Promise.allSettled(GIT_DATA_FILES.filter(fileName => includeLore || fileName !== "lore.json").map(async fileName => {
                     const path = gitDataPathFromIndex(index, fileName);
                     if (!path) throw new Error(`${fileName}: invalid path in data/index.json`);
                     const payload = await fetchGitDataJson(`${REPOSITORY_RAW_ROOT}/${path}?t=${stamp}`);
@@ -6599,6 +6775,42 @@ function SubbysPlushiesPageMain() {
             }
         })();
         return gitDataRefreshPromise;
+    }
+
+    // Lore is fetched on first inspection, not during every startup data refresh.
+    // Local cached lore and built-in stories remain usable offline immediately.
+    let onDemandLorePromise = null;
+    let onDemandLoreFetched = false;
+    let onDemandLoreRetryAfter = 0;
+    async function ensureRemotePlushLore() {
+        if (onDemandLorePromise) return onDemandLorePromise;
+        if (Date.now() < onDemandLoreRetryAfter) return false;
+        if (onDemandLoreFetched) return true;
+        onDemandLorePromise = (async () => {
+            try {
+                const index = await fetchGitDataJson(`${DATA_INDEX_URL}?t=${Date.now()}`);
+                if (!gitDataPlainObject(index) || Number(index.schemaVersion) !== GIT_DATA_SCHEMA_VERSION)
+                    throw new Error("Invalid lore index");
+                const path = gitDataPathFromIndex(index, "lore.json");
+                if (!path) throw new Error("No lore.json entry in data/index.json");
+                const payload = await fetchGitDataJson(`${REPOSITORY_RAW_ROOT}/${path}?t=${Date.now()}`);
+                if (!validateAndApplyGitDataFile("lore.json", payload)) throw new Error("Invalid lore.json data");
+                const old = readGitDataCache();
+                writeGitDataCache({schemaVersion:GIT_DATA_SCHEMA_VERSION, savedAt:Date.now(),
+                    indexPluginVersion:old?.indexPluginVersion || null,
+                    files:{...(gitDataPlainObject(old?.files) ? old.files : {}), "lore.json":payload}});
+                gitDataState = {...gitDataState, loadedFiles:[...new Set([...(gitDataState.loadedFiles || []), "lore.json"])],
+                    lastError:null};
+                onDemandLoreFetched = true;
+                if (extensionsActiveTab === "lore" && extensionsPanelElement?.isConnected) renderExtensionsPanel();
+                return true;
+            } catch (e) {
+                onDemandLoreRetryAfter = Date.now()+60000;
+                warn("On-demand lore fetch failed; using built-in/cached lore:", e); return false;
+            }
+            finally { onDemandLorePromise = null; }
+        })();
+        return onDemandLorePromise;
     }
 
     function showGitDataStatus() {
@@ -8207,6 +8419,7 @@ function SubbysPlushiesPageMain() {
     }
 
     function renderExtensionsLore(container) {
+        void ensureRemotePlushLore();
         const names = loreBrowseNames();
         if (!names.length) {
             const section = makeExtensionsSection("Lore");
@@ -8288,10 +8501,623 @@ function SubbysPlushiesPageMain() {
         container.appendChild(layout);
     }
 
+    // Artwork-authoring tool: adjusts color masks without editing source PNGs.
+    // v3.4.4: source-pixel zoom, preview cursor, continuous strokes, undo/redo,
+    // pan, keyboard shortcuts and selected-zone visibility. Export remains schema v2.
+    // Wardrobe Studio v3.5: standalone editor state, no global canvas monkeypatches.
+    // The native game reads the published schema-v2 color-layer manifest on reload.
+    // Wardrobe Studio v3.5: standalone editor state, no global canvas monkeypatches.
+    // The native game reads the published schema-v2 color-layer manifest on reload.
+    // Wardrobe Studio v3.5: standalone editor state, no global canvas monkeypatches.
+    // The native game reads the published schema-v2 color-layer manifest on reload.
+    async function openWardrobeColorZoneEditor(entry) {
+        const stored = wardrobeLayerManifest?.items?.[entry?.name];
+        if (!entry || !stored) {
+            appendLocalInfoBox("Wardrobe Studio", ["Color-layer data has not loaded. Check the GitHub data/wardrobe/color-layers.json file."]);
+            return false;
+        }
+        document.getElementById("SubbysWardrobeZoneEditor")?.__subbysDispose?.();
+        const W = entry.width, H = entry.height, count = W * H;
+        const root = document.createElement("div");
+        root.id = "SubbysWardrobeZoneEditor";
+        root.setAttribute("role", "dialog");
+        root.setAttribute("aria-label", `${entry.title} Wardrobe Studio`);
+        Object.assign(root.style, { position: "fixed", inset: "0", zIndex: "2147483646", pointerEvents: "none",
+            color: "#f6f2fa", font: "13px sans-serif" });
+        const panel = document.createElement("div");
+        Object.assign(panel.style, { position: "absolute", left: `${Math.max(8, (innerWidth - 1040) / 2)}px`,
+            top: `${Math.max(8, innerHeight - Math.min(860, innerHeight - 20) - 8)}px`,
+            width: `${Math.min(1040, innerWidth - 16)}px`, height: `${Math.min(860, innerHeight - 16)}px`,
+            minWidth: "min(450px, 95vw)", minHeight: "320px", maxWidth: "calc(100vw - 8px)",
+            maxHeight: "calc(100vh - 8px)", resize: "both", overflow: "hidden", boxSizing: "border-box",
+            display: "flex", flexDirection: "column", pointerEvents: "auto", background: "#292231",
+            border: "1px solid #b09ac3", borderRadius: "10px", boxShadow: "0 8px 40px #000c" });
+        const header = document.createElement("div");
+        Object.assign(header.style, { display: "flex", alignItems: "center", justifyContent: "space-between",
+            cursor: "move", padding: "10px", background: "#463651", flexShrink: "0", touchAction: "none" });
+        const headerTitle = document.createElement("strong"); headerTitle.textContent = `${entry.title} — Wardrobe Studio`;
+        const controlsTop = document.createElement("div");
+        Object.assign(controlsTop.style, { display: "flex", alignItems: "center", gap: "6px" });
+        const makeButton = (label, handler, parent = controlsTop) => {
+            const b = document.createElement("button"); b.type = "button"; b.textContent = label;
+            Object.assign(b.style, { background: "#50415d", color: "white", border: "1px solid #9883a9",
+                borderRadius: "5px", padding: "5px 8px", cursor: "pointer", font: "inherit" });
+            b.addEventListener("click", handler); parent.appendChild(b); return b;
+        };
+        let destroyed = false;
+        const cleanups = [];
+        let gamePreview = false, originalPreviewLayers = null, livePreviewTimer = 0;
+        let sourceByPose = new Map(), masksByPose = new Map(), originalsByPose = new Map(), fileByPose = new Map();
+        const originalNames = Array.isArray(stored.zoneOrder) ? [...stored.zoneOrder] : [...entry.colorZones];
+        let zones = [...originalNames], locks = new Set(), selectedZone = zones[0];
+        let selectedPose = "Standing", selectedTool = "brush", brushSize = 6, hardness = 100, opacity = 100, tolerance = 24;
+        let zoom = 1, zoomMode = "fit", spaceHeld = false, pointer = null, stroke = null, regionSelection = null;
+        let originalSlot = stored.slot || entry.group, slot = originalSlot;
+        let zonePriorities = { ...(entry.layerPriorities || {}), ...(stored.layerPriorities || {}) };
+        let zoneDefaults = Object.fromEntries(zones.map((name, i) => [name, stored.zoneColors?.[name] || entry.defaultColors[entry.colorZones.indexOf(name)] || "#FFFFFF"]));
+        const poseNames = ["Standing", ...WARDROBE_POSES.filter(p => p !== "Standing")];
+        const workingPoses = new Set(["Standing", ...Object.keys(stored.poses || {})]);
+        const create = (tag, parent, label = "") => {
+            const el = document.createElement(tag); if (label) el.textContent = label;
+            parent.appendChild(el); return el;
+        };
+        const select = (parent, values, selected) => {
+            const el = create("select", parent); for (const [v,l] of values) {
+                const option = create("option",el,l); option.value = v;
+            } el.value = selected; return el;
+        };
+        const setStyle = (el, styles) => { Object.assign(el.style, styles); return el; };
+        const field = (parent, caption, el) => {
+            const label = create("label", parent); label.textContent = caption + " "; label.appendChild(el);
+            setStyle(label,{display:"inline-flex",alignItems:"center",gap:"4px"}); return label;
+        };
+        const toolbar = setStyle(create("div",panel),{display:"flex",alignItems:"center",flexWrap:"wrap",gap:"7px",padding:"7px 10px",borderBottom:"1px solid #655471"});
+        const work = setStyle(create("div",panel), {display:"flex",flex:"1 1 auto",minHeight:"0",minWidth:"0",overflow:"hidden"});
+        const side = setStyle(create("aside",work), {width:"234px",flex:"0 0 234px",overflowY:"auto",padding:"8px",borderRight:"1px solid #625371",boxSizing:"border-box"});
+        const main = setStyle(create("div",work), {display:"flex",flexDirection:"column",flex:"1",minWidth:"0",overflow:"hidden"});
+        const stage = setStyle(create("div",main), {flex:"1",minHeight:"0",overflow:"auto",position:"relative",background:"#211b27",padding:"10px",overscrollBehavior:"contain"});
+        const imageFrame = setStyle(create("div",stage), {position:"relative",width:`${W+4}px`,height:`${H+4}px`,margin:"auto",flex:"0 0 auto"});
+        const canvas = create("canvas",imageFrame); canvas.width=W;canvas.height=H;
+        setStyle(canvas,{background:"repeating-conic-gradient(#a2a2a2 0% 25%,#eee 0% 50%) 0/16px 16px",cursor:"crosshair",touchAction:"none",border:"2px solid #aba0af",boxSizing:"content-box",imageRendering:"pixelated"});
+        // Native BC globally styles its canvases, sometimes with !important.
+        for (const [key,value] of Object.entries({position:"relative",display:"block",left:"auto",top:"auto",bottom:"auto",right:"auto",
+            transform:"none",float:"none",margin:"0",maxWidth:"none",maxHeight:"none"})) canvas.style.setProperty(key.replace(/[A-Z]/g, c=>`-${c.toLowerCase()}`),value,"important");
+        const circle = setStyle(create("div",imageFrame),{position:"absolute",pointerEvents:"none",display:"none",border:"2px solid #fefefe",borderRadius:"50%",zIndex:"2",transform:"translate(-50%,-50%)",boxSizing:"border-box",background:"#ec79c766"});
+        const compare = setStyle(create("div",main),{padding:"7px 10px",display:"flex",alignItems:"center",gap:"9px",flexWrap:"wrap",background:"#352a3d",flex:"0 0 auto"});
+        const origPreview = create("canvas",compare); origPreview.width=W;origPreview.height=H;
+        const afterPreview = create("canvas",compare); afterPreview.width=W;afterPreview.height=H;
+        for(const [c, caption] of [[origPreview,"Before"],[afterPreview,"After"]]) {
+            setStyle(c,{position:"relative",width:"58px",height:"74px",objectFit:"contain",border:"1px solid #aba0af",background:"#ddd",imageRendering:"pixelated"});
+            // BC applies canvas position and transform with !important; isolate preview canvases too.
+            for (const [key,value] of Object.entries({position:"relative",display:"block",left:"auto",top:"auto",
+                bottom:"auto",right:"auto",transform:"none",float:"none",maxWidth:"none",maxHeight:"none"}))
+                c.style.setProperty(key.replace(/[A-Z]/g,x=>`-${x.toLowerCase()}`),value,"important");
+            c.setAttribute("aria-label",caption+" preview");
+        }
+        const comparisonText = create("span",compare,"Before → After | Original PNG versus current color-zone edits.");
+        setStyle(comparisonText,{fontSize:"11px",flex:"1"});
+        const footer = setStyle(create("div",panel),{borderTop:"1px solid #655471",background:"#352b3d",padding:"8px 12px",flex:"0 0 auto",maxHeight:"120px",overflowY:"auto"});
+        const actions = setStyle(create("div",footer),{display:"flex",gap:"6px",flexWrap:"wrap"});
+        const status = setStyle(create("div",footer,"Loading editable artwork…"),{fontSize:"11px",marginTop:"6px",lineHeight:"1.4"});
+        header.append(headerTitle,controlsTop); panel.prepend(header);
+        root.appendChild(panel); document.body.appendChild(root);
+        const close = () => {
+            if(destroyed)return; destroyed=true;
+            if(livePreviewTimer) clearTimeout(livePreviewTimer);
+            if(gamePreview) restoreGamePreview();
+            for(const cleanup of cleanups) try{cleanup();}catch(_){}
+            root.remove();
+        };
+        root.__subbysDispose=close;
+        makeButton("✕ Close",close);
+        // Drag anywhere on the header except controls, with viewport clamping.
+        let moving=null;
+        header.addEventListener("pointerdown",event=>{
+            if(event.button!==0 || event.target.closest("button,input,select"))return;
+            moving={id:event.pointerId,x:event.clientX,y:event.clientY,left:panel.offsetLeft,top:panel.offsetTop};
+            header.setPointerCapture?.(event.pointerId);event.preventDefault();
+        });
+        header.addEventListener("pointermove",event=>{
+            if(!moving || moving.id!==event.pointerId)return;
+            panel.style.left=`${Math.max(0,Math.min(innerWidth-50,moving.left+event.clientX-moving.x))}px`;
+            panel.style.top=`${Math.max(0,Math.min(innerHeight-50,moving.top+event.clientY-moving.y))}px`;
+        });
+        for(const type of ["pointerup","pointercancel","lostpointercapture"])header.addEventListener(type,()=>{moving=null;});
+        // Ensure the window is recoverable after resizing the browser.
+        const clampWindow=()=>{
+            panel.style.left=`${Math.max(0,Math.min(Number.parseFloat(panel.style.left)||0,Math.max(0,innerWidth-70)))}px`;
+            panel.style.top=`${Math.max(0,Math.min(Number.parseFloat(panel.style.top)||0,Math.max(0,innerHeight-70)))}px`;
+            if(zoomMode==="fit")fitZoom();
+        };
+        window.addEventListener("resize",clampWindow);cleanups.push(()=>window.removeEventListener("resize",clampWindow));
+        const createImage=src=>new Promise((resolve,reject)=>{
+            const img=new Image();img.crossOrigin="anonymous";img.onload=()=>resolve(img);
+            img.onerror=()=>reject(new Error(`Cannot load image (CORS or file missing): ${String(src).slice(0,100)}`));img.src=src;
+        });
+        const download=(name,blob)=>{
+            const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;
+            document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200);
+        };
+        const pngBlob=canvas=>new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("PNG encoding failed")),"image/png"));
+        const imageDataFrom=async src=>{
+            const img=await createImage(src);
+            if(img.naturalWidth!==W||img.naturalHeight!==H)throw new Error(`Pose PNG must be ${W}×${H} pixels (got ${img.naturalWidth}×${img.naturalHeight}).`);
+            const c=document.createElement("canvas");c.width=W;c.height=H;const cx=c.getContext("2d",{willReadFrequently:true});
+            cx.drawImage(img,0,0);return cx.getImageData(0,0,W,H);
+        };
+        const asSourceData=(pose)=>sourceByPose.get(pose);
+        const currentMasks=()=>masksByPose.get(selectedPose);
+        const cloneState=()=>({zones:[...zones],locks:[...locks],poses:[...workingPoses],slot,selectedPose,
+            zonePriorities:{...zonePriorities},zoneDefaults:{...zoneDefaults},
+            masks:[...masksByPose].map(([pose,layerMap])=>[pose,[...layerMap].map(([name,mask])=>[name,new Uint8ClampedArray(mask)])])});
+        const undo=[],redo=[];
+        const remember=()=>{undo.push(cloneState());if(undo.length>18)undo.shift();redo.length=0;};
+        const restoreState=state=>{
+            zones=[...state.zones];locks=new Set(state.locks);slot=state.slot;workingPoses=new Set(state.poses);
+            zonePriorities={...state.zonePriorities};zoneDefaults={...state.zoneDefaults};
+            masksByPose=new Map(state.masks.map(([pose,layers])=>[pose,new Map(layers.map(([name,mask])=>[name,new Uint8ClampedArray(mask)]))]));
+            selectedPose=workingPoses.has(state.selectedPose)?state.selectedPose:"Standing";
+            selectedZone=zones.includes(selectedZone)?selectedZone:zones[0];
+            updateMenus();redraw();
+        };
+        const historyUndo=()=>{if(!undo.length)return;redo.push(cloneState());restoreState(undo.pop());status.textContent="Undid your last edit.";};
+        const historyRedo=()=>{if(!redo.length)return;undo.push(cloneState());restoreState(redo.pop());status.textContent="Redid your edit.";};
+        const zoneList=select(side,[],zones[0]);
+        setStyle(zoneList,{width:"100%",margin:"6px 0"});
+        zoneList.setAttribute("aria-label","Color zone");
+        const zoneControls=setStyle(create("div",side),{display:"flex",flexWrap:"wrap",gap:"4px"});
+        const previewRow=setStyle(create("div",side),{marginTop:"10px"});
+        const slotList=select(previewRow,[...WARDROBE_SLOTS].map(s=>[s,s]),slot);
+        field(previewRow,"Clothing slot",slotList);
+        const poseList=select(side,poseNames.map(p=>[p,p]),"Standing");
+        field(side,"Pose",poseList);
+        const uploadPose=create("input",side);uploadPose.type="file";uploadPose.accept="image/png";
+        setStyle(uploadPose,{display:"block",margin:"8px 0",width:"100%"});
+        const toolRow=setStyle(create("div",side),{display:"flex",flexWrap:"wrap",gap:"5px",marginTop:"10px"});
+        const toolButtons=new Map();
+        for(const [name,label] of [["brush","Brush"],["erase","Erase"],["wand","Magic Wand"],["fill","Smart Fill"],["pan","Hand / Pan"]]){
+            const b=makeButton(label,()=>{selectedTool=name;refreshTool();},toolRow);toolButtons.set(name,b);
+        }
+        function refreshTool(){for(const [name,b] of toolButtons)b.style.background=name===selectedTool?"#8e619e":"#50415d";canvas.style.cursor=selectedTool==="pan"?"grab":"crosshair";refreshCursor();}
+        const settings=setStyle(create("div",side),{display:"flex",flexDirection:"column",gap:"7px",marginTop:"12px"});
+        const setting=(name,min,max,start)=>{
+            const holder=create("label",settings),value=create("strong",holder,`${start}`);holder.insertBefore(document.createTextNode(name+" "),value);
+            const range=create("input",holder);range.type="range";range.min=min;range.max=max;range.value=start;range.style.width="100%";
+            range.addEventListener("input",()=>{value.textContent=range.value;
+                if(name==="Brush size")brushSize=Number(range.value);
+                if(name==="Hardness")hardness=Number(range.value);
+                if(name==="Opacity")opacity=Number(range.value);
+                if(name==="Tolerance")tolerance=Number(range.value);
+                refreshCursor();});return range;
+        };
+        setting("Brush size",1,64,6);setting("Hardness",0,100,100);
+        setting("Opacity",1,100,100);setting("Tolerance",0,120,24);
+        const overlayMode=select(toolbar,[["all","All zones"],["selected","Selected"],["none","Artwork only"]],"all");
+        field(toolbar,"View",overlayMode);overlayMode.addEventListener("change",()=>redraw());
+        let selectedRegion=new Uint8Array(count);
+        function updateMenus(){
+            zoneList.replaceChildren();
+            for(const name of zones){const o=create("option",zoneList,`${locks.has(name)?"🔒 ":""}${name}`);o.value=name;}
+            if(!zones.includes(selectedZone))selectedZone=zones[0];zoneList.value=selectedZone;
+            poseList.replaceChildren();for(const pose of poseNames){const o=create("option",poseList,workingPoses.has(pose)?pose:`${pose} (+)`);o.value=pose;}
+            poseList.value=selectedPose;slotList.value=slot;
+        }
+        zoneList.addEventListener("change",()=>{selectedZone=zoneList.value;redraw();});
+        const requestName=(label,fallback)=>{
+            const name=window.prompt(label,fallback);
+            if(name===null)return null;
+            const trimmed=name.trim();
+            if(!/^[A-Za-z][A-Za-z0-9]{0,31}$/.test(trimmed)){status.textContent="Use 1–32 letters/digits, starting with a letter, and no spaces.";return null;}
+            return trimmed;
+        };
+        makeButton("+ Zone",()=>{
+            const name=requestName("New zone name (letters/numbers only)","NewZone");if(!name)return;
+            if(zones.includes(name)||zones.length>=16){status.textContent="Zone already exists or 16-zone limit reached.";return;}
+            remember();zones.push(name);zoneDefaults[name]="#FFFFFF";
+            for(const layerMap of masksByPose.values())layerMap.set(name,new Uint8ClampedArray(count));
+            selectedZone=name;updateMenus();redraw();status.textContent=`Added ${name}. Export both the manifest and userscript-compatible metadata.`;
+        },zoneControls);
+        makeButton("Rename",()=>{
+            const prev=selectedZone, name=requestName("Rename color zone",prev);if(!name||prev===name)return;
+            if(zones.includes(name)){status.textContent="Zone name already exists.";return;}
+            remember();zones[zones.indexOf(prev)]=name;
+            zoneDefaults[name]=zoneDefaults[prev];delete zoneDefaults[prev];
+            if(Object.hasOwn(zonePriorities,prev)){zonePriorities[name]=zonePriorities[prev];delete zonePriorities[prev];}
+            for(const layerMap of masksByPose.values()){const data=layerMap.get(prev);layerMap.delete(prev);layerMap.set(name,data);}
+            if(locks.delete(prev))locks.add(name);selectedZone=name;updateMenus();redraw();
+        },zoneControls);
+        makeButton("Delete",()=>{
+            if(zones.length<=1){status.textContent="At least one color zone is required.";return;}
+            if(locks.has(selectedZone)){status.textContent="Unlock this zone before deleting it.";return;}
+            if(!window.confirm(`Delete zone ${selectedZone} from every pose? This can be undone.`))return;
+            remember();delete zoneDefaults[selectedZone];delete zonePriorities[selectedZone];
+            zones=zones.filter(name=>name!==selectedZone);
+            for(const layerMap of masksByPose.values())layerMap.delete(selectedZone);
+            selectedZone=zones[0];updateMenus();redraw();
+        },zoneControls);
+        makeButton("Merge",()=>{
+            if(locks.has(selectedZone)){status.textContent="Unlock the target zone first.";return;}
+            const target=window.prompt(`Merge ${selectedZone} INTO which zone?`,zones.find(name=>name!==selectedZone)||"");
+            if(!target||target===selectedZone||!zones.includes(target)||locks.has(target))return;
+            remember();for(const layerMap of masksByPose.values()){
+                const dest=layerMap.get(target),src=layerMap.get(selectedZone);
+                for(let i=0;i<count;i++)dest[i]=Math.max(dest[i],src[i]);layerMap.delete(selectedZone);
+            } delete zoneDefaults[selectedZone];delete zonePriorities[selectedZone];
+            zones=zones.filter(name=>name!==selectedZone);selectedZone=target;updateMenus();redraw();
+        },zoneControls);
+        makeButton("🔒 Lock / Unlock",()=>{
+            if(locks.has(selectedZone))locks.delete(selectedZone);else locks.add(selectedZone);updateMenus();
+            status.textContent=`${selectedZone}: ${locks.has(selectedZone)?"locked":"unlocked"}.`;
+        },zoneControls);
+        slotList.addEventListener("change",()=>{
+            const value=slotList.value;
+            if(value!==entry.group && !window.confirm(`Change ${entry.name} to native ${value}? Players will have to remove the old item from ${entry.group} before re-equipping. Apply after publish/refresh.`)){
+                slotList.value=slot;return;
+            }
+            remember();slot=value;status.textContent=`Selected ${slot}. This changes the slot after the exported manifest is published.`;
+        });
+        // Pose imports use PNG files at the same dimensions as the standing asset.
+        const ensurePose=async pose=>{
+            if(sourceByPose.has(pose))return true;
+            const spec=stored.poses?.[pose];
+            if(!spec)return false;
+            const source=await imageDataFrom(`${WARDROBE_ASSET_ROOT}/${encodeURIComponent(spec.file)}`);
+            sourceByPose.set(pose,source);fileByPose.set(pose,spec.file);
+            const layerMap=new Map();
+            for(const name of zones){
+                const data=spec.zones?.[name];if(!data){layerMap.set(name,new Uint8ClampedArray(count));continue;}
+                const img=await imageDataFrom(`data:image/png;base64,${data}`);
+                const alpha=new Uint8ClampedArray(count);for(let i=0;i<count;i++)alpha[i]=img.data[i*4+3];
+                layerMap.set(name,alpha);
+            }
+            masksByPose.set(pose,layerMap);originalsByPose.set(pose,{source, zones:spec.zones});return true;
+        };
+        poseList.addEventListener("change",async()=>{
+            const pose=poseList.value;
+            if(!workingPoses.has(pose)){status.textContent=`Import ${pose} PNG first. One full PNG, ${W}×${H} pixels.`;
+                return;}
+            try{await ensurePose(pose);selectedPose=pose;selectedRegion.fill(0);redraw();}
+            catch(e){status.textContent=String(e.message||e);selectedPose="Standing";poseList.value="Standing";}
+        });
+        uploadPose.addEventListener("change",async()=>{
+            const file=uploadPose.files?.[0];if(!file)return;
+            const pose=poseList.value;
+            if(pose==="Standing"){status.textContent="Standing artwork is the existing main PNG. Choose another pose before importing.";return;}
+            const url=URL.createObjectURL(file);
+            try{
+                const data=await imageDataFrom(url);
+                remember();workingPoses.add(pose);sourceByPose.set(pose,data);
+                fileByPose.set(pose,`${entry.name}_${pose}.png`);
+                const layerMap=new Map(zones.map(name=>[name,new Uint8ClampedArray(count)]));
+                // Preserve per-zone mask layout as a starting point only when requested.
+                if(window.confirm("Copy Standing zone masks into this pose as a starting point? Choose Cancel for blank zones.")){
+                    for(const name of zones)layerMap.get(name).set(masksByPose.get("Standing").get(name)||new Uint8Array(count));
+                }
+                masksByPose.set(pose,layerMap);originalsByPose.set(pose,{source:data,zones:{}});
+                selectedPose=pose;updateMenus();redraw();
+                status.textContent=`Imported ${pose}. Remember to export its PNG and the color data together.`;
+            }catch(e){status.textContent=String(e.message||e);}finally{URL.revokeObjectURL(url);uploadPose.value="";}
+        });
+        makeButton("Remove pose",()=>{
+            if(selectedPose==="Standing")return;
+            if(!window.confirm(`Remove custom ${selectedPose} pose artwork and zone masks?`))return;
+            remember();workingPoses.delete(selectedPose);
+            // Retain local buffers so Undo can restore this pose without another download.
+            selectedPose="Standing";updateMenus();redraw();
+        },side);
+        const sourceCanvas=document.createElement("canvas");sourceCanvas.width=W;sourceCanvas.height=H;
+        const sourceCtx=sourceCanvas.getContext("2d",{willReadFrequently:true});
+        const ctx=canvas.getContext("2d",{willReadFrequently:true});
+        const compareCtx=afterPreview.getContext("2d");
+        const sourcePreviewCtx=origPreview.getContext("2d");
+        function blendPreview(){
+            const source=asSourceData(selectedPose);if(!source)return null;
+            const edited=new ImageData(new Uint8ClampedArray(source.data),W,H);
+            const masks=currentMasks(),base=edited.data;
+            if(overlayMode.value!=="none"){
+                for(let i=0;i<count;i++){
+                    if(!base[i*4+3])continue;
+                    const z=overlayMode.value==="selected"?zones.indexOf(selectedZone):zones.findIndex(name=>masks?.get(name)?.[i]>0);
+                    if(z<0)continue;
+                    if(overlayMode.value==="selected" && !masks.get(selectedZone)?.[i])continue;
+                    const colors=[[243,94,179],[101,185,252],[241,193,82],[122,215,155],[173,139,240],[241,151,107]];
+                    const color=colors[z%colors.length],a=.47*((masks.get(zones[z])?.[i]||0)/255);
+                    base[i*4]=Math.round(base[i*4]*(1-a)+color[0]*a);
+                    base[i*4+1]=Math.round(base[i*4+1]*(1-a)+color[1]*a);
+                    base[i*4+2]=Math.round(base[i*4+2]*(1-a)+color[2]*a);
+                }
+            }
+            if(regionSelection?.length===count){for(let i=0;i<count;i++)if(regionSelection[i]){
+                base[i*4]=Math.round(base[i*4]*.52+255*.48);
+                base[i*4+1]=Math.round(base[i*4+1]*.52+244*.48);
+                base[i*4+2]=Math.round(base[i*4+2]*.52+70*.48);
+            }}
+            return edited;
+        }
+        function redraw(){
+            if(destroyed||!asSourceData(selectedPose))return;
+            const source=asSourceData(selectedPose);
+            sourcePreviewCtx.putImageData(source,0,0);
+            ctx.putImageData(blendPreview(),0,0);
+            compareCtx.clearRect(0,0,W,H);compareCtx.drawImage(canvas,0,0);
+            scheduleGamePreview();refreshCursor();
+        }
+        function refreshCursor(){
+            if(!pointer||spaceHeld||selectedTool==="pan"||selectedTool==="wand"||selectedTool==="fill"){
+                circle.style.display="none";return;
+            }
+            circle.style.display="block";const diameter=Math.max(2,brushSize*zoom);
+            circle.style.width=`${diameter}px`;circle.style.height=`${diameter}px`;
+            circle.style.left=`${2+pointer.x*zoom}px`;circle.style.top=`${2+pointer.y*zoom}px`;
+            circle.style.borderColor=selectedTool==="erase"?"#fa5151":locks.has(selectedZone)?"#f1aa50":"#fff";
+            circle.style.background=selectedTool==="erase"?"#fc444466":"#df8fdb55";
+        }
+        function displayScale(){
+            const width=Math.max(1,W*zoom),height=Math.max(1,H*zoom);
+            imageFrame.style.width=`${width+4}px`;imageFrame.style.height=`${height+4}px`;
+            canvas.style.setProperty("width",`${width}px`,"important");canvas.style.setProperty("height",`${height}px`,"important");refreshCursor();
+        }
+        function fitZoom(){
+            if(!stage.clientWidth||!stage.clientHeight)return;
+            zoom=Math.max(.15,Math.min(3,(stage.clientWidth-30)/W,(stage.clientHeight-30)/H));displayScale();
+        }
+        const zoomText=create("strong",toolbar,"100%");
+        const setZoom=(value)=>{zoomMode="manual";zoom=Math.max(.15,Math.min(8,value));displayScale();zoomText.textContent=`${Math.round(zoom*100)}%`;};
+        makeButton("−",()=>setZoom(zoom/1.25),toolbar);
+        makeButton("+",()=>setZoom(zoom*1.25),toolbar);
+        makeButton("Fit",()=>{zoomMode="fit";fitZoom();zoomText.textContent=`${Math.round(zoom*100)}%`;},toolbar);
+        makeButton("100%",()=>setZoom(1),toolbar);
+        stage.addEventListener("wheel",e=>{if(e.ctrlKey||e.metaKey){e.preventDefault();setZoom(zoom*(e.deltaY<0?1.2:1/1.2));}},{passive:false});
+        if(typeof ResizeObserver==="function"){
+            const ro=new ResizeObserver(()=>{if(zoomMode==="fit"){fitZoom();zoomText.textContent=`${Math.round(zoom*100)}%`;}});
+            ro.observe(stage);cleanups.push(()=>ro.disconnect());
+        }
+        const pointOf=event=>{
+            const r=canvas.getBoundingClientRect();
+            return {x:(event.clientX-r.left-(canvas.clientLeft||0))*W/Math.max(1,canvas.clientWidth),
+                    y:(event.clientY-r.top-(canvas.clientTop||0))*H/Math.max(1,canvas.clientHeight)};
+        };
+        const colorDistance=(pixels,a,b)=>{
+            const i=a*4,j=b*4;
+            return Math.max(Math.abs(pixels[i]-pixels[j]),Math.abs(pixels[i+1]-pixels[j+1]),Math.abs(pixels[i+2]-pixels[j+2]));
+        };
+        function connectedRegion(pt, smart=false){
+            const source=asSourceData(selectedPose);if(!source)return new Uint8Array(count);
+            const x=Math.floor(pt.x),y=Math.floor(pt.y),result=new Uint8Array(count);
+            if(x<0||y<0||x>=W||y>=H)return result;
+            const seed=y*W+x; if(!source.data[seed*4+3])return result;
+            const queue=new Int32Array(count);let head=0,tail=0;queue[tail++]=seed;result[seed]=1;
+            const map=currentMasks(),baseline=smart?zones.map(name=>map.get(name)[seed]>0):null;
+            while(head<tail){const p=queue[head++],px=p%W,py=(p-px)/W;
+                const next=[px>0?p-1:-1,px<W-1?p+1:-1,py>0?p-W:-1,py<H-1?p+W:-1];
+                for(const q of next){if(q<0||result[q]||!source.data[q*4+3])continue;
+                    if(colorDistance(source.data,seed,q)>tolerance)continue;
+                    if(smart && zones.some((name,i)=>(map.get(name)[q]>0)!==baseline[i]))continue;
+                    result[q]=1;queue[tail++]=q;
+                }
+            }
+            return result;
+        }
+        const canEdit=()=>{
+            if(locks.has(selectedZone)){status.textContent=`${selectedZone} is locked. Unlock it before painting.`;return false;}
+            return true;
+        };
+        function applyOwnership(index,weight,erase=false){
+            const source=asSourceData(selectedPose);if(!source||!source.data[index*4+3])return;
+            const map=currentMasks(),alpha=Math.max(0,Math.min(255,source.data[index*4+3]));
+            const target=map.get(selectedZone);
+            if(!target)return;
+            const add=Math.round(255*weight);
+            if(erase){target[index]=Math.max(0,target[index]-add);return;}
+            target[index]=Math.min(alpha,Math.round(target[index]+(alpha-target[index])*weight));
+            // Only unlocked neighboring zones lose ownership; keep artist-authored overlaps at soft brush edges.
+            for(const name of zones)if(name!==selectedZone && !locks.has(name)){
+                const mask=map.get(name);mask[index]=Math.round(mask[index]*(1-weight));
+            }
+        }
+        function paintStamp(at,eraser=false){
+            const r=Math.max(.5,brushSize/2),hard=hardness/100;
+            for(let y=Math.max(0,Math.floor(at.y-r));y<=Math.min(H-1,Math.ceil(at.y+r));y++){
+                for(let x=Math.max(0,Math.floor(at.x-r));x<=Math.min(W-1,Math.ceil(at.x+r));x++){
+                    const distance=Math.hypot(x+.5-at.x,y+.5-at.y)/r;
+                    if(distance>1)continue;
+                    const w=distance<=hard?1:Math.max(0,(1-distance)/Math.max(.0001,1-hard));
+                    applyOwnership(y*W+x,(opacity/100)*w,eraser);
+                }
+            }
+        }
+        function paintLine(a,b,eraser){
+            const steps=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/Math.max(.5,brushSize/3)));
+            for(let i=0;i<=steps;i++)paintStamp({x:a.x+(b.x-a.x)*i/steps,y:a.y+(b.y-a.y)*i/steps},eraser);
+        }
+        function fillRegion(selection){
+            if(!canEdit())return;
+            remember();for(let p=0;p<count;p++)if(selection[p])applyOwnership(p,opacity/100,selectedTool==="erase");
+            regionSelection=null;redraw();
+        }
+        makeButton("Apply Wand Selection",()=>{
+            if(!regionSelection?.some(Boolean)){status.textContent="Use Magic Wand first.";return;}
+            fillRegion(regionSelection);
+        },actions);
+        makeButton("Clear Selection",()=>{regionSelection=null;redraw();},actions);
+        canvas.addEventListener("pointerdown",e=>{
+            if(e.button!==0&&e.button!==1)return;
+            if(!asSourceData(selectedPose))return;e.preventDefault();
+            const pt=pointOf(e);pointer=pt;canvas.setPointerCapture?.(e.pointerId);
+            if(selectedTool==="pan"||spaceHeld||e.button===1){stroke={mode:"pan",id:e.pointerId,x:e.clientX,y:e.clientY,sx:stage.scrollLeft,sy:stage.scrollTop};return;}
+            if(selectedTool==="wand"){regionSelection=connectedRegion(pt,false);redraw();status.textContent="Magic Wand selection highlighted. Choose Apply Wand Selection to assign it.";return;}
+            if(selectedTool==="fill"){if(!canEdit())return;remember();const reg=connectedRegion(pt,true);
+                for(let p=0;p<count;p++)if(reg[p])applyOwnership(p,opacity/100,false);
+                redraw();status.textContent="Smart Fill applied to the connected similar-color region.";return;
+            }
+            if(!canEdit())return;remember();stroke={mode:"paint",id:e.pointerId,last:pt};
+            paintStamp(pt,selectedTool==="erase");redraw();
+        });
+        canvas.addEventListener("pointermove",e=>{
+            const pt=pointOf(e);pointer=pt;
+            if(stroke?.id===e.pointerId){
+                if(stroke.mode==="pan"){
+                    stage.scrollLeft=stroke.sx+stroke.x-e.clientX;stage.scrollTop=stroke.sy+stroke.y-e.clientY;
+                }else if(stroke.mode==="paint"){
+                    paintLine(stroke.last,pt,selectedTool==="erase");stroke.last=pt;redraw();
+                }
+            }refreshCursor();
+        });
+        for(const t of ["pointerup","pointercancel","lostpointercapture"])canvas.addEventListener(t,e=>{
+            if(stroke?.id===e.pointerId){stroke=null;redraw();}
+        });
+        canvas.addEventListener("pointerleave",()=>{if(!stroke){pointer=null;refreshCursor();}});
+        canvas.addEventListener("contextmenu",e=>e.preventDefault());
+        // Live preview is opt-in and LOCAL only; revert native image maps on close.
+        function restoreGamePreview(){
+            if(originalPreviewLayers){WARDROBE_LAYER_IMAGES.set(entry.name,originalPreviewLayers);originalPreviewLayers=null;}
+            gamePreview=false;
+            try{window.CharacterLoadCanvas?.(window.Player);}catch(_){}
+        }
+        async function layersForPose(pose){
+            const map=new Map(),source=sourceByPose.get(pose),masks=masksByPose.get(pose);
+            for(const name of zones){
+                const output=new ImageData(new Uint8ClampedArray(source.data),W,H),mask=masks.get(name);
+                for(let i=0;i<count;i++)output.data[i*4+3]=Math.min(output.data[i*4+3],mask?.[i]||0);
+                sourceCtx.putImageData(output,0,0);
+                map.set(name,sourceCanvas.toDataURL("image/png"));
+            }
+            return map;
+        }
+        async function refreshGamePreview(){
+            if(!gamePreview||destroyed||!window.Player)return;
+            if(!wardrobeEquippedItem(entry)){
+                status.textContent="Equip this item before enabling the in-game preview.";restoreGamePreview();return;
+            }
+            try{
+                const pose=selectedPose==="Standing"?"Standing":selectedPose;
+                const layerImages=await layersForPose(pose);
+                if(!gamePreview||destroyed)return;
+                WARDROBE_LAYER_IMAGES.set(entry.name,layerImages);
+                window.CharacterLoadCanvas?.(window.Player);
+            }catch(e){status.textContent=`Live preview: ${e?.message||e}`;}
+        }
+        function scheduleGamePreview(){
+            if(!gamePreview||destroyed)return;
+            clearTimeout(livePreviewTimer);livePreviewTimer=setTimeout(()=>{void refreshGamePreview();},150);
+        }
+        const liveButton=makeButton("In-game preview: OFF",()=>{
+            if(!gamePreview){
+                if(!wardrobeEquippedItem(entry)){status.textContent="Equip the item to preview it on your character.";return;}
+                originalPreviewLayers=WARDROBE_LAYER_IMAGES.get(entry.name);
+                gamePreview=true;liveButton.textContent="In-game preview: ON";scheduleGamePreview();
+            }else{restoreGamePreview();liveButton.textContent="In-game preview: OFF";}
+        },toolbar);
+        // Export original PNGs, masks, and the backward-compatible v2 manifest.
+        makeButton("Export pose PNGs",async()=>{
+            try{for(const pose of workingPoses){
+                if(pose==="Standing")continue;
+                const src=sourceByPose.get(pose);if(!src)continue;
+                sourceCtx.putImageData(src,0,0);
+                download(`${entry.name}_${pose}.png`,await pngBlob(sourceCanvas));
+            }status.textContent="Downloaded each imported pose PNG. Upload to assets/wardrobe/.";}
+            catch(e){status.textContent=`Pose export failed: ${e?.message||e}`;}
+        },actions);
+        makeButton("Export color-layers.json",async()=>{
+            try{
+                if(!zones.length)throw new Error("At least one zone is required");
+                const manifest={schemaVersion:2,items:{...wardrobeLayerManifest.items}};
+                const existing=wardrobeLayerManifest.items[entry.name];
+                const buildZoneData=async pose=>{
+                    const zonesOut={},source=sourceByPose.get(pose),masks=masksByPose.get(pose);
+                    for(const name of zones){
+                        const originalMasks=originalsByPose.get(pose)?.zones||{};
+                        const originalData=originalMasks[name];
+                        // Preserve unchanged masks bit for bit only if the original source pixels are identical.
+                        let unchanged=!!originalData;
+                        if(unchanged){
+                            const img=await imageDataFrom(`data:image/png;base64,${originalData}`);
+                            for(let i=0;i<count;i++)if(img.data[i*4+3]!==masks.get(name)[i]){unchanged=false;break;}
+                        }
+                        if(unchanged){zonesOut[name]=originalData;continue;}
+                        const data=new ImageData(new Uint8ClampedArray(source.data),W,H),mask=masks.get(name);
+                        for(let i=0;i<count;i++)data.data[i*4+3]=Math.min(data.data[i*4+3],mask[i]);
+                        sourceCtx.putImageData(data,0,0);
+                        zonesOut[name]=sourceCanvas.toDataURL("image/png").split(",")[1];
+                    }return zonesOut;
+                };
+                // Safety guard: a bad alpha mask must never make a published garment disappear.
+                // Check every pose, including freshly imported ones, before starting downloads.
+                for(const pose of workingPoses){
+                    if(!sourceByPose.has(pose))await ensurePose(pose);
+                    const source=sourceByPose.get(pose), masks=masksByPose.get(pose);
+                    let visible=0, recovered=0, covered=0;
+                    for(let i=0;i<count;i++){
+                        const sourceAlpha=source.data[i*4+3];if(sourceAlpha<=32)continue;
+                        visible++;let maskAlpha=0;
+                        for(const name of zones)maskAlpha=Math.max(maskAlpha,masks.get(name)?.[i]||0);
+                        if(maskAlpha>0)covered++;
+                        recovered+=Math.min(1,maskAlpha/sourceAlpha);
+                    }
+                    if(visible && (covered/visible<.5 || recovered/visible<.3)){
+                        throw new Error(`${pose} zones cover too little artwork (${Math.round(100*covered/visible)}% coverage). Export blocked to prevent invisible clothing. Paint the zones first.`);
+                    }
+                }
+                const standingZones=await buildZoneData("Standing");
+                const next={...existing,width:W,height:H,slot,zoneOrder:[...zones],zoneColors:{...zoneDefaults},
+                    layerPriorities:{...zonePriorities},zones:standingZones,poses:{}};
+                for(const pose of workingPoses){if(pose==="Standing")continue;
+                    if(!sourceByPose.has(pose))await ensurePose(pose);
+                    next.poses[pose]={width:W,height:H,file:`${entry.name}_${pose}.png`,zones:await buildZoneData(pose)};
+                }
+                manifest.items[entry.name]=next;
+                // Protect against disappearance: require visible source alpha to have matching zone coverage,
+                // except if artist intentionally leaves pixels uncolored; report uncovered count.
+                let uncovered=0,src=sourceByPose.get("Standing"),base=masksByPose.get("Standing");
+                for(let i=0;i<count;i++)if(src.data[i*4+3]>32&&!zones.some(name=>base.get(name)[i]>0))uncovered++;
+                if(uncovered>0&&!window.confirm(`${uncovered} visible artwork pixels are not assigned to a color zone. Export anyway?`))return;
+                download("color-layers.json",new Blob([JSON.stringify(manifest,null,2)],{type:"application/json"}));
+                status.textContent=`Exported ${zones.length} zones, ${workingPoses.size} pose(s), and slot ${slot}. Upload JSON and any new pose PNGs, then refresh BC.`;
+            }catch(e){status.textContent=`Export failed: ${e?.message||e}`;}
+        },actions);
+        const keydown=e=>{
+            if(destroyed)return;
+            if(e.key==="Escape"){close();return;}
+            if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target?.tagName||""))return;
+            if(e.key===" "){spaceHeld=true;refreshCursor();e.preventDefault();}
+            if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();e.shiftKey?historyRedo():historyUndo();}
+            if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="y"){e.preventDefault();historyRedo();}
+        };
+        const keyup=e=>{if(e.key===" "){spaceHeld=false;refreshCursor();}};
+        window.addEventListener("keydown",keydown,true);window.addEventListener("keyup",keyup,true);
+        cleanups.push(()=>{window.removeEventListener("keydown",keydown,true);window.removeEventListener("keyup",keyup,true);});
+        makeButton("↶ Undo",historyUndo,actions);makeButton("↷ Redo",historyRedo,actions);
+        makeButton("Reset selected zone",()=>{
+            if(!canEdit())return;remember();const m=currentMasks().get(selectedZone);m.fill(0);
+            const source=originalsByPose.get(selectedPose)?.zones?.[selectedZone];
+            if(source){void imageDataFrom(`data:image/png;base64,${source}`).then(data=>{
+                for(let i=0;i<count;i++)m[i]=data.data[i*4+3];redraw();});}
+            else redraw();
+        },actions);
+        try{
+            const standing=await imageDataFrom(WARDROBE_IMAGE_BY_NAME.get(entry.name));
+            if(destroyed)return false;
+            sourceByPose.set("Standing",standing);fileByPose.set("Standing",`${entry.name}.png`);
+            const standingMap=new Map();
+            for(const name of zones){
+                const data=stored.zones[name],alpha=new Uint8ClampedArray(count);
+                if(data){const img=await imageDataFrom(`data:image/png;base64,${data}`);
+                    for(let i=0;i<count;i++)alpha[i]=img.data[i*4+3];}
+                standingMap.set(name,alpha);
+            }
+            masksByPose.set("Standing",standingMap);originalsByPose.set("Standing",{source:standing,zones:{...stored.zones}});
+            // Eagerly load named poses so a saved editor project can export them reliably.
+            for(const pose of workingPoses)if(pose!=="Standing")await ensurePose(pose);
+            updateMenus();refreshTool();fitZoom();zoomText.textContent=`${Math.round(zoom*100)}%`;
+            redraw();status.textContent="Ready. Move the titlebar to reposition; drag the bottom-right corner to resize. Export JSON plus any new pose PNGs.";
+            return true;
+        }catch(e){status.textContent=`Unable to load Wardrobe Studio: ${e?.message||e}`;return false;}
+    }
+
     function renderExtensionsWardrobe(container) {
-        const section = makeExtensionsSection("Subby's Wardrobe • accessories");
+        const section = makeExtensionsSection("Subby's Wardrobe • clothing and accessories");
         const intro = document.createElement("div");
-        intro.textContent = "Two accessories with one source PNG each on GitHub and six independent color zones in shared JSON. Position controls adjust the accessories, not your character. Other viewers need the matching plugin.";
+        intro.textContent = "The Headband, Heart Charm and Draped Wrap Dress appear in BC's normal Appearance picker (Hair Accessory 2, Necklace, and Upper Clothing). Each uses one GitHub PNG with independent color zones. Positioning moves the clothing, not the character. Other viewers need the matching plugin and assets.";
         Object.assign(intro.style, { color: getExtensionsStyle().muted, marginBottom: "12px", lineHeight: "1.45" });
         section.appendChild(intro);
         for (const entry of WARDROBE_ITEMS) {
@@ -8317,6 +9143,7 @@ function SubbysPlushiesPageMain() {
             wear.disabled = !state.found;
             controls.appendChild(wear);
             controls.appendChild(makeExtensionsButton("Remove", () => { wardrobeRemoveByName(entry.name); }));
+            controls.appendChild(makeExtensionsButton("Edit Color Zones", () => { void openWardrobeColorZoneEditor(entry); }));
             const placement = wardrobePlacement(entry);
             const positionLabel = document.createElement("span");
             positionLabel.textContent = `Native fit: ${entry.width}×${entry.height} BC pixels • X ${placement.left} / Y ${placement.top} • no character-height changes`;
@@ -8327,6 +9154,12 @@ function SubbysPlushiesPageMain() {
                 ["← Left", -10, 0], ["Right →", 10, 0], ["↑ Up", 0, -10], ["Down ↓", 0, 10],
             ]) positionControls.appendChild(makeExtensionsButton(label, () => wardrobeSetPlacement(entry.name, dx, dy)));
             positionControls.appendChild(makeExtensionsButton("Reset Default Fit", () => wardrobeSetPlacement(entry.name, 0, 0, true)));
+            if (entry.name === "SubbyDrapedWrapDress") {
+                const button = makeExtensionsButton("Clear old Move / Resize", () => wardrobeResetMoveResize(entry.name));
+                button.title = "Use the new built-in dress size instead of an old manual X/Y/Scale adjustment. This clears only the selected equipped dress's Move / Resize overrides.";
+                button.disabled = !wardrobeEquippedItem(entry);
+                positionControls.appendChild(button);
+            }
             const colorControls = document.createElement("div");
             Object.assign(colorControls.style, { display: "flex", flexWrap: "wrap", gap: "12px", padding: "8px 0" });
             const currentColors = wardrobeGetColors(entry.name);
@@ -8378,7 +9211,7 @@ function SubbysPlushiesPageMain() {
         const wardrobePanel = makeExtensionsSection("Subby's Wardrobe • curated accessories");
         const wardrobe = window.SubbysWardrobeCurated;
         appendExtensionsKeyValue(wardrobePanel, "State", wardrobe?.status || "Loading");
-        appendExtensionsKeyValue(wardrobePanel, "Clothing catalog", "Cat-Ear Headband • Heart Charm");
+        appendExtensionsKeyValue(wardrobePanel, "Clothing catalog", "Cat-Ear Headband • Heart Charm • Draped Wrap Dress • Color Zone Editor");
         appendExtensionsKeyValue(wardrobePanel, "Registered", wardrobe?.registered?.join(", ") || "Not registered");
         if (wardrobe?.errors?.length) appendExtensionsKeyValue(wardrobePanel, "Diagnostics", wardrobe.errors.join("; "));
         const wardrobeHelp = document.createElement("div");
@@ -8409,7 +9242,7 @@ function SubbysPlushiesPageMain() {
         actions.append(
             makeExtensionsButton("Check for update", () => { void checkForUpdates({ silent: false }).finally(renderExtensionsPanel); }),
             makeExtensionsButton("Open Move / Resize", () => { closeExtensionsPanel(); void openNativeLayering(); }),
-            makeExtensionsButton("Reload Git data", () => { void refreshGitDataFromGitHub({ force: true, silent: false }).finally(renderExtensionsPanel); }),
+            makeExtensionsButton("Reload Git data", () => { void refreshGitDataFromGitHub({ force: true, silent: false, includeLore: true }).finally(renderExtensionsPanel); }),
             makeExtensionsButton("Print debug to console", () => debug())
         );
         container.appendChild(actions);
@@ -9709,7 +10542,7 @@ function SubbysPlushiesPageMain() {
             return true;
         }
         if (command === "/plushiedatareload") {
-            requireReady(() => { void refreshGitDataFromGitHub({ force: true, silent: false }); });
+            requireReady(() => { void refreshGitDataFromGitHub({ force: true, silent: false, includeLore: true }); });
             return true;
         }
 
@@ -13238,7 +14071,7 @@ function SubbysPlushiesPageMain() {
         for (const url of candidates) {
             try {
                 const audio = new Audio(url);
-                audio.preload = "auto";
+                audio.preload = "none";
                 audio.volume = 0.75;
                 activePurrAudio = audio;
                 await audio.play();
@@ -13871,6 +14704,8 @@ function SubbysPlushiesPageMain() {
 
         if (roomRosterSignature == null) {
             roomRosterSignature = signature;
+            if (idleAnimationTimer == null && getFeatureSettings().idleAnimations && !isLowCpuMode())
+                scheduleNextIdleAnimation(1200);
             captureVisiblePlushStates();
             pruneRememberedPlushStates(true);
             pruneAddonPresence();
@@ -13958,6 +14793,8 @@ function SubbysPlushiesPageMain() {
                 window.setTimeout(() => recoverRoomMascotState({ allowCache: true }), 0);
                 window.setTimeout(() => trackRoomAchievements(), 900);
                 window.setTimeout(() => sendAddonPresence(true), 450);
+                if (idleAnimationTimer == null && getFeatureSettings().idleAnimations && !isLowCpuMode())
+                    scheduleNextIdleAnimation(1200);
                 if (!installedHooks.has("ChatRoomAppendChat")) window.setTimeout(() => ensureOfferChatObserver("ChatRoomSync fallback"), 0);
             };
             if (result && typeof result.then === "function") {
@@ -14729,6 +15566,65 @@ function SubbysPlushiesPageMain() {
         return { C, item };
     }
 
+    function isWardrobeManagedItem(item) {
+        const asset = item?.Asset;
+        return !!asset && asset.Group && WARDROBE_ITEM_NAME_SET.has(asset.Name) && WARDROBE_ITEMS.some(entry => entry.name === asset.Name && entry.group === asset.Group.Name);
+    }
+
+    function getFocusedManagedLayeringItem() {
+        const C = window.DialogFocusCharacter || window.Player;
+        const focusItem = window.DialogFocusItem;
+        if (isOurs(focusItem) || isWardrobeManagedItem(focusItem)) return { C, item: focusItem };
+        const held = getHeld(C);
+        if (isOurs(held)) return { C, item: held };
+        return { C, item: null };
+    }
+
+    function managedLayerNames(item) {
+        if (!item?.Asset) return [];
+        if (isOurs(item)) {
+            return getVisiblePlushLayers(item).map(layer => layer?.Name).filter(Boolean);
+        }
+        if (isWardrobeManagedItem(item)) {
+            return Array.isArray(item.Asset.Layer) ? item.Asset.Layer.map(layer => layer?.Name).filter(Boolean) : [];
+        }
+        return [];
+    }
+
+    function hasManagedLayerSpecificTransform(item) {
+        const property = getProperty(item);
+        if (!property) return false;
+        const layerNames = new Set(managedLayerNames(item));
+        if (!layerNames.size) return false;
+        return Object.values(NATIVE_LAYER_PROPERTY_BY_TRANSFORM).some(layerProperty => {
+            const record = property[layerProperty];
+            if (!record || typeof record !== "object" || Array.isArray(record)) return false;
+            return Object.entries(record).some(([layerName, value]) => layerNames.has(layerName) && Number.isFinite(value));
+        });
+    }
+
+    function nativeTransformIsDefault(item) {
+        const transform = readNativeItemTransform(item);
+        if (!transform) return true;
+        return NATIVE_LAYER_TRANSFORM_KEYS.every(key => transform[key] === DEFAULT_TRANSFORM[key]);
+    }
+
+    function canonicalizeWardrobeLayerTransforms(C, item, reason = "Move / Resize canonicalize", publish = true) {
+        if (!C || !isWardrobeManagedItem(item)) return false;
+        const property = getProperty(item);
+        if (!property) return false;
+        const hasLayerSpecific = hasManagedLayerSpecificTransform(item);
+        const needsReset = !nativeTransformIsDefault(item);
+        if (!hasLayerSpecific || !needsReset) return false;
+        resetGenericNativeTransform(item);
+        rebuildCharacterCanvas(C, reason);
+        if (publish && C === window.Player) {
+            try { if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(C); }
+            catch (e) { warn(`Could not publish wardrobe Move / Resize values (${reason}):`, e); }
+        }
+        return true;
+    }
+
     function currentPlushOption() {
         const wireOption = getItemPlushOption(getFocusedPlushItem().item);
         return wireToPublicPlushOption(wireOption);
@@ -15122,23 +16018,32 @@ function SubbysPlushiesPageMain() {
             if (event.type === "input" && inputType !== "range") return;
 
             nativeLayeringInputEvents++;
-            const focused = getFocusedPlushItem();
-            if (!focused.C || !isOurs(focused.item)) return;
-            const signatureBefore = nativeItemTransformSignature(focused.item);
+            const focused = getFocusedManagedLayeringItem();
+            if (!focused.C || !(isOurs(focused.item) || isWardrobeManagedItem(focused.item))) return;
+            const signatureBefore = focused.item ? nativeItemTransformSignature(focused.item) : null;
             const eventType = event.type;
             const inferredField = inferNativeLayeringInputField(input, root, api).field;
 
             window.setTimeout(() => {
-                const current = getFocusedPlushItem();
-                if (!current.C || !isOurs(current.item)) return;
-                applyNativeLayeringInputFallback(input, root, api, current.item, signatureBefore);
-                mirrorNativeTransformToActivePlushLayer(
-                    current.C,
-                    current.item,
-                    `Move / Resize ${eventType}`,
-                    eventType === "change",
-                    inferredField ? [inferredField] : null
-                );
+                const current = getFocusedManagedLayeringItem();
+                if (!current.C || !(isOurs(current.item) || isWardrobeManagedItem(current.item))) return;
+                if (isOurs(current.item)) {
+                    applyNativeLayeringInputFallback(input, root, api, current.item, signatureBefore);
+                    mirrorNativeTransformToActivePlushLayer(
+                        current.C,
+                        current.item,
+                        `Move / Resize ${eventType}`,
+                        eventType === "change",
+                        inferredField ? [inferredField] : null
+                    );
+                } else if (isWardrobeManagedItem(current.item)) {
+                    canonicalizeWardrobeLayerTransforms(
+                        current.C,
+                        current.item,
+                        `Move / Resize ${eventType}`,
+                        eventType === "change"
+                    );
+                }
             }, 0);
         };
 
@@ -15152,23 +16057,28 @@ function SubbysPlushiesPageMain() {
 
         const original = api.Resize;
         const wrapped = function (...args) {
-            const beforeFocused = getFocusedPlushItem();
-            const beforeTransform = beforeFocused.C && isOurs(beforeFocused.item)
-                ? readNativeItemTransform(beforeFocused.item)
-                : null;
+            const beforeFocused = getFocusedManagedLayeringItem();
+            const managedBefore = beforeFocused.C && (isOurs(beforeFocused.item) || isWardrobeManagedItem(beforeFocused.item));
+            const beforeTransform = managedBefore ? readNativeItemTransform(beforeFocused.item) : null;
 
             const result = original.apply(this, args);
             window.setTimeout(() => {
-                const { C, item } = getFocusedPlushItem();
-                if (!C || !isOurs(item)) return;
+                const { C, item } = getFocusedManagedLayeringItem();
+                if (!C || !(isOurs(item) || isWardrobeManagedItem(item))) return;
 
                 const afterTransform = readNativeItemTransform(item);
                 const changedFields = beforeTransform && afterTransform
                     ? NATIVE_LAYER_TRANSFORM_KEYS.filter(field => beforeTransform[field] !== afterTransform[field])
                     : [];
 
-                if (changedFields.length) {
-                    mirrorNativeTransformToActivePlushLayer(C, item, "Layering.Resize", true, changedFields);
+                if (isOurs(item)) {
+                    if (changedFields.length) {
+                        mirrorNativeTransformToActivePlushLayer(C, item, "Layering.Resize", true, changedFields);
+                    }
+                } else if (isWardrobeManagedItem(item)) {
+                    if (changedFields.length || hasManagedLayerSpecificTransform(item)) {
+                        canonicalizeWardrobeLayerTransforms(C, item, "Layering.Resize", true);
+                    }
                 }
             }, 0);
             return result;
@@ -15366,19 +16276,40 @@ function SubbysPlushiesPageMain() {
         return indexes;
     }
 
+    // A single redraw per affected character per browser frame, never an
+    // unconditional frame loop. Keep dirty characters until the canvas is visible.
+    const dirtyPlushCharacters = new Set();
+    let dirtyPlushRenderFrame = 0;
+    function flushDirtyPlushCharacters() {
+        dirtyPlushRenderFrame = 0;
+        if (!plushScreenVisible()) return;
+        for (const C of dirtyPlushCharacters) {
+            try { rebuildCharacterCanvas(C, "plush artwork became ready"); }
+            catch (e) { warn("Deferred plush canvas update failed:", e); }
+        }
+        dirtyPlushCharacters.clear();
+        scheduleLocalOverlayReposition();
+    }
+    function scheduleDirtyPlushRender(C) {
+        if (C) dirtyPlushCharacters.add(C);
+        if (dirtyPlushRenderFrame || !plushScreenVisible()) return;
+        dirtyPlushRenderFrame = window.requestAnimationFrame(flushDirtyPlushCharacters);
+    }
     function refreshLazyRenderConsumers(source) {
         imageMappings = buildImageMappings();
         if (window.CurrentScreen !== "ChatRoom") return;
         const characters = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
-        for (const C of characters) {
-            let matched = false;
+        const members = characters.includes(window.Player) ? characters : [...characters, window.Player];
+        for (const C of members) {
+            if (!C) continue;
             for (const item of getEquippedPlushItems(C)) {
                 const option = canonicalWirePlushOption(getItemPlushOption(item));
-                if (validPlushOption(option) && PLUSH_IMAGES[option] === source) { matched = true; break; }
+                if (validPlushOption(option) && PLUSH_IMAGES[option] === source) {
+                    scheduleDirtyPlushRender(C);
+                    break;
+                }
             }
-            if (matched) rebuildCharacterCanvas(C, "lazy plush render ready");
         }
-        scheduleLocalOverlayReposition();
     }
 
     function ensureRenderImage(optionIndex, { refreshConsumers = true } = {}) {
@@ -15419,32 +16350,11 @@ function SubbysPlushiesPageMain() {
         for (let i = 0; i < renderImages.length; i++) renderImages[i] = renderFallbackImage;
         for (const index of renderIndexesForSource(PLUSH_IMAGES[0])) renderImages[index] = renderFallbackImage;
 
-        const prepareActionIcon = async (url, label, fileName) => {
-            try {
-                const image = await renderSmallPlush(url, label);
-                log(`Prepared shared action icon from assets/plushies/${fileName}.`);
-                return image || renderFallbackImage;
-            } catch (e) {
-                warn(`Could not load assets/plushies/${fileName}; using subbycat.png instead.`, e);
-                return renderFallbackImage;
-            }
-        };
-
-        hairActionIconImage = await prepareActionIcon(
-            HAIR_ACTION_ICON_URL,
-            "Hair Action",
-            "hairaction.png"
-        );
-        faceActionIconImage = await prepareActionIcon(
-            FACE_ACTION_ICON_URL,
-            "Face Action",
-            "faceaction.png"
-        );
-        pointingActionIconImage = await prepareActionIcon(
-            POINTING_ACTION_ICON_URL,
-            "Point Dramatically",
-            "pointing.png"
-        );
+        // Action icons are resolved only if an action actually needs that icon.
+        // This avoids three image fetches, decodes and canvas encodes at startup.
+        hairActionIconImage = null;
+        faceActionIconImage = null;
+        pointingActionIconImage = null;
 
         imageMappings = buildImageMappings();
         log(`Prepared startup artwork only; ${PLUSHES.length - renderIndexesForSource(PLUSH_IMAGES[0]).length} plush option(s) will load lazily on first use.`);
@@ -15940,13 +16850,39 @@ function SubbysPlushiesPageMain() {
         ALL_PLUGIN_ACTIVITIES.map(spec => Object.freeze({ spec, name: compactActivityName(spec.name) }))
     );
 
+    const actionIconLoads = new Map();
+    const actionIconFailureUntil = new Map();
+    function lazyActionIcon(slot) {
+        const entries = {
+            hair: [HAIR_ACTION_ICON_URL, "Hair Action", "hairActionIconImage"],
+            face: [FACE_ACTION_ICON_URL, "Face Action", "faceActionIconImage"],
+            pointing: [POINTING_ACTION_ICON_URL, "Point Dramatically", "pointingActionIconImage"],
+        };
+        const entry = entries[slot];
+        if (!entry || actionIconLoads.has(slot) || Date.now() < (actionIconFailureUntil.get(slot) || 0)) return;
+        const task = renderSmallPlush(entry[0], entry[1]).then(image => {
+            if (slot === "hair") hairActionIconImage = image;
+            else if (slot === "face") faceActionIconImage = image;
+            else pointingActionIconImage = image;
+            imageMappings = buildImageMappings();
+            scheduleLocalOverlayReposition();
+        }).catch(e => {
+            actionIconFailureUntil.set(slot, Date.now() + 120000);
+            warn(`Optional ${entry[1]} icon unavailable:`, e);
+        })
+          .finally(() => actionIconLoads.delete(slot));
+        actionIconLoads.set(slot, task);
+    }
     function resolvedCustomActionImage(spec) {
         switch (customActionImageCategory(spec)) {
             case "hair":
+                if (!hairActionIconImage) lazyActionIcon("hair");
                 return hairActionIconImage || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
             case "face":
+                if (!faceActionIconImage) lazyActionIcon("face");
                 return faceActionIconImage || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
             case "pointing":
+                if (!pointingActionIconImage) lazyActionIcon("pointing");
                 return pointingActionIconImage || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
             default:
                 return renderFallbackImage || PLUSH_FALLBACK_IMAGE;
@@ -16482,13 +17418,14 @@ function SubbysPlushiesPageMain() {
             inGlobalCatalog: Array.isArray(window.Asset) && window.Asset.some(same),
             inGroupCatalog: Array.isArray(group?.Asset) && group.Asset.some(same),
             groupCategory: group?.Category || null,
-            groupCustomizable: group?.AllowCustomize !== false,
+            groupCustomizable: group?.AllowCustomize === true,
             value: asset?.Value ?? null,
             description: asset?.Description ?? null,
             placement: wardrobePlacement(entry),
             spriteSize: { width: entry.width, height: entry.height },
             colorZones: [...entry.colorZones],
             colorableLayerCount: asset?.ColorableLayerCount ?? 0,
+            layerPriorities: asset?.Layer?.map(layer => ({ zone: layer?.Name, priority: layer?.Priority ?? asset?.Priority ?? null })) || [],
             colors: wardrobeGetColors(entry.name),
             heightModifier: asset?.HeightModifier ?? null,
             overrideHeight: asset?.OverrideHeight ?? null,
@@ -16515,6 +17452,136 @@ function SubbysPlushiesPageMain() {
         return status;
     }
 
+    // Native Wardrobe / Appearance catalog support. BC and some UI mods cache
+    // appearance choices when opening the item picker; adding an asset to
+    // AssetGet after that point does not necessarily update an existing screen.
+    // This adapter only touches our two names, without replacing game draw code.
+    const wardrobeNativePickerHooks = new Set();
+    const wardrobeNativePickerState = { addedToCachedLists: 0, lastSync: null };
+    let wardrobePickerSyncActive = false;
+
+    function wardrobeCachedAppearanceLists() {
+        const candidates = [];
+        // Older appearance screens store this as a top-level lexical variable,
+        // while some integrations expose their own copy on window.
+        try {
+            if (typeof AppearanceAssets !== "undefined" && Array.isArray(AppearanceAssets)) {
+                candidates.push(AppearanceAssets);
+            }
+        } catch (_) {}
+        try {
+            if (Array.isArray(window.AppearanceAssets) && !candidates.includes(window.AppearanceAssets)) {
+                candidates.push(window.AppearanceAssets);
+            }
+        } catch (_) {}
+        return candidates;
+    }
+
+    function wardrobeSyncNativePicker() {
+        if (wardrobePickerSyncActive || !wardrobeState.attempted) return false;
+        wardrobePickerSyncActive = true;
+        let changed = false;
+        try {
+            const assetTable = Array.isArray(window.Asset) ? window.Asset : null;
+            const cachedLists = wardrobeCachedAppearanceLists();
+            for (const entry of WARDROBE_ITEMS) {
+                const group = findRuntimeAssetGroup(entry.group);
+                const asset = window.AssetGet?.(FAMILY, entry.group, entry.name);
+                if (!group || !asset) continue;
+                // These are clothing groups; they must be user-customizable to
+                // be offered in the built-in Appearance editor. Never change
+                // the category or unrelated groups.
+                if (group.Category === "Appearance" && group.AllowCustomize !== true) {
+                    group.AllowCustomize = true;
+                    changed = true;
+                }
+                if (group.Category === "Appearance" && group.Clothing !== true) {
+                    group.Clothing = true; // Allows saving/access in outfit Wardrobe slots.
+                    changed = true;
+                }
+                asset.Group = group;
+                asset.Description = entry.title;
+                asset.Value = 0; // Available in the native clothing menu without a shop purchase.
+                const same = item => item?.Name === entry.name && item?.Group?.Name === entry.group;
+                if (assetTable) {
+                    const index = assetTable.findIndex(same);
+                    if (index < 0) { assetTable.push(asset); changed = true; }
+                    else if (assetTable[index] !== asset) { assetTable[index] = asset; changed = true; }
+                }
+                if (Array.isArray(group.Asset)) {
+                    const index = group.Asset.findIndex(same);
+                    if (index < 0) { group.Asset.push(asset); changed = true; }
+                    else if (group.Asset[index] !== asset) { group.Asset[index] = asset; changed = true; }
+                }
+                // Refresh an already opened classic Appearance selector. All
+                // items within this group retain their original order.
+                for (const groups of cachedLists) {
+                    const view = groups.find(current => current?.Group?.Name === entry.group);
+                    if (view && Array.isArray(view.Assets)) {
+                        const index = view.Assets.findIndex(same);
+                        if (index < 0) {
+                            view.Assets.push(asset);
+                            wardrobeNativePickerState.addedToCachedLists++;
+                            changed = true;
+                        } else if (view.Assets[index] !== asset) {
+                            view.Assets[index] = asset;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            wardrobeNativePickerState.lastSync = Date.now();
+        } finally {
+            wardrobePickerSyncActive = false;
+        }
+        return changed;
+    }
+
+    function wardrobeNativePickerDiagnostics() {
+        const groups = wardrobeCachedAppearanceLists();
+        return {
+            hookNames: [...wardrobeNativePickerHooks],
+            cachedAppearanceLists: groups.length,
+            addedToCachedLists: wardrobeNativePickerState.addedToCachedLists,
+            lastSync: wardrobeNativePickerState.lastSync,
+            entries: WARDROBE_ITEMS.map(entry => {
+                const group = findRuntimeAssetGroup(entry.group);
+                const asset = window.AssetGet?.(FAMILY, entry.group, entry.name);
+                return {
+                    name: entry.name, group: entry.group,
+                    registered: !!asset,
+                    category: group?.Category ?? null,
+                    customizable: group?.AllowCustomize === true,
+                    clothing: group?.Clothing === true,
+                    globalCatalog: Array.isArray(window.Asset) && window.Asset.some(a => a === asset),
+                    groupCatalog: Array.isArray(group?.Asset) && group.Asset.some(a => a === asset),
+                    cachedPicker: groups.length ? groups.some(list =>
+                        list.some(view => view?.Group?.Name === entry.group &&
+                            Array.isArray(view.Assets) && view.Assets.some(a => a === asset))) : null,
+                };
+            }),
+        };
+    }
+
+    function installWardrobeNativePickerHooks() {
+        // Hook list-building, not its draw functions, to remain compatible with BCX.
+        // Different BC versions expose different entry points; hook what's present.
+        for (const name of ["AppearanceBuildAssets", "CharacterAppearanceLoadCharacter", "AppearanceLoad", "AppearanceItemLoad"]) {
+            if (wardrobeNativePickerHooks.has(name) || typeof window[name] !== "function") continue;
+            try {
+                const installed = installHook(name, 10000, (args, next) => {
+                    wardrobeSyncNativePicker();
+                    const result = next(args);
+                    wardrobeSyncNativePicker();
+                    return result;
+                });
+                if (installed) wardrobeNativePickerHooks.add(name);
+            } catch (e) { warn(`Wardrobe native picker hook ${name} unavailable:`, e); }
+        }
+        wardrobeSyncNativePicker();
+        return wardrobeNativePickerHooks.size > 0;
+    }
+
     function wardrobeEntryByName(name) {
         const wanted = String(name || "").trim().toLowerCase();
         return WARDROBE_ITEMS.find(entry => entry.name.toLowerCase() === wanted || entry.title.toLowerCase() === wanted) || null;
@@ -16532,9 +17599,16 @@ function SubbysPlushiesPageMain() {
     }
 
     function wardrobeEquippedItem(entry) {
-        if (!entry) return null;
-        const item = window.InventoryGet?.(window.Player, entry.group) ||
-            window.Player?.Appearance?.find?.(item => item?.Asset?.Group?.Name === entry.group);
+        const player = window.Player;
+        // The catalog is registered while BC is still starting; InventoryGet
+        // requires a fully initialized character with an Appearance array.
+        if (!entry || !player || !Array.isArray(player.Appearance)) return null;
+        let item = null;
+        if (typeof window.InventoryGet === "function") {
+            try { item = window.InventoryGet(player, entry.group); }
+            catch (_) { /* BC/BCX can be rebuilding Appearance here. */ }
+        }
+        item ||= player.Appearance.find(candidate => candidate?.Asset?.Group?.Name === entry.group);
         return item?.Asset?.Name === entry.name ? item : null;
     }
 
@@ -16569,6 +17643,32 @@ function SubbysPlushiesPageMain() {
         } catch (_) {}
         if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return [...next];
+    }
+
+    // Clear old BC/Echo Move / Resize overrides ONLY when the user requests it.
+    // New v3.4.8 PNG/asset dimensions already bake in the requested 0.90 fit;
+    // preserving a prior 0.90 scale would make the outfit 0.81 of the v3.4.7 size.
+    function wardrobeResetMoveResize(name) {
+        const entry = wardrobeEntryByName(name);
+        const item = entry && wardrobeEquippedItem(entry);
+        if (!item) return false;
+        const property = item.Property;
+        if (!property || typeof property !== "object" || Array.isArray(property)) return true;
+        let changed = false;
+        for (const key of ["TranslationX", "TranslationY", "ScaleX", "ScaleY", "Rotation",
+            "LayerTranslationX", "LayerTranslationY", "LayerScaleX", "LayerScaleY", "LayerRotation"]) {
+            if (Object.prototype.hasOwnProperty.call(property, key)) {
+                delete property[key];
+                changed = true;
+            }
+        }
+        if (changed) {
+            try { window.CharacterRefresh?.(window.Player, false, false); } catch (_) {}
+            try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
+            try { if (window.CurrentScreen === "ChatRoom") window.ChatRoomCharacterUpdate?.(window.Player); } catch (_) {}
+        }
+        if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+        return true;
     }
 
     // Explicit on-demand actions; never auto-wear or modify a user's outfits.
@@ -16622,6 +17722,33 @@ function SubbysPlushiesPageMain() {
         }
     }
 
+    // Individual native BC layers can draw at their own priorities. Keep the
+    // Fabric zone/color slot intact: only its Z-order differs from the suit.
+    function wardrobeNativeLayerDefinition(entry, zone) {
+        const layer = { Name: zone, AllowColorize: true };
+        if (entry.poses?.size) layer.PoseMapping = { ...WARDROBE_NATIVE_POSE };
+        const priority = entry.layerPriorities?.[zone];
+        if (Number.isInteger(priority)) layer.Priority = priority;
+        return layer;
+    }
+
+    function wardrobeRepairLayerPriorities(entry, asset) {
+        if (!Array.isArray(asset?.Layer)) return false;
+        let changed = false;
+        for (let i = 0; i < entry.colorZones.length; i++) {
+            const layer = asset.Layer[i];
+            if (!layer || layer.Name !== entry.colorZones[i]) continue;
+            const priority = entry.layerPriorities?.[layer.Name];
+            // Only override targeted layers; leave all other zones' native
+            // priority and all BC/other-mod drawing groups alone.
+            if (Number.isInteger(priority) && layer.Priority !== priority) {
+                layer.Priority = priority;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
     function setupWardrobeAssets() {
         wardrobeState.attempted = true;
         wardrobeState.status = "registering";
@@ -16649,10 +17776,11 @@ function SubbysPlushiesPageMain() {
                         // Never raise/lower the PLAYER to fit clothing artwork.
                         HeightModifier: 0,
                         Priority: entry.priority,
+                        ...(entry.poses?.size ? { PoseMapping: { ...WARDROBE_NATIVE_POSE } } : {}),
                         ParentGroup: {},
                         DefaultColor: [...entry.defaultColors],
                         ColorableLayerCount: entry.colorZones.length,
-                        Layer: entry.colorZones.map(zone => ({ Name: zone, AllowColorize: true })),
+                        Layer: entry.colorZones.map(zone => wardrobeNativeLayerDefinition(entry, zone)),
                     };
                     callAssetAdd(definition, runtimeGroup, entry.group, null);
                     asset = window.AssetGet(FAMILY, entry.group, entry.name);
@@ -16668,7 +17796,14 @@ function SubbysPlushiesPageMain() {
                 // unless this was the legacy single-layer beta asset.
                 if (!Array.isArray(asset.Layer) || asset.Layer.length !== entry.colorZones.length ||
                     entry.colorZones.some((zone, i) => asset.Layer[i]?.Name !== zone)) {
-                    asset.Layer = entry.colorZones.map(zone => ({ Name: zone, AllowColorize: true }));
+                    asset.Layer = entry.colorZones.map(zone => wardrobeNativeLayerDefinition(entry, zone));
+                }
+                // Also repair the native BC AssetAdd-normalized layers when the
+                // asset was already registered in this page session.
+                wardrobeRepairLayerPriorities(entry, asset);
+                if (entry.poses?.size) {
+                    asset.PoseMapping = { ...WARDROBE_NATIVE_POSE };
+                    for (const layer of asset.Layer || []) layer.PoseMapping = { ...WARDROBE_NATIVE_POSE };
                 }
                 ensureWardrobePickerCatalog(asset, runtimeGroup, entry);
                 wardrobeNeutralizeHeight(entry);
@@ -16681,6 +17816,7 @@ function SubbysPlushiesPageMain() {
         }
         wardrobeRepairLayerNamesCache();
         for (const entry of WARDROBE_ITEMS) wardrobeRepairAssetText(entry);
+        wardrobeSyncNativePicker();
         wardrobeState.status = wardrobeState.registered.length === WARDROBE_ITEMS.length
             ? "registered-native" : (wardrobeState.registered.length ? "partial" : "failed");
         log(`Wardrobe ${wardrobeState.status}: ${wardrobeState.registered.join(", ") || "none"}.`);
@@ -18048,7 +19184,7 @@ function SubbysPlushiesPageMain() {
         status: () => extensionsStatusSnapshot(),
         offerStatus: () => extensionsStatusSnapshot().offer,
         dataStatus: () => ({ ...gitDataState, status: gitDataStatusText() }),
-        reloadData: () => refreshGitDataFromGitHub({ force: true, silent: false }),
+        reloadData: () => refreshGitDataFromGitHub({ force: true, silent: false, includeLore: true }),
         debug,
     };
 
@@ -18142,11 +19278,27 @@ function SubbysPlushiesPageMain() {
         installAssetTextHook();
         installWardrobeLayerTextHook();
         installWardrobeVisibleLabelFix();
+        // Register in BC's native Appearance catalog BEFORE waiting for network
+        // color data. Otherwise BC can cache the clothing picker without us.
+        // The source PNG previews are served from GitHub, while individual
+        // recolorable layers are populated asynchronously after registration.
+        setupWardrobeAssets();
+        installWardrobeNativePickerHooks();
+        // Some BC builds load their Appearance editor later than the asset table.
+        // Bounded one-shot retries, no permanent frame loop or polling observer.
+        for (const delay of [1000, 4000, 12000]) {
+            window.setTimeout(() => installWardrobeNativePickerHooks(), delay);
+        }
         const wardrobeImagesLoaded = await wardrobeEarlyLayerPromise;
-        // Register accessories only when the color layers are available.
-        // Otherwise they cannot render; leave Plushies working even if GitHub fails.
-        if (wardrobeImagesLoaded) setupWardrobeAssets();
-        else wardrobeState.status = "images-unavailable";
+        if (wardrobeImagesLoaded) {
+            wardrobeSyncNativePicker();
+            try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
+        } else {
+            // Keep the items selectable for when GitHub responds, but report
+            // that the color layers (and therefore their render) are unavailable.
+            wardrobeState.errors.push(`Color layers unavailable: ${wardrobeLayersError || "remote request failed"}`);
+            warn("Wardrobe items registered, but remote color artwork is not ready:", wardrobeLayersError);
+        }
 
         await prepareRenderImages();
         setupNativeAsset();
@@ -18186,7 +19338,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.3.5";
+    const VERSION = "3.5.0-beta.1";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
