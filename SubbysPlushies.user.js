@@ -2,8 +2,8 @@
 // @name         BC - Subby's Plushies + Wardrobe
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.3.7
-// @description  Subby’s Plushies + Wardrobe: multicolor cat-ear headband and heart charm, Lore, Eva, plushie interactions, and native BC item integration
+// @version      3.4.0
+// @description  Subby’s Plushies + Wardrobe: native draped wrap dress with four color zones, custom accessories, lazy assets and the zone editor
 // @released     2026-10-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.3.7";
+    const VERSION = "3.4.0";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -756,20 +756,21 @@ function SubbysPlushiesPageMain() {
     const UPDATE_MANIFEST_URL = `${REPOSITORY_RAW_ROOT}/version.json`;
     const PLUSH_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/plushies`;
 
-    // Two Wardrobe accessory PNGs are hosted on GitHub, even when the
-    // userscript runs locally. Their six recolorable BC layers come from the
-    // shared remote color-layers.json; no clothing pose assets are registered.
+    // Three wardrobe PNGs are hosted on GitHub, even when the script runs
+    // locally. BC layers are supplied by shared color-layers.json (schema v2).
     // Uses Plushies' existing image-source mapper (no raw drawing overrides).
     const WARDROBE_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/wardrobe`;
     const WARDROBE_LAYERS_URL = `${REPOSITORY_RAW_ROOT}/data/wardrobe/color-layers.json`;
     const WARDROBE_ITEMS = Object.freeze([
         Object.freeze({"name": "SubbyCatHeadband", "title": "Subby's Plush Cat-Ear Headband", "group": "HairAccessory2", "top": 50, "left": 168, "width": 183, "height": 100, "priority": 55, "colorZones": ["OuterEars", "InnerEars", "Headband", "Bow"], "defaultColors": ["#BB8CCC", "#F2C1D6", "#B58ACA", "#E58DBA"]}),
-        Object.freeze({"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]})
+        Object.freeze({"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]}),
+        Object.freeze({"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Suit","top":170,"left":85,"width":330,"height":440,"priority":38,"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]})
     ]);
     const WARDROBE_IMAGE_BY_NAME = new Map(WARDROBE_ITEMS.map(entry =>
         [entry.name, `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(entry.name)}.png`]));
     const WARDROBE_LAYER_IMAGES = new Map(WARDROBE_ITEMS.map(entry =>
         [entry.name, new Map()]));
+    let wardrobeLayerManifest = null;
     let wardrobeLayersReady = false;
     let wardrobeLayersError = null;
     async function loadWardrobeColorLayers() {
@@ -802,8 +803,9 @@ function SubbysPlushiesPageMain() {
                 const zones = loadZones(entry, remote.zones);
                 pending.push([entry.name, zones]);
             }
-            // Commit only after validating both accessories and all six color zones.
+            // Commit only after validating every Wardrobe item and color zone.
             for (const [name, zones] of pending) WARDROBE_LAYER_IMAGES.set(name, zones);
+            wardrobeLayerManifest = payload;
             wardrobeLayersReady = true;
             wardrobeLayersError = null;
             return true;
@@ -979,6 +981,10 @@ function SubbysPlushiesPageMain() {
             get errors() { return [...wardrobeState.errors]; },
             get status() { return wardrobeState.status; },
             get imageStatus() { return { ready: wardrobeLayersReady, error: wardrobeLayersError, source: WARDROBE_LAYERS_URL }; },
+            editColorZones: name => {
+                const entry = WARDROBE_ITEMS.find(item => item.name === name);
+                return entry ? openWardrobeColorZoneEditor(entry) : false;
+            },
             reloadImages: async () => {
                 if (!(await loadWardrobeColorLayers())) return false;
                 if (!wardrobeState.attempted) setupWardrobeAssets();
@@ -4220,6 +4226,7 @@ function SubbysPlushiesPageMain() {
     }
 
     function scheduleLocalOverlayReposition() {
+        if (!plushScreenVisible()) return;
         if (localOverlayRepositionFrame != null) return;
         localOverlayRepositionFrame = requestAnimationFrame(() => {
             localOverlayRepositionFrame = null;
@@ -4233,7 +4240,7 @@ function SubbysPlushiesPageMain() {
 
     function refreshPlushStatusIcon() {
         const targetItem = statusOverlayTargetItem();
-        if (window.CurrentScreen !== "ChatRoom" || !isOurs(targetItem)) {
+        if (!plushScreenVisible() || !isOurs(targetItem)) {
             removePlushStatusIcon();
             schedulePlushStatusSleepRefresh(targetItem);
             return false;
@@ -4723,6 +4730,7 @@ function SubbysPlushiesPageMain() {
     const nativePresenceDomBadges = new Map();
     const nativePresencePendingOverlayWork = new Map();
     const nativePresenceCaptureTimes = new Map();
+    const nativePresenceEffectProbeTimes = new Map();
     let nativePresenceBadgePruneTimer = null;
     let nativePresenceOverlayWorkRaf = 0;
     // The addon indicator is a hover-only decoration, never a permanent badge.
@@ -4786,6 +4794,14 @@ function SubbysPlushiesPageMain() {
 
     function refreshNativePresenceBadgeHover() {
         nativePresenceHoveredKey = nativePresenceHoveredCharacterKey();
+        if (nativePresenceHoveredKey && !nativePresenceDomBadges.has(nativePresenceHoveredKey)) {
+            const key = nativePresenceHoveredKey;
+            const members = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
+            const C = key === nativePresenceBadgeKey(window.Player) ? window.Player :
+                members.find(member => nativePresenceBadgeKey(member) === key);
+            const placement = C && characterChatRoomDraw(C);
+            if (C && placement && Date.now() - Number(placement.at) <= 1200) positionNativePresenceDomBadge(C, placement);
+        }
         const now = Date.now();
         for (const [key, image] of nativePresenceDomBadges) {
             if (!image?.isConnected) continue;
@@ -4880,10 +4896,13 @@ function SubbysPlushiesPageMain() {
             }
         }
         if (remove) {
+            if (nativePresenceBadgePruneTimer != null) window.clearTimeout(nativePresenceBadgePruneTimer);
+            nativePresenceBadgePruneTimer = null;
             nativePresenceHoverPointer = null;
             nativePresenceHoveredKey = null;
             nativePresencePendingOverlayWork.clear();
             nativePresenceCaptureTimes.clear();
+            nativePresenceEffectProbeTimes.clear();
             lastCharacterChatRoomDraw.clear();
             lastPlayerChatRoomDraw = null;
         }
@@ -4917,6 +4936,8 @@ function SubbysPlushiesPageMain() {
 
         if (![left, top, width, height].every(Number.isFinite)) return false;
 
+        // Do not allocate DOM badges for all remote members every render.
+        if (nativePresenceHoveredKey !== nativePresenceBadgeKey(C)) return false;
         const image = ensureNativePresenceDomBadge(C);
         if (!image) return false;
 
@@ -4929,6 +4950,7 @@ function SubbysPlushiesPageMain() {
             height: `${Math.round(height)}px`,
         });
 
+        if (nativePresenceHoveredKey) scheduleNativeBadgeExpiry();
         nativePresenceDrawMethod = "DOM overlay after character render";
         nativePresenceDrawCount++;
         lastNativePresenceDrawAt = Date.now();
@@ -4939,7 +4961,7 @@ function SubbysPlushiesPageMain() {
         nativePresenceOverlayWorkRaf = 0;
 
         if (
-            window.CurrentScreen !== "ChatRoom" ||
+            !plushScreenVisible() ||
             addonPresenceIconHiddenByNativeUI()
         ) {
             nativePresencePendingOverlayWork.clear();
@@ -4966,7 +4988,11 @@ function SubbysPlushiesPageMain() {
 
         // The mouse may already be over a player when the next draw is queued.
         refreshNativePresenceBadgeHover();
-        pruneNativePresenceDomBadges();
+        const now = Date.now();
+        if (now - (flushNativePresenceOverlayWork.lastPruneAt || 0) > 1200) {
+            flushNativePresenceOverlayWork.lastPruneAt = now;
+            pruneNativePresenceDomBadges();
+        }
     }
 
     function pruneNativePresenceDomBadges() {
@@ -4993,8 +5019,18 @@ function SubbysPlushiesPageMain() {
         if (inRoom && nativePresenceHoverPointer) refreshNativePresenceBadgeHover();
     }
 
+    function scheduleNativeBadgeExpiry() {
+        if (nativePresenceBadgePruneTimer != null || !nativePresenceHoveredKey || !nativePresenceDomBadges.size) return;
+        nativePresenceBadgePruneTimer = window.setTimeout(() => {
+            nativePresenceBadgePruneTimer = null;
+            pruneNativePresenceDomBadges();
+            // Keep the stale-badge safeguard while hovered only. No idle loop.
+            if (nativePresenceHoveredKey && nativePresenceDomBadges.size) scheduleNativeBadgeExpiry();
+        }, 1500);
+    }
+
     function queueNativePresenceOverlayWork(C, placement) {
-        if (!C || !placement) return false;
+        if (!C || !placement || !plushScreenVisible()) return false;
         const key = nativePresenceBadgeKey(C) || C;
         nativePresencePendingOverlayWork.set(key, { C, placement });
 
@@ -5098,8 +5134,22 @@ function SubbysPlushiesPageMain() {
             if (placement) {
                 rememberVisibleOverlayPlacement(C, placement);
                 const key = nativePresenceBadgeKey(C);
+                const member = Number(C.MemberNumber);
+                const local = C === window.Player || member === Number(window.Player?.MemberNumber);
+                // Detect restraint overlays once every 1.5s when idle, not on
+                // every native DrawCharacter invocation for each remote avatar.
+                const activeRestraintOverlay = !!petSuitRenderStates.get(petSuitOverlayKey(C))?.active;
+                const lastProbe = nativePresenceEffectProbeTimes.get(key) || 0;
+                let newlyRestrained = false;
+                if (!activeRestraintOverlay && placement.at - lastProbe >= 1500) {
+                    nativePresenceEffectProbeTimes.set(key, placement.at);
+                    newlyRestrained = !!characterPetSuitItem(C) && isOurs(getHandheldItem(C));
+                }
+                const needsOverlay = !!nativePresenceHoverPointer || activeRestraintOverlay || newlyRestrained ||
+                    (Number.isFinite(member) && remotePlushEmotes.has(member)) ||
+                    (local && (speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected));
                 const last = nativePresenceCaptureTimes.get(key) || 0;
-                if (placement.at - last >= 100 || !last) {
+                if (needsOverlay && (placement.at - last >= 100 || !last)) {
                     nativePresenceCaptureTimes.set(key, placement.at);
                     queueNativePresenceOverlayWork(C, placement);
                 }
@@ -5125,11 +5175,16 @@ function SubbysPlushiesPageMain() {
             nativePresenceOverlayRetryTimer = null;
         }
         installNativePresenceBadgeHoverListeners();
-        if (nativePresenceBadgePruneTimer == null) {
-            nativePresenceBadgePruneTimer = window.setInterval(pruneNativePresenceDomBadges, 500);
-        }
         return true;
     }
+
+    window.SubbysPlushiesPerformanceDiag = () => ({
+        visible: plushScreenVisible(), loadedPlushImages: renderImages.filter(image => image && image !== renderFallbackImage).length,
+        pendingPlushLoads: renderImagePromises.size, pendingActionIcons: actionIconLoads.size, pendingCanvasRedraws: dirtyPlushCharacters.size,
+        activePresenceBadges: nativePresenceDomBadges.size,
+        queuedPresenceDraws: nativePresencePendingOverlayWork.size,
+        cachedLore: (gitDataState.loadedFiles || []).includes("lore.json"),
+    });
 
     window.SubbysPlushiesDialogueTest = (actionKey = "pet") => {
         const spec = PLUGIN_ACTIVITY_BY_KEY.get(String(actionKey || "pet"));
@@ -5297,13 +5352,22 @@ function SubbysPlushiesPageMain() {
         return true;
     }
 
+    function plushScreenVisible() {
+        if (document.hidden || window.CurrentScreen !== "ChatRoom") return false;
+        const canvas = document.getElementById("MainCanvas");
+        if (!canvas || typeof canvas.getBoundingClientRect !== "function") return true;
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        return rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
+    }
+
     function scheduleNextIdleAnimation(delay = null) {
         if (idleAnimationTimer != null) window.clearTimeout(idleAnimationTimer);
-        if (!getFeatureSettings().idleAnimations || isLowCpuMode() || document.hidden) { idleAnimationTimer = null; return false; }
+        if (!getFeatureSettings().idleAnimations || isLowCpuMode() || !plushScreenVisible()) { idleAnimationTimer = null; return false; }
         const wait = Number.isFinite(delay) ? Math.max(500, delay) : IDLE_MIN_DELAY_MS + Math.random() * (IDLE_MAX_DELAY_MS - IDLE_MIN_DELAY_MS);
         idleAnimationTimer = window.setTimeout(() => {
             idleAnimationTimer = null;
-            runIdleAnimation();
+            if (plushScreenVisible()) runIdleAnimation();
             scheduleNextIdleAnimation();
         }, wait);
         return true;
@@ -5314,6 +5378,16 @@ function SubbysPlushiesPageMain() {
     function installVisibilityPerformanceHooks() {
         if (visibilityPerformanceHooksInstalled) return true;
         visibilityPerformanceHooksInstalled = true;
+        const resumeIfVisible = () => {
+            if (!plushScreenVisible()) return;
+            if (getFeatureSettings().idleAnimations && !isLowCpuMode() && idleAnimationTimer == null)
+                scheduleNextIdleAnimation(1200);
+            scheduleDirtyPlushRender();
+            scheduleLocalOverlayReposition();
+            scheduleNativePresenceBadgeHoverRefresh();
+        };
+        window.addEventListener("scroll", resumeIfVisible, {passive:true});
+        window.addEventListener("resize", resumeIfVisible, {passive:true});
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
                 cancelIdleAnimation(false);
@@ -5342,6 +5416,7 @@ function SubbysPlushiesPageMain() {
     }
 
     function showCurrentPlushInfo() {
+        void ensureRemotePlushLore();
         const name = currentPlushName();
         const lore = getPlushLore(name) || { title: "Plushie", text: "Lore is not available yet. The addon will use the validated Git copy when it is online or cached." };
         const mood = getPlushMoodRecord(name);
@@ -6519,7 +6594,7 @@ function SubbysPlushiesPageMain() {
         return "Built-in fallback";
     }
 
-    async function refreshGitDataFromGitHub({ force = false, silent = true } = {}) {
+    async function refreshGitDataFromGitHub({ force = false, silent = true, includeLore = false } = {}) {
         if (gitDataRefreshPromise) return gitDataRefreshPromise;
         if (!force) {
             let lastCheck = 0;
@@ -6540,7 +6615,7 @@ function SubbysPlushiesPageMain() {
                 const loaded = [];
                 const failures = [];
 
-                const results = await Promise.allSettled(GIT_DATA_FILES.map(async fileName => {
+                const results = await Promise.allSettled(GIT_DATA_FILES.filter(fileName => includeLore || fileName !== "lore.json").map(async fileName => {
                     const path = gitDataPathFromIndex(index, fileName);
                     if (!path) throw new Error(`${fileName}: invalid path in data/index.json`);
                     const payload = await fetchGitDataJson(`${REPOSITORY_RAW_ROOT}/${path}?t=${stamp}`);
@@ -6602,6 +6677,42 @@ function SubbysPlushiesPageMain() {
             }
         })();
         return gitDataRefreshPromise;
+    }
+
+    // Lore is fetched on first inspection, not during every startup data refresh.
+    // Local cached lore and built-in stories remain usable offline immediately.
+    let onDemandLorePromise = null;
+    let onDemandLoreFetched = false;
+    let onDemandLoreRetryAfter = 0;
+    async function ensureRemotePlushLore() {
+        if (onDemandLorePromise) return onDemandLorePromise;
+        if (Date.now() < onDemandLoreRetryAfter) return false;
+        if (onDemandLoreFetched) return true;
+        onDemandLorePromise = (async () => {
+            try {
+                const index = await fetchGitDataJson(`${DATA_INDEX_URL}?t=${Date.now()}`);
+                if (!gitDataPlainObject(index) || Number(index.schemaVersion) !== GIT_DATA_SCHEMA_VERSION)
+                    throw new Error("Invalid lore index");
+                const path = gitDataPathFromIndex(index, "lore.json");
+                if (!path) throw new Error("No lore.json entry in data/index.json");
+                const payload = await fetchGitDataJson(`${REPOSITORY_RAW_ROOT}/${path}?t=${Date.now()}`);
+                if (!validateAndApplyGitDataFile("lore.json", payload)) throw new Error("Invalid lore.json data");
+                const old = readGitDataCache();
+                writeGitDataCache({schemaVersion:GIT_DATA_SCHEMA_VERSION, savedAt:Date.now(),
+                    indexPluginVersion:old?.indexPluginVersion || null,
+                    files:{...(gitDataPlainObject(old?.files) ? old.files : {}), "lore.json":payload}});
+                gitDataState = {...gitDataState, loadedFiles:[...new Set([...(gitDataState.loadedFiles || []), "lore.json"])],
+                    lastError:null};
+                onDemandLoreFetched = true;
+                if (extensionsActiveTab === "lore" && extensionsPanelElement?.isConnected) renderExtensionsPanel();
+                return true;
+            } catch (e) {
+                onDemandLoreRetryAfter = Date.now()+60000;
+                warn("On-demand lore fetch failed; using built-in/cached lore:", e); return false;
+            }
+            finally { onDemandLorePromise = null; }
+        })();
+        return onDemandLorePromise;
     }
 
     function showGitDataStatus() {
@@ -8210,6 +8321,7 @@ function SubbysPlushiesPageMain() {
     }
 
     function renderExtensionsLore(container) {
+        void ensureRemotePlushLore();
         const names = loreBrowseNames();
         if (!names.length) {
             const section = makeExtensionsSection("Lore");
@@ -8291,10 +8403,238 @@ function SubbysPlushiesPageMain() {
         container.appendChild(layout);
     }
 
+    // Artwork-authoring tool: edits color ownership, not the player's appearance.
+    // The export preserves the existing schema v2 manifest and all other items.
+    async function openWardrobeColorZoneEditor(entry) {
+        if (!entry || !wardrobeLayerManifest?.items?.[entry.name]) {
+            appendLocalInfoBox("Color Zone Editor", ["Wait for the GitHub color layers to load before editing."]);
+            return false;
+        }
+        // The BC canvas stylesheet can give every canvas absolute positioning.
+        // Put the drawing surface in a bounded preview stage and override those
+        // game-only rules at inline-important priority. The controls stay docked
+        // below the preview and the entire editor is anchored to the viewport bottom.
+        const previousEditor = document.getElementById("SubbysWardrobeZoneEditor");
+        if (previousEditor) {
+            if (typeof previousEditor.__subbysDispose === "function") previousEditor.__subbysDispose();
+            else previousEditor.remove();
+        }
+        const root = document.createElement("div");
+        root.id = "SubbysWardrobeZoneEditor";
+        Object.assign(root.style, { position: "fixed", inset: "0", zIndex: "2147483646", background: "rgba(0,0,0,.82)",
+            display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "12px",
+            boxSizing: "border-box", overflow: "hidden", color: "#eee", font: "14px sans-serif" });
+        const panel = document.createElement("div");
+        Object.assign(panel.style, { position: "relative", display: "flex", flexDirection: "column", flex: "0 1 720px",
+            width: "100%", height: "min(88dvh, 730px)", maxHeight: "calc(100dvh - 24px)", minHeight: "0",
+            background: "#28232f", border: "1px solid #a68db1", borderRadius: "12px", padding: "14px",
+            boxSizing: "border-box", overflow: "hidden", boxShadow: "0 -12px 38px rgba(0,0,0,.4)" });
+        const heading = document.createElement("h3");
+        heading.textContent = `${entry.title} — Color Zone Editor`;
+        Object.assign(heading.style, { margin: "0 0 8px", fontSize: "18px", flexShrink: "0" });
+        const notice = document.createElement("p");
+        notice.textContent = "Paint which zone owns each pixel. Export color-layers.json to apply your changes after uploading it to GitHub.";
+        Object.assign(notice.style, { margin: "0 0 8px", lineHeight: "1.4", flexShrink: "0" });
+        const previewStage = document.createElement("div");
+        Object.assign(previewStage.style, { position: "relative", isolation: "isolate", flex: "1 1 auto", minHeight: "70px",
+            minWidth: "0", overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center",
+            borderRadius: "8px", background: "#201b27", padding: "8px", boxSizing: "border-box" });
+        const canvas = document.createElement("canvas");
+        canvas.width = entry.width; canvas.height = entry.height;
+        Object.assign(canvas.style, { imageRendering: "pixelated", cursor: "crosshair", touchAction: "none",
+            background: "repeating-conic-gradient(#bbb 0% 25%,#eee 0% 50%) 0/16px 16px",
+            border: "2px solid #aaa", boxSizing: "border-box", flex: "0 0 auto" });
+        // Explicitly beat BC's global canvas CSS (including !important).
+        for (const [key, value] of Object.entries({ position: "relative", inset: "auto", top: "auto", left: "auto",
+            right: "auto", bottom: "auto", transform: "none", margin: "auto", display: "block", float: "none",
+            maxWidth: "none", maxHeight: "none", zIndex: "auto", visibility: "visible" })) {
+            canvas.style.setProperty(key.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`), value, "important");
+        }
+        previewStage.appendChild(canvas);
+        const footer = document.createElement("div");
+        Object.assign(footer.style, { position: "relative", zIndex: "1", flex: "0 0 auto", paddingTop: "9px",
+            background: "#28232f", borderTop: "1px solid #51445c", maxHeight: "38%", overflowY: "auto" });
+        const controls = document.createElement("div");
+        Object.assign(controls.style, { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" });
+        const zoneSelect = document.createElement("select");
+        const zoneColors = ["#f66bc8","#8bd0ff","#e4d173","#9fe6a1","#cbb3ff","#ffac7e"];
+        for (const zone of entry.colorZones) { const option=document.createElement("option"); option.textContent=zone; option.value=zone; zoneSelect.appendChild(option); }
+        zoneSelect.title = "Zone to paint";
+        const brushLabel = document.createElement("label"); brushLabel.textContent="Brush ";
+        const brush = document.createElement("input"); brush.type="range"; brush.min="1"; brush.max="20"; brush.value="5"; brushLabel.appendChild(brush);
+        const eraseLabel = document.createElement("label");
+        const erase = document.createElement("input"); erase.type="checkbox";
+        eraseLabel.append(erase, document.createTextNode(" Erase"));
+        controls.append(zoneSelect,brushLabel,eraseLabel);
+        const actions = document.createElement("div");
+        Object.assign(actions.style,{display:"flex",flexWrap:"wrap",gap:"8px",marginTop:"12px"});
+        const status = document.createElement("p"); status.style.fontSize="12px";
+        status.textContent = "Loading image and current zones…";
+        const button = (label, action) => { const b=document.createElement("button");b.type="button";b.textContent=label;
+            Object.assign(b.style,{padding:"7px 12px",cursor:"pointer"});b.addEventListener("click",action);actions.appendChild(b);return b;};
+        let editorResizeObserver = null;
+        const fitPreview = () => {
+            if (!root.isConnected) return;
+            // Keep the actual pixel canvas proportional, even for large BC items.
+            // A small preview can be zoomed later without changing color masks.
+            const stageWidth = Math.max(48, previewStage.clientWidth - 20);
+            const stageHeight = Math.max(48, previewStage.clientHeight - 20);
+            const scale = Math.max(.2, Math.min(3, stageWidth / entry.width, stageHeight / entry.height));
+            canvas.style.setProperty("width", `${Math.max(1, Math.round(entry.width * scale))}px`, "important");
+            canvas.style.setProperty("height", `${Math.max(1, Math.round(entry.height * scale))}px`, "important");
+        };
+        const close = () => {
+            editorResizeObserver?.disconnect();
+            window.removeEventListener("resize", fitPreview);
+            root.remove();
+        };
+        root.__subbysDispose = close;
+        button("Close", close);
+        root.addEventListener("pointerdown", event => { if (event.target === root) close(); });
+        footer.append(controls, actions, status);
+        panel.append(heading, notice, previewStage, footer);
+        root.appendChild(panel);
+        document.body.appendChild(root);
+        if (typeof window.ResizeObserver === "function") {
+            editorResizeObserver = new window.ResizeObserver(fitPreview);
+            editorResizeObserver.observe(previewStage);
+        }
+        window.addEventListener("resize", fitPreview);
+        fitPreview();
+        try {
+            const createImage = source => new Promise((resolve,reject) => {
+                const image=new Image(); image.crossOrigin="anonymous";
+                image.onload=()=>resolve(image); image.onerror=()=>reject(new Error("Image unavailable or blocked by CORS"));
+                image.src=source;
+            });
+            const source = await createImage(WARDROBE_IMAGE_BY_NAME.get(entry.name));
+            if (!root.isConnected) return false;
+            if (source.naturalWidth!==entry.width || source.naturalHeight!==entry.height) throw new Error("Source PNG dimensions differ from BC asset metadata");
+            const temp = document.createElement("canvas"); temp.width=entry.width; temp.height=entry.height;
+            const tempCtx=temp.getContext("2d",{willReadFrequently:true});
+            tempCtx.drawImage(source,0,0); const pixels=tempCtx.getImageData(0,0,entry.width,entry.height);
+            const ctx=canvas.getContext("2d",{willReadFrequently:true});
+            const count=entry.width*entry.height;
+            // Separate masks preserve overlapping native recolor pixels.
+            // Existing assets legitimately have overlap between zones.
+            const masks=entry.colorZones.map(()=>new Uint8Array(count));
+            const originals=[];
+            for (let z=0;z<entry.colorZones.length;z++) {
+                const data=wardrobeLayerManifest.items[entry.name].zones[entry.colorZones[z]];
+                const image=await createImage(`data:image/png;base64,${data}`);
+                tempCtx.clearRect(0,0,entry.width,entry.height);tempCtx.drawImage(image,0,0);
+                const rgba=tempCtx.getImageData(0,0,entry.width,entry.height).data;
+                originals.push(new Uint8ClampedArray(rgba));
+                for (let p=0;p<count;p++) if (rgba[p*4+3]>0) masks[z][p]=1;
+            }
+            const overlayCanvas = document.createElement("canvas");
+            overlayCanvas.width=entry.width; overlayCanvas.height=entry.height;
+            const overlayCtx=overlayCanvas.getContext("2d");
+            const overlay=ctx.createImageData(entry.width,entry.height);
+            const paintOverlay = () => {
+                ctx.clearRect(0,0,entry.width,entry.height);ctx.putImageData(pixels,0,0);
+                overlay.data.fill(0);
+                for(let p=0;p<count;p++){
+                    const z=masks.findIndex(mask=>mask[p]);if(z<0)continue;
+                    const hex=zoneColors[z%zoneColors.length];
+                    overlay.data[p*4]=parseInt(hex.slice(1,3),16);
+                    overlay.data[p*4+1]=parseInt(hex.slice(3,5),16);
+                    overlay.data[p*4+2]=parseInt(hex.slice(5,7),16);
+                    overlay.data[p*4+3]=pixels.data[p*4+3] ? 120 : 0;
+                }
+                overlayCtx.putImageData(overlay,0,0);
+                ctx.drawImage(overlayCanvas,0,0);
+            };
+            const coordinate = event => {
+                const r = canvas.getBoundingClientRect();
+                // Exclude the outline: pointer positions must match the source
+                // PNG pixel coordinates, not the CSS border box.
+                const b = Math.max(0, canvas.clientLeft || 0);
+                const width = Math.max(1, canvas.clientWidth);
+                const height = Math.max(1, canvas.clientHeight);
+                return { x: (event.clientX - r.left - b) * entry.width / width,
+                    y: (event.clientY - r.top - b) * entry.height / height };
+            };
+            const paint = event => {
+                const at=coordinate(event);
+                const z=erase.checked?-1:entry.colorZones.indexOf(zoneSelect.value);
+                const radius=Math.max(0.5,Number(brush.value)/2);
+                const x0=Math.max(0,Math.floor(at.x-radius)), x1=Math.min(entry.width-1,Math.ceil(at.x+radius));
+                const y0=Math.max(0,Math.floor(at.y-radius)), y1=Math.min(entry.height-1,Math.ceil(at.y+radius));
+                for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) {
+                    if ((x-at.x)**2+(y-at.y)**2>radius*radius)continue;
+                    const p=y*entry.width+x;
+                    if (pixels.data[p*4+3]) {
+                        for (const mask of masks) mask[p]=0;
+                        if (z>=0) masks[z][p]=1;
+                    }
+                }
+                paintOverlay();
+            };
+            let painting=false;
+            canvas.addEventListener("pointerdown", event => {
+                if (event.button !== 0 && event.pointerType === "mouse") return;
+                event.preventDefault();
+                painting = true;
+                canvas.setPointerCapture?.(event.pointerId);
+                paint(event);
+            });
+            canvas.addEventListener("pointermove",event=>{if(painting)paint(event);});
+            canvas.addEventListener("pointerup",()=>{painting=false;});
+            canvas.addEventListener("pointercancel",()=>{painting=false;});
+            button("Reset zones",()=>{
+                for(let z=0;z<originals.length;z++) for(let p=0;p<count;p++)
+                    masks[z][p]=originals[z][p*4+3]>0?1:0;
+                paintOverlay();
+            });
+            const exportButton=button("Export color-layers.json",()=>{
+                try {
+                    const updated={schemaVersion:2,items:{...wardrobeLayerManifest.items}};
+                    const layers={};
+                    for (let z=0;z<entry.colorZones.length;z++) {
+                        let modified = false;
+                        for (let p = 0; p < count; p++) {
+                            if (masks[z][p] !== (originals[z][p * 4 + 3] > 0 ? 1 : 0)) {
+                                modified = true;
+                                break;
+                            }
+                        }
+                        if (!modified) {
+                            layers[entry.colorZones[z]] = wardrobeLayerManifest.items[entry.name].zones[entry.colorZones[z]];
+                            continue;
+                        }
+                        const data=ctx.createImageData(entry.width,entry.height);
+                        for(let p=0;p<count;p++)if(masks[z][p]){
+                            const i=p*4,old=originals[z];
+                            // Preserve original premultiplied artwork/shading when possible.
+                            const sourceRgba=old[i+3]?old:pixels.data;
+                            data.data[i]=sourceRgba[i];data.data[i+1]=sourceRgba[i+1];
+                            data.data[i+2]=sourceRgba[i+2];data.data[i+3]=sourceRgba[i+3];
+                        }
+                        tempCtx.clearRect(0,0,entry.width,entry.height);tempCtx.putImageData(data,0,0);
+                        layers[entry.colorZones[z]]=temp.toDataURL("image/png").split(",")[1];
+                    }
+                    updated.items[entry.name]={...wardrobeLayerManifest.items[entry.name],width:entry.width,height:entry.height,zones:layers};
+                    const objectUrl=URL.createObjectURL(new Blob([JSON.stringify(updated,null,2)],{type:"application/json"}));
+                    const a=document.createElement("a");a.href=objectUrl;a.download="color-layers.json";
+                    document.body.appendChild(a);a.click();a.remove();window.setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
+                    status.textContent="Exported color-layers.json. Upload to data/wardrobe/ on your GitHub branch, then refresh BC.";
+                }catch(e){status.textContent=`Export failed: ${e?.message||e}`;}
+            });
+            exportButton.disabled=false;
+            status.textContent="Paint the selected zone, or erase a zone. Existing overlapping colors and all other wardrobe items are preserved.";
+            paintOverlay();
+            return true;
+        } catch(e) {
+            status.textContent=`Cannot open editor: ${e?.message||e}`;
+            return false;
+        }
+    }
+
     function renderExtensionsWardrobe(container) {
-        const section = makeExtensionsSection("Subby's Wardrobe • accessories");
+        const section = makeExtensionsSection("Subby's Wardrobe • clothing and accessories");
         const intro = document.createElement("div");
-        intro.textContent = "These two accessories also appear in BC's normal Appearance picker under Hair Accessory 2 and Necklace. This panel offers extra positioning controls. Each item uses one GitHub PNG and independent color zones; other viewers need the matching plugin.";
+        intro.textContent = "The Headband, Heart Charm and Draped Wrap Dress appear in BC's normal Appearance picker (Hair Accessory 2, Necklace, and Suit). Each uses one GitHub PNG with independent color zones. Positioning moves the clothing, not the character. Other viewers need the matching plugin and assets.";
         Object.assign(intro.style, { color: getExtensionsStyle().muted, marginBottom: "12px", lineHeight: "1.45" });
         section.appendChild(intro);
         for (const entry of WARDROBE_ITEMS) {
@@ -8320,6 +8660,7 @@ function SubbysPlushiesPageMain() {
             wear.disabled = !state.found;
             controls.appendChild(wear);
             controls.appendChild(makeExtensionsButton("Remove", () => { wardrobeRemoveByName(entry.name); }));
+            controls.appendChild(makeExtensionsButton("Edit Color Zones", () => { void openWardrobeColorZoneEditor(entry); }));
             const placement = wardrobePlacement(entry);
             const positionLabel = document.createElement("span");
             positionLabel.textContent = `Native fit: ${entry.width}×${entry.height} BC pixels • X ${placement.left} / Y ${placement.top} • no character-height changes`;
@@ -8381,7 +8722,7 @@ function SubbysPlushiesPageMain() {
         const wardrobePanel = makeExtensionsSection("Subby's Wardrobe • curated accessories");
         const wardrobe = window.SubbysWardrobeCurated;
         appendExtensionsKeyValue(wardrobePanel, "State", wardrobe?.status || "Loading");
-        appendExtensionsKeyValue(wardrobePanel, "Clothing catalog", "Cat-Ear Headband • Heart Charm");
+        appendExtensionsKeyValue(wardrobePanel, "Clothing catalog", "Cat-Ear Headband • Heart Charm • Draped Wrap Dress • Color Zone Editor");
         appendExtensionsKeyValue(wardrobePanel, "Registered", wardrobe?.registered?.join(", ") || "Not registered");
         if (wardrobe?.errors?.length) appendExtensionsKeyValue(wardrobePanel, "Diagnostics", wardrobe.errors.join("; "));
         const wardrobeHelp = document.createElement("div");
@@ -8412,7 +8753,7 @@ function SubbysPlushiesPageMain() {
         actions.append(
             makeExtensionsButton("Check for update", () => { void checkForUpdates({ silent: false }).finally(renderExtensionsPanel); }),
             makeExtensionsButton("Open Move / Resize", () => { closeExtensionsPanel(); void openNativeLayering(); }),
-            makeExtensionsButton("Reload Git data", () => { void refreshGitDataFromGitHub({ force: true, silent: false }).finally(renderExtensionsPanel); }),
+            makeExtensionsButton("Reload Git data", () => { void refreshGitDataFromGitHub({ force: true, silent: false, includeLore: true }).finally(renderExtensionsPanel); }),
             makeExtensionsButton("Print debug to console", () => debug())
         );
         container.appendChild(actions);
@@ -9712,7 +10053,7 @@ function SubbysPlushiesPageMain() {
             return true;
         }
         if (command === "/plushiedatareload") {
-            requireReady(() => { void refreshGitDataFromGitHub({ force: true, silent: false }); });
+            requireReady(() => { void refreshGitDataFromGitHub({ force: true, silent: false, includeLore: true }); });
             return true;
         }
 
@@ -13241,7 +13582,7 @@ function SubbysPlushiesPageMain() {
         for (const url of candidates) {
             try {
                 const audio = new Audio(url);
-                audio.preload = "auto";
+                audio.preload = "none";
                 audio.volume = 0.75;
                 activePurrAudio = audio;
                 await audio.play();
@@ -13874,6 +14215,8 @@ function SubbysPlushiesPageMain() {
 
         if (roomRosterSignature == null) {
             roomRosterSignature = signature;
+            if (idleAnimationTimer == null && getFeatureSettings().idleAnimations && !isLowCpuMode())
+                scheduleNextIdleAnimation(1200);
             captureVisiblePlushStates();
             pruneRememberedPlushStates(true);
             pruneAddonPresence();
@@ -13961,6 +14304,8 @@ function SubbysPlushiesPageMain() {
                 window.setTimeout(() => recoverRoomMascotState({ allowCache: true }), 0);
                 window.setTimeout(() => trackRoomAchievements(), 900);
                 window.setTimeout(() => sendAddonPresence(true), 450);
+                if (idleAnimationTimer == null && getFeatureSettings().idleAnimations && !isLowCpuMode())
+                    scheduleNextIdleAnimation(1200);
                 if (!installedHooks.has("ChatRoomAppendChat")) window.setTimeout(() => ensureOfferChatObserver("ChatRoomSync fallback"), 0);
             };
             if (result && typeof result.then === "function") {
@@ -15369,19 +15714,40 @@ function SubbysPlushiesPageMain() {
         return indexes;
     }
 
+    // A single redraw per affected character per browser frame, never an
+    // unconditional frame loop. Keep dirty characters until the canvas is visible.
+    const dirtyPlushCharacters = new Set();
+    let dirtyPlushRenderFrame = 0;
+    function flushDirtyPlushCharacters() {
+        dirtyPlushRenderFrame = 0;
+        if (!plushScreenVisible()) return;
+        for (const C of dirtyPlushCharacters) {
+            try { rebuildCharacterCanvas(C, "plush artwork became ready"); }
+            catch (e) { warn("Deferred plush canvas update failed:", e); }
+        }
+        dirtyPlushCharacters.clear();
+        scheduleLocalOverlayReposition();
+    }
+    function scheduleDirtyPlushRender(C) {
+        if (C) dirtyPlushCharacters.add(C);
+        if (dirtyPlushRenderFrame || !plushScreenVisible()) return;
+        dirtyPlushRenderFrame = window.requestAnimationFrame(flushDirtyPlushCharacters);
+    }
     function refreshLazyRenderConsumers(source) {
         imageMappings = buildImageMappings();
         if (window.CurrentScreen !== "ChatRoom") return;
         const characters = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
-        for (const C of characters) {
-            let matched = false;
+        const members = characters.includes(window.Player) ? characters : [...characters, window.Player];
+        for (const C of members) {
+            if (!C) continue;
             for (const item of getEquippedPlushItems(C)) {
                 const option = canonicalWirePlushOption(getItemPlushOption(item));
-                if (validPlushOption(option) && PLUSH_IMAGES[option] === source) { matched = true; break; }
+                if (validPlushOption(option) && PLUSH_IMAGES[option] === source) {
+                    scheduleDirtyPlushRender(C);
+                    break;
+                }
             }
-            if (matched) rebuildCharacterCanvas(C, "lazy plush render ready");
         }
-        scheduleLocalOverlayReposition();
     }
 
     function ensureRenderImage(optionIndex, { refreshConsumers = true } = {}) {
@@ -15422,32 +15788,11 @@ function SubbysPlushiesPageMain() {
         for (let i = 0; i < renderImages.length; i++) renderImages[i] = renderFallbackImage;
         for (const index of renderIndexesForSource(PLUSH_IMAGES[0])) renderImages[index] = renderFallbackImage;
 
-        const prepareActionIcon = async (url, label, fileName) => {
-            try {
-                const image = await renderSmallPlush(url, label);
-                log(`Prepared shared action icon from assets/plushies/${fileName}.`);
-                return image || renderFallbackImage;
-            } catch (e) {
-                warn(`Could not load assets/plushies/${fileName}; using subbycat.png instead.`, e);
-                return renderFallbackImage;
-            }
-        };
-
-        hairActionIconImage = await prepareActionIcon(
-            HAIR_ACTION_ICON_URL,
-            "Hair Action",
-            "hairaction.png"
-        );
-        faceActionIconImage = await prepareActionIcon(
-            FACE_ACTION_ICON_URL,
-            "Face Action",
-            "faceaction.png"
-        );
-        pointingActionIconImage = await prepareActionIcon(
-            POINTING_ACTION_ICON_URL,
-            "Point Dramatically",
-            "pointing.png"
-        );
+        // Action icons are resolved only if an action actually needs that icon.
+        // This avoids three image fetches, decodes and canvas encodes at startup.
+        hairActionIconImage = null;
+        faceActionIconImage = null;
+        pointingActionIconImage = null;
 
         imageMappings = buildImageMappings();
         log(`Prepared startup artwork only; ${PLUSHES.length - renderIndexesForSource(PLUSH_IMAGES[0]).length} plush option(s) will load lazily on first use.`);
@@ -15943,13 +16288,39 @@ function SubbysPlushiesPageMain() {
         ALL_PLUGIN_ACTIVITIES.map(spec => Object.freeze({ spec, name: compactActivityName(spec.name) }))
     );
 
+    const actionIconLoads = new Map();
+    const actionIconFailureUntil = new Map();
+    function lazyActionIcon(slot) {
+        const entries = {
+            hair: [HAIR_ACTION_ICON_URL, "Hair Action", "hairActionIconImage"],
+            face: [FACE_ACTION_ICON_URL, "Face Action", "faceActionIconImage"],
+            pointing: [POINTING_ACTION_ICON_URL, "Point Dramatically", "pointingActionIconImage"],
+        };
+        const entry = entries[slot];
+        if (!entry || actionIconLoads.has(slot) || Date.now() < (actionIconFailureUntil.get(slot) || 0)) return;
+        const task = renderSmallPlush(entry[0], entry[1]).then(image => {
+            if (slot === "hair") hairActionIconImage = image;
+            else if (slot === "face") faceActionIconImage = image;
+            else pointingActionIconImage = image;
+            imageMappings = buildImageMappings();
+            scheduleLocalOverlayReposition();
+        }).catch(e => {
+            actionIconFailureUntil.set(slot, Date.now() + 120000);
+            warn(`Optional ${entry[1]} icon unavailable:`, e);
+        })
+          .finally(() => actionIconLoads.delete(slot));
+        actionIconLoads.set(slot, task);
+    }
     function resolvedCustomActionImage(spec) {
         switch (customActionImageCategory(spec)) {
             case "hair":
+                if (!hairActionIconImage) lazyActionIcon("hair");
                 return hairActionIconImage || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
             case "face":
+                if (!faceActionIconImage) lazyActionIcon("face");
                 return faceActionIconImage || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
             case "pointing":
+                if (!pointingActionIconImage) lazyActionIcon("pointing");
                 return pointingActionIconImage || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
             default:
                 return renderFallbackImage || PLUSH_FALLBACK_IMAGE;
@@ -16665,9 +17036,16 @@ function SubbysPlushiesPageMain() {
     }
 
     function wardrobeEquippedItem(entry) {
-        if (!entry) return null;
-        const item = window.InventoryGet?.(window.Player, entry.group) ||
-            window.Player?.Appearance?.find?.(item => item?.Asset?.Group?.Name === entry.group);
+        const player = window.Player;
+        // The catalog is registered while BC is still starting; InventoryGet
+        // requires a fully initialized character with an Appearance array.
+        if (!entry || !player || !Array.isArray(player.Appearance)) return null;
+        let item = null;
+        if (typeof window.InventoryGet === "function") {
+            try { item = window.InventoryGet(player, entry.group); }
+            catch (_) { /* BC/BCX can be rebuilding Appearance here. */ }
+        }
+        item ||= player.Appearance.find(candidate => candidate?.Asset?.Group?.Name === entry.group);
         return item?.Asset?.Name === entry.name ? item : null;
     }
 
@@ -18182,7 +18560,7 @@ function SubbysPlushiesPageMain() {
         status: () => extensionsStatusSnapshot(),
         offerStatus: () => extensionsStatusSnapshot().offer,
         dataStatus: () => ({ ...gitDataState, status: gitDataStatusText() }),
-        reloadData: () => refreshGitDataFromGitHub({ force: true, silent: false }),
+        reloadData: () => refreshGitDataFromGitHub({ force: true, silent: false, includeLore: true }),
         debug,
     };
 
@@ -18336,7 +18714,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.3.7";
+    const VERSION = "3.4.0";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
