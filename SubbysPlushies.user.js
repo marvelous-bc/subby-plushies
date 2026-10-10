@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies + Wardrobe
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.4.3
+// @version      3.4.4
 // @description  Subby’s Plushies + Wardrobe: height-compatible native draped dress, four color zones, accessories, lazy assets and zone editor
 // @released     2026-10-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.4.3";
+    const VERSION = "3.4.4";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -832,7 +832,7 @@ function SubbysPlushiesPageMain() {
                         saved[entry.name] = previous[entry.name];
                 }
             }
-            // v3.4.3 changes only the dress's native baseline from Y 170 to Y 167.
+            // v3.4.4 changes only the dress's native baseline from Y 170 to Y 167.
             // Forget the exact old default; preserve genuinely customized fits.
             const dressSaved = saved.SubbyDrapedWrapDress;
             if (dressSaved && Number(dressSaved.left) === 85 &&
@@ -8433,96 +8433,209 @@ function SubbysPlushiesPageMain() {
         container.appendChild(layout);
     }
 
-    // Artwork-authoring tool: edits color ownership, not the player's appearance.
-    // The export preserves the existing schema v2 manifest and all other items.
+    // Artwork-authoring tool: adjusts color masks without editing source PNGs.
+    // v3.4.4: source-pixel zoom, preview cursor, continuous strokes, undo/redo,
+    // pan, keyboard shortcuts and selected-zone visibility. Export remains schema v2.
     async function openWardrobeColorZoneEditor(entry) {
         if (!entry || !wardrobeLayerManifest?.items?.[entry.name]) {
             appendLocalInfoBox("Color Zone Editor", ["Wait for the GitHub color layers to load before editing."]);
             return false;
         }
-        // The BC canvas stylesheet can give every canvas absolute positioning.
-        // Put the drawing surface in a bounded preview stage and override those
-        // game-only rules at inline-important priority. The controls stay docked
-        // below the preview and the entire editor is anchored to the viewport bottom.
-        const previousEditor = document.getElementById("SubbysWardrobeZoneEditor");
-        if (previousEditor) {
-            if (typeof previousEditor.__subbysDispose === "function") previousEditor.__subbysDispose();
-            else previousEditor.remove();
+        const previous = document.getElementById("SubbysWardrobeZoneEditor");
+        if (previous) {
+            if (typeof previous.__subbysDispose === "function") previous.__subbysDispose();
+            else previous.remove();
         }
         const root = document.createElement("div");
         root.id = "SubbysWardrobeZoneEditor";
-        Object.assign(root.style, { position: "fixed", inset: "0", zIndex: "2147483646", background: "rgba(0,0,0,.82)",
-            display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "12px",
-            boxSizing: "border-box", overflow: "hidden", color: "#eee", font: "14px sans-serif" });
+        root.setAttribute("role", "dialog");
+        root.setAttribute("aria-modal", "true");
+        root.setAttribute("aria-label", `${entry.title} color zone editor`);
+        Object.assign(root.style, { position: "fixed", inset: "0", zIndex: "2147483646", background: "rgba(0,0,0,.84)",
+            display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "10px",
+            boxSizing: "border-box", color: "#eee", font: "14px sans-serif" });
         const panel = document.createElement("div");
-        Object.assign(panel.style, { position: "relative", display: "flex", flexDirection: "column", flex: "0 1 720px",
-            width: "100%", height: "min(88dvh, 730px)", maxHeight: "calc(100dvh - 24px)", minHeight: "0",
-            background: "#28232f", border: "1px solid #a68db1", borderRadius: "12px", padding: "14px",
+        Object.assign(panel.style, { position: "relative", display: "flex", flexDirection: "column", flex: "0 1 820px",
+            width: "100%", height: "min(94dvh, 900px)", maxHeight: "calc(100dvh - 20px)", minHeight: "0",
+            background: "#28232f", border: "1px solid #a68db1", borderRadius: "12px", padding: "12px",
             boxSizing: "border-box", overflow: "hidden", boxShadow: "0 -12px 38px rgba(0,0,0,.4)" });
         const heading = document.createElement("h3");
         heading.textContent = `${entry.title} — Color Zone Editor`;
-        Object.assign(heading.style, { margin: "0 0 8px", fontSize: "18px", flexShrink: "0" });
+        Object.assign(heading.style, { margin: "0 0 7px", fontSize: "18px", flexShrink: "0" });
         const notice = document.createElement("p");
-        notice.textContent = "Paint which zone owns each pixel. Export color-layers.json to apply your changes after uploading it to GitHub.";
-        Object.assign(notice.style, { margin: "0 0 8px", lineHeight: "1.4", flexShrink: "0" });
+        notice.textContent = "Choose a zone and paint over the artwork. The highlighted circle shows exactly where the brush or eraser will apply.";
+        Object.assign(notice.style, { margin: "0 0 8px", lineHeight: "1.35", fontSize: "13px", flexShrink: "0" });
+        const toolbar = document.createElement("div");
+        Object.assign(toolbar.style, { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px",
+            paddingBottom: "9px", flexShrink: "0" });
+        const makeButton = (label, action, container = toolbar) => {
+            const b = document.createElement("button");
+            b.type = "button"; b.textContent = label;
+            Object.assign(b.style, { padding: "6px 10px", background: "#40364d", color: "#fff",
+                border: "1px solid #7e6c8f", borderRadius: "6px", cursor: "pointer", font: "inherit" });
+            b.addEventListener("click", action); container.appendChild(b); return b;
+        };
         const previewStage = document.createElement("div");
-        Object.assign(previewStage.style, { position: "relative", isolation: "isolate", flex: "1 1 auto", minHeight: "70px",
-            minWidth: "0", overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center",
-            borderRadius: "8px", background: "#201b27", padding: "8px", boxSizing: "border-box" });
+        previewStage.setAttribute("aria-label", "Scrollable color zone painting area");
+        Object.assign(previewStage.style, { position: "relative", isolation: "isolate", flex: "1 1 auto", minHeight: "80px",
+            minWidth: "0", overflow: "auto", display: "flex", alignItems: "flex-start", justifyContent: "flex-start",
+            borderRadius: "8px", background: "#201b27", padding: "10px", boxSizing: "border-box",
+            overscrollBehavior: "contain" });
+        // A separate frame prevents centered flex overflow from clipping the top/left
+        // of a zoomed image. The cursor is an HTML element, not a BC canvas.
+        const imageFrame = document.createElement("div");
+        Object.assign(imageFrame.style, { position: "relative", display: "block", flex: "0 0 auto",
+            margin: "auto", minWidth: "0", minHeight: "0", boxSizing: "content-box" });
         const canvas = document.createElement("canvas");
         canvas.width = entry.width; canvas.height = entry.height;
         Object.assign(canvas.style, { imageRendering: "pixelated", cursor: "crosshair", touchAction: "none",
             background: "repeating-conic-gradient(#bbb 0% 25%,#eee 0% 50%) 0/16px 16px",
-            border: "2px solid #aaa", boxSizing: "border-box", flex: "0 0 auto" });
-        // Explicitly beat BC's global canvas CSS (including !important).
+            border: "2px solid #aaa", boxSizing: "content-box", flex: "0 0 auto" });
+        // BC's global canvas rules, including !important, must not position this canvas.
         for (const [key, value] of Object.entries({ position: "relative", inset: "auto", top: "auto", left: "auto",
-            right: "auto", bottom: "auto", transform: "none", margin: "auto", display: "block", float: "none",
+            right: "auto", bottom: "auto", transform: "none", margin: "0", display: "block", float: "none",
             maxWidth: "none", maxHeight: "none", zIndex: "auto", visibility: "visible" })) {
             canvas.style.setProperty(key.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`), value, "important");
         }
-        previewStage.appendChild(canvas);
+        const brushCursor = document.createElement("div");
+        brushCursor.setAttribute("aria-hidden", "true");
+        Object.assign(brushCursor.style, { position: "absolute", display: "none", pointerEvents: "none", zIndex: "2",
+            boxSizing: "border-box", border: "2px solid #fff", borderRadius: "50%",
+            transform: "translate(-50%, -50%)", boxShadow: "0 0 0 1px #15121b, 0 0 8px #000",
+            background: "rgba(246,107,200,.25)" });
+        imageFrame.append(canvas, brushCursor);
+        previewStage.appendChild(imageFrame);
         const footer = document.createElement("div");
-        Object.assign(footer.style, { position: "relative", zIndex: "1", flex: "0 0 auto", paddingTop: "9px",
-            background: "#28232f", borderTop: "1px solid #51445c", maxHeight: "38%", overflowY: "auto" });
+        Object.assign(footer.style, { position: "relative", zIndex: "1", flex: "0 0 auto", paddingTop: "8px",
+            background: "#28232f", borderTop: "1px solid #51445c", maxHeight: "42%", overflowY: "auto" });
         const controls = document.createElement("div");
-        Object.assign(controls.style, { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" });
+        Object.assign(controls.style, { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" });
         const zoneSelect = document.createElement("select");
-        const zoneColors = ["#f66bc8","#8bd0ff","#e4d173","#9fe6a1","#cbb3ff","#ffac7e"];
-        for (const zone of entry.colorZones) { const option=document.createElement("option"); option.textContent=zone; option.value=zone; zoneSelect.appendChild(option); }
         zoneSelect.title = "Zone to paint";
-        const brushLabel = document.createElement("label"); brushLabel.textContent="Brush ";
-        const brush = document.createElement("input"); brush.type="range"; brush.min="1"; brush.max="20"; brush.value="5"; brushLabel.appendChild(brush);
+        const zoneColors = ["#f66bc8", "#8bd0ff", "#e4d173", "#9fe6a1", "#cbb3ff", "#ffac7e"];
+        for (const zone of entry.colorZones) {
+            const option = document.createElement("option"); option.textContent = zone; option.value = zone;
+            zoneSelect.appendChild(option);
+        }
+        const brushLabel = document.createElement("label"); brushLabel.textContent = "Brush ";
+        const brush = document.createElement("input");
+        brush.type = "range"; brush.min = "1"; brush.max = "64"; brush.value = "6";
+        brush.title = "Brush diameter in image pixels";
+        const brushValue = document.createElement("span"); brushValue.textContent = "6 px";
+        brushLabel.append(brush, brushValue);
         const eraseLabel = document.createElement("label");
-        const erase = document.createElement("input"); erase.type="checkbox";
-        eraseLabel.append(erase, document.createTextNode(" Erase"));
-        controls.append(zoneSelect,brushLabel,eraseLabel);
+        const erase = document.createElement("input"); erase.type = "checkbox";
+        eraseLabel.append(erase, document.createTextNode(" Eraser"));
+        const overlayLabel = document.createElement("label"); overlayLabel.textContent = "Show ";
+        const overlaySelect = document.createElement("select");
+        for (const [value, label] of [["all", "All zones"], ["selected", "Selected zone"], ["none", "Artwork only"]]) {
+            const option = document.createElement("option"); option.value = value; option.textContent = label;
+            overlaySelect.appendChild(option);
+        }
+        overlayLabel.appendChild(overlaySelect);
+        controls.append(zoneSelect, brushLabel, eraseLabel, overlayLabel);
         const actions = document.createElement("div");
-        Object.assign(actions.style,{display:"flex",flexWrap:"wrap",gap:"8px",marginTop:"12px"});
-        const status = document.createElement("p"); status.style.fontSize="12px";
-        status.textContent = "Loading image and current zones…";
-        const button = (label, action) => { const b=document.createElement("button");b.type="button";b.textContent=label;
-            Object.assign(b.style,{padding:"7px 12px",cursor:"pointer"});b.addEventListener("click",action);actions.appendChild(b);return b;};
+        Object.assign(actions.style, { display: "flex", flexWrap: "wrap", gap: "7px", marginTop: "9px" });
+        const status = document.createElement("p");
+        Object.assign(status.style, { fontSize: "12px", lineHeight: "1.45", margin: "7px 0 0" });
+        status.textContent = "Loading source image and color layers…";
+        const zoomText = document.createElement("strong");
+        zoomText.setAttribute("aria-live", "polite");
+        Object.assign(zoomText.style, { display: "inline-block", minWidth: "60px", textAlign: "center" });
+        const fitScale = () => Math.max(0.15, Math.min(4,
+            (Math.max(50, previewStage.clientWidth - 26) / entry.width),
+            (Math.max(50, previewStage.clientHeight - 26) / entry.height)));
+        let zoom = 1;
+        let zoomMode = "fit";
+        let lastPointer = null;
+        let panActive = false;
+        let spacePressed = false;
         let editorResizeObserver = null;
-        const fitPreview = () => {
-            if (!root.isConnected) return;
-            // Keep the actual pixel canvas proportional, even for large BC items.
-            // A small preview can be zoomed later without changing color masks.
-            const stageWidth = Math.max(48, previewStage.clientWidth - 20);
-            const stageHeight = Math.max(48, previewStage.clientHeight - 20);
-            const scale = Math.max(.2, Math.min(3, stageWidth / entry.width, stageHeight / entry.height));
-            canvas.style.setProperty("width", `${Math.max(1, Math.round(entry.width * scale))}px`, "important");
-            canvas.style.setProperty("height", `${Math.max(1, Math.round(entry.height * scale))}px`, "important");
+        let painting = false;
+        let panning = false;
+        let strokePointerId = null;
+        let panOrigin = null;
+        let lastPaint = null;
+        let applyStroke = null;
+        let doUndo = () => {};
+        let doRedo = () => {};
+        let undoButton = null;
+        let redoButton = null;
+        const displayScale = () => {
+            const width = Math.max(1, entry.width * zoom);
+            const height = Math.max(1, entry.height * zoom);
+            imageFrame.style.width = `${width + 4}px`;
+            imageFrame.style.height = `${height + 4}px`;
+            canvas.style.setProperty("width", `${width}px`, "important");
+            canvas.style.setProperty("height", `${height}px`, "important");
+            zoomText.textContent = `${Math.round(zoom * 100)}%`;
+            refreshCursor();
         };
+        const eventPoint = event => {
+            const r = canvas.getBoundingClientRect();
+            const b = Math.max(0, canvas.clientLeft || 0);
+            return { x: (event.clientX - r.left - b) * entry.width / Math.max(1, canvas.clientWidth),
+                y: (event.clientY - r.top - b) * entry.height / Math.max(1, canvas.clientHeight) };
+        };
+        function refreshCursor() {
+            if (!lastPointer || panning || panActive || spacePressed || !root.isConnected) {
+                brushCursor.style.display = "none"; return;
+            }
+            const at = lastPointer;
+            if (at.x < 0 || at.y < 0 || at.x >= entry.width || at.y >= entry.height) {
+                brushCursor.style.display = "none"; return;
+            }
+            const diameter = Math.max(2, Number(brush.value) * zoom);
+            const color = zoneColors[Math.max(0, entry.colorZones.indexOf(zoneSelect.value)) % zoneColors.length];
+            brushCursor.style.display = "block";
+            brushCursor.style.width = `${diameter}px`;
+            brushCursor.style.height = `${diameter}px`;
+            brushCursor.style.left = `${2 + at.x * zoom}px`;
+            brushCursor.style.top = `${2 + at.y * zoom}px`;
+            brushCursor.style.borderColor = erase.checked ? "#ff7979" : "#fff";
+            brushCursor.style.background = erase.checked ? "rgba(255,75,75,.3)" : `${color}55`;
+        }
+        const setZoom = (value, center = null) => {
+            const before = canvas.getBoundingClientRect();
+            const stage = previewStage.getBoundingClientRect();
+            const clientX = center?.clientX ?? stage.left + stage.width / 2;
+            const clientY = center?.clientY ?? stage.top + stage.height / 2;
+            const px = (clientX - before.left - (canvas.clientLeft || 0)) * entry.width / Math.max(1, canvas.clientWidth);
+            const py = (clientY - before.top - (canvas.clientTop || 0)) * entry.height / Math.max(1, canvas.clientHeight);
+            zoom = Math.max(0.15, Math.min(8, Math.round(value * 100) / 100));
+            displayScale();
+            const after = canvas.getBoundingClientRect();
+            previewStage.scrollLeft += after.left + (canvas.clientLeft || 0) + px * canvas.clientWidth / entry.width - clientX;
+            previewStage.scrollTop += after.top + (canvas.clientTop || 0) + py * canvas.clientHeight / entry.height - clientY;
+        };
+        const changeZoom = delta => { zoomMode = "manual"; setZoom(zoom * delta); };
+        const fitPreview = () => { if (root.isConnected && zoomMode === "fit") { zoom = fitScale(); displayScale(); } };
+        makeButton("− Zoom", () => changeZoom(1 / 1.25));
+        toolbar.appendChild(zoomText);
+        makeButton("+ Zoom", () => changeZoom(1.25));
+        makeButton("Fit", () => { zoomMode = "fit"; fitPreview(); previewStage.scrollTo(0, 0); });
+        makeButton("100%", () => { zoomMode = "manual"; setZoom(1); });
+        const panButton = makeButton("Hand / Pan", () => {
+            panActive = !panActive;
+            panButton.setAttribute("aria-pressed", String(panActive));
+            panButton.style.background = panActive ? "#74608a" : "#40364d";
+            canvas.style.cursor = panActive ? "grab" : "crosshair";
+            refreshCursor();
+        });
+        panButton.setAttribute("aria-pressed", "false");
         const close = () => {
             editorResizeObserver?.disconnect();
             window.removeEventListener("resize", fitPreview);
+            window.removeEventListener("keydown", onKeyDown, true);
+            window.removeEventListener("keyup", onKeyUp, true);
+            window.removeEventListener("blur", onBlur);
             root.remove();
         };
         root.__subbysDispose = close;
-        button("Close", close);
+        makeButton("Close", close, actions);
         root.addEventListener("pointerdown", event => { if (event.target === root) close(); });
         footer.append(controls, actions, status);
-        panel.append(heading, notice, previewStage, footer);
+        panel.append(heading, notice, toolbar, previewStage, footer);
         root.appendChild(panel);
         document.body.appendChild(root);
         if (typeof window.ResizeObserver === "function") {
@@ -8531,132 +8644,232 @@ function SubbysPlushiesPageMain() {
         }
         window.addEventListener("resize", fitPreview);
         fitPreview();
+        brush.addEventListener("input", () => { brushValue.textContent = `${brush.value} px`; refreshCursor(); });
+        erase.addEventListener("change", refreshCursor);
+        zoneSelect.addEventListener("change", () => { refreshCursor(); redrawOverlay?.(); });
+        let redrawOverlay = null;
+        overlaySelect.addEventListener("change", () => redrawOverlay?.());
+        previewStage.addEventListener("wheel", event => {
+            if (!event.ctrlKey && !event.metaKey) return; // Ordinary wheel keeps scrolling the viewport.
+            event.preventDefault(); zoomMode = "manual";
+            setZoom(zoom * (event.deltaY < 0 ? 1.2 : 1 / 1.2), event);
+        }, { passive: false });
+        function onKeyDown(event) {
+            if (!root.isConnected) return;
+            const editable = /^(INPUT|SELECT|TEXTAREA)$/.test(event.target?.tagName || "") || event.target?.isContentEditable;
+            if (event.key === "Escape") { event.preventDefault(); close(); return; }
+            if (editable) return;
+            if (event.key === " " && !spacePressed) { spacePressed = true; canvas.style.cursor = "grab"; refreshCursor(); event.preventDefault(); }
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+                event.preventDefault(); if (event.shiftKey) doRedo(); else doUndo();
+            } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+                event.preventDefault(); doRedo();
+            } else if (event.key === "+" || event.key === "=") { event.preventDefault(); changeZoom(1.25); }
+            else if (event.key === "-" || event.key === "_") { event.preventDefault(); changeZoom(1 / 1.25); }
+            else if (event.key === "[") { brush.value = String(Math.max(1, Number(brush.value) - 1)); brush.dispatchEvent(new Event("input")); }
+            else if (event.key === "]") { brush.value = String(Math.min(64, Number(brush.value) + 1)); brush.dispatchEvent(new Event("input")); }
+        }
+        function onKeyUp(event) {
+            if (event.key === " ") { spacePressed = false; if (!panActive) canvas.style.cursor = "crosshair"; refreshCursor(); }
+        }
+        function onBlur() { spacePressed = false; refreshCursor(); }
+        window.addEventListener("keydown", onKeyDown, true);
+        window.addEventListener("keyup", onKeyUp, true);
+        window.addEventListener("blur", onBlur);
         try {
-            const createImage = source => new Promise((resolve,reject) => {
-                const image=new Image(); image.crossOrigin="anonymous";
-                image.onload=()=>resolve(image); image.onerror=()=>reject(new Error("Image unavailable or blocked by CORS"));
-                image.src=source;
+            const createImage = source => new Promise((resolve, reject) => {
+                const image = new Image(); image.crossOrigin = "anonymous";
+                image.onload = () => resolve(image);
+                image.onerror = () => reject(new Error("Image unavailable or blocked by CORS"));
+                image.src = source;
             });
             const source = await createImage(WARDROBE_IMAGE_BY_NAME.get(entry.name));
             if (!root.isConnected) return false;
-            if (source.naturalWidth!==entry.width || source.naturalHeight!==entry.height) throw new Error("Source PNG dimensions differ from BC asset metadata");
-            const temp = document.createElement("canvas"); temp.width=entry.width; temp.height=entry.height;
-            const tempCtx=temp.getContext("2d",{willReadFrequently:true});
-            tempCtx.drawImage(source,0,0); const pixels=tempCtx.getImageData(0,0,entry.width,entry.height);
-            const ctx=canvas.getContext("2d",{willReadFrequently:true});
-            const count=entry.width*entry.height;
-            // Separate masks preserve overlapping native recolor pixels.
-            // Existing assets legitimately have overlap between zones.
-            const masks=entry.colorZones.map(()=>new Uint8Array(count));
-            const originals=[];
-            for (let z=0;z<entry.colorZones.length;z++) {
-                const data=wardrobeLayerManifest.items[entry.name].zones[entry.colorZones[z]];
-                const image=await createImage(`data:image/png;base64,${data}`);
-                tempCtx.clearRect(0,0,entry.width,entry.height);tempCtx.drawImage(image,0,0);
-                const rgba=tempCtx.getImageData(0,0,entry.width,entry.height).data;
+            if (source.naturalWidth !== entry.width || source.naturalHeight !== entry.height)
+                throw new Error("Source PNG dimensions differ from BC asset metadata");
+            const temp = document.createElement("canvas"); temp.width = entry.width; temp.height = entry.height;
+            const tempCtx = temp.getContext("2d", { willReadFrequently: true });
+            tempCtx.drawImage(source, 0, 0);
+            const pixels = tempCtx.getImageData(0, 0, entry.width, entry.height);
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+            const count = entry.width * entry.height;
+            // The masks are independent: already-overlapping native color zones survive.
+            const masks = entry.colorZones.map(() => new Uint8Array(count));
+            const originals = [];
+            for (let z = 0; z < entry.colorZones.length; z++) {
+                const data = wardrobeLayerManifest.items[entry.name].zones[entry.colorZones[z]];
+                const image = await createImage(`data:image/png;base64,${data}`);
+                if (!root.isConnected) return false;
+                tempCtx.clearRect(0, 0, entry.width, entry.height); tempCtx.drawImage(image, 0, 0);
+                const rgba = tempCtx.getImageData(0, 0, entry.width, entry.height).data;
                 originals.push(new Uint8ClampedArray(rgba));
-                for (let p=0;p<count;p++) if (rgba[p*4+3]>0) masks[z][p]=1;
+                for (let p = 0; p < count; p++) if (rgba[p * 4 + 3] > 0) masks[z][p] = 1;
             }
             const overlayCanvas = document.createElement("canvas");
-            overlayCanvas.width=entry.width; overlayCanvas.height=entry.height;
-            const overlayCtx=overlayCanvas.getContext("2d");
-            const overlay=ctx.createImageData(entry.width,entry.height);
+            overlayCanvas.width = entry.width; overlayCanvas.height = entry.height;
+            const overlayCtx = overlayCanvas.getContext("2d");
+            const overlay = ctx.createImageData(entry.width, entry.height);
             const paintOverlay = () => {
-                ctx.clearRect(0,0,entry.width,entry.height);ctx.putImageData(pixels,0,0);
+                ctx.clearRect(0, 0, entry.width, entry.height); ctx.putImageData(pixels, 0, 0);
+                if (overlaySelect.value === "none") return;
                 overlay.data.fill(0);
-                for(let p=0;p<count;p++){
-                    const z=masks.findIndex(mask=>mask[p]);if(z<0)continue;
-                    const hex=zoneColors[z%zoneColors.length];
-                    overlay.data[p*4]=parseInt(hex.slice(1,3),16);
-                    overlay.data[p*4+1]=parseInt(hex.slice(3,5),16);
-                    overlay.data[p*4+2]=parseInt(hex.slice(5,7),16);
-                    overlay.data[p*4+3]=pixels.data[p*4+3] ? 120 : 0;
+                const active = entry.colorZones.indexOf(zoneSelect.value);
+                for (let p = 0; p < count; p++) {
+                    const z = overlaySelect.value === "selected"
+                        ? (masks[active]?.[p] ? active : -1)
+                        : (masks[active]?.[p] ? active : masks.findIndex(mask => mask[p]));
+                    if (z < 0 || !pixels.data[p * 4 + 3]) continue;
+                    const hex = zoneColors[z % zoneColors.length];
+                    overlay.data[p * 4] = parseInt(hex.slice(1, 3), 16);
+                    overlay.data[p * 4 + 1] = parseInt(hex.slice(3, 5), 16);
+                    overlay.data[p * 4 + 2] = parseInt(hex.slice(5, 7), 16);
+                    overlay.data[p * 4 + 3] = overlaySelect.value === "selected" ? 145 : 110;
                 }
-                overlayCtx.putImageData(overlay,0,0);
-                ctx.drawImage(overlayCanvas,0,0);
+                overlayCtx.putImageData(overlay, 0, 0); ctx.drawImage(overlayCanvas, 0, 0);
             };
-            const coordinate = event => {
-                const r = canvas.getBoundingClientRect();
-                // Exclude the outline: pointer positions must match the source
-                // PNG pixel coordinates, not the CSS border box.
-                const b = Math.max(0, canvas.clientLeft || 0);
-                const width = Math.max(1, canvas.clientWidth);
-                const height = Math.max(1, canvas.clientHeight);
-                return { x: (event.clientX - r.left - b) * entry.width / width,
-                    y: (event.clientY - r.top - b) * entry.height / height };
+            redrawOverlay = paintOverlay;
+            const undoHistory = [], redoHistory = [];
+            const snapshot = () => masks.map(mask => mask.slice());
+            const restore = state => { state.forEach((mask, i) => masks[i].set(mask)); paintOverlay(); };
+            const updateHistoryButtons = () => {
+                undoButton.disabled = !undoHistory.length;
+                redoButton.disabled = !redoHistory.length;
+                undoButton.style.opacity = undoHistory.length ? "1" : ".45";
+                redoButton.style.opacity = redoHistory.length ? "1" : ".45";
             };
-            const paint = event => {
-                const at=coordinate(event);
-                const z=erase.checked?-1:entry.colorZones.indexOf(zoneSelect.value);
-                const radius=Math.max(0.5,Number(brush.value)/2);
-                const x0=Math.max(0,Math.floor(at.x-radius)), x1=Math.min(entry.width-1,Math.ceil(at.x+radius));
-                const y0=Math.max(0,Math.floor(at.y-radius)), y1=Math.min(entry.height-1,Math.ceil(at.y+radius));
-                for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) {
-                    if ((x-at.x)**2+(y-at.y)**2>radius*radius)continue;
-                    const p=y*entry.width+x;
-                    if (pixels.data[p*4+3]) {
-                        for (const mask of masks) mask[p]=0;
-                        if (z>=0) masks[z][p]=1;
+            const remember = () => {
+                undoHistory.push(snapshot()); if (undoHistory.length > 12) undoHistory.shift();
+                redoHistory.length = 0; updateHistoryButtons();
+            };
+            doUndo = () => {
+                if (!undoHistory.length) return;
+                redoHistory.push(snapshot()); restore(undoHistory.pop()); updateHistoryButtons();
+                status.textContent = "Undid the last stroke. Export to publish your edits.";
+            };
+            doRedo = () => {
+                if (!redoHistory.length) return;
+                undoHistory.push(snapshot()); restore(redoHistory.pop()); updateHistoryButtons();
+                status.textContent = "Restored a stroke. Export to publish your edits.";
+            };
+            undoButton = makeButton("↶ Undo", doUndo, actions);
+            redoButton = makeButton("↷ Redo", doRedo, actions);
+            updateHistoryButtons();
+            // A stroke may contain many pointer events; interpolate every half-brush
+            // diameter to avoid dotted gaps when someone moves quickly.
+            const stamp = at => {
+                const z = erase.checked ? -1 : entry.colorZones.indexOf(zoneSelect.value);
+                const radius = Math.max(.5, Number(brush.value) / 2);
+                const x0 = Math.max(0, Math.floor(at.x - radius)), x1 = Math.min(entry.width - 1, Math.ceil(at.x + radius));
+                const y0 = Math.max(0, Math.floor(at.y - radius)), y1 = Math.min(entry.height - 1, Math.ceil(at.y + radius));
+                for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+                    if ((x - at.x) ** 2 + (y - at.y) ** 2 > radius * radius) continue;
+                    const p = y * entry.width + x;
+                    if (!pixels.data[p * 4 + 3]) continue;
+                    for (const mask of masks) mask[p] = 0;
+                    if (z >= 0) masks[z][p] = 1;
+                }
+            };
+            applyStroke = at => {
+                if (lastPaint) {
+                    const distance = Math.hypot(at.x - lastPaint.x, at.y - lastPaint.y);
+                    const step = Math.max(.5, Number(brush.value) / 3);
+                    const segments = Math.max(1, Math.ceil(distance / step));
+                    for (let i = 1; i <= segments; i++) {
+                        stamp({ x: lastPaint.x + (at.x - lastPaint.x) * i / segments,
+                            y: lastPaint.y + (at.y - lastPaint.y) * i / segments });
                     }
-                }
-                paintOverlay();
+                } else stamp(at);
+                lastPaint = at; paintOverlay();
             };
-            let painting=false;
             canvas.addEventListener("pointerdown", event => {
-                if (event.button !== 0 && event.pointerType === "mouse") return;
+                if (event.button !== 0 && event.button !== 1 && event.pointerType === "mouse") return;
                 event.preventDefault();
-                painting = true;
+                strokePointerId = event.pointerId;
                 canvas.setPointerCapture?.(event.pointerId);
-                paint(event);
+                if (panActive || spacePressed || event.button === 1) {
+                    panning = true; panOrigin = { x: event.clientX, y: event.clientY,
+                        scrollX: previewStage.scrollLeft, scrollY: previewStage.scrollTop };
+                    canvas.style.cursor = "grabbing"; refreshCursor(); return;
+                }
+                painting = true; lastPaint = null; remember();
+                const at = eventPoint(event); lastPointer = at; applyStroke(at); refreshCursor();
             });
-            canvas.addEventListener("pointermove",event=>{if(painting)paint(event);});
-            canvas.addEventListener("pointerup",()=>{painting=false;});
-            canvas.addEventListener("pointercancel",()=>{painting=false;});
-            button("Reset zones",()=>{
-                for(let z=0;z<originals.length;z++) for(let p=0;p<count;p++)
-                    masks[z][p]=originals[z][p*4+3]>0?1:0;
-                paintOverlay();
+            canvas.addEventListener("pointermove", event => {
+                if (panning && event.pointerId === strokePointerId && panOrigin) {
+                    previewStage.scrollLeft = panOrigin.scrollX - (event.clientX - panOrigin.x);
+                    previewStage.scrollTop = panOrigin.scrollY - (event.clientY - panOrigin.y);
+                    return;
+                }
+                const points = painting && event.getCoalescedEvents ? event.getCoalescedEvents() : [event];
+                for (const point of points.length ? points : [event]) {
+                    const at = eventPoint(point); lastPointer = at;
+                    if (painting && event.pointerId === strokePointerId) applyStroke(at);
+                }
+                refreshCursor();
             });
-            const exportButton=button("Export color-layers.json",()=>{
+            const finishStroke = event => {
+                if (event.pointerId !== strokePointerId) return;
+                if (painting && event.type === "pointerup") applyStroke(eventPoint(event));
+                painting = false; panning = false; lastPaint = null; panOrigin = null; strokePointerId = null;
+                canvas.style.cursor = panActive || spacePressed ? "grab" : "crosshair";
+                refreshCursor();
+            };
+            canvas.addEventListener("pointerup", finishStroke);
+            canvas.addEventListener("pointercancel", finishStroke);
+            canvas.addEventListener("lostpointercapture", finishStroke);
+            canvas.addEventListener("pointerleave", () => { if (!painting && !panning) { lastPointer = null; refreshCursor(); } });
+            canvas.addEventListener("pointerenter", event => { lastPointer = eventPoint(event); refreshCursor(); });
+            canvas.addEventListener("contextmenu", event => event.preventDefault());
+            makeButton("Reset zones", () => {
+                remember();
+                for (let z = 0; z < originals.length; z++) for (let p = 0; p < count; p++)
+                    masks[z][p] = originals[z][p * 4 + 3] > 0 ? 1 : 0;
+                paintOverlay(); status.textContent = "Original zones restored. Undo is available.";
+            }, actions);
+            makeButton("Export color-layers.json", () => {
                 try {
-                    const updated={schemaVersion:2,items:{...wardrobeLayerManifest.items}};
-                    const layers={};
-                    for (let z=0;z<entry.colorZones.length;z++) {
+                    const updated = { schemaVersion: 2, items: { ...wardrobeLayerManifest.items } };
+                    const layers = {};
+                    for (let z = 0; z < entry.colorZones.length; z++) {
                         let modified = false;
                         for (let p = 0; p < count; p++) {
                             if (masks[z][p] !== (originals[z][p * 4 + 3] > 0 ? 1 : 0)) {
-                                modified = true;
-                                break;
+                                modified = true; break;
                             }
                         }
                         if (!modified) {
+                            // Important: untouched zones retain the original Base64 bytes.
                             layers[entry.colorZones[z]] = wardrobeLayerManifest.items[entry.name].zones[entry.colorZones[z]];
                             continue;
                         }
-                        const data=ctx.createImageData(entry.width,entry.height);
-                        for(let p=0;p<count;p++)if(masks[z][p]){
-                            const i=p*4,old=originals[z];
-                            // Preserve original premultiplied artwork/shading when possible.
-                            const sourceRgba=old[i+3]?old:pixels.data;
-                            data.data[i]=sourceRgba[i];data.data[i+1]=sourceRgba[i+1];
-                            data.data[i+2]=sourceRgba[i+2];data.data[i+3]=sourceRgba[i+3];
+                        const data = ctx.createImageData(entry.width, entry.height);
+                        for (let p = 0; p < count; p++) if (masks[z][p]) {
+                            const i = p * 4, original = originals[z];
+                            const sourceRgba = original[i + 3] ? original : pixels.data;
+                            data.data[i] = sourceRgba[i]; data.data[i + 1] = sourceRgba[i + 1];
+                            data.data[i + 2] = sourceRgba[i + 2]; data.data[i + 3] = sourceRgba[i + 3];
                         }
-                        tempCtx.clearRect(0,0,entry.width,entry.height);tempCtx.putImageData(data,0,0);
-                        layers[entry.colorZones[z]]=temp.toDataURL("image/png").split(",")[1];
+                        tempCtx.clearRect(0, 0, entry.width, entry.height); tempCtx.putImageData(data, 0, 0);
+                        layers[entry.colorZones[z]] = temp.toDataURL("image/png").split(",")[1];
                     }
-                    updated.items[entry.name]={...wardrobeLayerManifest.items[entry.name],width:entry.width,height:entry.height,zones:layers};
-                    const objectUrl=URL.createObjectURL(new Blob([JSON.stringify(updated,null,2)],{type:"application/json"}));
-                    const a=document.createElement("a");a.href=objectUrl;a.download="color-layers.json";
-                    document.body.appendChild(a);a.click();a.remove();window.setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
-                    status.textContent="Exported color-layers.json. Upload to data/wardrobe/ on your GitHub branch, then refresh BC.";
-                }catch(e){status.textContent=`Export failed: ${e?.message||e}`;}
-            });
-            exportButton.disabled=false;
-            status.textContent="Paint the selected zone, or erase a zone. Existing overlapping colors and all other wardrobe items are preserved.";
+                    updated.items[entry.name] = { ...wardrobeLayerManifest.items[entry.name],
+                        width: entry.width, height: entry.height, zones: layers };
+                    const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(updated, null, 2)], { type: "application/json" }));
+                    const a = document.createElement("a"); a.href = objectUrl; a.download = "color-layers.json";
+                    document.body.appendChild(a); a.click(); a.remove();
+                    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+                    status.textContent = "Exported color-layers.json. Upload to data/wardrobe/ on your GitHub branch, then refresh BC.";
+                } catch (e) { status.textContent = `Export failed: ${e?.message || e}`; }
+            }, actions);
+            const shortcuts = document.createElement("div");
+            shortcuts.textContent = "Zoom: buttons or Ctrl+wheel • Pan: Hand button, Space+drag, or middle mouse • Undo: Ctrl+Z • Redo: Ctrl+Shift+Z • Brush: [ and ] • Esc: close. Eraser removes zone ownership, not the PNG artwork.";
+            Object.assign(shortcuts.style, { fontSize: "11px", opacity: ".82", paddingTop: "8px", lineHeight: "1.45" });
+            footer.appendChild(shortcuts);
+            status.textContent = "Ready. Move your pointer over the artwork to preview your brush. Editing keeps your image intact until you export.";
             paintOverlay();
             return true;
-        } catch(e) {
-            status.textContent=`Cannot open editor: ${e?.message||e}`;
+        } catch (e) {
+            status.textContent = `Cannot open editor: ${e?.message || e}`;
             return false;
         }
     }
@@ -18774,7 +18987,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.4.3";
+    const VERSION = "3.4.4";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
