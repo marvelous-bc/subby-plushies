@@ -1,5 +1,5 @@
 {
-  "version": "3.3.5-beta.1",
-  "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/beta/SubbysPlushies.user.js",
-  "notes": "Beta: bundled Subby's Wardrobe curated accessories (Cat-Ear Headband and Heart Charm Necklace) with the full v3.3.4 Plushies base. Lore, Eva, no-snap dragging and existing features retained. Experimental appearance assets may not persist or sync to users without the mod."
+  "version": "3.3.5",
+  "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
+  "notes": "Stable release of Subby's Plushies + Wardrobe without the Cozy Robe. Only Cat-Ear Headband and Heart Charm remain as native, multicolor, repositionable items. Preserves existing Plushies features, Eva and Lore; all assets load from the main branch."
 }
