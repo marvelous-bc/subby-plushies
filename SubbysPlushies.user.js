@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         BC - Subby's Plushies
+// @name         BC - Subby's Plushies + Wardrobe
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.3.4
-// @description  Plushie companion system for Bondage Club R132: activities, moods, relationships, synced emotes, battles, room mascot, themes, poses, stats, achievements, backups, and more
-// @released     2026-10-09
+// @version      3.3.6
+// @description  Subby’s Plushies + Wardrobe: multicolor cat-ear headband and heart charm, Lore, Eva, plushie interactions, and native BC item integration
+// @released     2026-10-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -17,7 +17,8 @@
 // @match        https://www.bondage-europe.com/*/BondageClub/
 // @match        https://bondage-asia.com/club/*/
 // @match        https://www.bondage-asia.com/club/*/
-// @run-at       document-end
+// @run-at       document-start
+// @noframes
 // @grant        none
 // @sandbox      raw
 // @inject-into  page
@@ -26,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.3.4";
+    const VERSION = "3.3.6";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -37,7 +38,7 @@ function SubbysPlushiesPageMain() {
             document.documentElement?.setAttribute("data-subbys-plushies-load-source", "direct");
         }
     } catch (_) {}
-    const BUILD_DATE = "2026-10-09";
+    const BUILD_DATE = "2026-10-10";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -590,10 +591,11 @@ function SubbysPlushiesPageMain() {
     let SPEECH_IDLE_CHANCE = 0.32;
     const BATTLE_CHALLENGE_RE = /(.+?)\((\d+)\) challenges (.+?)\((\d+)\) to a plushie battle with (.+?)\./i;
     const BATTLE_RESULT_RE = /Plushie battle result: (.+?)\((\d+)\) \[([^\]]+)\] (wins|loses|draws) against (.+?)\((\d+)\) \[([^\]]+)\]\. Scores (\d+)-(\d+)\./i;
-    const UPDATE_CHECK_STORAGE_KEY = "SubbysPlushies:last-update-check:v1";
+    // Public and beta branches track their own update-check clock.
+    const UPDATE_CHECK_STORAGE_KEY = "SubbysPlushies:main:last-update-check:v1";
     const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-    const UPDATE_REPOSITORY_API = "https://api.github.com/repos/marvelous-bc/subby-plushies/contents/";
-    const UPDATE_REPOSITORY_PAGE = "https://github.com/marvelous-bc/subby-plushies";
+    const UPDATE_REPOSITORY_API = "https://api.github.com/repos/marvelous-bc/subby-plushies/contents/?ref=main";
+    const UPDATE_REPOSITORY_PAGE = "https://github.com/marvelous-bc/subby-plushies/tree/main";
 
     let PROTECT_DURATION_MS = 2800;
     let PROTECT_TRANSFORM = Object.freeze({
@@ -735,8 +737,8 @@ function SubbysPlushiesPageMain() {
     const REPOSITORY_RAW_ROOT = "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main";
     const DATA_INDEX_URL = `${REPOSITORY_RAW_ROOT}/data/index.json`;
     const GIT_DATA_SCHEMA_VERSION = 1;
-    const GIT_DATA_CACHE_KEY = "SubbysPlushies:git-data-cache:v1";
-    const GIT_DATA_LAST_CHECK_KEY = "SubbysPlushies:git-data-last-check:v1";
+    const GIT_DATA_CACHE_KEY = "SubbysPlushies:main:git-data-cache:v1";
+    const GIT_DATA_LAST_CHECK_KEY = "SubbysPlushies:main:git-data-last-check:v1";
     const GIT_DATA_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
     const GIT_DATA_FILES = Object.freeze([
         "lore.json",
@@ -753,6 +755,269 @@ function SubbysPlushiesPageMain() {
     ]);
     const UPDATE_MANIFEST_URL = `${REPOSITORY_RAW_ROOT}/version.json`;
     const PLUSH_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/plushies`;
+
+    // Two Wardrobe accessory PNGs are hosted on GitHub, even when the
+    // userscript runs locally. Their six recolorable BC layers come from the
+    // shared remote color-layers.json; no clothing pose assets are registered.
+    // Uses Plushies' existing image-source mapper (no raw drawing overrides).
+    const WARDROBE_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/wardrobe`;
+    const WARDROBE_LAYERS_URL = `${REPOSITORY_RAW_ROOT}/data/wardrobe/color-layers.json`;
+    const WARDROBE_ITEMS = Object.freeze([
+        Object.freeze({"name": "SubbyCatHeadband", "title": "Subby's Plush Cat-Ear Headband", "group": "HairAccessory2", "top": 50, "left": 168, "width": 183, "height": 100, "priority": 55, "colorZones": ["OuterEars", "InnerEars", "Headband", "Bow"], "defaultColors": ["#BB8CCC", "#F2C1D6", "#B58ACA", "#E58DBA"]}),
+        Object.freeze({"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]})
+    ]);
+    const WARDROBE_IMAGE_BY_NAME = new Map(WARDROBE_ITEMS.map(entry =>
+        [entry.name, `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(entry.name)}.png`]));
+    const WARDROBE_LAYER_IMAGES = new Map(WARDROBE_ITEMS.map(entry =>
+        [entry.name, new Map()]));
+    let wardrobeLayersReady = false;
+    let wardrobeLayersError = null;
+    async function loadWardrobeColorLayers() {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 10000);
+        try {
+            const response = await fetch(WARDROBE_LAYERS_URL, { cache: "no-store", signal: controller.signal });
+            if (!response.ok) throw new Error(`HTTP ${response.status} fetching color-layers.json`);
+            const payload = await response.json();
+            if (payload?.schemaVersion !== 2 || !payload.items || typeof payload.items !== "object") {
+                throw new Error("Unsupported Wardrobe layer manifest (requires schema v2)");
+            }
+            const pending = [];
+            const loadZones = (entry, zones) => {
+                const result = new Map();
+                for (const zone of entry.colorZones) {
+                    const value = zones?.[zone];
+                    if (typeof value !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(value) || value.length < 100) {
+                        throw new Error(`Invalid ${entry.name}/${zone} artwork`);
+                    }
+                    result.set(zone, `data:image/png;base64,${value}`);
+                }
+                return result;
+            };
+            for (const entry of WARDROBE_ITEMS) {
+                const remote = payload.items[entry.name];
+                if (!remote || remote.width !== entry.width || remote.height !== entry.height) {
+                    throw new Error(`Missing/mismatched zone artwork for ${entry.name}`);
+                }
+                const zones = loadZones(entry, remote.zones);
+                pending.push([entry.name, zones]);
+            }
+            // Commit only after validating both accessories and all six color zones.
+            for (const [name, zones] of pending) WARDROBE_LAYER_IMAGES.set(name, zones);
+            wardrobeLayersReady = true;
+            wardrobeLayersError = null;
+            return true;
+        } catch (error) {
+            wardrobeLayersError = String(error?.message || error);
+            console.warn("[Subby's Wardrobe] GitHub color layers unavailable:", wardrobeLayersError);
+            return false;
+        } finally { window.clearTimeout(timeout); }
+    }
+    // Start the remote asset fetch immediately at document-start, while BC loads.
+    const wardrobeEarlyLayerPromise = loadWardrobeColorLayers();
+    const wardrobeState = { status: "waiting", registered: [], errors: [], methods: [], attempted: false };
+    // Retain v4 accessory positions but discard removed/unknown Wardrobe assets.
+    const WARDROBE_PLACEMENT_STORAGE_KEY = "SubbysPlushies:beta:wardrobe-placements:v4";
+    const wardrobePlacements = (() => {
+        try {
+            const present = window.localStorage?.getItem(WARDROBE_PLACEMENT_STORAGE_KEY);
+            const previous = JSON.parse(present != null ? present :
+                (window.localStorage?.getItem("SubbysPlushies:beta:wardrobe-placements:v3") || "{}"));
+            const saved = {};
+            if (previous && typeof previous === "object" && !Array.isArray(previous)) {
+                for (const entry of WARDROBE_ITEMS) {
+                    if (previous[entry.name] && typeof previous[entry.name] === "object")
+                        saved[entry.name] = previous[entry.name];
+                }
+            }
+            window.localStorage?.setItem(WARDROBE_PLACEMENT_STORAGE_KEY, JSON.stringify(saved));
+            return saved;
+        } catch (_) { return {}; }
+    })();
+    // Native asset coordinates are in the 500 x 1000 character coordinate system.
+    function wardrobePlacement(entry) {
+        const saved = wardrobePlacements[entry.name];
+        const coordinate = (value, fallback) => Number.isFinite(Number(value))
+            ? Math.max(-500, Math.min(1200, Math.round(Number(value)))) : fallback;
+        return {
+            left: saved && typeof saved === "object" ? coordinate(saved.left, entry.left) : entry.left,
+            top: saved && typeof saved === "object" ? coordinate(saved.top, entry.top) : entry.top,
+        };
+    }
+
+    function wardrobeApplyPlacement(entry, asset) {
+        if (!asset) return false;
+        const { left, top } = wardrobePlacement(entry);
+        const oldLeft = Number(asset.Left);
+        const oldTop = Number(asset.Top);
+        const dx = Number.isFinite(oldLeft) ? left - oldLeft : 0;
+        const dy = Number.isFinite(oldTop) ? top - oldTop : 0;
+        asset.Left = left;
+        asset.Top = top;
+        // These are image dimensions, NOT BC's character HeightModifier. Without
+        // explicit zero, some BC implementations can include an undefined or
+        // inherited modifier when recalculating character vertical placement.
+        asset.HeightModifier = 0;
+        if (asset.OverrideHeight != null) asset.OverrideHeight = null;
+        // Keep renderer metadata and the actual PNG dimensions identical.
+        asset.Width = entry.width;
+        asset.Height = entry.height;
+        // Some BC builds materialize native layer positions/sizes separately.
+        // Never set undefined layer offsets (which could double-add the asset's offset).
+        for (const layer of (Array.isArray(asset.Layer) ? asset.Layer : [])) {
+            if (Number.isFinite(layer.Left)) layer.Left += dx;
+            if (Number.isFinite(layer.Top)) layer.Top += dy;
+            if (Number.isFinite(layer.Width)) layer.Width = entry.width;
+            if (Number.isFinite(layer.Height)) layer.Height = entry.height;
+        }
+        return true;
+    }
+
+    // The Wardrobe item must never be able to move the character. BC can
+    // calculate HeightModifier using BOTH Asset and equipped Item.Property.
+    // Normalize only OUR Wardrobe assets; leave all unrelated clothing alone.
+    function wardrobeNeutralizeHeight(entry, item = null) {
+        if (!entry) return false;
+        const asset = window.AssetGet?.(FAMILY, entry.group, entry.name);
+        if (!asset) return false;
+        asset.HeightModifier = 0;
+        if (asset.OverrideHeight != null) asset.OverrideHeight = null;
+        const equipped = item || (window.Player && window.InventoryGet?.(window.Player, entry.group)) ||
+            window.Player?.Appearance?.find?.(a => a?.Asset?.Group?.Name === entry.group);
+        if (equipped?.Asset?.Name === entry.name && equipped.Property && typeof equipped.Property === "object") {
+            // Legacy versions may have persisted an unwanted height override.
+            delete equipped.Property.HeightModifier;
+            delete equipped.Property.OverrideHeight;
+        }
+        return true;
+    }
+
+    function wardrobeSetPlacement(name, deltaLeft = 0, deltaTop = 0, reset = false) {
+        const entry = wardrobeEntryByName(name);
+        if (!entry) return false;
+        const asset = window.AssetGet?.(FAMILY, entry.group, entry.name);
+        if (!asset) return false;
+        if (reset) delete wardrobePlacements[entry.name];
+        else {
+            const current = wardrobePlacement(entry);
+            wardrobePlacements[entry.name] = {
+                left: Math.max(-500, Math.min(1200, current.left + Number(deltaLeft || 0))),
+                top: Math.max(-500, Math.min(1200, current.top + Number(deltaTop || 0))),
+            };
+        }
+        try { window.localStorage?.setItem(WARDROBE_PLACEMENT_STORAGE_KEY, JSON.stringify(wardrobePlacements)); } catch (_) {}
+        wardrobeApplyPlacement(entry, asset);
+        wardrobeNeutralizeHeight(entry);
+        // Redraw on demand only (never a drag-time timer or global render hook).
+        try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
+        if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+        return wardrobePlacement(entry);
+    }
+
+    // The Appearance picker may consult BC's loaded translation table directly,
+    // instead of calling the mod-hooked AssetTextGet function. Keep all backends in sync.
+    function wardrobeRepairAssetText(entry) {
+        // BC, BCX, and appearance extensions use slightly different forms.
+        const groups = entry.group === "HairAccessory2" ? ["HairAccessory1", "HairAccessory2"] : [entry.group];
+        const names = groups.flatMap(group => [
+            `${group}${entry.name}`, `${group}-${entry.name}`, `${group}:${entry.name}`,
+        ]);
+        const apply = table => {
+            if (table instanceof Map) {
+                for (const key of names) table.set(key, entry.title);
+            } else if (table && typeof table === "object" && !Array.isArray(table)) {
+                for (const key of names) table[key] = entry.title;
+            }
+        };
+        for (const table of [window.AssetText, window.AssetTextCache]) {
+            if (!table) continue;
+            apply(table);
+            for (const locale of ["EN", "en", "English", "Female3DCG"]) {
+                const nested = table instanceof Map ? table.get(locale) : table[locale];
+                apply(nested);
+            }
+        }
+    }
+
+    function wardrobeSpriteForPath(path) {
+        if (typeof path !== "string" || !/subby/i.test(path) || !/\.png(?:[?#]|$)/i.test(path)) return null;
+        const normalized = path.replace(/\\/g, "/").split(/[?#]/, 1)[0];
+        for (const entry of WARDROBE_ITEMS) {
+            const spriteGroups = entry.group === "HairAccessory2"
+                ? ["HairAccessory2", "HairAccessory1"] : [entry.group];
+            const segment = spriteGroups.map(group => `/${group}/`).find(part => normalized.includes(part));
+            if (!segment) continue;
+            const suffix = normalized.slice(normalized.indexOf(segment) + segment.length);
+            const filename = suffix.split("/").pop() || "";
+            const image = WARDROBE_IMAGE_BY_NAME.get(entry.name);
+            if (filename === `${entry.name}.png` || filename === `${entry.name}_Preview.png` ||
+                suffix === `Preview/${entry.name}.png` || suffix === `Preview/${entry.name}_0.png`) {
+                return image || null;
+            }
+            const layerImages = WARDROBE_LAYER_IMAGES.get(entry.name);
+            for (const zone of entry.colorZones) {
+                if (filename === `${entry.name}_${zone}.png` ||
+                    filename === `${entry.name}_${zone}_0.png` ||
+                    suffix.endsWith(`${entry.name}/${zone}.png`)) {
+                    return layerImages?.get(zone) || null;
+                }
+            }
+            const numberMatch = filename.match(new RegExp(`^${entry.name}_(\\d+)\\.png$`));
+            if (numberMatch) {
+                const zone = entry.colorZones[Number(numberMatch[1])];
+                return zone ? layerImages?.get(zone) || null : null;
+            }
+        }
+        return null;
+    }
+
+    Object.defineProperty(window, "SubbysWardrobeCurated", {
+        configurable: true,
+        value: Object.freeze({
+            version: "0.4.1",
+            get registered() { return [...wardrobeState.registered]; },
+            get errors() { return [...wardrobeState.errors]; },
+            get status() { return wardrobeState.status; },
+            get imageStatus() { return { ready: wardrobeLayersReady, error: wardrobeLayersError, source: WARDROBE_LAYERS_URL }; },
+            reloadImages: async () => {
+                if (!(await loadWardrobeColorLayers())) return false;
+                if (wardrobeState.status === "images-unavailable") setupWardrobeAssets();
+                try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
+                if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+                return true;
+            },
+            get translationStatus() { return {
+                layerHookInstalled: wardrobeLayerTextHookInstalled,
+                layerRetryAttempts: wardrobeLayerTextHookRetries,
+                cachedTextTablesPatched: wardrobeRepairLayerNamesCache(),
+                exampleLayerKey: "HairAccessory1SubbyCatHeadbandOuterEars",
+                exampleDescriptionKey: "Necklace-SubbyHeartCharm",
+            }; },
+            get displayLabelStatus() { return {
+                drawHooks: [...wardrobeDrawLabelHooksInstalled],
+                domObserverInstalled: !!wardrobeDomLabelObserver,
+                canvasReplacements: wardrobeDrawLabelCounts.canvas,
+                domReplacements: wardrobeDrawLabelCounts.dom,
+            }; },
+            displayText: wardrobeResolveMissingVisibleLabel,
+            get methods() { return [...wardrobeState.methods]; },
+            get assets() { return WARDROBE_ITEMS.map(wardrobeCatalogStatus); },
+            diagnose: () => WARDROBE_ITEMS.map(wardrobeCatalogStatus),
+            wear: name => wardrobeWearByName(name),
+            remove: name => wardrobeRemoveByName(name),
+            placement: name => { const entry = wardrobeEntryByName(name); return entry ? wardrobePlacement(entry) : null; },
+            move: (name, dx = 0, dy = 0) => wardrobeSetPlacement(name, dx, dy),
+            resetPlacement: name => wardrobeSetPlacement(name, 0, 0, true),
+            getColors: name => wardrobeGetColors(name),
+            setColors: (name, values) => wardrobeSetColors(name, values),
+            // Use in console to confirm BC's exact generated layer paths.
+            resolveSpritePath: path => {
+                const image = wardrobeSpriteForPath(path);
+                return image ? { matched: true, embedded: image.startsWith("data:image/png;") } : { matched: false };
+            },
+        }),
+    });
+
     const SFX_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/sfx`;
     const plushAsset = fileName => `${PLUSH_ASSET_ROOT}/${fileName}`;
 
@@ -1010,7 +1275,7 @@ function SubbysPlushiesPageMain() {
 
     const EXTENSIONS_IDENTIFIER = "SubbysPlushies";
     const EXTENSIONS_BUTTON_TEXT = "Subby's Plushies";
-    const EXTENSIONS_TABS = Object.freeze(["status", "lore", "settings", "progress", "commands"]);
+    const EXTENSIONS_TABS = Object.freeze(["status", "lore", "wardrobe", "settings", "progress", "commands"]);
 
     const CURRENT_COMMAND_GROUPS = Object.freeze([
         Object.freeze({
@@ -1031,6 +1296,7 @@ function SubbysPlushiesPageMain() {
             commands: Object.freeze([
                 Object.freeze({ command: "/plushieextensions", description: "Open the Subby's Plushies Extensions control center on Settings." }),
                 Object.freeze({ command: "/plushiestatus", description: "Open the Status tab." }),
+                Object.freeze({ command: "/plushiewardrobe", description: "Open Wardrobe: multicolor cat-ear headband and heart charm, with position controls." }),
                 Object.freeze({ command: "/plushiesettings", description: "Open Settings → General." }),
                 Object.freeze({ command: "/plushielayout", description: "Open Settings → Layout customization." }),
                 Object.freeze({ command: "/plushieplushies", description: "Open Progress → Plushies with relationships, favorites, emotes, and saved poses." }),
@@ -4456,6 +4722,13 @@ function SubbysPlushiesPageMain() {
     const nativePresenceCaptureTimes = new Map();
     let nativePresenceBadgePruneTimer = null;
     let nativePresenceOverlayWorkRaf = 0;
+    // The addon indicator is a hover-only decoration, never a permanent badge.
+    // Keep the pointer in CSS screen coordinates so browser zoom and canvas scaling
+    // are handled by the same character-coordinate helpers used by plushie overlays.
+    let nativePresenceHoverPointer = null;
+    let nativePresenceHoveredKey = null;
+    let nativePresenceHoverFrame = 0;
+    let nativePresenceHoverListenersInstalled = false;
 
     function nativePresenceBadgeKey(C) {
         const member = Number(C?.MemberNumber);
@@ -4465,6 +4738,97 @@ function SubbysPlushiesPageMain() {
 
     function nativePresenceCanvasElement() {
         return document.getElementById("MainCanvas") || document.querySelector("canvas");
+    }
+
+    function nativePresenceHoveredCharacterKey() {
+        const pointer = nativePresenceHoverPointer;
+        if (!pointer || window.CurrentScreen !== "ChatRoom" || document.hidden || addonPresenceIconHiddenByNativeUI()) return null;
+        const canvas = nativePresenceCanvasElement();
+        const canvasRect = canvas?.getBoundingClientRect?.();
+        if (!canvasRect || pointer.x < canvasRect.left || pointer.x > canvasRect.right ||
+            pointer.y < canvasRect.top || pointer.y > canvasRect.bottom) return null;
+
+        const roster = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
+        const members = roster.includes(window.Player) ? roster : [...roster, window.Player];
+        let winner = null;
+        let bestScore = Infinity;
+        for (const C of members) {
+            if (!addonPresenceCharacterVisible(C)) continue;
+            const draw = characterChatRoomDraw(C);
+            if (!draw || !Number.isFinite(draw.at) || Date.now() - draw.at > 1200) continue;
+            // BC draws characters on a native 500 x 1000 character canvas.
+            // The existing helper accounts for height, zoom, and appearance offsets.
+            const start = characterPointToScreen(C, 0, 0);
+            const end = characterPointToScreen(C, 500, 1000);
+            if (!start || !end) continue;
+            const left = Math.min(start.x, end.x);
+            const right = Math.max(start.x, end.x);
+            const top = Math.min(start.y, end.y);
+            const bottom = Math.max(start.y, end.y);
+            const width = right - left;
+            const height = bottom - top;
+            if (width < 5 || height < 5 || pointer.x < left || pointer.x > right ||
+                pointer.y < top || pointer.y > bottom) continue;
+            // If avatars overlap, prefer the one whose center is closest, so
+            // hovering one person never lights up several addon indicators.
+            const score = Math.pow((pointer.x - (left + right) / 2) / width, 2) +
+                Math.pow((pointer.y - (top + bottom) / 2) / height, 2);
+            if (score < bestScore) {
+                winner = nativePresenceBadgeKey(C);
+                bestScore = score;
+            }
+        }
+        return winner;
+    }
+
+    function refreshNativePresenceBadgeHover() {
+        nativePresenceHoveredKey = nativePresenceHoveredCharacterKey();
+        const now = Date.now();
+        for (const [key, image] of nativePresenceDomBadges) {
+            if (!image?.isConnected) continue;
+            const age = now - (Number(image.dataset.lastSubbysDrawAt) || 0);
+            image.style.display = key === nativePresenceHoveredKey && age <= 1200 ? "block" : "none";
+        }
+    }
+
+    function scheduleNativePresenceBadgeHoverRefresh() {
+        if (nativePresenceHoverFrame) return;
+        nativePresenceHoverFrame = window.requestAnimationFrame(() => {
+            nativePresenceHoverFrame = 0;
+            refreshNativePresenceBadgeHover();
+        });
+    }
+
+    function installNativePresenceBadgeHoverListeners() {
+        if (nativePresenceHoverListenersInstalled) return;
+        nativePresenceHoverListenersInstalled = true;
+        // Using a document listener avoids fragile per-canvas attachment after BC
+        // re-creates its canvas; pointer events still must originate on MainCanvas.
+        document.addEventListener("pointermove", event => {
+            const canvas = nativePresenceCanvasElement();
+            nativePresenceHoverPointer = event.target === canvas && event.pointerType !== "touch"
+                ? { x: event.clientX, y: event.clientY }
+                : null;
+            scheduleNativePresenceBadgeHoverRefresh();
+        }, { passive: true, capture: true });
+        document.addEventListener("pointerout", event => {
+            if (event.target === nativePresenceCanvasElement() && event.relatedTarget !== event.target) {
+                nativePresenceHoverPointer = null;
+                refreshNativePresenceBadgeHover();
+            }
+        }, true);
+        document.addEventListener("pointercancel", () => {
+            nativePresenceHoverPointer = null;
+            refreshNativePresenceBadgeHover();
+        }, true);
+        window.addEventListener("blur", () => {
+            nativePresenceHoverPointer = null;
+            refreshNativePresenceBadgeHover();
+        });
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) nativePresenceHoverPointer = null;
+            refreshNativePresenceBadgeHover();
+        });
     }
 
     function ensureNativePresenceDomBadge(C) {
@@ -4513,6 +4877,8 @@ function SubbysPlushiesPageMain() {
             }
         }
         if (remove) {
+            nativePresenceHoverPointer = null;
+            nativePresenceHoveredKey = null;
             nativePresencePendingOverlayWork.clear();
             nativePresenceCaptureTimes.clear();
             lastCharacterChatRoomDraw.clear();
@@ -4553,7 +4919,7 @@ function SubbysPlushiesPageMain() {
 
         image.dataset.lastSubbysDrawAt = String(placement.at || Date.now());
         Object.assign(image.style, {
-            display: "block",
+            display: nativePresenceHoveredKey === nativePresenceBadgeKey(C) ? "block" : "none",
             left: `${Math.round(left)}px`,
             top: `${Math.round(top)}px`,
             width: `${Math.round(width)}px`,
@@ -4595,6 +4961,8 @@ function SubbysPlushiesPageMain() {
             }
         }
 
+        // The mouse may already be over a player when the next draw is queued.
+        refreshNativePresenceBadgeHover();
         pruneNativePresenceDomBadges();
     }
 
@@ -4618,6 +4986,8 @@ function SubbysPlushiesPageMain() {
                 image.style.display = "none";
             }
         }
+        // Re-evaluate geometry while the pointer is stationary and BC changes poses.
+        if (inRoom && nativePresenceHoverPointer) refreshNativePresenceBadgeHover();
     }
 
     function queueNativePresenceOverlayWork(C, placement) {
@@ -4751,6 +5121,7 @@ function SubbysPlushiesPageMain() {
             window.clearTimeout(nativePresenceOverlayRetryTimer);
             nativePresenceOverlayRetryTimer = null;
         }
+        installNativePresenceBadgeHoverListeners();
         if (nativePresenceBadgePruneTimer == null) {
             nativePresenceBadgePruneTimer = window.setInterval(pruneNativePresenceDomBadges, 500);
         }
@@ -4787,6 +5158,9 @@ function SubbysPlushiesPageMain() {
             overlayFunctionAvailable: typeof window.DrawCharacter === "function",
             badgeCount: nativePresenceDomBadges.size,
             visibleBadgeCount: [...nativePresenceDomBadges.values()].filter(img => img?.isConnected && img.style.display !== "none").length,
+            visibilityMode: "character-hover-only",
+            hoveredCharacter: nativePresenceHoveredKey,
+            pointerOverGameCanvas: !!nativePresenceHoverPointer,
             overlayRetryAttempt: nativePresenceOverlayRetryAttempt,
             overlayRetryPending: nativePresenceOverlayRetryTimer != null,
             renderModSdkHooksBySubbysPlushies: {
@@ -6264,7 +6638,7 @@ function SubbysPlushiesPageMain() {
         } catch (_) {}
 
         try {
-            const listingText = await fetchTextWithTimeout(`${UPDATE_REPOSITORY_API}?t=${Date.now()}`);
+            const listingText = await fetchTextWithTimeout(`${UPDATE_REPOSITORY_API}&t=${Date.now()}`);
             const listing = JSON.parse(listingText);
             if (!Array.isArray(listing)) return null;
             const candidates = listing
@@ -7914,6 +8288,76 @@ function SubbysPlushiesPageMain() {
         container.appendChild(layout);
     }
 
+    function renderExtensionsWardrobe(container) {
+        const section = makeExtensionsSection("Subby's Wardrobe • accessories");
+        const intro = document.createElement("div");
+        intro.textContent = "Two accessories with one source PNG each on GitHub and six independent color zones in shared JSON. Position controls adjust the accessories, not your character. Other viewers need the matching plugin.";
+        Object.assign(intro.style, { color: getExtensionsStyle().muted, marginBottom: "12px", lineHeight: "1.45" });
+        section.appendChild(intro);
+        for (const entry of WARDROBE_ITEMS) {
+            const itemSection = document.createElement("div");
+            Object.assign(itemSection.style, { display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap", marginBottom: "16px", paddingBottom: "12px", borderBottom: `1px solid ${getExtensionsStyle().border}55` });
+            const picture = document.createElement("img");
+            picture.src = WARDROBE_IMAGE_BY_NAME.get(entry.name);
+            picture.alt = entry.title;
+            Object.assign(picture.style, { width: "96px", height: "96px", objectFit: "contain", background: getExtensionsStyle().header, borderRadius: "8px" });
+            const detail = document.createElement("div");
+            Object.assign(detail.style, { display: "flex", flexDirection: "column", gap: "6px", flex: "1 1 240px" });
+            const heading = document.createElement("strong");
+            heading.textContent = entry.title;
+            const state = wardrobeCatalogStatus(entry);
+            const details = document.createElement("div");
+            details.textContent = `BC slot: ${entry.group} • Asset: ${entry.name} • ${state.found ? "Registered" : "Registration failed"} • Picker: ${state.inGlobalCatalog && state.inGroupCatalog ? "Indexed" : "Catalog incomplete"}`;
+            Object.assign(details.style, { color: getExtensionsStyle().muted, fontSize: "13px" });
+            const controls = document.createElement("div");
+            Object.assign(controls.style, { display: "flex", gap: "8px", flexWrap: "wrap" });
+            const wear = makeExtensionsButton("Wear", () => {
+                if (!wardrobeWearByName(entry.name)) appendLocalInfoBox("Wardrobe", [`Could not equip ${entry.title}. Inspect SubbysWardrobeCurated.diagnose() in console.`]);
+            });
+            wear.disabled = !state.found;
+            controls.appendChild(wear);
+            controls.appendChild(makeExtensionsButton("Remove", () => { wardrobeRemoveByName(entry.name); }));
+            const placement = wardrobePlacement(entry);
+            const positionLabel = document.createElement("span");
+            positionLabel.textContent = `Native fit: ${entry.width}×${entry.height} BC pixels • X ${placement.left} / Y ${placement.top} • no character-height changes`;
+            Object.assign(positionLabel.style, { color: getExtensionsStyle().muted, fontSize: "12px" });
+            const positionControls = document.createElement("div");
+            Object.assign(positionControls.style, { display: "flex", flexWrap: "wrap", gap: "6px" });
+            for (const [label, dx, dy] of [
+                ["← Left", -10, 0], ["Right →", 10, 0], ["↑ Up", 0, -10], ["Down ↓", 0, 10],
+            ]) positionControls.appendChild(makeExtensionsButton(label, () => wardrobeSetPlacement(entry.name, dx, dy)));
+            positionControls.appendChild(makeExtensionsButton("Reset Default Fit", () => wardrobeSetPlacement(entry.name, 0, 0, true)));
+            const colorControls = document.createElement("div");
+            Object.assign(colorControls.style, { display: "flex", flexWrap: "wrap", gap: "12px", padding: "8px 0" });
+            const currentColors = wardrobeGetColors(entry.name);
+            for (let index = 0; index < entry.colorZones.length; index++) {
+                const zone = entry.colorZones[index];
+                const label = document.createElement("label");
+                Object.assign(label.style, { display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "12px" });
+                const picker = document.createElement("input");
+                picker.type = "color";
+                picker.value = currentColors[index];
+                picker.disabled = !wardrobeEquippedItem(entry);
+                picker.title = `Recolor ${zone.replace(/([a-z])([A-Z])/g, "$1 $2")}`;
+                Object.assign(picker.style, { width: "36px", height: "30px", cursor: "pointer" });
+                picker.addEventListener("change", () => wardrobeSetColors(entry.name, { [zone]: picker.value }));
+                label.append(picker, document.createTextNode(zone.replace(/([a-z])([A-Z])/g, "$1 $2")));
+                colorControls.appendChild(label);
+            }
+            detail.append(heading, details, controls, colorControls, positionLabel, positionControls);
+            itemSection.append(picture, detail);
+            section.appendChild(itemSection);
+        }
+
+        if (wardrobeState.errors.length) {
+            const problems = document.createElement("div");
+            problems.textContent = `Diagnostics: ${wardrobeState.errors.slice(-4).join(" | ")}`;
+            Object.assign(problems.style, { color: getExtensionsStyle().muted, fontSize: "12px" });
+            section.appendChild(problems);
+        }
+        container.appendChild(section);
+    }
+
     function renderExtensionsStatus(container) {
         const status = extensionsStatusSnapshot();
         const section = makeExtensionsSection("Addon status");
@@ -7930,6 +8374,18 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(section, "Git data", status.gitData);
         appendExtensionsKeyValue(section, "Git data refreshed", status.gitDataRefreshed);
         container.appendChild(section);
+
+        const wardrobePanel = makeExtensionsSection("Subby's Wardrobe • curated accessories");
+        const wardrobe = window.SubbysWardrobeCurated;
+        appendExtensionsKeyValue(wardrobePanel, "State", wardrobe?.status || "Loading");
+        appendExtensionsKeyValue(wardrobePanel, "Clothing catalog", "Cat-Ear Headband • Heart Charm");
+        appendExtensionsKeyValue(wardrobePanel, "Registered", wardrobe?.registered?.join(", ") || "Not registered");
+        if (wardrobe?.errors?.length) appendExtensionsKeyValue(wardrobePanel, "Diagnostics", wardrobe.errors.join("; "));
+        const wardrobeHelp = document.createElement("div");
+        wardrobeHelp.textContent = "Open the Wardrobe tab to preview and equip both accessories, even if BC filters them from the native Appearance picker. Multiplayer persistence is unverified.";
+        Object.assign(wardrobeHelp.style, { color: getExtensionsStyle().muted, fontSize: "12px", marginTop: "8px", lineHeight: "1.4" });
+        wardrobePanel.appendChild(wardrobeHelp);
+        container.appendChild(wardrobePanel);
 
         const enabled = makeExtensionsSection("Feature status");
         appendExtensionsKeyValue(enabled, "Protect Me", status.protectMe ? "ON" : "Off");
@@ -8713,6 +9169,7 @@ function SubbysPlushiesPageMain() {
         extensionsPanelContent.innerHTML = "";
         extensionsPanelElement.style.font = `${extensionsLayoutMetrics().fontSize}px Arial, sans-serif`;
         if (extensionsActiveTab === "lore") renderExtensionsLore(extensionsPanelContent);
+        else if (extensionsActiveTab === "wardrobe") renderExtensionsWardrobe(extensionsPanelContent);
         else if (extensionsActiveTab === "settings") renderExtensionsSettings(extensionsPanelContent);
         else if (extensionsActiveTab === "progress") renderExtensionsProgress(extensionsPanelContent);
         else if (extensionsActiveTab === "commands") renderExtensionsCommands(extensionsPanelContent);
@@ -8864,7 +9321,7 @@ function SubbysPlushiesPageMain() {
             background: getExtensionsStyle().header,
             flexWrap: "wrap",
         });
-        const labels = { status: "Status", lore: "Lore", settings: "Settings", progress: "Progress", commands: "Commands" };
+        const labels = { status: "Status", lore: "Lore", wardrobe: "Wardrobe", settings: "Settings", progress: "Progress", commands: "Commands" };
         for (const tab of EXTENSIONS_TABS) {
             const button = makeExtensionsButton(labels[tab], () => {
                 extensionsActiveTab = tab;
@@ -9188,6 +9645,10 @@ function SubbysPlushiesPageMain() {
                 const slot = Number(command.slice("/plushieposeclear ".length).trim());
                 appendLocalInfoBox("Saved pose", [clearSavedPose(slot) ? `Cleared ${currentPlushName()} Pose ${slot}.` : "That pose slot is already empty or invalid."], { compact: true });
             });
+            return true;
+        }
+        if (command === "/plushiewardrobe") {
+            requireReady(() => openExtensionsPanel("wardrobe"));
             return true;
         }
         if (command === "/plushielore") {
@@ -15107,7 +15568,285 @@ function SubbysPlushiesPageMain() {
             for (const [key, value] of Object.entries(strings)) textMap.set(`${prefix}${key}`, value);
         }
 
+        for (const entry of WARDROBE_ITEMS) {
+            textMap.set(`${entry.group}${entry.name}`, entry.title);
+            textMap.set(`${entry.group}:${entry.name}`, entry.title);
+            textMap.set(`${entry.group}-${entry.name}`, entry.title);
+            textMap.set(`${entry.group.toLowerCase()}:${entry.name.toLowerCase()}`, entry.title);
+            // Appearance extensions and some BC text paths use this hyphenated key.
+            if (entry.group === "HairAccessory2") {
+                textMap.set(`HairAccessory1-${entry.name}`, entry.title);
+                textMap.set(`HairAccessory1:${entry.name}`, entry.title);
+                textMap.set(`HairAccessory1${entry.name}`, entry.title);
+            }
+            for (const zone of entry.colorZones) {
+                textMap.set(`${entry.group}${entry.name}${zone}`, zone.replace(/([a-z])([A-Z])/g, "$1 $2"));
+            }
+        }
+
         return textMap;
+    }
+
+    // LayerNames.csv labels are looked up separately from asset descriptions.
+    // Only our six curated layers are translated; all other keys pass through.
+    function wardrobeLayerTextMap() {
+        const labels = new Map();
+        for (const entry of WARDROBE_ITEMS) {
+            for (const zone of entry.colorZones) {
+                const display = zone.replace(/([a-z])([A-Z])/g, "$1 $2");
+                labels.set(`${entry.group}${entry.name}${zone}`, display);
+                if (entry.group === "HairAccessory2") {
+                    // Some BC appearance paths use the first hair-accessory group.
+                    labels.set(`HairAccessory1${entry.name}${zone}`, display);
+                }
+            }
+        }
+        return labels;
+    }
+
+    // These are the exact additions contained in the companion CSV files.
+    // Runtime registration is needed because a CSV committed to GitHub does not
+    // become part of BC's own LayerNames.csv or Female3DCG.csv automatically.
+    const WARDROBE_LAYER_TEXT_RETRY_DELAYS_MS = Object.freeze([250, 750, 1500, 3000, 6000, 10000]);
+    let wardrobeLayerTextHookInstalled = false;
+    let wardrobeLayerTextHookRetries = 0;
+    let wardrobeLayerTextHookRetryTimer = null;
+
+    function wardrobeInjectLayerRows(table, labels) {
+        if (!table) return false;
+        if (table instanceof Map) {
+            for (const [key, value] of labels) table.set(key, value);
+            return true;
+        }
+        if (Array.isArray(table)) {
+            // Existing parsed CSVs can be 2-column arrays or Tag/Value objects.
+            // Do not alter unrecognized array layouts.
+            const first = table.find(row => row != null);
+            if (Array.isArray(first)) {
+                if (first.length < 2 || typeof first[0] !== "string") return false;
+                for (const [key, value] of labels) {
+                    const existing = table.find(row => Array.isArray(row) && row[0] === key);
+                    if (existing) existing[1] = value;
+                    else table.push([key, value]);
+                }
+                return true;
+            }
+            if (first && typeof first === "object" && !Array.isArray(first)) {
+                const tagKey = ["Tag", "tag", "Key", "key", "Name", "name"].find(prop =>
+                    Object.prototype.hasOwnProperty.call(first, prop));
+                const valueKey = ["Value", "value", "Text", "text", "Description", "description"].find(prop =>
+                    Object.prototype.hasOwnProperty.call(first, prop));
+                if (!tagKey || !valueKey) return false;
+                for (const [key, value] of labels) {
+                    const existing = table.find(row => row && row[tagKey] === key);
+                    if (existing) existing[valueKey] = value;
+                    else table.push({ [tagKey]: key, [valueKey]: value });
+                }
+                return true;
+            }
+            return false;
+        }
+        if (typeof table === "object") {
+            for (const [key, value] of labels) table[key] = value;
+            return true;
+        }
+        return false;
+    }
+
+    function wardrobeRepairLayerNamesCache() {
+        const labels = wardrobeLayerTextMap();
+        const paths = [
+            "LayerNames.csv", "LayerNames", "Assets/Female3DCG/LayerNames.csv",
+            "BondageClub/Assets/Female3DCG/LayerNames.csv",
+        ];
+        let repaired = 0;
+        for (const root of [window.TextCache, window.TranslationCache, window.TextScreenCache, window.CSVCache]) {
+            if (!root || typeof root !== "object") continue;
+            for (const path of paths) {
+                const table = root instanceof Map ? root.get(path) : root[path];
+                try { if (wardrobeInjectLayerRows(table, labels)) repaired++; } catch (_) {}
+            }
+        }
+        // Some editors read the active parsed CSV directly instead of TextGet.
+        for (const key of ["TextLayerNames", "LayerNames", "Text_LayerNames"]) {
+            try { if (wardrobeInjectLayerRows(window[key], labels)) repaired++; } catch (_) {}
+        }
+        return repaired;
+    }
+
+    function installWardrobeLayerTextHook() {
+        wardrobeRepairLayerNamesCache();
+        if (wardrobeLayerTextHookInstalled) return true;
+        // Use ModSDK only. A direct TextGet reassignment triggers BCX warnings.
+        if (!modApi || typeof modApi.hookFunction !== "function" || typeof window.TextGet !== "function") {
+            if (wardrobeLayerTextHookRetries < WARDROBE_LAYER_TEXT_RETRY_DELAYS_MS.length &&
+                wardrobeLayerTextHookRetryTimer == null && typeof window.setTimeout === "function") {
+                const delay = WARDROBE_LAYER_TEXT_RETRY_DELAYS_MS[wardrobeLayerTextHookRetries++];
+                wardrobeLayerTextHookRetryTimer = window.setTimeout(() => {
+                    wardrobeLayerTextHookRetryTimer = null;
+                    installWardrobeLayerTextHook();
+                }, delay);
+            }
+            return false;
+        }
+        const labels = wardrobeLayerTextMap();
+        try {
+            modApi.hookFunction("TextGet", 100000, (args, next) => {
+                // Different BC versions/editors pass key and text table in
+                // different argument positions. Match only our exact keys.
+                const exact = Array.isArray(args) ? args.find(value =>
+                    typeof value === "string" && labels.has(value)) : null;
+                if (exact) return labels.get(exact);
+                const result = next(args);
+                // Also handle a missing-translation diagnostic returned by BC.
+                // Never modify unrelated translations or other mods' strings.
+                if (typeof result === "string" && /MISSING TEXT IN|Unknown translation key/i.test(result)) {
+                    for (const [key, value] of labels) {
+                        if (result.trimEnd().replace(/["']/g, "").endsWith(key)) return value;
+                    }
+                }
+                return result;
+            });
+            wardrobeLayerTextHookInstalled = true;
+            return true;
+        } catch (e) {
+            warn("Wardrobe LayerNames ModSDK hook unavailable:", e);
+            return false;
+        }
+    }
+
+    // The third-party Appearance renderer can capture an unhooked TextGet reference
+    // or a missing message before the main-world TextGet hook installs. The normal
+    // console TextGet may be correct while that editor still draws stale fallback
+    // strings. Repair only our exact on-screen missing labels, at render time.
+    const WARDROBE_DRAW_LABEL_HOOK_TARGETS = Object.freeze([
+        "DrawText", "DrawTextFit", "DrawTextWrap", "DrawButton", "DrawBackNextButton",
+    ]);
+    const wardrobeDrawLabelHooksInstalled = new Set();
+    const wardrobeDrawLabelCounts = { canvas: 0, dom: 0 };
+    let wardrobeDomLabelObserver = null;
+    let wardrobeDisplayHookRetryTimer = null;
+    let wardrobeDisplayHookRetryIndex = 0;
+    const WARDROBE_DISPLAY_HOOK_RETRIES_MS = Object.freeze([650, 1700, 4000]);
+
+    function wardrobeResolveMissingVisibleLabel(value) {
+        if (typeof value !== "string" || value.length > 1024 ||
+            !/MISSING TEXT IN|UNKNOWN TRANSLATION KEY|MISSING ASSET DESCRIPTION/i.test(value)) return value;
+        const layerMatch = /(?:MISSING TEXT IN|UNKNOWN TRANSLATION KEY)/i.test(value);
+        const itemMatch = /MISSING ASSET DESCRIPTION/i.test(value);
+        const normalized = value.trim().replace(/["'`\s]+$/g, "");
+        if (layerMatch) {
+            for (const [key, label] of wardrobeLayerTextMap()) {
+                if (normalized.endsWith(key)) return label;
+            }
+        }
+        if (itemMatch) {
+            for (const entry of WARDROBE_ITEMS) {
+                const groups = entry.group === "HairAccessory2"
+                    ? ["HairAccessory1", "HairAccessory2"] : [entry.group];
+                for (const group of groups) {
+                    if ([`${group}${entry.name}`, `${group}-${entry.name}`, `${group}:${entry.name}`]
+                        .some(key => normalized.endsWith(key))) {
+                        const marker = value.search(/MISSING ASSET DESCRIPTION/i);
+                        return marker >= 0 ? value.slice(0, marker) + entry.title : entry.title;
+                    }
+                }
+            }
+        }
+        return value;
+    }
+
+    function installWardrobeDrawLabelHooks() {
+        if (!modApi || typeof modApi.hookFunction !== "function") return false;
+        for (const name of WARDROBE_DRAW_LABEL_HOOK_TARGETS) {
+            if (wardrobeDrawLabelHooksInstalled.has(name) || typeof window[name] !== "function") continue;
+            try {
+                modApi.hookFunction(name, 100000, (args, next) => {
+                    // DrawButton's text is usually argument 5; Text routines
+                    // commonly use argument 1. Check strings only and leave
+                    // all unrelated game/other-mod labels untouched.
+                    let translated = null;
+                    if (Array.isArray(args)) for (let i = 0; i < args.length; i++) {
+                        const value = args[i];
+                        // Draw calls are frequent. Do not allocate an args copy,
+                        // or even use the translator, for ordinary labels.
+                        if (typeof value !== "string" ||
+                            !(value.includes("MISSING") || value.includes("Unknown translation key"))) continue;
+                        const replacement = wardrobeResolveMissingVisibleLabel(value);
+                        if (replacement === value) continue;
+                        if (!translated) translated = args.slice();
+                        translated[i] = replacement;
+                    }
+                    if (translated) wardrobeDrawLabelCounts.canvas++;
+                    return next(translated || args);
+                });
+                wardrobeDrawLabelHooksInstalled.add(name);
+            } catch (e) {
+                warn(`Wardrobe label renderer hook unavailable (${name}):`, e);
+            }
+        }
+        return wardrobeDrawLabelHooksInstalled.size > 0;
+    }
+
+    function wardrobeRepairVisibleTextNode(node) {
+        if (!node || node.nodeType !== 3 || typeof node.nodeValue !== "string") return;
+        const before = node.nodeValue;
+        const after = wardrobeResolveMissingVisibleLabel(before);
+        if (before !== after) {
+            node.nodeValue = after;
+            wardrobeDrawLabelCounts.dom++;
+        }
+    }
+
+    function wardrobeRepairInsertedText(root) {
+        if (!root) return;
+        if (root.nodeType === 3) { wardrobeRepairVisibleTextNode(root); return; }
+        if (root.nodeType !== 1 && root.nodeType !== 11) return;
+        // A bounded traversal occurs only for newly added HTML nodes. Never
+        // scan or rewrite the entire BC document on animation frames.
+        const pending = [root];
+        let visited = 0;
+        while (pending.length && visited++ < 350) {
+            const current = pending.pop();
+            if (current.nodeType === 3) {
+                wardrobeRepairVisibleTextNode(current);
+            } else if (current.childNodes) {
+                for (const child of current.childNodes) pending.push(child);
+            }
+        }
+    }
+
+    function installWardrobeDomLabelFallback() {
+        if (wardrobeDomLabelObserver || !document.body || typeof window.MutationObserver !== "function") return false;
+        try {
+            wardrobeDomLabelObserver = new window.MutationObserver(mutations => {
+                for (const mutation of mutations) {
+                    if (mutation.type === "characterData") wardrobeRepairVisibleTextNode(mutation.target);
+                    else if (mutation.type === "childList") for (const node of mutation.addedNodes) {
+                        wardrobeRepairInsertedText(node);
+                    }
+                }
+            });
+            wardrobeDomLabelObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
+            return true;
+        } catch (e) {
+            wardrobeDomLabelObserver = null;
+            warn("Wardrobe DOM label fallback unavailable:", e);
+            return false;
+        }
+    }
+
+    function installWardrobeVisibleLabelFix() {
+        installWardrobeDrawLabelHooks();
+        installWardrobeDomLabelFallback();
+        if (wardrobeDisplayHookRetryTimer == null &&
+            wardrobeDisplayHookRetryIndex < WARDROBE_DISPLAY_HOOK_RETRIES_MS.length) {
+            wardrobeDisplayHookRetryTimer = window.setTimeout(() => {
+                wardrobeDisplayHookRetryTimer = null;
+                wardrobeDisplayHookRetryIndex++;
+                installWardrobeVisibleLabelFix();
+            }, WARDROBE_DISPLAY_HOOK_RETRIES_MS[wardrobeDisplayHookRetryIndex]);
+        }
     }
 
     function installAssetTextHook() {
@@ -15115,7 +15854,13 @@ function SubbysPlushiesPageMain() {
         if (!installHook("AssetTextGet", 1000, (args, next) => {
             const key = args?.[0];
             if (typeof key === "string" && textMap.has(key)) return textMap.get(key);
-            return next(args);
+            const result = next(args);
+            if (typeof result === "string" && /MISSING ASSET DESCRIPTION/i.test(result)) {
+                for (const [candidate, label] of textMap) {
+                    if (result.trimEnd().endsWith(candidate)) return label;
+                }
+            }
+            return result;
         })) {
             throw new Error("AssetTextGet is unavailable; cannot install custom asset text.");
         }
@@ -15282,7 +16027,10 @@ function SubbysPlushiesPageMain() {
     }
 
     function mapImageSource(source) {
-        if (typeof source !== "string" || !imageMappings) return source;
+        if (typeof source !== "string") return source;
+        const wardrobeSprite = wardrobeSpriteForPath(source);
+        if (wardrobeSprite) return wardrobeSprite;
+        if (!imageMappings) return source;
 
         if (
             !source.includes(ASSET_NAME) &&
@@ -15377,6 +16125,10 @@ function SubbysPlushiesPageMain() {
             const originalSet = srcDescriptor.set;
             const wrappedSet = function (value) {
                 if (typeof value !== "string") return originalSet.call(this, value);
+                // Fixed Wardrobe paths piggyback on the already installed Plushies
+                // image redirect; no extra native drawing hooks are necessary.
+                const wardrobeSprite = wardrobeSpriteForPath(value);
+                if (wardrobeSprite) return originalSet.call(this, wardrobeSprite);
                 if (!value.includes("SubbysPlushies") && !value.includes("subbysplushies")) {
                     try { lazyNativeImageSourceByElement.delete(this); } catch (_) {}
                     return originalSet.call(this, value);
@@ -15410,6 +16162,10 @@ function SubbysPlushiesPageMain() {
             !originalSetAttribute[CUSTOM_HOOK_MARK]
         ) {
             const wrappedSetAttribute = function (name, value) {
+                if ((name === "src" || name === "SRC") && typeof value === "string") {
+                    const wardrobeSprite = wardrobeSpriteForPath(value);
+                    if (wardrobeSprite) return originalSetAttribute.call(this, name, wardrobeSprite);
+                }
                 if ((name === "src" || name === "SRC") && typeof value === "string" &&
                     (value.includes("SubbysPlushies") || value.includes("subbysplushies"))) {
                         const lazyOption = trackLazyNativeImageElement(this, value);
@@ -15444,7 +16200,7 @@ function SubbysPlushiesPageMain() {
         const nativeImageHook = installNativeImageElementHook();
 
         let fallbackHook = null;
-        if (!nativeImageHook) {
+        if (!nativeImageHook && modApi && typeof modApi.hookFunction === "function") {
             const candidates = [
                 "DrawGetImage",
                 "DrawImage",
@@ -15458,7 +16214,7 @@ function SubbysPlushiesPageMain() {
                 const installed = installHook(functionName, 1000, (args, next) => {
                     const source = args?.[0];
                     if (typeof source !== "string" ||
-                        (!source.includes("SubbysPlushies") && !source.includes("subbysplushies"))) {
+                        (!source.includes("SubbysPlushies") && !source.includes("subbysplushies") && !wardrobeSpriteForPath(source))) {
                         return next(args);
                     }
                     const mapped = mapImageSource(source);
@@ -15554,7 +16310,7 @@ function SubbysPlushiesPageMain() {
     function findRuntimeAssetGroup(groupName = GROUP) {
         return Array.isArray(window.AssetGroup)
             ? window.AssetGroup.find(group =>
-                group?.Name === groupName && (!group?.Family || group.Family === FAMILY)
+                group?.Name === groupName && (!group?.Family || group.Family === FAMILY || group.Family?.Name === FAMILY)
             ) || null
             : null;
     }
@@ -15602,7 +16358,7 @@ function SubbysPlushiesPageMain() {
         return add;
     }
 
-    function callAssetAdd(definition, runtimeGroup, groupName = runtimeGroup?.Name || GROUP) {
+    function callAssetAdd(definition, runtimeGroup, groupName = runtimeGroup?.Name || GROUP, optionalExtendedConfig) {
         const add = window.AssetAdd;
         if (typeof add !== "function") throw new Error("AssetAdd is unavailable.");
         if (!runtimeGroup || typeof runtimeGroup !== "object") {
@@ -15616,7 +16372,9 @@ function SubbysPlushiesPageMain() {
         const signatureFunction = getAssetAddSignatureFunction() || add;
         const params = getParameterNames(signatureFunction);
         const arity = Math.max(Number(signatureFunction.length) || 0, params.length);
-        const extendedConfig = makeExtendedConfig();
+        // undefined keeps the original Plushies modular configuration;
+        // null is passed for ordinary Wardrobe appearance assets.
+        const extendedConfig = optionalExtendedConfig === undefined ? makeExtendedConfig() : optionalExtendedConfig;
         const sourceGroup = findSourceAssetGroup(groupName);
 
         try {
@@ -15710,6 +16468,223 @@ function SubbysPlushiesPageMain() {
         }
 
         return primaryAsset || AssetGet(FAMILY, GROUP, ASSET_NAME);
+    }
+
+    // The Appearance picker consults more than AssetGet. Previous mocked tests
+    // checked lookup only, so an item could report success but remain invisible.
+    function wardrobeCatalogStatus(entry) {
+        const group = findRuntimeAssetGroup(entry.group);
+        const asset = typeof window.AssetGet === "function" ? window.AssetGet(FAMILY, entry.group, entry.name) : null;
+        const same = candidate => candidate?.Name === entry.name && candidate?.Group?.Name === entry.group;
+        return {
+            name: entry.name, title: entry.title, group: entry.group,
+            found: !!asset,
+            inGlobalCatalog: Array.isArray(window.Asset) && window.Asset.some(same),
+            inGroupCatalog: Array.isArray(group?.Asset) && group.Asset.some(same),
+            groupCategory: group?.Category || null,
+            groupCustomizable: group?.AllowCustomize !== false,
+            value: asset?.Value ?? null,
+            description: asset?.Description ?? null,
+            placement: wardrobePlacement(entry),
+            spriteSize: { width: entry.width, height: entry.height },
+            colorZones: [...entry.colorZones],
+            colorableLayerCount: asset?.ColorableLayerCount ?? 0,
+            colors: wardrobeGetColors(entry.name),
+            heightModifier: asset?.HeightModifier ?? null,
+            overrideHeight: asset?.OverrideHeight ?? null,
+        };
+    }
+
+    function ensureWardrobePickerCatalog(asset, group, entry) {
+        if (!asset || !group) throw new Error("Missing created asset or runtime group");
+        // Do not replace native asset objects: preserve BC's prototype, internal
+        // properties, and any references in AssetGet's internal lookups.
+        asset.Group = group;
+        asset.Description = entry.title;
+        wardrobeRepairAssetText(entry);
+        wardrobeApplyPlacement(entry, asset);
+        wardrobeNeutralizeHeight(entry);
+        asset.Value = 0;
+        const same = candidate => candidate?.Name === entry.name && candidate?.Group?.Name === entry.group;
+        if (Array.isArray(window.Asset) && !window.Asset.some(same)) window.Asset.push(asset);
+        if (Array.isArray(group.Asset) && !group.Asset.some(same)) group.Asset.push(asset);
+        const status = wardrobeCatalogStatus(entry);
+        if (!status.found) throw new Error("AssetGet cannot resolve the registered accessory");
+        if (Array.isArray(window.Asset) && !status.inGlobalCatalog) throw new Error("Asset missing from global Appearance item catalog");
+        if (Array.isArray(group.Asset) && !status.inGroupCatalog) throw new Error("Asset missing from group Appearance item catalog");
+        return status;
+    }
+
+    function wardrobeEntryByName(name) {
+        const wanted = String(name || "").trim().toLowerCase();
+        return WARDROBE_ITEMS.find(entry => entry.name.toLowerCase() === wanted || entry.title.toLowerCase() === wanted) || null;
+    }
+
+    // Native BC appearance colors are an ordered array: one entry per named layer.
+    // We change only the selected equipped accessory; other outfits are not touched.
+    function wardrobeNormalizeColors(entry, value) {
+        const input = Array.isArray(value) ? value : [];
+        return entry.defaultColors.map((fallback, i) => {
+            const color = input[i];
+            return typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)
+                ? color.toUpperCase() : fallback;
+        });
+    }
+
+    function wardrobeEquippedItem(entry) {
+        if (!entry) return null;
+        const item = window.InventoryGet?.(window.Player, entry.group) ||
+            window.Player?.Appearance?.find?.(item => item?.Asset?.Group?.Name === entry.group);
+        return item?.Asset?.Name === entry.name ? item : null;
+    }
+
+    function wardrobeGetColors(name) {
+        const entry = wardrobeEntryByName(name);
+        if (!entry) return null;
+        const item = wardrobeEquippedItem(entry);
+        return wardrobeNormalizeColors(entry, item?.Color);
+    }
+
+    function wardrobeSetColors(name, changes) {
+        const entry = wardrobeEntryByName(name);
+        const item = wardrobeEquippedItem(entry);
+        if (!entry || !item) return false;
+        const next = wardrobeNormalizeColors(entry, item.Color);
+        if (Array.isArray(changes)) {
+            for (let i = 0; i < Math.min(changes.length, next.length); i++) {
+                if (typeof changes[i] === "string" && /^#[0-9a-f]{6}$/i.test(changes[i]))
+                    next[i] = changes[i].toUpperCase();
+            }
+        } else if (changes && typeof changes === "object") {
+            for (let i = 0; i < entry.colorZones.length; i++) {
+                const color = changes[entry.colorZones[i]];
+                if (typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)) next[i] = color.toUpperCase();
+            }
+        } else return false;
+        item.Color = next; // Native Item.Color, serialized with outfits and appearance updates.
+        try { window.CharacterRefresh?.(window.Player, false, false); } catch (_) {}
+        try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
+        try {
+            if (window.CurrentScreen === "ChatRoom") window.ChatRoomCharacterUpdate?.(window.Player);
+        } catch (_) {}
+        if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+        return [...next];
+    }
+
+    // Explicit on-demand actions; never auto-wear or modify a user's outfits.
+    function wardrobeWearByName(name) {
+        const entry = wardrobeEntryByName(name);
+        if (!entry || !window.Player || typeof window.InventoryWear !== "function") return false;
+        const asset = window.AssetGet?.(FAMILY, entry.group, entry.name);
+        if (!asset) {
+            wardrobeState.errors.push(`${entry.name}: cannot wear because it is not registered`);
+            return false;
+        }
+        try {
+            // Repair text even if localization loaded later than registration.
+            ensureWardrobePickerCatalog(asset, findRuntimeAssetGroup(entry.group), entry);
+            window.InventoryWear(window.Player, entry.name, entry.group, [...entry.defaultColors]);
+            const equipped = wardrobeEquippedItem(entry);
+            if (!equipped) throw new Error("InventoryWear did not equip the selected asset");
+            if (!Array.isArray(equipped.Color) || equipped.Color.length !== entry.colorZones.length) {
+                equipped.Color = [...entry.defaultColors];
+            }
+            wardrobeNeutralizeHeight(entry, equipped);
+            try { if (typeof window.CharacterRefresh === "function") window.CharacterRefresh(window.Player, false, false); } catch (_) {}
+            try { if (typeof window.CharacterLoadCanvas === "function") window.CharacterLoadCanvas(window.Player); } catch (_) {}
+            if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+            return true;
+        } catch (e) {
+            const message = `${entry.name}: ${String(e?.message || e)}`;
+            wardrobeState.errors.push(message);
+            warn("Wardrobe wear failed:", message);
+            if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+            return false;
+        }
+    }
+
+    function wardrobeRemoveByName(name) {
+        const entry = wardrobeEntryByName(name);
+        if (!entry || !window.Player || typeof window.InventoryRemove !== "function") return false;
+        const equipped = window.InventoryGet?.(window.Player, entry.group) ||
+            window.Player?.Appearance?.find?.(item => item?.Asset?.Group?.Name === entry.group);
+        if (equipped?.Asset?.Name !== entry.name) return false; // Never remove someone else's accessory.
+        try {
+            window.InventoryRemove(window.Player, entry.group);
+            try { if (typeof window.CharacterRefresh === "function") window.CharacterRefresh(window.Player, false, false); } catch (_) {}
+            try { if (typeof window.CharacterLoadCanvas === "function") window.CharacterLoadCanvas(window.Player); } catch (_) {}
+            if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+            return true;
+        } catch (e) {
+            wardrobeState.errors.push(`${entry.name}: ${String(e?.message || e)}`);
+            if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+            return false;
+        }
+    }
+
+    function setupWardrobeAssets() {
+        wardrobeState.attempted = true;
+        wardrobeState.status = "registering";
+        wardrobeState.registered.length = 0;
+        wardrobeState.errors.length = 0;
+        wardrobeState.methods.length = 0;
+        for (const entry of WARDROBE_ITEMS) {
+            try {
+                const runtimeGroup = findRuntimeAssetGroup(entry.group);
+                if (!runtimeGroup) throw new Error(`Appearance group ${entry.group} unavailable`);
+                let asset = window.AssetGet(FAMILY, entry.group, entry.name);
+                if (!asset) {
+                    const placement = wardrobePlacement(entry);
+                    const definition = {
+                        Name: entry.name,
+                        Description: entry.title,
+                        Value: 0,
+                        Difficulty: 0,
+                        Random: false,
+                        Extended: false,
+                        Top: placement.top,
+                        Left: placement.left,
+                        Width: entry.width,
+                        Height: entry.height,
+                        // Never raise/lower the PLAYER to fit clothing artwork.
+                        HeightModifier: 0,
+                        Priority: entry.priority,
+                        ParentGroup: {},
+                        DefaultColor: [...entry.defaultColors],
+                        ColorableLayerCount: entry.colorZones.length,
+                        Layer: entry.colorZones.map(zone => ({ Name: zone, AllowColorize: true })),
+                    };
+                    callAssetAdd(definition, runtimeGroup, entry.group, null);
+                    asset = window.AssetGet(FAMILY, entry.group, entry.name);
+                    if (!asset) throw new Error("AssetAdd returned but AssetGet cannot find the accessory");
+                    wardrobeState.methods.push(`${entry.name}: native AssetAdd + picker catalogs`);
+                } else {
+                    wardrobeState.methods.push(`${entry.name}: already registered + picker catalogs`);
+                }
+                // Also repair an already registered asset without changing its group or item ID.
+                asset.DefaultColor = [...entry.defaultColors];
+                if (asset.ColorableLayerCount !== entry.colorZones.length) asset.ColorableLayerCount = entry.colorZones.length;
+                // AssetAdd may enrich the native layer objects; do not replace them
+                // unless this was the legacy single-layer beta asset.
+                if (!Array.isArray(asset.Layer) || asset.Layer.length !== entry.colorZones.length ||
+                    entry.colorZones.some((zone, i) => asset.Layer[i]?.Name !== zone)) {
+                    asset.Layer = entry.colorZones.map(zone => ({ Name: zone, AllowColorize: true }));
+                }
+                ensureWardrobePickerCatalog(asset, runtimeGroup, entry);
+                wardrobeNeutralizeHeight(entry);
+                wardrobeState.registered.push(entry.name);
+            } catch (e) {
+                const message = `${entry.name}: ${String(e?.message || e)}`;
+                wardrobeState.errors.push(message);
+                warn("Wardrobe registration failed:", message);
+            }
+        }
+        wardrobeRepairLayerNamesCache();
+        for (const entry of WARDROBE_ITEMS) wardrobeRepairAssetText(entry);
+        wardrobeState.status = wardrobeState.registered.length === WARDROBE_ITEMS.length
+            ? "registered-native" : (wardrobeState.registered.length ? "partial" : "failed");
+        log(`Wardrobe ${wardrobeState.status}: ${wardrobeState.registered.join(", ") || "none"}.`);
+        return wardrobeState.status === "registered-native";
     }
 
     function ensureExtendedCallbacks() {
@@ -17008,6 +17983,7 @@ function SubbysPlushiesPageMain() {
     window.SubbysPlushies = {
         version: VERSION,
         apiVersion: 2,
+        get wardrobe() { return window.SubbysWardrobeCurated || null; },
         get ready() { return ready; },
         get failed() { return failed; },
         getHeld: pluginApiHeldSnapshot,
@@ -17160,6 +18136,18 @@ function SubbysPlushiesPageMain() {
         installDogsCompatibilityBridge();
         scheduleNativeCommandFallbackHook();
 
+        // Appearance assets are available early, independently of external
+        // plushie PNG loading. The same image mapper is reused by both modules.
+        installNativeImageElementHook();
+        installAssetTextHook();
+        installWardrobeLayerTextHook();
+        installWardrobeVisibleLabelFix();
+        const wardrobeImagesLoaded = await wardrobeEarlyLayerPromise;
+        // Register accessories only when the color layers are available.
+        // Otherwise they cannot render; leave Plushies working even if GitHub fails.
+        if (wardrobeImagesLoaded) setupWardrobeAssets();
+        else wardrobeState.status = "images-unavailable";
+
         await prepareRenderImages();
         setupNativeAsset();
         installPlushStateHooks();
@@ -17198,7 +18186,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.3.4";
+    const VERSION = "3.3.5";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 

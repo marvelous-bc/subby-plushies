@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         BC - Subby's Plushies (Always Latest Launcher)
-// @namespace    subbycat.subbysplushies.live-loader
+// @name         BC - Subby's Plushies + Wardrobe (Release Launcher)
+// @namespace    subbycat.subbysplushies.release-live-loader
 // @author       Marvelous
 // @version      1.0.0
-// @description  Loads the latest Subby's Plushies from the official GitHub repository on every BC page load; no SHA-256 maintenance needed.
+// @description  Loads the latest public Subby's Plushies + Wardrobe from GitHub on every BC page load; no SHA-256 maintenance needed.
 // @homepageURL  https://github.com/marvelous-bc/subby-plushies
 // @supportURL   https://github.com/marvelous-bc/subby-plushies/issues
 // @match        https://bondageprojects.elementfx.com/R*
@@ -27,8 +27,8 @@
     const TAG = "[Subby's Plushies launcher]";
     const SCRIPT_URL = "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js";
     const ACTIVE_KEY = "__SUBBYS_PLUSHIES_ACTIVE__";
-    const LOADER_KEY = "__SUBBYS_PLUSHIES_LIVE_LOADER__";
-    const EXEC_KEY = "__SUBBYS_PLUSHIES_LIVE_EXECUTION__";
+    const LOADER_KEY = "__SUBBYS_PLUSHIES_RELEASE_LIVE_LOADER__";
+    const EXEC_KEY = "__SUBBYS_PLUSHIES_RELEASE_LIVE_EXECUTION__";
     const MAX_ATTEMPTS = 2;
     const REQUEST_TIMEOUT_MS = 12000;
 
