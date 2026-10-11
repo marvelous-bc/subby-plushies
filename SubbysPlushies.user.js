@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies + Wardrobe
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.6
+// @version      3.5.7
 // @description  Subby’s Plushies + Wardrobe: Paint-style tools, asset drawing, color-zone editor and poses
 // @released     2026-10-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.5.6";
+    const VERSION = "3.5.7";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -38,7 +38,7 @@ function SubbysPlushiesPageMain() {
             document.documentElement?.setAttribute("data-subbys-plushies-load-source", "direct");
         }
     } catch (_) {}
-    const BUILD_DATE = "2026-10-10";
+    const BUILD_DATE = "2026-10-11";
     const TAG = "[Subby's Plushies]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -577,6 +577,7 @@ function SubbysPlushiesPageMain() {
         showDragButton: true,
         extraActions: false,
         sharedEmoteChains: true,
+        quickReactions: true,
         expressionReactions: true,
         ignorePoseChangingEmotes: false,
         highlightMyName: false,
@@ -1449,6 +1450,7 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushieidle", description: "Toggle idle plushie wiggle animations." }),
                 Object.freeze({ command: "/plushiespeech", description: "Toggle local automatic speech bubbles." }),
                 Object.freeze({ command: "/plushieextraactions", description: "Toggle optional non-plush Extra Actions. Disabled by default." }),
+                Object.freeze({ command: "/plushiereactions [on|off]", description: "Toggle emoji reactions below public chat messages. Visible only to updated addon users." }),
                 Object.freeze({ command: "/plushiewavechain", description: "Toggle left-to-right shared Wave emote chains." }),
                 Object.freeze({ command: "/plushieignoreposes", description: "Toggle ignoring pose-changing plugin emotes such as Wave and Raise Both Arms." }),
                 Object.freeze({ command: "/plushieexpressions", description: "Toggle short expression reactions to plushie and Extra Actions." }),
@@ -2088,6 +2090,7 @@ function SubbysPlushiesPageMain() {
             showDragButton: storedBoolean("showDragButton"),
             extraActions: storedBoolean("extraActions"),
             sharedEmoteChains: storedBoolean("sharedEmoteChains"),
+            quickReactions: storedBoolean("quickReactions"),
             expressionReactions: storedBoolean("expressionReactions"),
             ignorePoseChangingEmotes: storedBoolean("ignorePoseChangingEmotes"),
             highlightMyName: Object.prototype.hasOwnProperty.call(stored, "highlightMyName") ? !!stored.highlightMyName : false,
@@ -2110,6 +2113,7 @@ function SubbysPlushiesPageMain() {
             if (settings[key]) highlightMyNameInVisibleChat();
             else clearMyNameHighlights();
         }
+        if (key === "quickReactions") quickReactionUpdateVisibility();
         if (key === "showDragButton") {
             if (settings[key]) refreshDragToggleButton();
             else removeDragToggleButton();
@@ -6615,6 +6619,7 @@ function SubbysPlushiesPageMain() {
                     ? !!normalized.featureDefaults.ignorePoseChangingEmotes
                     : false,
                 highlightMyName: false,
+                quickReactions: true,
             });
         } else if (fileName === "idle.json") {
             IDLE_MIN_DELAY_MS = Math.min(normalized.minDelayMs, normalized.maxDelayMs);
@@ -10000,6 +10005,7 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(enabled, "Speech bubbles", status.speechBubbles ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Highlight my name", status.highlightMyName ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Extra Actions", status.extraActions ? "ON" : "Off");
+        appendExtensionsKeyValue(enabled, "Quick chat reactions", status.quickReactions ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Shared emote chains", status.sharedEmoteChains ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Ignore pose-changing emotes", status.ignorePoseChangingEmotes ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Expression reactions", status.expressionReactions ? "ON" : "Off");
@@ -10043,6 +10049,7 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow("Speech Bubbles", "Allow local mood-based plush speech bubbles.", settings.speechBubbles, () => toggleFeatureSetting("speechBubbles")),
             extensionsSettingRow("Highlight My Name", "Locally highlight mentions of your character display name in chat (not your account name). Off by default.", settings.highlightMyName, () => toggleFeatureSetting("highlightMyName")),
             extensionsSettingRow("Extra Actions", "Adds optional non-plush social actions after all plushie actions. Disabled by default.", settings.extraActions, () => toggleFeatureSetting("extraActions")),
+            extensionsSettingRow("Quick Chat Reactions", "React beneath normal chat and emote messages. Hidden sync packets share emoji counts only with updated addon users. No visible chat lines.", settings.quickReactions, () => toggleFeatureSetting("quickReactions")),
             extensionsSettingRow("Shared Emote Chains", "A Wave from an addon user can ripple left-to-right through addon users in the room.", settings.sharedEmoteChains, () => toggleFeatureSetting("sharedEmoteChains")),
             extensionsSettingRow("Expression Reactions", "Friendly plushie and Extra Actions can trigger short facial reactions on the recipient's own client.", settings.expressionReactions, () => toggleFeatureSetting("expressionReactions")),
             extensionsSettingRow("Automatic Update Checks", "Check the repository manifest at most once per day.", settings.autoUpdateChecks, () => toggleFeatureSetting("autoUpdateChecks"))
@@ -11081,6 +11088,10 @@ function SubbysPlushiesPageMain() {
             }
         }
 
+        if (lower.startsWith("/plushiereactions ")) {
+            return ["/plushiereactions on", "/plushiereactions off"].filter(candidate => candidate.startsWith(lower));
+        }
+
         if (lower.startsWith("/help p")) {
             return ["/help plushie", "/help plushies"].filter(candidate => candidate.startsWith(lower));
         }
@@ -11354,6 +11365,18 @@ function SubbysPlushiesPageMain() {
         if (command === "/plushieidle") { requireReady(() => { const enabled = toggleFeatureSetting("idleAnimations"); appendLocalInfoBox("Idle Animation", [`Idle Animation is now ${enabled ? "ON" : "off"}.`]); }); return true; }
         if (command === "/plushiespeech") { requireReady(() => { const enabled = toggleFeatureSetting("speechBubbles"); appendLocalInfoBox("Speech Bubbles", [`Speech Bubbles are now ${enabled ? "ON" : "off"}.`]); }); return true; }
         if (command === "/plushieextraactions") { requireReady(() => { const enabled = toggleFeatureSetting("extraActions"); appendLocalInfoBox("Extra Actions", [`Extra Actions are now ${enabled ? "ON" : "off"}.`, enabled ? "Non-plush actions are appended after all plushie actions." : "Optional non-plush actions were removed from the activity list."], { compact: true }); }); return true; }
+        if (command === "/plushiereactions" || command.startsWith("/plushiereactions ")) {
+            requireReady(() => {
+                const arg = command.slice("/plushiereactions".length).trim();
+                if (arg && !["on", "off"].includes(arg)) {
+                    appendLocalInfoBox("Quick Reactions", ["Use /plushiereactions on or /plushiereactions off."]);
+                    return;
+                }
+                const enabled = arg ? setFeatureSetting("quickReactions", arg === "on") : toggleFeatureSetting("quickReactions");
+                appendLocalInfoBox("Quick Reactions", [`Emoji chat reactions are now ${enabled ? "ON" : "off"}.`], { compact: true });
+            });
+            return true;
+        }
         if (command === "/plushiewavechain") { requireReady(() => { const enabled = toggleFeatureSetting("sharedEmoteChains"); appendLocalInfoBox("Shared Emote Chains", [`Left-to-right Wave chains are now ${enabled ? "ON" : "off"}.`], { compact: true }); }); return true; }
         if (command === "/plushieversion") {
             appendLocalInfoBox("Subby's Plushies Version", [
@@ -11395,6 +11418,7 @@ function SubbysPlushiesPageMain() {
                     `Idle animations: ${settings.idleAnimations ? "ON" : "off"}`,
                     `Speech bubbles: ${settings.speechBubbles ? "ON" : "off"}`,
                     `Extra Actions: ${settings.extraActions ? "ON" : "off"}`,
+                    `Quick chat reactions: ${settings.quickReactions ? "ON" : "off"}`,
                     `Shared emote chains: ${settings.sharedEmoteChains ? "ON" : "off"}`,
                     `Ignore pose-changing emotes: ${settings.ignorePoseChangingEmotes ? "ON" : "off"}`,
                     `Expression reactions: ${settings.expressionReactions ? "ON" : "off"}`,
@@ -13404,13 +13428,340 @@ function SubbysPlushiesPageMain() {
         );
     }
 
+    // Quick Reactions: local UI + hidden chat packets, never visible chat messages.
+    // Reaction targets use the original unrendered message body and sender ID;
+    // arrival-age matching avoids reliance on localized timestamps or nicknames.
+    const QUICK_REACTION_CONTENT = "SubbysPlushiesQuickReactionV1";
+    const QUICK_REACTION_TAG = "SubbysPlushiesQuickReaction";
+    const QUICK_REACTION_SET = Object.freeze(["❤️", "😂", "😮", "👏", "🥺", "👍", "💜", "🔥"]);
+    const QUICK_REACTION_TTL_MS = 5 * 60 * 1000;
+    const quickReactionRecords = [];
+    const quickReactionPending = [];
+    const quickReactionSeenPackets = new Map();
+    let quickReactionRendering = null;
+    let quickReactionOpenPicker = null;
+    let quickReactionLastSendAt = 0;
+    let quickReactionNextId = 0;
+
+    function quickReactionDigest(data) {
+        // FNV-1a over public message content; no private message text is sent.
+        const input = `${data.Type}\u0000${data.Sender}\u0000${data.Content}`;
+        let hash = 2166136261;
+        for (let i = 0; i < input.length; i++) {
+            hash ^= input.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0).toString(16).padStart(8, "0");
+    }
+
+    function quickReactionEligible(data) {
+        return window.CurrentScreen === "ChatRoom" &&
+            !!data && (data.Type === "Chat" || data.Type === "Emote") &&
+            Number.isInteger(Number(data.Sender)) && Number(data.Sender) > 0 &&
+            typeof data.Content === "string" && data.Content.length > 0 && data.Content.length <= 8000 &&
+            (data.Target == null || Number(data.Target) === 0);
+    }
+
+    function quickReactionRoomKey() {
+        const room = window.ChatRoomData;
+        return room ? `${String(room.Space || "")}/${String(room.Name || "")}` : "";
+    }
+
+    function quickReactionPurge() {
+        const now = Date.now();
+        while (quickReactionRecords.length &&
+            (quickReactionRecords.length > 180 || now - quickReactionRecords[0].created > QUICK_REACTION_TTL_MS ||
+                !quickReactionRecords[0].row?.isConnected)) {
+            const old = quickReactionRecords.shift();
+            quickReactionClosePicker(old);
+            old.bar?.remove();
+        }
+        for (const [token, received] of quickReactionSeenPackets) {
+            if (now - received > QUICK_REACTION_TTL_MS) quickReactionSeenPackets.delete(token);
+        }
+        for (let i = quickReactionPending.length - 1; i >= 0; i--) {
+            if (now - quickReactionPending[i].received > 5000) quickReactionPending.splice(i, 1);
+        }
+    }
+
+    function quickReactionClosePicker(onlyRecord = null) {
+        if (!quickReactionOpenPicker) return;
+        if (onlyRecord && quickReactionOpenPicker.record !== onlyRecord) return;
+        quickReactionOpenPicker.panel.remove();
+        quickReactionOpenPicker = null;
+    }
+
+    function quickReactionButton(label, title, onClick) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.title = title;
+        button.setAttribute("aria-label", title);
+        Object.assign(button.style, {
+            fontFamily: 'Arial, "Segoe UI Emoji", sans-serif', fontSize: "13px", lineHeight: "1.25",
+            background: "rgba(50,39,65,.12)", border: "1px solid rgba(130,104,148,.35)",
+            borderRadius: "12px", padding: "2px 6px", color: "inherit", cursor: "pointer",
+        });
+        button.addEventListener("click", event => {
+            event.preventDefault(); event.stopPropagation();
+            onClick();
+        });
+        button.addEventListener("mousedown", event => event.stopPropagation());
+        return button;
+    }
+
+    function quickReactionRender(record) {
+        if (!record?.row?.isConnected) return;
+        if (!getFeatureSettings().quickReactions) {
+            record.bar?.remove(); record.bar = null;
+            quickReactionClosePicker(record);
+            return;
+        }
+        if (!record.bar) {
+            record.bar = document.createElement("div");
+            record.bar.className = "SubbysPlushiesQuickReactions";
+            Object.assign(record.bar.style, {
+                display: "flex", alignItems: "center", flexWrap: "wrap", gap: "3px",
+                margin: "2px 0 0 7px", fontSize: "12px", lineHeight: "1.25",
+            });
+            record.row.appendChild(record.bar);
+        }
+        record.bar.replaceChildren();
+        const counts = new Map();
+        for (const emoji of record.reactions.values()) {
+            counts.set(emoji, (counts.get(emoji) || 0) + 1);
+        }
+        const myMember = Number(window.Player?.MemberNumber);
+        const mine = record.reactions.get(myMember) || "";
+        const plus = quickReactionButton(mine ? "☺+" : "☺+", "React to this message", () => quickReactionTogglePicker(record));
+        plus.style.opacity = ".7";
+        record.bar.appendChild(plus);
+        for (const emoji of QUICK_REACTION_SET) {
+            const count = counts.get(emoji);
+            if (!count) continue;
+            const chip = quickReactionButton(`${emoji} ${count}`, `${count} reaction${count === 1 ? "" : "s"} — click to ${mine === emoji ? "remove yours" : "react"}`, () => quickReactionSend(record, emoji));
+            if (mine === emoji) {
+                chip.style.borderColor = "#ba79d4";
+                chip.style.background = "rgba(190,119,212,.24)";
+            }
+            record.bar.appendChild(chip);
+        }
+    }
+
+    function quickReactionTogglePicker(record) {
+        if (!getFeatureSettings().quickReactions || !record?.row?.isConnected) return;
+        if (quickReactionOpenPicker?.record === record) {
+            quickReactionClosePicker(); return;
+        }
+        quickReactionClosePicker();
+        const panel = document.createElement("div");
+        panel.className = "SubbysPlushiesReactionPicker";
+        Object.assign(panel.style, {
+            display: "flex", flexWrap: "wrap", gap: "4px", padding: "5px", margin: "3px 0 1px 7px",
+            width: "fit-content", maxWidth: "260px", background: "#302638", color: "#fff",
+            border: "1px solid #8e719a", borderRadius: "9px", position: "relative", zIndex: "5",
+        });
+        for (const emoji of QUICK_REACTION_SET) {
+            panel.appendChild(quickReactionButton(emoji, `React ${emoji}`, () => {
+                quickReactionSend(record, emoji);
+                quickReactionClosePicker();
+            }));
+        }
+        record.bar?.after(panel);
+        quickReactionOpenPicker = { record, panel };
+    }
+
+    function quickReactionMatch(packet) {
+        const now = Date.now();
+        let best = null, difference = Infinity, secondDifference = Infinity;
+        for (let i = quickReactionRecords.length - 1; i >= 0; i--) {
+            const record = quickReactionRecords[i];
+            if (!record.row?.isConnected || record.room !== packet.room ||
+                record.sender !== packet.targetSender || record.signature !== packet.signature ||
+                record.kind !== packet.messageType) continue;
+            const candidate = Math.abs((now - record.created) - packet.ageMs);
+            if (candidate < difference) {
+                secondDifference = difference;
+                best = record;
+                difference = candidate;
+            } else if (candidate < secondDifference) {
+                secondDifference = candidate;
+            }
+        }
+        // Fail closed: another message with identical wording should not inherit
+        // a reaction unless its approximate received-time offset matches.
+        // When two identical messages are almost indistinguishable in time,
+        // ignore remote reactions rather than silently attaching to the wrong one.
+        return difference <= 12000 && secondDifference - difference >= 1500 ? best : null;
+    }
+
+    function quickReactionApplyPacket(packet, actor) {
+        if (!getFeatureSettings().quickReactions) return false;
+        const record = quickReactionMatch(packet);
+        if (!record) return false;
+        if (packet.emoji) record.reactions.set(actor, packet.emoji);
+        else record.reactions.delete(actor);
+        quickReactionRender(record);
+        return true;
+    }
+
+    function quickReactionProcessPending() {
+        if (!getFeatureSettings().quickReactions) return;
+        for (let i = quickReactionPending.length - 1; i >= 0; i--) {
+            const { packet, actor } = quickReactionPending[i];
+            if (quickReactionApplyPacket(packet, actor)) quickReactionPending.splice(i, 1);
+        }
+    }
+
+    function quickReactionReceive(data) {
+        if (!data || data.Type !== "Hidden" || data.Content !== QUICK_REACTION_CONTENT) return false;
+        // Claim our hidden protocol; never run unrelated chat handlers on it.
+        if (!getFeatureSettings().quickReactions) return true;
+        const raw = Array.isArray(data.Dictionary)
+            ? data.Dictionary.find(item => item?.Tag === QUICK_REACTION_TAG)?.Text : null;
+        if (typeof raw !== "string" || raw.length > 600) return true;
+        let packet;
+        try { packet = JSON.parse(raw); } catch (_) { return true; }
+        const actor = Number(data.Sender);
+        if (!packet || packet.v !== 1 || !Number.isInteger(actor) || actor <= 0 ||
+            !Number.isInteger(packet.targetSender) || packet.targetSender <= 0 ||
+            !["Chat", "Emote"].includes(packet.messageType) ||
+            !/^[0-9a-f]{8}$/.test(packet.signature) ||
+            !Number.isInteger(packet.ageMs) || packet.ageMs < 0 || packet.ageMs > QUICK_REACTION_TTL_MS ||
+            (packet.emoji !== "" && !QUICK_REACTION_SET.includes(packet.emoji)) ||
+            typeof packet.token !== "string" || !/^[0-9A-Za-z_-]{8,100}$/.test(packet.token) ||
+            typeof packet.room !== "string" || packet.room !== quickReactionRoomKey()) return true;
+        if (quickReactionSeenPackets.has(packet.token)) return true;
+        quickReactionSeenPackets.set(packet.token, Date.now());
+        quickReactionPurge();
+        if (!quickReactionApplyPacket(packet, actor)) {
+            if (quickReactionPending.length < 24) quickReactionPending.push({ packet, actor, received: Date.now() });
+        }
+        return true;
+    }
+
+    function quickReactionSend(record, emoji) {
+        if (!getFeatureSettings().quickReactions || !record?.row?.isConnected ||
+            window.CurrentScreen !== "ChatRoom" || typeof window.ServerSend !== "function" ||
+            record.room !== quickReactionRoomKey() || !QUICK_REACTION_SET.includes(emoji)) return false;
+        const now = Date.now();
+        if (now - quickReactionLastSendAt < 650) return false;
+        const me = Number(window.Player?.MemberNumber);
+        if (!Number.isInteger(me) || me <= 0) return false;
+        const value = record.reactions.get(me) === emoji ? "" : emoji;
+        const packet = {
+            v: 1, room: record.room, targetSender: record.sender, messageType: record.kind,
+            signature: record.signature, ageMs: Math.min(QUICK_REACTION_TTL_MS, Math.max(0, now - record.created)),
+            emoji: value, token: `${me}-${now.toString(36)}-${(++quickReactionNextId).toString(36)}`,
+        };
+        try {
+            window.ServerSend("ChatRoomChat", {
+                Type: "Hidden", Content: QUICK_REACTION_CONTENT,
+                Dictionary: [{ Tag: QUICK_REACTION_TAG, Text: JSON.stringify(packet) }],
+            });
+            quickReactionLastSendAt = now;
+            quickReactionSeenPackets.set(packet.token, now);
+            // The sending client knows the exact clicked row, even when two
+            // identical messages were posted too close together to distinguish.
+            if (value) record.reactions.set(me, value);
+            else record.reactions.delete(me);
+            quickReactionRender(record);
+            return true;
+        } catch (e) {
+            warn("Quick Reaction sync failed:", e);
+            return false;
+        }
+    }
+
+    function quickReactionAttachRow(row, context) {
+        if (!(row instanceof Element) || !row.classList.contains("ChatMessage") ||
+            row.classList.contains("ChatMessageLocalMessage") ||
+            row.classList.contains("SubbysPlushiesOfferPrompt") || !row.isConnected || !context) return false;
+        if (quickReactionRecords.some(existing => existing.row === row)) return false;
+        const rowSender = Number(row.dataset?.sender);
+        if (Number.isInteger(rowSender) && rowSender > 0 && rowSender !== context.sender) return false;
+        const record = {
+            row, room: context.room, sender: context.sender, kind: context.kind,
+            signature: context.signature, created: context.created, reactions: new Map(), bar: null,
+        };
+        quickReactionRecords.push(record);
+        quickReactionPurge();
+        quickReactionRender(record);
+        quickReactionProcessPending();
+        return true;
+    }
+
+    function quickReactionCaptureAppendedRow(node) {
+        const context = quickReactionRendering;
+        if (!context || !(node instanceof Element)) return;
+        const row = node.classList.contains("ChatMessage") ? node : node.closest(".ChatMessage");
+        if (row && !context.row) context.row = row;
+        // Rendering finishes in the outer ChatRoomMessage hook after append.
+    }
+
+    function quickReactionTrackIncoming(data, next) {
+        const context = {
+            sender: Number(data.Sender), kind: data.Type, signature: quickReactionDigest(data),
+            room: quickReactionRoomKey(), created: Date.now(), row: null,
+        };
+        const prior = quickReactionRendering;
+        const root = getOfferChatRoot();
+        const previousRows = root ? new Set(root.querySelectorAll(".ChatMessage")) : null;
+        quickReactionRendering = context;
+        let result;
+        try { result = next(); }
+        finally { quickReactionRendering = prior; }
+        const attach = () => {
+            if (context.row?.isConnected && quickReactionAttachRow(context.row, context)) return true;
+            const currentRoot = getOfferChatRoot();
+            if (!currentRoot) return false;
+            const rows = currentRoot.querySelectorAll(".ChatMessage");
+            for (let i = rows.length - 1; i >= 0; i--) {
+                if (previousRows?.has(rows[i])) continue;
+                if (quickReactionAttachRow(rows[i], context)) return true;
+            }
+            return false;
+        };
+        if (!attach()) window.setTimeout(attach, 80);
+        return result;
+    }
+
+    function quickReactionUpdateVisibility() {
+        quickReactionClosePicker();
+        for (const record of quickReactionRecords) quickReactionRender(record);
+        if (!getFeatureSettings().quickReactions) quickReactionPending.length = 0;
+    }
+
+    function quickReactionReset() {
+        quickReactionClosePicker();
+        for (const record of quickReactionRecords) record.bar?.remove();
+        quickReactionRecords.length = 0;
+        quickReactionPending.length = 0;
+        quickReactionSeenPackets.clear();
+        quickReactionRendering = null;
+        quickReactionLastSendAt = 0;
+    }
+
+    // Read-only diagnostic entrypoint for verifying packet/DOM hooks in BC.
+    Object.defineProperty(window, "SubbysQuickReactions", {
+        configurable: true,
+        value: Object.freeze({
+            get enabled() { return !!getFeatureSettings().quickReactions; },
+            get messages() { return quickReactionRecords.length; },
+            get pending() { return quickReactionPending.length; },
+            get networkHook() { return installedHooks.has("ChatRoomMessage"); },
+            get appendHook() { return installedHooks.has("ChatRoomAppendChat"); },
+            toggle: () => toggleFeatureSetting("quickReactions"),
+        }),
+    });
+
     const MY_NAME_HIGHLIGHT_CLASS = "SubbysPlushiesMyNameHighlight";
     const MY_NAME_HIGHLIGHT_IGNORE_SELECTOR = [
         "a", "button", "input", "textarea", "select", "script", "style", "code",
         ".ChatMessageName", ".ChatMessageSender", ".ChatMessageUsername",
         ".ChatMessageHeader", ".ChatMessageTime", ".ChatMessageTimestamp",
         ".ReplyButton", ".SubbysPlushiesOfferControls",
-        ".SubbysPlushiesOfferPrompt", "." + MY_NAME_HIGHLIGHT_CLASS,
+        ".SubbysPlushiesOfferPrompt", ".SubbysPlushiesQuickReactions", ".SubbysPlushiesReactionPicker", "." + MY_NAME_HIGHLIGHT_CLASS,
         "[contenteditable]"
     ].join(",");
 
@@ -15542,6 +15893,7 @@ function SubbysPlushiesPageMain() {
             roomMascotState = null;
             removeRoomMascotOverlay();
             clearRemotePlushEmotes();
+            quickReactionReset();
             addonPresenceMembers.clear();
             receivedCustomActionTokens.clear();
             locallyRenderedCustomActionTokens.clear();
@@ -15555,6 +15907,7 @@ function SubbysPlushiesPageMain() {
         })) hooked++;
 
         if (installHook("ChatRoomSync", 10000, (args, next) => {
+            quickReactionReset();
             roomMascotState = null;
             removeRoomMascotOverlay();
             const result = next(args);
@@ -16068,6 +16421,7 @@ function SubbysPlushiesPageMain() {
                 tagNativeCustomActionRow(node, active.token);
             }
             const result = next(args);
+            quickReactionCaptureAppendedRow(node);
             if (node && window.CurrentScreen === "ChatRoom") {
                 inspectOfferMutationNode(node, getOfferChatRoot());
                 if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
@@ -16082,6 +16436,8 @@ function SubbysPlushiesPageMain() {
             if (processAddonPresencePacket(data)) return next(args);
             if (processSharedWaveChainPacket(data)) return next(args);
             if (processOfferDecisionSignal(data)) return next(args);
+            if (quickReactionReceive(data)) return next(args);
+            if (quickReactionEligible(data)) return quickReactionTrackIncoming(data, () => next(args));
 
             const hiddenBattleData = data?.Type === "Hidden" ? battleDataFromAction(data) : null;
             if (hiddenBattleData) {
@@ -20108,7 +20464,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.6";
+    const VERSION = "3.5.7";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
