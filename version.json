@@ -1,5 +1,5 @@
 {
-  "version": "3.4.8",
+  "version": "3.5.1",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Draped Wrap Dress reference fit updated for BC 155 cm with Echo -40: native X90/Y182 and resampled 279x373 sprite (90% of v3.4.7). All four color masks rebuilt at the matching size, preserving opacity, overlap and priorities. Adds a user-controlled Clear old Move / Resize action to avoid double-scaling existing saved outfit edits; preserves all other clothing and plushie features. Fixes stale userscript @version header."
+  "notes": "Public Paint Tools Studio release. Carries over the full v3.5.0-beta.6 drawing toolkit: selections, magic wand, move tools, gradients, clone, recolor, text, shapes, transformations and history, alongside Wardrobe Studio custom zones, poses, and transparent PNG export. Includes prior beta undo/redo and character-guide fitting changes. Main-branch URLs and update caches. No changes to wardrobe artwork, masks, or default fitting."
 }

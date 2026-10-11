@@ -2,8 +2,8 @@
 // @name         BC - Subby's Plushies + Wardrobe
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.4.8
-// @description  Subby’s Plushies + Wardrobe: height-compatible native draped dress, four color zones, accessories, lazy assets and zone editor
+// @version      3.5.1
+// @description  Subby’s Plushies + Wardrobe: Paint-style tools, asset drawing, color-zone editor and poses
 // @released     2026-10-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.4.8";
+    const VERSION = "3.5.1";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -761,16 +761,26 @@ function SubbysPlushiesPageMain() {
     // Uses Plushies' existing image-source mapper (no raw drawing overrides).
     const WARDROBE_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/wardrobe`;
     const WARDROBE_LAYERS_URL = `${REPOSITORY_RAW_ROOT}/data/wardrobe/color-layers.json`;
-    const WARDROBE_ITEMS = Object.freeze([
-        Object.freeze({"name": "SubbyCatHeadband", "title": "Subby's Plush Cat-Ear Headband", "group": "HairAccessory2", "top": 50, "left": 168, "width": 183, "height": 100, "priority": 55, "colorZones": ["OuterEars", "InnerEars", "Headband", "Bow"], "defaultColors": ["#BB8CCC", "#F2C1D6", "#B58ACA", "#E58DBA"]}),
-        Object.freeze({"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]}),
-        Object.freeze({"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Cloth","top":182,"left":90,"width":279,"height":373,"priority":38,"layerPriorities":{"Fabric":29},"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]})
-    ]);
+    const WARDROBE_ITEMS = [
+        {"name": "SubbyCatHeadband", "title": "Subby's Plush Cat-Ear Headband", "group": "HairAccessory2", "top": 50, "left": 168, "width": 183, "height": 100, "priority": 55, "colorZones": ["OuterEars", "InnerEars", "Headband", "Bow"], "defaultColors": ["#BB8CCC", "#F2C1D6", "#B58ACA", "#E58DBA"]},
+        {"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]},
+        {"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Cloth","top":182,"left":90,"width":279,"height":373,"priority":38,"layerPriorities":{"Fabric":29},"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]}
+    ];
     const WARDROBE_ITEM_NAME_SET = new Set(WARDROBE_ITEMS.map(entry => entry.name));
     const WARDROBE_IMAGE_BY_NAME = new Map(WARDROBE_ITEMS.map(entry =>
         [entry.name, `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(entry.name)}.png`]));
-    const WARDROBE_LAYER_IMAGES = new Map(WARDROBE_ITEMS.map(entry =>
-        [entry.name, new Map()]));
+    const WARDROBE_LAYER_IMAGES = new Map(WARDROBE_ITEMS.map(entry => [entry.name, new Map()]));
+    // Optional pose art follows the same per-zone native path lookup as standing.
+    const WARDROBE_POSE_IMAGES = new Map();
+    const WARDROBE_SLOTS = new Set(["Cloth", "Suit", "ClothLower", "Necklace", "HairAccessory2", "HairAccessory1", "Bra", "Panties", "Socks", "Shoes"]);
+    const WARDROBE_POSES = ["Standing", "ArmsUp", "ArmsUpWide", "ArmsBehind", "Kneel", "AllFours"];
+    const WARDROBE_NATIVE_POSE = Object.freeze({
+        ArmsUp: "ArmsUp", OverTheHead: "ArmsUp", ArmsRaised: "ArmsUp",
+        ArmsUpWide: "ArmsUpWide", Yoked: "ArmsUpWide", SpreadEagle: "ArmsUpWide",
+        ArmsBehind: "ArmsBehind", BackBoxTie: "ArmsBehind", BackElbowTouch: "ArmsBehind",
+        Kneel: "Kneel", KneelingSpread: "Kneel", LegsClosed: "Kneel",
+        AllFours: "AllFours", Hogtied: "AllFours"
+    });
     let wardrobeLayerManifest = null;
     let wardrobeLayersReady = false;
     let wardrobeLayersError = null;
@@ -785,9 +795,10 @@ function SubbysPlushiesPageMain() {
                 throw new Error("Unsupported Wardrobe layer manifest (requires schema v2)");
             }
             const pending = [];
-            const loadZones = (entry, zones) => {
+            const metadata = [];
+            const loadZones = (entry, zones, names) => {
                 const result = new Map();
-                for (const zone of entry.colorZones) {
+                for (const zone of names) {
                     const value = zones?.[zone];
                     if (typeof value !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(value) || value.length < 100) {
                         throw new Error(`Invalid ${entry.name}/${zone} artwork`);
@@ -801,11 +812,48 @@ function SubbysPlushiesPageMain() {
                 if (!remote || remote.width !== entry.width || remote.height !== entry.height) {
                     throw new Error(`Missing/mismatched zone artwork for ${entry.name}`);
                 }
-                const zones = loadZones(entry, remote.zones);
-                pending.push([entry.name, zones]);
+                const names = Array.isArray(remote.zoneOrder) ? remote.zoneOrder : entry.colorZones;
+                if (!Array.isArray(names) || !names.length || names.length > 16 ||
+                    new Set(names).size !== names.length ||
+                    names.some(name => typeof name !== "string" || !/^[A-Za-z][A-Za-z0-9]{0,31}$/.test(name))) {
+                    throw new Error(`Invalid color-zone names/order for ${entry.name}`);
+                }
+                const slot = remote.slot || entry.group;
+                if (!WARDROBE_SLOTS.has(slot)) throw new Error(`Unsupported native slot ${slot}`);
+                const zones = loadZones(entry, remote.zones, names);
+                const poses = new Map();
+                if (remote.poses && typeof remote.poses === "object") {
+                    for (const [pose, spec] of Object.entries(remote.poses)) {
+                        if (!WARDROBE_POSES.includes(pose) || pose === "Standing" || !spec ||
+                            spec.width !== entry.width || spec.height !== entry.height ||
+                            !spec.zones || typeof spec.file !== "string" ||
+                            spec.file !== `${entry.name}_${pose}.png`) {
+                            throw new Error(`Invalid pose metadata for ${entry.name}/${pose}`);
+                        }
+                        poses.set(pose, { file: spec.file, layers: loadZones(entry, spec.zones, names) });
+                    }
+                }
+                pending.push([entry.name, zones, poses]);
+                metadata.push([entry, names, slot, poses]);
             }
-            // Commit only after validating every Wardrobe item and color zone.
-            for (const [name, zones] of pending) WARDROBE_LAYER_IMAGES.set(name, zones);
+            // Commit metadata atomically after validation; no partial modifications.
+            const remoteColorValue = (name, zone) => {
+                const color = payload.items?.[name]?.zoneColors?.[zone];
+                return typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) ? color.toUpperCase() : null;
+            };
+            for (const [entry, names, slot, poses] of metadata) {
+                const previous = new Map(entry.colorZones.map((name, i) => [name, entry.defaultColors[i]]));
+                entry.colorZones = [...names];
+                entry.defaultColors = names.map(name => (
+                    typeof remoteColorValue(entry.name, name) === "string" ? remoteColorValue(entry.name, name) : previous.get(name) || "#FFFFFF"));
+                entry.layerPriorities = payload.items[entry.name]?.layerPriorities || entry.layerPriorities || {};
+                entry.group = slot;
+                entry.poses = poses;
+            }
+            for (const [name, zones, poses] of pending) {
+                WARDROBE_LAYER_IMAGES.set(name, zones);
+                WARDROBE_POSE_IMAGES.set(name, poses);
+            }
             wardrobeLayerManifest = payload;
             wardrobeLayersReady = true;
             wardrobeLayersError = null;
@@ -833,7 +881,7 @@ function SubbysPlushiesPageMain() {
                         saved[entry.name] = previous[entry.name];
                 }
             }
-            // v3.4.8 updates the native dress baseline for 155 cm / Echo -40.
+            // v3.4.8 updated the native dress baseline for 155 cm / Echo -40.
             // Forget exact old defaults without overwriting genuinely custom fits.
             const dressSaved = saved.SubbyDrapedWrapDress;
             if (dressSaved && Number(dressSaved.left) === 85 &&
@@ -962,9 +1010,27 @@ function SubbysPlushiesPageMain() {
             const image = WARDROBE_IMAGE_BY_NAME.get(entry.name);
             if (filename === `${entry.name}.png` || filename === `${entry.name}_Preview.png` ||
                 suffix === `Preview/${entry.name}.png` || suffix === `Preview/${entry.name}_0.png`) {
-                return image || null;
+                // BC's pose router may request a pose-folder copy of the base item.
+                const folderPose = normalized.split("/").find(part => WARDROBE_POSES.includes(part));
+                const posed = WARDROBE_POSE_IMAGES.get(entry.name)?.get(folderPose);
+                return posed ? `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(posed.file)}` : image || null;
             }
-            const layerImages = WARDROBE_LAYER_IMAGES.get(entry.name);
+            const poseByFolder = normalized.split("/").map(part => part.toLowerCase());
+            let pose = "Standing";
+            for (const candidate of WARDROBE_POSES.slice(1)) {
+                if (poseByFolder.includes(candidate.toLowerCase()) ||
+                    filename.toLowerCase().includes(`_${candidate.toLowerCase()}_`) ||
+                    filename.toLowerCase().endsWith(`_${candidate.toLowerCase()}.png`)) pose = candidate;
+            }
+            // BC may ask for original pose names (e.g. OverTheHead) before mapping.
+            for (const [nativePose, mapped] of Object.entries(WARDROBE_NATIVE_POSE)) {
+                if (poseByFolder.includes(nativePose.toLowerCase())) pose = mapped;
+            }
+            const poseInfo = WARDROBE_POSE_IMAGES.get(entry.name)?.get(pose);
+            const layerImages = poseInfo?.layers || WARDROBE_LAYER_IMAGES.get(entry.name);
+            if (pose !== "Standing" && filename === `${entry.name}_${pose}.png`) {
+                return poseInfo ? `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(poseInfo.file)}` : image;
+            }
             for (const zone of entry.colorZones) {
                 if (filename === `${entry.name}_${zone}.png` ||
                     filename === `${entry.name}_${zone}_0.png` ||
@@ -992,6 +1058,10 @@ function SubbysPlushiesPageMain() {
             editColorZones: name => {
                 const entry = WARDROBE_ITEMS.find(item => item.name === name);
                 return entry ? openWardrobeColorZoneEditor(entry) : false;
+            },
+            drawAsset: name => {
+                const entry = WARDROBE_ITEMS.find(item => item.name === name);
+                return entry ? openWardrobeAssetDrawingStudio(entry) : false;
             },
             reloadImages: async () => {
                 if (!(await loadWardrobeColorLayers())) return false;
@@ -8438,442 +8508,1346 @@ function SubbysPlushiesPageMain() {
     // Artwork-authoring tool: adjusts color masks without editing source PNGs.
     // v3.4.4: source-pixel zoom, preview cursor, continuous strokes, undo/redo,
     // pan, keyboard shortcuts and selected-zone visibility. Export remains schema v2.
-    async function openWardrobeColorZoneEditor(entry) {
-        if (!entry || !wardrobeLayerManifest?.items?.[entry.name]) {
-            appendLocalInfoBox("Color Zone Editor", ["Wait for the GitHub color layers to load before editing."]);
+    // Wardrobe Studio v3.5: standalone editor state, no global canvas monkeypatches.
+    // The native game reads the published schema-v2 color-layer manifest on reload.
+    // Wardrobe Studio v3.5: standalone editor state, no global canvas monkeypatches.
+    // The native game reads the published schema-v2 color-layer manifest on reload.
+    // Wardrobe Studio v3.5: standalone editor state, no global canvas monkeypatches.
+    // The native game reads the published schema-v2 color-layer manifest on reload.
+    // Transparent artwork painter, aligned to BC's native 500x1000 asset space.
+    // Its character snapshot is a reference only and is never included in PNG exports.
+    function openWardrobeAssetDrawingStudio(entry, options = {}) {
+        if (!entry || !window.Player) {
+            appendLocalInfoBox("Asset Drawing Studio", ["Load your BC character before drawing an asset."]);
             return false;
         }
-        const previous = document.getElementById("SubbysWardrobeZoneEditor");
-        if (previous) {
-            if (typeof previous.__subbysDispose === "function") previous.__subbysDispose();
-            else previous.remove();
+        document.getElementById("SubbysWardrobeAssetPainter")?.__subbysDispose?.();
+        const NATIVE_W = 500, NATIVE_H = 1000;
+        const placement = wardrobePlacement(entry);
+        const poseLabel = () => {
+            const p = window.Player;
+            const poses = Array.isArray(p?.ActivePose) ? p.ActivePose : Array.isArray(p?.Pose) ? p.Pose : [];
+            return poses.length ? poses.join(" + ") : "Standing / default";
+        };
+        let visible = true, brush = 9, opacity = 100, hardness = 85, zoom = 0.55;
+        let tool = "brush", drawColor = "#d3baff", refOpacity = 55;
+        let drawing = null, spacePressed = false, hover = null, lastPose = poseLabel();
+        const undo = [], redo = [], disposers = [];
+        const root = document.createElement("div");
+        root.id = "SubbysWardrobeAssetPainter";
+        Object.assign(root.style, {position:"fixed",inset:"0",zIndex:"2147483647",pointerEvents:"none",font:"13px sans-serif",color:"#fff"});
+        const panel = document.createElement("section");
+        Object.assign(panel.style, {position:"absolute",left:`${Math.max(8,(innerWidth-980)/2)}px`,top:"18px",
+            width:`${Math.min(980,innerWidth-16)}px`,height:`${Math.min(790,innerHeight-36)}px`,
+            minWidth:"min(440px,95vw)",minHeight:"310px",maxWidth:"calc(100vw - 8px)",
+            maxHeight:"calc(100vh - 8px)",resize:"both",overflow:"hidden",display:"flex",
+            flexDirection:"column",boxSizing:"border-box",pointerEvents:"auto",border:"1px solid #b8a5cb",
+            borderRadius:"10px",background:"#292232",boxShadow:"0 9px 50px #000c"});
+        root.appendChild(panel);document.body.appendChild(root);
+        const add = (tag,parent,text="") => {
+            const el=document.createElement(tag);if(text)el.textContent=text;parent.appendChild(el);return el;
+        };
+        const css = (el,style) => (Object.assign(el.style,style),el);
+        const button = (label,handler,parent) => {
+            const b=add("button",parent,label);b.type="button";
+            css(b,{border:"1px solid #907da3",borderRadius:"5px",background:"#51405c",color:"white",
+                padding:"5px 8px",cursor:"pointer",font:"inherit"});b.addEventListener("click",handler);return b;
+        };
+        const header=css(add("header",panel),{display:"flex",justifyContent:"space-between",alignItems:"center",
+            padding:"8px 12px",flex:"0 0 auto",background:"#483955",cursor:"move",touchAction:"none"});
+        const heading=add("strong",header,`${entry.title} — Asset Drawing Studio`);
+        const topRight=add("div",header);
+        const body=css(add("div",panel),{display:"flex",flex:"1 1 auto",minHeight:"0",overflow:"hidden"});
+        const tools=css(add("aside",body),{width:"225px",flex:"0 0 225px",padding:"10px",overflowY:"auto",
+            boxSizing:"border-box",borderRight:"1px solid #625171"});
+        const surface=css(add("div",body),{flex:"1 1 auto",minWidth:"0",minHeight:"0",overflow:"auto",background:"#201b27",
+            padding:"12px",overscrollBehavior:"contain"});
+        const frame=css(add("div",surface),{position:"relative",width:`${NATIVE_W*zoom}px`,height:`${NATIVE_H*zoom}px`,margin:"auto",
+            background:"repeating-conic-gradient(#9b9b9b 0% 25%,#dadada 0% 50%) 0/18px 18px",border:"2px solid #ab9ab5"});
+        const createCanvas = () => {
+            const c=add("canvas",frame);c.width=NATIVE_W;c.height=NATIVE_H;
+            css(c,{position:"absolute",left:"0",top:"0",width:`${NATIVE_W*zoom}px`,height:`${NATIVE_H*zoom}px`,margin:"0",padding:"0",
+                maxWidth:"none",maxHeight:"none",transform:"none",display:"block",imageRendering:"auto"});
+            for(const [key,val] of Object.entries({position:"absolute",left:"0px",top:"0px",right:"auto",bottom:"auto",
+                transform:"none",display:"block",maxWidth:"none",maxHeight:"none",margin:"0px"}))
+                c.style.setProperty(key.replace(/[A-Z]/g,x=>`-${x.toLowerCase()}`),val,"important");
+            return c;
+        };
+        const reference=createCanvas();reference.style.pointerEvents="none";
+        const paint=createCanvas();paint.style.touchAction="none";paint.style.cursor="crosshair";
+        const preview=createCanvas();preview.style.pointerEvents="none";
+        const selectOverlay=createCanvas();selectOverlay.style.pointerEvents="none";
+        selectOverlay.style.display="none";
+        const referenceCtx=reference.getContext("2d"),ctx=paint.getContext("2d",{willReadFrequently:true}),
+            previewCtx=preview.getContext("2d");
+        const marker=css(add("div",frame),{position:"absolute",border:"1px solid white",borderRadius:"50%",
+            background:"#fff2",display:"none",pointerEvents:"none",zIndex:"6",transform:"translate(-50%,-50%)",boxSizing:"border-box"});
+        const footer=css(add("footer",panel),{padding:"8px 10px",borderTop:"1px solid #655674",background:"#362b3e",flex:"0 0 auto"});
+        const actions=css(add("div",footer),{display:"flex",gap:"5px",flexWrap:"wrap"});
+        const status=css(add("div",footer,"Your character is a tracing reference only — it will never be exported."),
+            {paddingTop:"7px",fontSize:"11px",lineHeight:"1.4",color:"#e0d0e5"});
+        const label=(caption,input)=>{const wrap=add("label",tools,caption+" ");wrap.appendChild(input);
+            css(wrap,{display:"block",marginBottom:"10px"});return wrap;};
+        const controlGroup=css(add("div",tools),{display:"flex",flexWrap:"wrap",gap:"5px",marginBottom:"10px"});
+        const toolsByName=new Map();
+        const toolEntries=[
+            ["selectRect","Rectangle Select"],["lasso","Lasso Select"],["selectEllipse","Ellipse Select"],["wand","Magic Wand"],
+            ["movePixels","Move Pixels"],["moveSelection","Move Selection"],["zoom","Zoom"],["pan","Hand"],
+            ["brush","Paintbrush"],["pencil","Pencil"],["erase","Eraser"],["fill","Paint Bucket"],
+            ["gradient","Gradient"],["clone","Clone Stamp"],["recolor","Recolor"],["picker","Eyedropper"],
+            ["text","Text"],["line","Line"],["curve","Curve"],["rectangle","Rectangle"],
+            ["roundRect","Rounded Rect"],["ellipse","Ellipse"],["freeform","Freeform Shape"]
+        ];
+        for(const [name,displayName] of toolEntries){const b=button(displayName,()=>{
+            tool=name;curvePoints=null;polygonPoints=null;previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);refreshTool();},controlGroup);
+            b.dataset.paintTool=name;toolsByName.set(name,b);
         }
+        const makeRange=(name,min,max,start,callback)=>{
+            const input=add("input",tools);input.type="range";input.min=min;input.max=max;input.value=start;
+            input.style.width="100%";const lab=label(name+`: ${start}`,input);
+            input.addEventListener("input",()=>{lab.firstChild.textContent=name+`: ${input.value} `;
+                callback(Number(input.value));refreshCursor();});return input;
+        };
+        const colorPicker=add("input",tools);colorPicker.type="color";colorPicker.value=drawColor;
+        label("Primary / new color",colorPicker);colorPicker.addEventListener("input",()=>{drawColor=colorPicker.value;});
+        const secondaryPicker=add("input",tools);secondaryPicker.type="color";secondaryPicker.value="#ffffff";
+        label("Secondary / source color",secondaryPicker);secondaryPicker.addEventListener("input",()=>{secondaryColor=secondaryPicker.value;});
+        makeRange("Brush size",1,80,brush,v=>brush=v);
+        makeRange("Hardness",0,100,hardness,v=>hardness=v);
+        makeRange("Opacity",1,100,opacity,v=>opacity=v);
+        makeRange("Tolerance",0,255,30,v=>tolerance=v);
+        const selectMode=add("select",tools);
+        for(const [key,title] of [["replace","Replace Selection"],["add","Add to Selection"],["subtract","Subtract"],["intersect","Intersect"]]){
+            const option=add("option",selectMode,title);option.value=key;
+        }
+        label("Selection mode",selectMode);selectMode.addEventListener("change",()=>{selectionMode=selectMode.value;});
+        const globalToggle=add("input",tools);globalToggle.type="checkbox";
+        label("Global Fill / Magic Wand",globalToggle);globalToggle.addEventListener("change",()=>{floodGlobal=globalToggle.checked;});
+        const shapeMode=add("select",tools);
+        for(const [key,title] of [["outline","Outline"],["filled","Filled"],["both","Fill and outline"]]){
+            const option=add("option",shapeMode,title);option.value=key;
+        }
+        label("Shape mode",shapeMode);shapeMode.addEventListener("change",()=>{shapeFill=shapeMode.value;});
+        const gradientMode=add("select",tools);
+        for(const [key,title] of [["linear","Linear"],["radial","Radial"]]){
+            const option=add("option",gradientMode,title);option.value=key;
+        }
+        label("Gradient mode",gradientMode);gradientMode.addEventListener("change",()=>{gradientType=gradientMode.value;});
+        const textField=add("textarea",tools);textField.rows=2;textField.value="Text";
+        css(textField,{width:"100%",boxSizing:"border-box",background:"#211a29",color:"white"});
+        label("Text content",textField);textField.addEventListener("input",()=>{textContent=textField.value;});
+        makeRange("Font size",8,128,28,v=>fontSize=v);
+        const fontField=add("select",tools);
+        for(const name of ["Arial","Verdana","Georgia","Courier New","Times New Roman","sans-serif"]){
+            const option=add("option",fontField,name);option.value=name;
+        }
+        label("Font",fontField);fontField.addEventListener("change",()=>{fontName=fontField.value;});
+        const boldToggle=add("input",tools);boldToggle.type="checkbox";
+        label("Bold text",boldToggle);boldToggle.addEventListener("change",()=>{textBold=boldToggle.checked;});
+        makeRange("Character opacity",0,100,refOpacity,v=>{refOpacity=v;reference.style.opacity=String(v/100);});
+        css(add("div",tools,"Tips: Ctrl+click Clone to choose a source. Ctrl+click Recolor to sample the old color. Select before cutting, moving or painting within a region. Curve: draw a line, then click the bend. Freeform: click corners, double-click to finish."),
+            {fontSize:"11px",lineHeight:"1.5",marginBottom:"12px",color:"#d4bfd9"});
+        const poseStatus=css(add("div",tools),{fontSize:"11px",marginBottom:"10px",lineHeight:"1.5",whiteSpace:"pre-wrap"});
+        const refreshPoseLabel=()=>{
+            poseStatus.textContent=`Your current pose:\n${poseLabel()}\nEditing PNG for: ${options.pose||"Standing"}`;
+        };
+        const updateRef=()=>{
+            referenceCtx.clearRect(0,0,NATIVE_W,NATIVE_H);
+            const C=window.Player;
+            // Prefer BC's resized canvas when available so the tracing guide matches
+            // the character's actual on-screen body scale/height more closely.
+            const image=[C?.CanvasResize,C?.CanvasBlink,C?.Canvas].find(c=>c&&Number(c.width)>0&&Number(c.height)>0);
+            if(!image){status.textContent="BC character canvas not available yet. Open Appearance or re-enter the room, then select Refresh Character.";return false;}
+            try{
+                const imgW=Math.max(1,Number(image.width)||NATIVE_W);
+                const imgH=Math.max(1,Number(image.height)||NATIVE_H);
+                const offset=imgH>=1600?600:0;
+                const sampleH=Math.max(1,Math.min(NATIVE_H,imgH-offset));
+
+                // Copy the source region first so we can detect the actual opaque
+                // character bounds. Some BC canvases include a lot of transparent
+                // margin; drawing the whole source directly makes the body appear
+                // tiny and disproportionate inside the studio.
+                const temp=document.createElement("canvas");
+                temp.width=imgW; temp.height=sampleH;
+                const tempCtx=temp.getContext("2d", { willReadFrequently: true }) || temp.getContext("2d");
+                tempCtx.clearRect(0,0,imgW,sampleH);
+                tempCtx.drawImage(image,0,offset,imgW,sampleH,0,0,imgW,sampleH);
+
+                let bounds=null;
+                try{
+                    const data=tempCtx.getImageData(0,0,imgW,sampleH).data;
+                    let minX=imgW, minY=sampleH, maxX=-1, maxY=-1;
+                    const threshold=8;
+                    for(let y=0;y<sampleH;y++){
+                        for(let x=0;x<imgW;x++){
+                            const a=data[(y*imgW+x)*4+3];
+                            if(a>=threshold){
+                                if(x<minX) minX=x;
+                                if(y<minY) minY=y;
+                                if(x>maxX) maxX=x;
+                                if(y>maxY) maxY=y;
+                            }
+                        }
+                    }
+                    if(maxX>=minX && maxY>=minY){
+                        const padX=Math.max(2, Math.round((maxX-minX+1)*0.03));
+                        const padY=Math.max(2, Math.round((maxY-minY+1)*0.03));
+                        bounds={
+                            x:Math.max(0,minX-padX),
+                            y:Math.max(0,minY-padY),
+                            w:Math.min(imgW, maxX+padX+1)-Math.max(0,minX-padX),
+                            h:Math.min(sampleH, maxY+padY+1)-Math.max(0,minY-padY),
+                        };
+                    }
+                }catch(_){ bounds=null; }
+
+                let usedBounds=false;
+                if(bounds && bounds.w>10 && bounds.h>10){
+                    const margin=8;
+                    const scale=Math.min((NATIVE_W-margin*2)/bounds.w, (NATIVE_H-margin*2)/bounds.h);
+                    const drawW=Math.max(1, Math.round(bounds.w*scale));
+                    const drawH=Math.max(1, Math.round(bounds.h*scale));
+                    const dx=Math.round((NATIVE_W-drawW)/2);
+                    const dy=Math.round((NATIVE_H-drawH)/2);
+                    referenceCtx.drawImage(temp,bounds.x,bounds.y,bounds.w,bounds.h,dx,dy,drawW,drawH);
+                    usedBounds=true;
+                }else{
+                    referenceCtx.drawImage(temp,0,0,imgW,sampleH,0,0,NATIVE_W,NATIVE_H);
+                }
+                refreshPoseLabel();
+                const sourceName=image===C?.CanvasResize?"CanvasResize":(image===C?.CanvasBlink?"CanvasBlink":"Canvas");
+                status.textContent=`Character reference refreshed from ${sourceName}${usedBounds?" with opaque-bounds fitting":""}. Trace over it; only your transparent paint layer is exported.`;
+                return true;
+            }catch(e){status.textContent=`Cannot copy BC character canvas: ${String(e?.message||e)}`;return false;}
+        };
+        button("Refresh character",()=>{lastPose=poseLabel();updateRef();},tools);
+        const follow=add("label",tools,"Follow pose changes ");
+        const followBox=add("input",follow);followBox.type="checkbox";followBox.checked=true;
+        css(follow,{display:"block",marginTop:"10px",marginBottom:"12px"});
+        button("Load current item PNG",()=>{
+            if(!options.sourceData){status.textContent="Open Drawing Studio from Edit Color Zones to load existing artwork.";return;}
+            if(!window.confirm("Replace unsaved drawing strokes with this item's current PNG?"))return;
+            saveHistory();ctx.clearRect(0,0,NATIVE_W,NATIVE_H);
+            const c=document.createElement("canvas");c.width=entry.width;c.height=entry.height;
+            c.getContext("2d").putImageData(options.sourceData,0,0);
+            ctx.drawImage(c,placement.left,placement.top);refreshCursor();status.textContent="Loaded current item artwork into the paint layer.";
+        },tools);
+        const uploaded=add("input",tools);uploaded.type="file";uploaded.accept="image/png";
+        css(uploaded,{width:"100%",marginTop:"12px"});
+        label("Import transparent PNG",uploaded);
+        uploaded.addEventListener("change",async()=>{
+            const file=uploaded.files?.[0];if(!file)return;
+            const url=URL.createObjectURL(file);
+            try{
+                const img=new Image();await new Promise((resolve,reject)=>{
+                    img.onload=resolve;img.onerror=()=>reject(new Error("Cannot decode PNG"));img.src=url;
+                });
+                if(![[NATIVE_W,NATIVE_H],[entry.width,entry.height]].some(([w,h])=>w===img.naturalWidth&&h===img.naturalHeight))
+                    throw new Error(`PNG must be 500×1000 or ${entry.width}×${entry.height} pixels.`);
+                saveHistory();ctx.clearRect(0,0,NATIVE_W,NATIVE_H);
+                ctx.drawImage(img,img.naturalWidth===NATIVE_W?0:placement.left,img.naturalHeight===NATIVE_H?0:placement.top);
+                status.textContent="Imported PNG onto the editable layer. Your character remains a separate reference.";
+            }catch(e){status.textContent=String(e.message||e);}finally{URL.revokeObjectURL(url);uploaded.value="";}
+        });
+        // Paint.NET-inspired tools (independent implementation; no Paint.NET code is bundled).
+        const PIXELS=NATIVE_W*NATIVE_H;
+        let selection=null, selectedCount=0, selectionMode="replace", clipboard=null;
+        let tolerance=30, floodGlobal=false, secondaryColor="#ffffff", shapeFill="outline", gradientType="linear";
+        let fontSize=28, fontName="Arial", textContent="Text", textBold=false;
+        let cloneSource=null, clonePixels=null, cloneOffset=null, curvePoints=null, polygonPoints=null;
+        let drawingStartImage=null, paintingTemp=null, operation=null;
+        const selectTools=new Set(["selectRect","selectEllipse","lasso","wand","moveSelection"]);
+        const shapeTools=new Set(["line","curve","rectangle","roundRect","ellipse","freeform"]);
+        const brushTools=new Set(["brush","pencil","erase","clone","recolor"]);
+        const colorRGB=(hex)=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)];
+        const hexRGB=()=>colorRGB(drawColor);
+        const historySnapshot=()=>({pixels:ctx.getImageData(0,0,NATIVE_W,NATIVE_H),selection:selection?.slice()||null});
+        const saveHistory=()=>{undo.push(historySnapshot());if(undo.length>20)undo.shift();redo.length=0;};
+        const restore=state=>{if(!state)return;ctx.putImageData(state.pixels,0,0);
+            selection=state.selection?.slice()||null;refreshSelection();previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);};
+        const doUndo=()=>{if(!undo.length)return;redo.push(historySnapshot());restore(undo.pop());status.textContent="Undo applied.";};
+        const doRedo=()=>{if(!redo.length)return;undo.push(historySnapshot());restore(redo.pop());status.textContent="Redo applied.";};
+        button("Undo",doUndo,actions);button("Redo",doRedo,actions);
+        const zoomDisplay=add("span",actions,"55%");css(zoomDisplay,{padding:"6px"});
+        function setZoom(value){zoom=Math.min(8,Math.max(.15,value));
+            frame.style.width=`${NATIVE_W*zoom}px`;frame.style.height=`${NATIVE_H*zoom}px`;
+            for(const c of [reference,paint,preview,selectOverlay]){c.style.width=`${NATIVE_W*zoom}px`;c.style.height=`${NATIVE_H*zoom}px`;}
+            zoomDisplay.textContent=`${Math.round(zoom*100)}%`;refreshCursor();}
+        button("− Zoom",()=>setZoom(zoom/1.25),actions);button("+ Zoom",()=>setZoom(zoom*1.25),actions);
+        button("Fit",()=>{const r=surface.getBoundingClientRect();setZoom(Math.min((r.width-28)/NATIVE_W,(r.height-28)/NATIVE_H));},actions);
+        const imageCoordinate=e=>{const r=paint.getBoundingClientRect();return {
+            x:Math.min(NATIVE_W-1,Math.max(0,(e.clientX-r.left)*NATIVE_W/r.width)),
+            y:Math.min(NATIVE_H-1,Math.max(0,(e.clientY-r.top)*NATIVE_H/r.height))};};
+        function refreshTool(){for(const [n,b] of toolsByName)b.style.background=n===tool?"#916ca6":"#51405c";
+            paint.style.cursor=tool==="pan"?"grab":tool==="picker"?"copy":tool==="text"?"text":tool==="zoom"?"zoom-in":"crosshair";
+            refreshCursor();}
+        function refreshCursor(){if(!hover||selectTools.has(tool)||["pan","picker","fill","zoom","text"].includes(tool)||spacePressed){marker.style.display="none";return;}
+            marker.style.display="block";marker.style.width=`${Math.max(2,brush*zoom)}px`;
+            marker.style.height=`${Math.max(2,brush*zoom)}px`;marker.style.left=`${hover.x*zoom}px`;
+            marker.style.top=`${hover.y*zoom}px`;marker.style.borderColor=tool==="erase"?"#ff5555":"#fff";}
+        function refreshSelection(){const overlay=selectOverlay.getContext("2d"),out=overlay.createImageData(NATIVE_W,NATIVE_H);
+            selectedCount=0;
+            if(selection){for(let i=0;i<PIXELS;i++)if(selection[i]){
+                selectedCount++;const x=i%NATIVE_W,y=(i-x)/NATIVE_W,k=i*4;
+                const edge=x===0||y===0||x===NATIVE_W-1||y===NATIVE_H-1||
+                    !selection[i-1]||!selection[i+1]||!selection[i-NATIVE_W]||!selection[i+NATIVE_W];
+                out.data[k]=edge?255:105;out.data[k+1]=edge?255:156;out.data[k+2]=edge?255:235;
+                out.data[k+3]=edge?210:25;
+            }}
+            overlay.putImageData(out,0,0);
+            selectOverlay.style.display=selectedCount?"block":"none";
+            if(!selectedCount)selection=null;
+            selectionInfo.textContent=selectedCount?`Selected ${selectedCount.toLocaleString()} pixels`:"No selection";
+        }
+        function combineSelection(incoming,mode=selectionMode){const before=selection;
+            if(mode==="replace"||!before)selection=incoming;
+            else{const result=new Uint8Array(PIXELS);
+                for(let i=0;i<PIXELS;i++)result[i]=mode==="add"?(before[i]||incoming[i]?1:0):
+                    mode==="subtract"?(before[i]&&!incoming[i]?1:0):(before[i]&&incoming[i]?1:0);
+                selection=result;
+            }
+            refreshSelection();}
+        function selectAll(){saveHistory();selection=new Uint8Array(PIXELS);selection.fill(1);refreshSelection();}
+        function deselect(){if(!selection)return;saveHistory();selection=null;refreshSelection();}
+        function invertSelection(){saveHistory();const inverse=new Uint8Array(PIXELS);
+            if(selection)for(let i=0;i<PIXELS;i++)inverse[i]=selection[i]?0:1;else inverse.fill(1);
+            selection=inverse;refreshSelection();}
+        function rasterSelectionPath(path){const c=document.createElement("canvas");c.width=NATIVE_W;c.height=NATIVE_H;
+            const t=c.getContext("2d",{willReadFrequently:true});t.fillStyle="white";t.fill(path);
+            const d=t.getImageData(0,0,NATIVE_W,NATIVE_H).data,mask=new Uint8Array(PIXELS);
+            for(let i=0;i<PIXELS;i++)mask[i]=d[i*4+3]>=64?1:0;
+            return mask;
+        }
+        function selectionPath(a,b,kind,points=null){const p=new Path2D();
+            if(kind==="selectRect")p.rect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.max(1,Math.abs(b.x-a.x)),Math.max(1,Math.abs(b.y-a.y)));
+            else if(kind==="selectEllipse")p.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.max(.5,Math.abs(b.x-a.x)/2),Math.max(.5,Math.abs(b.y-a.y)/2),0,0,2*Math.PI);
+            else if(points?.length){p.moveTo(points[0].x,points[0].y);for(const pt of points.slice(1))p.lineTo(pt.x,pt.y);p.closePath();}
+            return p;
+        }
+        function matchColor(d,index,initial,threshold){let worst=0;
+            for(let k=0;k<4;k++){
+                const v=k<3&&d[index*4+3]===0&&initial[3]===0?0:Math.abs(d[index*4+k]-initial[k]);
+                if(v>worst)worst=v;
+            }
+            return worst<=threshold;
+        }
+        function floodIndices(pos,global=false){const d=ctx.getImageData(0,0,NATIVE_W,NATIVE_H).data;
+            const sx=Math.floor(pos.x),sy=Math.floor(pos.y),start=sy*NATIVE_W+sx;
+            const original=Array.from(d.slice(start*4,start*4+4));
+            const found=new Uint8Array(PIXELS),limit=Math.max(0,Math.min(255,tolerance));
+            if(global){for(let i=0;i<PIXELS;i++)if(matchColor(d,i,original,limit))found[i]=1;return found;}
+            const seen=new Uint8Array(PIXELS),stack=[start];
+            while(stack.length){const i=stack.pop();if(i<0||i>=PIXELS||seen[i])continue;
+                seen[i]=1;if(!matchColor(d,i,original,limit))continue;found[i]=1;
+                const x=i%NATIVE_W,y=(i-x)/NATIVE_W;
+                if(x>0)stack.push(i-1);if(x<NATIVE_W-1)stack.push(i+1);
+                if(y>0)stack.push(i-NATIVE_W);if(y<NATIVE_H-1)stack.push(i+NATIVE_W);
+            }
+            return found;
+        }
+        function paintPixel(data,i,color,alpha=255){const p=i*4,a=Math.max(0,Math.min(1,alpha/255));
+            const oldA=data[p+3]/255,combined=a+oldA*(1-a);
+            for(let k=0;k<3;k++)data[p+k]=combined?Math.round((color[k]*a+data[p+k]*oldA*(1-a))/combined):0;
+            data[p+3]=Math.round(combined*255);
+        }
+        function fillAt(pos){const mask=floodIndices(pos,floodGlobal),img=ctx.getImageData(0,0,NATIVE_W,NATIVE_H),d=img.data;
+            const rgb=hexRGB();let touched=0;for(let i=0;i<PIXELS;i++)if(mask[i]&&(!selection||selection[i])){
+                paintPixel(d,i,rgb,Math.round(opacity*2.55));touched++;
+            }
+            if(touched)ctx.putImageData(img,0,0);status.textContent=`Filled ${touched.toLocaleString()} pixels.`;
+        }
+        function selectionBounds(){if(!selection)return{x:0,y:0,w:NATIVE_W,h:NATIVE_H};
+            let x0=NATIVE_W,y0=NATIVE_H,x1=-1,y1=-1;
+            for(let i=0;i<PIXELS;i++)if(selection[i]){const x=i%NATIVE_W,y=(i-x)/NATIVE_W;
+                if(x<x0)x0=x;if(y<y0)y0=y;if(x>x1)x1=x;if(y>y1)y1=y;
+            }
+            return x1<0?null:{x:x0,y:y0,w:x1-x0+1,h:y1-y0+1};
+        }
+        function moveMask(dx,dy,source){const dst=new Uint8Array(PIXELS);
+            for(let y=0;y<NATIVE_H;y++)for(let x=0;x<NATIVE_W;x++){
+                const tx=x+dx,ty=y+dy;if(tx>=0&&tx<NATIVE_W&&ty>=0&&ty<NATIVE_H&&source[y*NATIVE_W+x])dst[ty*NATIVE_W+tx]=1;
+            }
+            return dst;
+        }
+        function moveImage(base,mask,dx,dy,copy=false){const src=base.data,out=new ImageData(new Uint8ClampedArray(src),NATIVE_W,NATIVE_H);
+            const all=!mask;
+            if(!copy)for(let i=0;i<PIXELS;i++)if(all||mask[i])out.data.fill(0,i*4,i*4+4);
+            for(let y=0;y<NATIVE_H;y++)for(let x=0;x<NATIVE_W;x++){
+                const i=y*NATIVE_W+x;if(!all&&!mask[i])continue;
+                const tx=x+dx,ty=y+dy;if(tx<0||ty<0||tx>=NATIVE_W||ty>=NATIVE_H)continue;
+                const ti=(ty*NATIVE_W+tx)*4,si=i*4;
+                out.data[ti]=src[si];out.data[ti+1]=src[si+1];out.data[ti+2]=src[si+2];out.data[ti+3]=src[si+3];
+            }
+            return out;
+        }
+        function selectionOnlyCanvas(){const c=document.createElement("canvas");c.width=NATIVE_W;c.height=NATIVE_H;
+            const d=ctx.getImageData(0,0,NATIVE_W,NATIVE_H);
+            if(selection)for(let i=0;i<PIXELS;i++)if(!selection[i])d.data[i*4+3]=0;
+            c.getContext("2d").putImageData(d,0,0);return c;
+        }
+        function copySelection(){clipboard=selectionOnlyCanvas();status.textContent="Selection copied to internal clipboard.";}
+        function cutSelection(){saveHistory();copySelection();const d=ctx.getImageData(0,0,NATIVE_W,NATIVE_H);
+            for(let i=0;i<PIXELS;i++)if(!selection||selection[i])d.data.fill(0,i*4,i*4+4);
+            ctx.putImageData(d,0,0);status.textContent="Cut pixels (Undo available).";}
+        function pasteSelection(){if(!clipboard)return;saveHistory();ctx.drawImage(clipboard,0,0);
+            selection=new Uint8Array(PIXELS);const d=clipboard.getContext("2d").getImageData(0,0,NATIVE_W,NATIVE_H).data;
+            for(let i=0;i<PIXELS;i++)if(d[i*4+3])selection[i]=1;
+            refreshSelection();status.textContent="Pasted pixels on the drawing layer.";}
+        function eraseSelected(){saveHistory();const d=ctx.getImageData(0,0,NATIVE_W,NATIVE_H);
+            for(let i=0;i<PIXELS;i++)if(!selection||selection[i])d.data.fill(0,i*4,i*4+4);
+            ctx.putImageData(d,0,0);status.textContent="Pixels cleared.";}
+        function replaceImageSelected(newImage,oldImage){if(!selection){ctx.putImageData(newImage,0,0);return;}
+            for(let i=0;i<PIXELS;i++)if(!selection[i])newImage.data.set(oldImage.data.subarray(i*4,i*4+4),i*4);
+            ctx.putImageData(newImage,0,0);
+        }
+        function dab(dest,x,y,toolName=tool){const radius=toolName==="pencil"?.5:Math.max(.5,brush/2);
+            dest.save();dest.globalCompositeOperation=toolName==="erase"?"destination-out":"source-over";
+            dest.globalAlpha=opacity/100;
+            if(toolName==="pencil"){dest.imageSmoothingEnabled=false;dest.fillStyle=drawColor;dest.fillRect(Math.floor(x),Math.floor(y),1,1);}
+            else if(hardness>=99){dest.fillStyle=toolName==="erase"?"#000":drawColor;dest.beginPath();dest.arc(x,y,radius,0,Math.PI*2);dest.fill();}
+            else{const g=dest.createRadialGradient(x,y,radius*hardness/100,x,y,radius),rgb=toolName==="erase"?"0,0,0":hexRGB().join(",");
+                g.addColorStop(0,`rgba(${rgb},1)`);g.addColorStop(1,`rgba(${rgb},0)`);
+                dest.fillStyle=g;dest.beginPath();dest.arc(x,y,radius,0,Math.PI*2);dest.fill();}
+            dest.restore();}
+        function strokeBetween(dest,a,b,toolName=tool){const distance=Math.hypot(b.x-a.x,b.y-a.y),steps=Math.max(1,Math.ceil(distance/Math.max(1,(toolName==="pencil"?1:brush)/4)));
+            for(let i=0;i<=steps;i++){const t=i/steps;dab(dest,a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,toolName);}}
+        function makeShapePath(a,b,kind,points=null){const p=new Path2D(),l=Math.min(a.x,b.x),t=Math.min(a.y,b.y),w=Math.max(1,Math.abs(a.x-b.x)),h=Math.max(1,Math.abs(a.y-b.y));
+            if(kind==="line"){p.moveTo(a.x,a.y);p.lineTo(b.x,b.y);}
+            else if(kind==="curve"){p.moveTo(a.x,a.y);p.quadraticCurveTo(points?.[0]?.x??(a.x+b.x)/2,points?.[0]?.y??(a.y+b.y)/2,b.x,b.y);}
+            else if(kind==="rectangle")p.rect(l,t,w,h);
+            else if(kind==="roundRect")p.roundRect(l,t,w,h,Math.min(18,w/4,h/4));
+            else if(kind==="ellipse")p.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.max(.5,w/2),Math.max(.5,h/2),0,0,Math.PI*2);
+            else if(kind==="freeform"&&points?.length){p.moveTo(points[0].x,points[0].y);for(const pt of points.slice(1))p.lineTo(pt.x,pt.y);p.closePath();}
+            return p;
+        }
+        function drawShape(dest,a,b,kind=tool,points=null){dest.save();dest.globalAlpha=opacity/100;
+            dest.strokeStyle=drawColor;dest.fillStyle=drawColor;dest.lineWidth=brush;dest.lineCap="round";dest.lineJoin="round";
+            const path=makeShapePath(a,b,kind,points);
+            if(kind!=="line"&&kind!=="curve"&&shapeFill!=="outline")dest.fill(path);
+            if(shapeFill!=="filled"||kind==="line"||kind==="curve")dest.stroke(path);
+            dest.restore();}
+        function drawGradient(dest,a,b){const rgb1=drawColor,rgb2=secondaryColor;
+            dest.save();dest.globalAlpha=opacity/100;
+            const d=Math.max(1,Math.hypot(b.x-a.x,b.y-a.y));
+            const g=gradientType==="radial"?dest.createRadialGradient(a.x,a.y,0,a.x,a.y,d):dest.createLinearGradient(a.x,a.y,b.x,b.y);
+            g.addColorStop(0,rgb1);g.addColorStop(1,rgb2);
+            dest.fillStyle=g;dest.fillRect(0,0,NATIVE_W,NATIVE_H);dest.restore();}
+        function stampOrRecolor(dest,x,y,mode){if(!clonePixels)return;
+            const r=Math.max(1,Math.floor(brush/2));
+            const x0=Math.max(0,Math.floor(x)-r),y0=Math.max(0,Math.floor(y)-r);
+            const x1=Math.min(NATIVE_W-1,Math.ceil(x)+r),y1=Math.min(NATIVE_H-1,Math.ceil(y)+r);
+            const w=x1-x0+1,h=y1-y0+1;
+            const base=dest.getImageData(x0,y0,w,h),d=base.data,source=clonePixels.data;
+            const ox=Math.round(cloneOffset?.x||0),oy=Math.round(cloneOffset?.y||0);
+            const primary=hexRGB(),secondary=colorRGB(secondaryColor);
+            for(let yy=y0;yy<=y1;yy++)
+                for(let xx=x0;xx<=x1;xx++){
+                    const distance=Math.hypot(xx-x,yy-y);if(distance>r)continue;
+                    const falloff=hardness>=99?1:Math.min(1,(r-distance)/Math.max(.01,r*(1-hardness/100)));
+                    const i=yy*NATIVE_W+xx;if(selection&&!selection[i])continue;
+                    const localI=(yy-y0)*w+(xx-x0);
+                    const a=Math.round(opacity*2.55*falloff);if(a<1)continue;
+                    if(mode==="clone"){
+                        const sx=xx+ox,sy=yy+oy;if(sx<0||sy<0||sx>=NATIVE_W||sy>=NATIVE_H)continue;
+                        const si=(sy*NATIVE_W+sx)*4;if(!source[si+3])continue;
+                        paintPixel(d,localI,[source[si],source[si+1],source[si+2]],Math.round(a*source[si+3]/255));
+                    }else{
+                        const k=localI*4;if(!d[k+3])continue;
+                        const error=Math.max(Math.abs(d[k]-secondary[0]),Math.abs(d[k+1]-secondary[1]),Math.abs(d[k+2]-secondary[2]));
+                        if(error>tolerance)continue;
+                        const lum=(d[k]+d[k+1]+d[k+2])/3,baseLum=(secondary[0]+secondary[1]+secondary[2])/3;
+                        const mult=Math.min(2.5,Math.max(.35,(lum+32)/(baseLum+32)));
+                        const influence=a/255;
+                        for(let j=0;j<3;j++)d[k+j]=Math.round(d[k+j]*(1-influence)+Math.min(255,primary[j]*mult)*influence);
+                    }
+                }
+            dest.putImageData(base,x0,y0);
+        }
+        function drawTextAt(pos){if(!textContent.trim())return;saveHistory();
+            const before=undo[undo.length-1].pixels,c=document.createElement("canvas");c.width=NATIVE_W;c.height=NATIVE_H;
+            const t=c.getContext("2d");t.font=`${textBold?"bold ":""}${fontSize}px ${fontName}`;
+            t.fillStyle=drawColor;t.globalAlpha=opacity/100;t.textBaseline="top";
+            textContent.split("\n").slice(0,12).forEach((line,i)=>t.fillText(line,pos.x,pos.y+i*fontSize*1.3,NATIVE_W-pos.x));
+            ctx.drawImage(c,0,0);if(selection)replaceImageSelected(ctx.getImageData(0,0,NATIVE_W,NATIVE_H),before);
+            status.textContent="Text placed onto artwork (Undo available).";
+        }
+        function applyBitmapTransform(kind){saveHistory();const source=selectionOnlyCanvas(),b=selectionBounds();if(!b)return;
+            const snapshot=undo[undo.length-1].pixels;
+            const d=ctx.getImageData(0,0,NATIVE_W,NATIVE_H);
+            for(let i=0;i<PIXELS;i++)if(!selection||selection[i])d.data.fill(0,i*4,i*4+4);
+            ctx.putImageData(d,0,0);
+            const t=document.createElement("canvas");t.width=b.w;t.height=b.h;
+            const c=t.getContext("2d");c.translate(b.w/2,b.h/2);
+            if(kind==="flipH")c.scale(-1,1);else if(kind==="flipV")c.scale(1,-1);
+            else c.rotate(kind==="rotateCW"?Math.PI/2:-Math.PI/2);
+            c.drawImage(source,b.x,b.y,b.w,b.h,-b.w/2,-b.h/2,b.w,b.h);
+            ctx.drawImage(t,b.x,b.y);
+            // Selected region now follows the transformed alpha bounding box.
+            if(selection){const curr=ctx.getImageData(0,0,NATIVE_W,NATIVE_H).data;
+                const mask=new Uint8Array(PIXELS);for(let i=0;i<PIXELS;i++)if(curr[i*4+3]&&(!snapshot.data[i*4+3]||selection[i]))mask[i]=1;
+                selection=mask;refreshSelection();}
+            status.textContent="Pixels transformed. Undo available.";
+        }
+        function drawToolStaging(a,b,kind,points=null){previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);
+            if(kind==="gradient")drawGradient(previewCtx,a,b);
+            else if(shapeTools.has(kind))drawShape(previewCtx,a,b,kind,points);
+            else if(kind==="lasso"||kind==="selectRect"||kind==="selectEllipse"){
+                const p=selectionPath(a,b,kind,points);previewCtx.save();previewCtx.lineWidth=1/Math.max(.2,zoom);
+                previewCtx.strokeStyle="#fff";previewCtx.setLineDash([5/zoom,3/zoom]);previewCtx.stroke(p);previewCtx.restore();}
+        }
+        const selectionInfo=css(add("div",tools,"No selection"),{fontSize:"11px",marginBottom:"8px",color:"#ead8f4"});
+        const selButtons=css(add("div",tools),{display:"flex",flexWrap:"wrap",gap:"4px",marginBottom:"12px"});
+        for(const [name,fn] of [["Select All",selectAll],["Deselect",deselect],["Invert",invertSelection],
+            ["Cut",cutSelection],["Copy",copySelection],["Paste",pasteSelection],["Clear",eraseSelected]])button(name,fn,selButtons);
+        const transformButtons=css(add("div",tools),{display:"flex",flexWrap:"wrap",gap:"4px",marginBottom:"12px"});
+        for(const [name,mode] of [["Flip H","flipH"],["Flip V","flipV"],["Rotate ↻","rotateCW"],["Rotate ↺","rotateCCW"]])
+            button(name,()=>applyBitmapTransform(mode),transformButtons);
+        let pan=null;
+        function resolveSelectionMode(e){return e.altKey?"subtract":e.ctrlKey?"add":selectionMode;}
+        paint.addEventListener("pointerdown",e=>{
+            const pos=imageCoordinate(e);hover=pos;
+            if(tool==="picker"){
+                const d=ctx.getImageData(Math.floor(pos.x),Math.floor(pos.y),1,1).data;
+                if(d[3]){const hex="#"+[...d.slice(0,3)].map(v=>v.toString(16).padStart(2,"0")).join("");
+                    if(e.button===2){secondaryColor=hex;secondaryPicker.value=hex;}else{drawColor=hex;colorPicker.value=hex;}}
+                return;
+            }
+            if(tool==="zoom"){setZoom(zoom*(e.button===2?.8:1.25));return;}
+            if(e.button===1||spacePressed||tool==="pan"){
+                pan={id:e.pointerId,x:e.clientX,y:e.clientY,left:surface.scrollLeft,top:surface.scrollTop};
+                paint.setPointerCapture(e.pointerId);e.preventDefault();return;
+            }
+            if(e.button!==0)return;
+            if(tool==="text"){drawTextAt(pos);return;}
+            if(tool==="wand"){saveHistory();combineSelection(floodIndices(pos,floodGlobal),resolveSelectionMode(e));
+                status.textContent="Magic Wand selection updated.";return;}
+            if(tool==="curve"&&curvePoints){saveHistory();const shape=curvePoints;drawToolStaging(shape.start,shape.end,"curve",[pos]);
+                const before=undo[undo.length-1].pixels;ctx.drawImage(preview,0,0);
+                if(selection)replaceImageSelected(ctx.getImageData(0,0,NATIVE_W,NATIVE_H),before);
+                previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);curvePoints=null;status.textContent="Curve committed.";return;}
+            if(tool==="freeform"&&polygonPoints){polygonPoints.push(pos);status.textContent="Click more polygon corners, double click to close.";return;}
+            if(tool==="clone"&&e.ctrlKey){cloneSource=pos;status.textContent="Clone source set. Paint to copy from that location.";return;}
+            if(tool==="recolor"&&e.ctrlKey){const d=ctx.getImageData(Math.floor(pos.x),Math.floor(pos.y),1,1).data;
+                secondaryColor="#"+[...d.slice(0,3)].map(v=>v.toString(16).padStart(2,"0")).join("");secondaryPicker.value=secondaryColor;
+                status.textContent="Recolor source color sampled.";return;}
+            if(tool==="clone"&&!cloneSource){status.textContent="Ctrl+click to set Clone source first.";return;}
+            if(tool==="freeform"){polygonPoints=[pos];status.textContent="Click to add polygon corners; double click to finish.";return;}
+            if(tool==="moveSelection"&&!selection){status.textContent="Create a selection first.";return;}
+            saveHistory();drawing={id:e.pointerId,start:pos,prev:pos,selectionMode:resolveSelectionMode(e)};
+            drawingStartImage=undo[undo.length-1].pixels;
+            if(tool==="fill"){fillAt(pos);drawing=null;return;}
+            if(tool==="clone"||tool==="recolor"){
+                clonePixels=historySnapshot().pixels;
+                if(tool==="clone")cloneOffset={x:cloneSource.x-pos.x,y:cloneSource.y-pos.y};
+            }
+            if(brushTools.has(tool)){
+                if(tool==="clone"||tool==="recolor")stampOrRecolor(ctx,pos.x,pos.y,tool);
+                else dab(ctx,pos.x,pos.y,tool);
+            }
+            paint.setPointerCapture(e.pointerId);e.preventDefault();refreshCursor();
+        });
+        paint.addEventListener("pointermove",e=>{
+            const pos=imageCoordinate(e);hover=pos;refreshCursor();
+            if(pan?.id===e.pointerId){surface.scrollLeft=pan.left-(e.clientX-pan.x);surface.scrollTop=pan.top-(e.clientY-pan.y);return;}
+            if(!drawing||drawing.id!==e.pointerId)return;
+            if(brushTools.has(tool)){
+                if(tool==="clone"||tool==="recolor"){
+                    const distance=Math.hypot(pos.x-drawing.prev.x,pos.y-drawing.prev.y),count=Math.max(1,Math.ceil(distance/Math.max(1,brush/2)));
+                    for(let i=1;i<=count;i++){const t=i/count;
+                        stampOrRecolor(ctx,drawing.prev.x+(pos.x-drawing.prev.x)*t,drawing.prev.y+(pos.y-drawing.prev.y)*t,tool);}
+                }else strokeBetween(ctx,drawing.prev,pos,tool);
+            }else if(tool==="moveSelection"){
+                const dx=Math.round(pos.x-drawing.start.x),dy=Math.round(pos.y-drawing.start.y);
+                selection=moveMask(dx,dy,undo[undo.length-1].selection||new Uint8Array(PIXELS));refreshSelection();
+            }else if(tool==="movePixels"){
+                const dx=Math.round(pos.x-drawing.start.x),dy=Math.round(pos.y-drawing.start.y);
+                const base=undo[undo.length-1],mask=base.selection;
+                ctx.putImageData(moveImage(base.pixels,mask,dx,dy,e.ctrlKey),0,0);
+                if(mask){selection=moveMask(dx,dy,mask);refreshSelection();}
+            }else if(tool==="lasso"){
+                drawing.points??=[drawing.start];drawing.points.push(pos);
+                drawToolStaging(drawing.start,pos,"lasso",drawing.points);
+            }else drawToolStaging(drawing.start,pos,tool);
+            drawing.prev=pos;
+        });
+        const endStroke=e=>{
+            if(pan?.id===e.pointerId){pan=null;return;}
+            if(!drawing||drawing.id!==e.pointerId)return;
+            const before=undo[undo.length-1].pixels;
+            if(["selectRect","selectEllipse","lasso"].includes(tool)){
+                combineSelection(rasterSelectionPath(selectionPath(drawing.start,drawing.prev,tool,drawing.points)),drawing.selectionMode);
+            }else if(tool==="curve"){
+                curvePoints={start:drawing.start,end:drawing.prev};status.textContent="Click a bend point to finish the curve.";
+            }else if(shapeTools.has(tool)||tool==="gradient"){
+                previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);
+                if(tool==="gradient")drawGradient(previewCtx,drawing.start,drawing.prev);
+                else drawShape(previewCtx,drawing.start,drawing.prev,tool);
+                ctx.drawImage(preview,0,0);
+                if(selection)replaceImageSelected(ctx.getImageData(0,0,NATIVE_W,NATIVE_H),before);
+            }else if(brushTools.has(tool)&&selection){
+                replaceImageSelected(ctx.getImageData(0,0,NATIVE_W,NATIVE_H),before);
+            }
+            previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);drawing=null;
+            status.textContent=tool==="curve"?"Click to set curve bend point.":"Drawing updated. Undo and transparent PNG export available.";
+        };
+        paint.addEventListener("pointerup",endStroke);paint.addEventListener("pointercancel",endStroke);
+        paint.addEventListener("dblclick",e=>{
+            if(tool!=="freeform"||!polygonPoints||polygonPoints.length<3)return;
+            saveHistory();const before=undo[undo.length-1].pixels;
+            drawShape(ctx,polygonPoints[0],polygonPoints[polygonPoints.length-1],"freeform",polygonPoints);
+            if(selection)replaceImageSelected(ctx.getImageData(0,0,NATIVE_W,NATIVE_H),before);
+            polygonPoints=null;status.textContent="Freeform shape committed.";e.preventDefault();
+        });
+        paint.addEventListener("pointerleave",()=>{hover=null;refreshCursor();});
+        paint.addEventListener("contextmenu",e=>e.preventDefault());
+        const allowWheel=e=>{if(!e.ctrlKey)return;e.preventDefault();setZoom(zoom*(e.deltaY<0?1.15:1/1.15));};
+        surface.addEventListener("wheel",allowWheel,{passive:false});
+        const blob=canvas=>new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Cannot export PNG")),"image/png"));
+        const save=(filename,content)=>{const u=URL.createObjectURL(content),a=document.createElement("a");
+            a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);};
+        const croppedCanvas=()=>{const c=document.createElement("canvas");c.width=entry.width;c.height=entry.height;
+            c.getContext("2d").drawImage(paint,placement.left,placement.top,entry.width,entry.height,0,0,entry.width,entry.height);return c;};
+        const checkCropped=()=>{
+            const src=ctx.getImageData(0,0,NATIVE_W,NATIVE_H).data;let out=0,visibleCount=0;
+            for(let y=0;y<NATIVE_H;y++)for(let x=0;x<NATIVE_W;x++){
+                if(src[(y*NATIVE_W+x)*4+3]===0)continue;visibleCount++;
+                if(x<placement.left||y<placement.top||x>=placement.left+entry.width||y>=placement.top+entry.height)out++;
+            }
+            return {out,visibleCount};
+        };
+        button("Export full transparent PNG",async()=>{
+            try{save(`${entry.name}_${options.pose||"Standing"}_500x1000.png`,await blob(paint));
+                status.textContent="Exported 500×1000 native BC drawing. The character reference was excluded.";}
+            catch(e){status.textContent=String(e?.message||e);}
+        },actions);
+        button("Export item PNG",async()=>{
+            try{const {out,visibleCount}=checkCropped();if(!visibleCount)throw new Error("Nothing has been drawn yet.");
+                if(out&&!window.confirm(`${out} painted pixels fall outside the item bounds and will be cropped. Continue?`))return;
+                save(`${entry.name}${options.pose&&options.pose!=="Standing"?"_"+options.pose:""}.png`,await blob(croppedCanvas()));
+                status.textContent=`Exported ${entry.width}×${entry.height} item PNG. Publish with matching color masks.`;
+            }catch(e){status.textContent=String(e?.message||e);}
+        },actions);
+        if(typeof options.onApply==="function")button("Use drawing for this pose",()=>{
+            const {visibleCount,out}=checkCropped();if(!visibleCount){status.textContent="Draw or import artwork first.";return;}
+            if(out&&!window.confirm(`${out} painted pixels outside this item's boundaries will be cropped. Continue?`))return;
+            const c=croppedCanvas(),data=c.getContext("2d").getImageData(0,0,entry.width,entry.height);
+            options.onApply(data);status.textContent="Drawing applied to the selected pose in Wardrobe Studio. Export the PNG and color-layers.json there.";
+        },actions);
+        button("Clear drawing",()=>{if(!window.confirm("Clear your transparent drawing? You can Undo."))return;
+            saveHistory();ctx.clearRect(0,0,NATIVE_W,NATIVE_H);},actions);
+        const keydown=e=>{
+            if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target?.tagName||""))return;
+            if(e.key==="Escape"){
+                if(polygonPoints){polygonPoints=null;previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);}
+                else if(curvePoints){curvePoints=null;previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);}
+                else if(selection)deselect();else close();return;
+            }
+            const key=e.key.toLowerCase(),control=e.ctrlKey||e.metaKey;
+            if(e.key===" "){spacePressed=true;e.preventDefault();refreshCursor();}
+            if(control&&key==="z"){e.preventDefault();e.shiftKey?doRedo():doUndo();return;}
+            if(control&&key==="y"){e.preventDefault();doRedo();return;}
+            if(control&&key==="a"){e.preventDefault();selectAll();return;}
+            if(control&&key==="d"){e.preventDefault();deselect();return;}
+            if(control&&key==="c"){e.preventDefault();copySelection();return;}
+            if(control&&key==="x"){e.preventDefault();cutSelection();return;}
+            if(control&&key==="v"){e.preventDefault();pasteSelection();return;}
+            if(key==="delete"||key==="backspace"){e.preventDefault();eraseSelected();return;}
+            if(!control&&!e.altKey){const shortcuts={b:"brush",p:"pencil",e:"erase",f:"fill",g:"gradient",l:"clone",r:"recolor",k:"picker",t:"text",m:"movePixels",s:"selectRect",h:"pan",z:"zoom",o:"line"};
+                if(shortcuts[key]){tool=shortcuts[key];refreshTool();}}
+        };
+        const keyup=e=>{if(e.key===" "){spacePressed=false;refreshCursor();}};
+        window.addEventListener("keydown",keydown,true);window.addEventListener("keyup",keyup,true);
+        disposers.push(()=>{window.removeEventListener("keydown",keydown,true);window.removeEventListener("keyup",keyup,true);});
+        let dragging=null;
+        header.addEventListener("pointerdown",e=>{
+            if(e.button!==0||e.target.closest("button,input,select"))return;
+            dragging={id:e.pointerId,x:e.clientX,y:e.clientY,left:panel.offsetLeft,top:panel.offsetTop};
+            header.setPointerCapture?.(e.pointerId);e.preventDefault();
+        });
+        header.addEventListener("pointermove",e=>{
+            if(!dragging||dragging.id!==e.pointerId)return;
+            panel.style.left=`${Math.max(0,Math.min(innerWidth-70,dragging.left+e.clientX-dragging.x))}px`;
+            panel.style.top=`${Math.max(0,Math.min(innerHeight-70,dragging.top+e.clientY-dragging.y))}px`;
+        });
+        header.addEventListener("pointerup",()=>{dragging=null;});
+        const poseInterval=setInterval(()=>{
+            if(!followBox.checked||!visible)return;
+            const next=poseLabel();if(next===lastPose)return;lastPose=next;
+            // Snapshot only on a pose change, never run a game render loop.
+            updateRef();status.textContent=`Pose changed to ${next}. Character reference refreshed; drawing retained.`;
+        },1100);
+        const close=()=>{if(!visible)return;visible=false;clearInterval(poseInterval);for(const fn of disposers)try{fn();}catch(_){}root.remove();};
+        root.__subbysDispose=close;
+        button("Close",close,topRight);
+        reference.style.opacity=String(refOpacity/100);
+        refreshTool();updateRef();
+        requestAnimationFrame(()=>{
+            if(!visible)return;
+            const r=surface.getBoundingClientRect();setZoom(Math.min(.8,Math.max(.25,(r.height-30)/NATIVE_H)));
+        });
+        return true;
+    }
+
+    async function openWardrobeColorZoneEditor(entry) {
+        const stored = wardrobeLayerManifest?.items?.[entry?.name];
+        if (!entry || !stored) {
+            appendLocalInfoBox("Wardrobe Studio", ["Color-layer data has not loaded. Check the GitHub data/wardrobe/color-layers.json file."]);
+            return false;
+        }
+        document.getElementById("SubbysWardrobeZoneEditor")?.__subbysDispose?.();
+        const W = entry.width, H = entry.height, count = W * H;
         const root = document.createElement("div");
         root.id = "SubbysWardrobeZoneEditor";
         root.setAttribute("role", "dialog");
-        root.setAttribute("aria-modal", "true");
-        root.setAttribute("aria-label", `${entry.title} color zone editor`);
-        Object.assign(root.style, { position: "fixed", inset: "0", zIndex: "2147483646", background: "rgba(0,0,0,.84)",
-            display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "10px",
-            boxSizing: "border-box", color: "#eee", font: "14px sans-serif" });
+        root.setAttribute("aria-label", `${entry.title} Wardrobe Studio`);
+        Object.assign(root.style, { position: "fixed", inset: "0", zIndex: "2147483646", pointerEvents: "none",
+            color: "#f6f2fa", font: "13px sans-serif" });
         const panel = document.createElement("div");
-        Object.assign(panel.style, { position: "relative", display: "flex", flexDirection: "column", flex: "0 1 820px",
-            width: "100%", height: "min(94dvh, 900px)", maxHeight: "calc(100dvh - 20px)", minHeight: "0",
-            background: "#28232f", border: "1px solid #a68db1", borderRadius: "12px", padding: "12px",
-            boxSizing: "border-box", overflow: "hidden", boxShadow: "0 -12px 38px rgba(0,0,0,.4)" });
-        const heading = document.createElement("h3");
-        heading.textContent = `${entry.title} — Color Zone Editor`;
-        Object.assign(heading.style, { margin: "0 0 7px", fontSize: "18px", flexShrink: "0" });
-        const notice = document.createElement("p");
-        notice.textContent = "Choose a zone and paint over the artwork. The highlighted circle shows exactly where the brush or eraser will apply.";
-        Object.assign(notice.style, { margin: "0 0 8px", lineHeight: "1.35", fontSize: "13px", flexShrink: "0" });
-        const toolbar = document.createElement("div");
-        Object.assign(toolbar.style, { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px",
-            paddingBottom: "9px", flexShrink: "0" });
-        const makeButton = (label, action, container = toolbar) => {
-            const b = document.createElement("button");
-            b.type = "button"; b.textContent = label;
-            Object.assign(b.style, { padding: "6px 10px", background: "#40364d", color: "#fff",
-                border: "1px solid #7e6c8f", borderRadius: "6px", cursor: "pointer", font: "inherit" });
-            b.addEventListener("click", action); container.appendChild(b); return b;
+        Object.assign(panel.style, { position: "absolute", left: `${Math.max(8, (innerWidth - 1040) / 2)}px`,
+            top: `${Math.max(8, innerHeight - Math.min(860, innerHeight - 20) - 8)}px`,
+            width: `${Math.min(1040, innerWidth - 16)}px`, height: `${Math.min(860, innerHeight - 16)}px`,
+            minWidth: "min(450px, 95vw)", minHeight: "320px", maxWidth: "calc(100vw - 8px)",
+            maxHeight: "calc(100vh - 8px)", resize: "both", overflow: "hidden", boxSizing: "border-box",
+            display: "flex", flexDirection: "column", pointerEvents: "auto", background: "#292231",
+            border: "1px solid #b09ac3", borderRadius: "10px", boxShadow: "0 8px 40px #000c" });
+        const header = document.createElement("div");
+        Object.assign(header.style, { display: "flex", alignItems: "center", justifyContent: "space-between",
+            cursor: "move", padding: "10px", background: "#463651", flexShrink: "0", touchAction: "none" });
+        const headerTitle = document.createElement("strong"); headerTitle.textContent = `${entry.title} — Wardrobe Studio`;
+        const controlsTop = document.createElement("div");
+        Object.assign(controlsTop.style, { display: "flex", alignItems: "center", gap: "6px" });
+        const makeButton = (label, handler, parent = controlsTop) => {
+            const b = document.createElement("button"); b.type = "button"; b.textContent = label;
+            Object.assign(b.style, { background: "#50415d", color: "white", border: "1px solid #9883a9",
+                borderRadius: "5px", padding: "5px 8px", cursor: "pointer", font: "inherit" });
+            b.addEventListener("click", handler); parent.appendChild(b); return b;
         };
-        const previewStage = document.createElement("div");
-        previewStage.setAttribute("aria-label", "Scrollable color zone painting area");
-        Object.assign(previewStage.style, { position: "relative", isolation: "isolate", flex: "1 1 auto", minHeight: "80px",
-            minWidth: "0", overflow: "auto", display: "flex", alignItems: "flex-start", justifyContent: "flex-start",
-            borderRadius: "8px", background: "#201b27", padding: "10px", boxSizing: "border-box",
-            overscrollBehavior: "contain" });
-        // A separate frame prevents centered flex overflow from clipping the top/left
-        // of a zoomed image. The cursor is an HTML element, not a BC canvas.
-        const imageFrame = document.createElement("div");
-        Object.assign(imageFrame.style, { position: "relative", display: "block", flex: "0 0 auto",
-            margin: "auto", minWidth: "0", minHeight: "0", boxSizing: "content-box" });
-        const canvas = document.createElement("canvas");
-        canvas.width = entry.width; canvas.height = entry.height;
-        Object.assign(canvas.style, { imageRendering: "pixelated", cursor: "crosshair", touchAction: "none",
-            background: "repeating-conic-gradient(#bbb 0% 25%,#eee 0% 50%) 0/16px 16px",
-            border: "2px solid #aaa", boxSizing: "content-box", flex: "0 0 auto" });
-        // BC's global canvas rules, including !important, must not position this canvas.
-        for (const [key, value] of Object.entries({ position: "relative", inset: "auto", top: "auto", left: "auto",
-            right: "auto", bottom: "auto", transform: "none", margin: "0", display: "block", float: "none",
-            maxWidth: "none", maxHeight: "none", zIndex: "auto", visibility: "visible" })) {
-            canvas.style.setProperty(key.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`), value, "important");
-        }
-        const brushCursor = document.createElement("div");
-        brushCursor.setAttribute("aria-hidden", "true");
-        Object.assign(brushCursor.style, { position: "absolute", display: "none", pointerEvents: "none", zIndex: "2",
-            boxSizing: "border-box", border: "2px solid #fff", borderRadius: "50%",
-            transform: "translate(-50%, -50%)", boxShadow: "0 0 0 1px #15121b, 0 0 8px #000",
-            background: "rgba(246,107,200,.25)" });
-        imageFrame.append(canvas, brushCursor);
-        previewStage.appendChild(imageFrame);
-        const footer = document.createElement("div");
-        Object.assign(footer.style, { position: "relative", zIndex: "1", flex: "0 0 auto", paddingTop: "8px",
-            background: "#28232f", borderTop: "1px solid #51445c", maxHeight: "42%", overflowY: "auto" });
-        const controls = document.createElement("div");
-        Object.assign(controls.style, { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px" });
-        const zoneSelect = document.createElement("select");
-        zoneSelect.title = "Zone to paint";
-        const zoneColors = ["#f66bc8", "#8bd0ff", "#e4d173", "#9fe6a1", "#cbb3ff", "#ffac7e"];
-        for (const zone of entry.colorZones) {
-            const option = document.createElement("option"); option.textContent = zone; option.value = zone;
-            zoneSelect.appendChild(option);
-        }
-        const brushLabel = document.createElement("label"); brushLabel.textContent = "Brush ";
-        const brush = document.createElement("input");
-        brush.type = "range"; brush.min = "1"; brush.max = "64"; brush.value = "6";
-        brush.title = "Brush diameter in image pixels";
-        const brushValue = document.createElement("span"); brushValue.textContent = "6 px";
-        brushLabel.append(brush, brushValue);
-        const eraseLabel = document.createElement("label");
-        const erase = document.createElement("input"); erase.type = "checkbox";
-        eraseLabel.append(erase, document.createTextNode(" Eraser"));
-        const overlayLabel = document.createElement("label"); overlayLabel.textContent = "Show ";
-        const overlaySelect = document.createElement("select");
-        for (const [value, label] of [["all", "All zones"], ["selected", "Selected zone"], ["none", "Artwork only"]]) {
-            const option = document.createElement("option"); option.value = value; option.textContent = label;
-            overlaySelect.appendChild(option);
-        }
-        overlayLabel.appendChild(overlaySelect);
-        controls.append(zoneSelect, brushLabel, eraseLabel, overlayLabel);
-        const actions = document.createElement("div");
-        Object.assign(actions.style, { display: "flex", flexWrap: "wrap", gap: "7px", marginTop: "9px" });
-        const status = document.createElement("p");
-        Object.assign(status.style, { fontSize: "12px", lineHeight: "1.45", margin: "7px 0 0" });
-        status.textContent = "Loading source image and color layers…";
-        const zoomText = document.createElement("strong");
-        zoomText.setAttribute("aria-live", "polite");
-        Object.assign(zoomText.style, { display: "inline-block", minWidth: "60px", textAlign: "center" });
-        const fitScale = () => Math.max(0.15, Math.min(4,
-            (Math.max(50, previewStage.clientWidth - 26) / entry.width),
-            (Math.max(50, previewStage.clientHeight - 26) / entry.height)));
-        let zoom = 1;
-        let zoomMode = "fit";
-        let lastPointer = null;
-        let panActive = false;
-        let spacePressed = false;
-        let editorResizeObserver = null;
-        let painting = false;
-        let panning = false;
-        let strokePointerId = null;
-        let panOrigin = null;
-        let lastPaint = null;
-        let applyStroke = null;
-        let doUndo = () => {};
-        let doRedo = () => {};
-        let undoButton = null;
-        let redoButton = null;
-        const displayScale = () => {
-            const width = Math.max(1, entry.width * zoom);
-            const height = Math.max(1, entry.height * zoom);
-            imageFrame.style.width = `${width + 4}px`;
-            imageFrame.style.height = `${height + 4}px`;
-            canvas.style.setProperty("width", `${width}px`, "important");
-            canvas.style.setProperty("height", `${height}px`, "important");
-            zoomText.textContent = `${Math.round(zoom * 100)}%`;
-            refreshCursor();
+        let destroyed = false;
+        const cleanups = [];
+        let gamePreview = false, originalPreviewLayers = null, livePreviewTimer = 0;
+        let sourceByPose = new Map(), masksByPose = new Map(), originalsByPose = new Map(), fileByPose = new Map();
+        const originalNames = Array.isArray(stored.zoneOrder) ? [...stored.zoneOrder] : [...entry.colorZones];
+        let zones = [...originalNames], locks = new Set(), selectedZone = zones[0];
+        let selectedPose = "Standing", selectedTool = "brush", brushSize = 6, hardness = 100, opacity = 100, tolerance = 24;
+        let zoom = 1, zoomMode = "fit", spaceHeld = false, pointer = null, stroke = null, regionSelection = null;
+        let originalSlot = stored.slot || entry.group, slot = originalSlot;
+        let zonePriorities = { ...(entry.layerPriorities || {}), ...(stored.layerPriorities || {}) };
+        let zoneDefaults = Object.fromEntries(zones.map((name, i) => [name, stored.zoneColors?.[name] || entry.defaultColors[entry.colorZones.indexOf(name)] || "#FFFFFF"]));
+        const poseNames = ["Standing", ...WARDROBE_POSES.filter(p => p !== "Standing")];
+        const workingPoses = new Set(["Standing", ...Object.keys(stored.poses || {})]);
+        const create = (tag, parent, label = "") => {
+            const el = document.createElement(tag); if (label) el.textContent = label;
+            parent.appendChild(el); return el;
         };
-        const eventPoint = event => {
-            const r = canvas.getBoundingClientRect();
-            const b = Math.max(0, canvas.clientLeft || 0);
-            return { x: (event.clientX - r.left - b) * entry.width / Math.max(1, canvas.clientWidth),
-                y: (event.clientY - r.top - b) * entry.height / Math.max(1, canvas.clientHeight) };
+        const select = (parent, values, selected) => {
+            const el = create("select", parent); for (const [v,l] of values) {
+                const option = create("option",el,l); option.value = v;
+            } el.value = selected; return el;
         };
-        function refreshCursor() {
-            if (!lastPointer || panning || panActive || spacePressed || !root.isConnected) {
-                brushCursor.style.display = "none"; return;
-            }
-            const at = lastPointer;
-            if (at.x < 0 || at.y < 0 || at.x >= entry.width || at.y >= entry.height) {
-                brushCursor.style.display = "none"; return;
-            }
-            const diameter = Math.max(2, Number(brush.value) * zoom);
-            const color = zoneColors[Math.max(0, entry.colorZones.indexOf(zoneSelect.value)) % zoneColors.length];
-            brushCursor.style.display = "block";
-            brushCursor.style.width = `${diameter}px`;
-            brushCursor.style.height = `${diameter}px`;
-            brushCursor.style.left = `${2 + at.x * zoom}px`;
-            brushCursor.style.top = `${2 + at.y * zoom}px`;
-            brushCursor.style.borderColor = erase.checked ? "#ff7979" : "#fff";
-            brushCursor.style.background = erase.checked ? "rgba(255,75,75,.3)" : `${color}55`;
+        const setStyle = (el, styles) => { Object.assign(el.style, styles); return el; };
+        const field = (parent, caption, el) => {
+            const label = create("label", parent); label.textContent = caption + " "; label.appendChild(el);
+            setStyle(label,{display:"inline-flex",alignItems:"center",gap:"4px"}); return label;
+        };
+        const toolbar = setStyle(create("div",panel),{display:"flex",alignItems:"center",flexWrap:"wrap",gap:"7px",padding:"7px 10px",borderBottom:"1px solid #655471"});
+        const work = setStyle(create("div",panel), {display:"flex",flex:"1 1 auto",minHeight:"0",minWidth:"0",overflow:"hidden"});
+        const side = setStyle(create("aside",work), {width:"234px",flex:"0 0 234px",overflowY:"auto",padding:"8px",borderRight:"1px solid #625371",boxSizing:"border-box"});
+        const main = setStyle(create("div",work), {display:"flex",flexDirection:"column",flex:"1",minWidth:"0",overflow:"hidden"});
+        const stage = setStyle(create("div",main), {flex:"1",minHeight:"0",overflow:"auto",position:"relative",background:"#211b27",padding:"10px",overscrollBehavior:"contain"});
+        const imageFrame = setStyle(create("div",stage), {position:"relative",width:`${W+4}px`,height:`${H+4}px`,margin:"auto",flex:"0 0 auto"});
+        const canvas = create("canvas",imageFrame); canvas.width=W;canvas.height=H;
+        setStyle(canvas,{background:"repeating-conic-gradient(#a2a2a2 0% 25%,#eee 0% 50%) 0/16px 16px",cursor:"crosshair",touchAction:"none",border:"2px solid #aba0af",boxSizing:"content-box",imageRendering:"pixelated"});
+        // Native BC globally styles its canvases, sometimes with !important.
+        for (const [key,value] of Object.entries({position:"relative",display:"block",left:"auto",top:"auto",bottom:"auto",right:"auto",
+            transform:"none",float:"none",margin:"0",maxWidth:"none",maxHeight:"none"})) canvas.style.setProperty(key.replace(/[A-Z]/g, c=>`-${c.toLowerCase()}`),value,"important");
+        const circle = setStyle(create("div",imageFrame),{position:"absolute",pointerEvents:"none",display:"none",border:"2px solid #fefefe",borderRadius:"50%",zIndex:"2",transform:"translate(-50%,-50%)",boxSizing:"border-box",background:"#ec79c766"});
+        const compare = setStyle(create("div",main),{padding:"7px 10px",display:"flex",alignItems:"center",gap:"9px",flexWrap:"wrap",background:"#352a3d",flex:"0 0 auto"});
+        const origPreview = create("canvas",compare); origPreview.width=W;origPreview.height=H;
+        const afterPreview = create("canvas",compare); afterPreview.width=W;afterPreview.height=H;
+        for(const [c, caption] of [[origPreview,"Before"],[afterPreview,"After"]]) {
+            setStyle(c,{position:"relative",width:"58px",height:"74px",objectFit:"contain",border:"1px solid #aba0af",background:"#ddd",imageRendering:"pixelated"});
+            // BC applies canvas position and transform with !important; isolate preview canvases too.
+            for (const [key,value] of Object.entries({position:"relative",display:"block",left:"auto",top:"auto",
+                bottom:"auto",right:"auto",transform:"none",float:"none",maxWidth:"none",maxHeight:"none"}))
+                c.style.setProperty(key.replace(/[A-Z]/g,x=>`-${x.toLowerCase()}`),value,"important");
+            c.setAttribute("aria-label",caption+" preview");
         }
-        const setZoom = (value, center = null) => {
-            const before = canvas.getBoundingClientRect();
-            const stage = previewStage.getBoundingClientRect();
-            const clientX = center?.clientX ?? stage.left + stage.width / 2;
-            const clientY = center?.clientY ?? stage.top + stage.height / 2;
-            const px = (clientX - before.left - (canvas.clientLeft || 0)) * entry.width / Math.max(1, canvas.clientWidth);
-            const py = (clientY - before.top - (canvas.clientTop || 0)) * entry.height / Math.max(1, canvas.clientHeight);
-            zoom = Math.max(0.15, Math.min(8, Math.round(value * 100) / 100));
-            displayScale();
-            const after = canvas.getBoundingClientRect();
-            previewStage.scrollLeft += after.left + (canvas.clientLeft || 0) + px * canvas.clientWidth / entry.width - clientX;
-            previewStage.scrollTop += after.top + (canvas.clientTop || 0) + py * canvas.clientHeight / entry.height - clientY;
-        };
-        const changeZoom = delta => { zoomMode = "manual"; setZoom(zoom * delta); };
-        const fitPreview = () => { if (root.isConnected && zoomMode === "fit") { zoom = fitScale(); displayScale(); } };
-        makeButton("− Zoom", () => changeZoom(1 / 1.25));
-        toolbar.appendChild(zoomText);
-        makeButton("+ Zoom", () => changeZoom(1.25));
-        makeButton("Fit", () => { zoomMode = "fit"; fitPreview(); previewStage.scrollTo(0, 0); });
-        makeButton("100%", () => { zoomMode = "manual"; setZoom(1); });
-        const panButton = makeButton("Hand / Pan", () => {
-            panActive = !panActive;
-            panButton.setAttribute("aria-pressed", String(panActive));
-            panButton.style.background = panActive ? "#74608a" : "#40364d";
-            canvas.style.cursor = panActive ? "grab" : "crosshair";
-            refreshCursor();
-        });
-        panButton.setAttribute("aria-pressed", "false");
+        const comparisonText = create("span",compare,"Before → After | Original PNG versus current color-zone edits.");
+        setStyle(comparisonText,{fontSize:"11px",flex:"1"});
+        const footer = setStyle(create("div",panel),{borderTop:"1px solid #655471",background:"#352b3d",padding:"8px 12px",flex:"0 0 auto",maxHeight:"120px",overflowY:"auto"});
+        const actions = setStyle(create("div",footer),{display:"flex",gap:"6px",flexWrap:"wrap"});
+        const status = setStyle(create("div",footer,"Loading editable artwork…"),{fontSize:"11px",marginTop:"6px",lineHeight:"1.4"});
+        header.append(headerTitle,controlsTop); panel.prepend(header);
+        root.appendChild(panel); document.body.appendChild(root);
         const close = () => {
-            editorResizeObserver?.disconnect();
-            window.removeEventListener("resize", fitPreview);
-            window.removeEventListener("keydown", onKeyDown, true);
-            window.removeEventListener("keyup", onKeyUp, true);
-            window.removeEventListener("blur", onBlur);
+            if(destroyed)return; destroyed=true;
+            if(livePreviewTimer) clearTimeout(livePreviewTimer);
+            if(gamePreview) restoreGamePreview();
+            for(const cleanup of cleanups) try{cleanup();}catch(_){}
             root.remove();
         };
-        root.__subbysDispose = close;
-        makeButton("Close", close, actions);
-        root.addEventListener("pointerdown", event => { if (event.target === root) close(); });
-        footer.append(controls, actions, status);
-        panel.append(heading, notice, toolbar, previewStage, footer);
-        root.appendChild(panel);
-        document.body.appendChild(root);
-        if (typeof window.ResizeObserver === "function") {
-            editorResizeObserver = new window.ResizeObserver(fitPreview);
-            editorResizeObserver.observe(previewStage);
+        root.__subbysDispose=close;
+        makeButton("✕ Close",close);
+        // Drag anywhere on the header except controls, with viewport clamping.
+        let moving=null;
+        header.addEventListener("pointerdown",event=>{
+            if(event.button!==0 || event.target.closest("button,input,select"))return;
+            moving={id:event.pointerId,x:event.clientX,y:event.clientY,left:panel.offsetLeft,top:panel.offsetTop};
+            header.setPointerCapture?.(event.pointerId);event.preventDefault();
+        });
+        header.addEventListener("pointermove",event=>{
+            if(!moving || moving.id!==event.pointerId)return;
+            panel.style.left=`${Math.max(0,Math.min(innerWidth-50,moving.left+event.clientX-moving.x))}px`;
+            panel.style.top=`${Math.max(0,Math.min(innerHeight-50,moving.top+event.clientY-moving.y))}px`;
+        });
+        for(const type of ["pointerup","pointercancel","lostpointercapture"])header.addEventListener(type,()=>{moving=null;});
+        // Ensure the window is recoverable after resizing the browser.
+        const clampWindow=()=>{
+            panel.style.left=`${Math.max(0,Math.min(Number.parseFloat(panel.style.left)||0,Math.max(0,innerWidth-70)))}px`;
+            panel.style.top=`${Math.max(0,Math.min(Number.parseFloat(panel.style.top)||0,Math.max(0,innerHeight-70)))}px`;
+            if(zoomMode==="fit")fitZoom();
+        };
+        window.addEventListener("resize",clampWindow);cleanups.push(()=>window.removeEventListener("resize",clampWindow));
+        const createImage=src=>new Promise((resolve,reject)=>{
+            const img=new Image();img.crossOrigin="anonymous";img.onload=()=>resolve(img);
+            img.onerror=()=>reject(new Error(`Cannot load image (CORS or file missing): ${String(src).slice(0,100)}`));img.src=src;
+        });
+        const download=(name,blob)=>{
+            const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;
+            document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200);
+        };
+        const pngBlob=canvas=>new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("PNG encoding failed")),"image/png"));
+        const imageDataFrom=async src=>{
+            const img=await createImage(src);
+            if(img.naturalWidth!==W||img.naturalHeight!==H)throw new Error(`Pose PNG must be ${W}×${H} pixels (got ${img.naturalWidth}×${img.naturalHeight}).`);
+            const c=document.createElement("canvas");c.width=W;c.height=H;const cx=c.getContext("2d",{willReadFrequently:true});
+            cx.drawImage(img,0,0);return cx.getImageData(0,0,W,H);
+        };
+        const asSourceData=(pose)=>sourceByPose.get(pose);
+        const currentMasks=()=>masksByPose.get(selectedPose);
+        // Editor history must capture not just zone masks but also pose art and
+        // selection. Pose ImageData is never edited in-place, so Map snapshots
+        // may safely retain references to those (large) immutable buffers.
+        const cloneState=()=>({zones:[...zones],locks:[...locks],poses:[...workingPoses],slot,selectedPose,selectedZone,
+            zonePriorities:{...zonePriorities},zoneDefaults:{...zoneDefaults},
+            sourceByPose:new Map(sourceByPose),fileByPose:new Map(fileByPose),originalsByPose:new Map(originalsByPose),
+            masks:[...masksByPose].map(([pose,layerMap])=>[pose,[...layerMap].map(([name,mask])=>[name,new Uint8ClampedArray(mask)])])});
+        const undo=[],redo=[];
+        const remember=()=>{undo.push(cloneState());if(undo.length>18)undo.shift();redo.length=0;};
+        const restoreState=state=>{
+            if(!state)return;
+            zones=[...state.zones];locks=new Set(state.locks);slot=state.slot;
+            // workingPoses is a const Set; restore its members, not the binding.
+            workingPoses.clear();for(const pose of state.poses)workingPoses.add(pose);
+            zonePriorities={...state.zonePriorities};zoneDefaults={...state.zoneDefaults};
+            sourceByPose=new Map(state.sourceByPose);fileByPose=new Map(state.fileByPose);
+            originalsByPose=new Map(state.originalsByPose);
+            masksByPose=new Map(state.masks.map(([pose,layers])=>[pose,new Map(layers.map(([name,mask])=>[name,new Uint8ClampedArray(mask)]))]));
+            selectedPose=workingPoses.has(state.selectedPose)?state.selectedPose:"Standing";
+            selectedZone=zones.includes(state.selectedZone)?state.selectedZone:zones[0];
+            regionSelection=null;selectedRegion.fill(0);
+            updateMenus();redraw();
+        };
+        const historyUndo=()=>{if(!undo.length)return;redo.push(cloneState());restoreState(undo.pop());status.textContent="Undid your last edit.";};
+        const historyRedo=()=>{if(!redo.length)return;undo.push(cloneState());restoreState(redo.pop());status.textContent="Redid your edit.";};
+        const zoneList=select(side,[],zones[0]);
+        setStyle(zoneList,{width:"100%",margin:"6px 0"});
+        zoneList.setAttribute("aria-label","Color zone");
+        const zoneControls=setStyle(create("div",side),{display:"flex",flexWrap:"wrap",gap:"4px"});
+        const previewRow=setStyle(create("div",side),{marginTop:"10px"});
+        const slotList=select(previewRow,[...WARDROBE_SLOTS].map(s=>[s,s]),slot);
+        field(previewRow,"Clothing slot",slotList);
+        const poseList=select(side,poseNames.map(p=>[p,p]),"Standing");
+        field(side,"Pose",poseList);
+        const uploadPose=create("input",side);uploadPose.type="file";uploadPose.accept="image/png";
+        setStyle(uploadPose,{display:"block",margin:"8px 0",width:"100%"});
+        const toolRow=setStyle(create("div",side),{display:"flex",flexWrap:"wrap",gap:"5px",marginTop:"10px"});
+        const toolButtons=new Map();
+        for(const [name,label] of [["brush","Brush"],["erase","Erase"],["wand","Magic Wand"],["fill","Smart Fill"],["pan","Hand / Pan"]]){
+            const b=makeButton(label,()=>{selectedTool=name;refreshTool();},toolRow);toolButtons.set(name,b);
         }
-        window.addEventListener("resize", fitPreview);
-        fitPreview();
-        brush.addEventListener("input", () => { brushValue.textContent = `${brush.value} px`; refreshCursor(); });
-        erase.addEventListener("change", refreshCursor);
-        zoneSelect.addEventListener("change", () => { refreshCursor(); redrawOverlay?.(); });
-        let redrawOverlay = null;
-        overlaySelect.addEventListener("change", () => redrawOverlay?.());
-        previewStage.addEventListener("wheel", event => {
-            if (!event.ctrlKey && !event.metaKey) return; // Ordinary wheel keeps scrolling the viewport.
-            event.preventDefault(); zoomMode = "manual";
-            setZoom(zoom * (event.deltaY < 0 ? 1.2 : 1 / 1.2), event);
-        }, { passive: false });
-        function onKeyDown(event) {
-            if (!root.isConnected) return;
-            const editable = /^(INPUT|SELECT|TEXTAREA)$/.test(event.target?.tagName || "") || event.target?.isContentEditable;
-            if (event.key === "Escape") { event.preventDefault(); close(); return; }
-            if (editable) return;
-            if (event.key === " " && !spacePressed) { spacePressed = true; canvas.style.cursor = "grab"; refreshCursor(); event.preventDefault(); }
-            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
-                event.preventDefault(); if (event.shiftKey) doRedo(); else doUndo();
-            } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
-                event.preventDefault(); doRedo();
-            } else if (event.key === "+" || event.key === "=") { event.preventDefault(); changeZoom(1.25); }
-            else if (event.key === "-" || event.key === "_") { event.preventDefault(); changeZoom(1 / 1.25); }
-            else if (event.key === "[") { brush.value = String(Math.max(1, Number(brush.value) - 1)); brush.dispatchEvent(new Event("input")); }
-            else if (event.key === "]") { brush.value = String(Math.min(64, Number(brush.value) + 1)); brush.dispatchEvent(new Event("input")); }
+        function refreshTool(){for(const [name,b] of toolButtons)b.style.background=name===selectedTool?"#8e619e":"#50415d";canvas.style.cursor=selectedTool==="pan"?"grab":"crosshair";refreshCursor();}
+        const settings=setStyle(create("div",side),{display:"flex",flexDirection:"column",gap:"7px",marginTop:"12px"});
+        const setting=(name,min,max,start)=>{
+            const holder=create("label",settings),value=create("strong",holder,`${start}`);holder.insertBefore(document.createTextNode(name+" "),value);
+            const range=create("input",holder);range.type="range";range.min=min;range.max=max;range.value=start;range.style.width="100%";
+            range.addEventListener("input",()=>{value.textContent=range.value;
+                if(name==="Brush size")brushSize=Number(range.value);
+                if(name==="Hardness")hardness=Number(range.value);
+                if(name==="Opacity")opacity=Number(range.value);
+                if(name==="Tolerance")tolerance=Number(range.value);
+                refreshCursor();});return range;
+        };
+        setting("Brush size",1,64,6);setting("Hardness",0,100,100);
+        setting("Opacity",1,100,100);setting("Tolerance",0,120,24);
+        const overlayMode=select(toolbar,[["all","All zones"],["selected","Selected"],["none","Artwork only"]],"all");
+        field(toolbar,"View",overlayMode);overlayMode.addEventListener("change",()=>redraw());
+        let selectedRegion=new Uint8Array(count);
+        function updateMenus(){
+            zoneList.replaceChildren();
+            for(const name of zones){const o=create("option",zoneList,`${locks.has(name)?"🔒 ":""}${name}`);o.value=name;}
+            if(!zones.includes(selectedZone))selectedZone=zones[0];zoneList.value=selectedZone;
+            poseList.replaceChildren();for(const pose of poseNames){const o=create("option",poseList,workingPoses.has(pose)?pose:`${pose} (+)`);o.value=pose;}
+            poseList.value=selectedPose;slotList.value=slot;
         }
-        function onKeyUp(event) {
-            if (event.key === " ") { spacePressed = false; if (!panActive) canvas.style.cursor = "crosshair"; refreshCursor(); }
-        }
-        function onBlur() { spacePressed = false; refreshCursor(); }
-        window.addEventListener("keydown", onKeyDown, true);
-        window.addEventListener("keyup", onKeyUp, true);
-        window.addEventListener("blur", onBlur);
-        try {
-            const createImage = source => new Promise((resolve, reject) => {
-                const image = new Image(); image.crossOrigin = "anonymous";
-                image.onload = () => resolve(image);
-                image.onerror = () => reject(new Error("Image unavailable or blocked by CORS"));
-                image.src = source;
-            });
-            const source = await createImage(WARDROBE_IMAGE_BY_NAME.get(entry.name));
-            if (!root.isConnected) return false;
-            if (source.naturalWidth !== entry.width || source.naturalHeight !== entry.height)
-                throw new Error("Source PNG dimensions differ from BC asset metadata");
-            const temp = document.createElement("canvas"); temp.width = entry.width; temp.height = entry.height;
-            const tempCtx = temp.getContext("2d", { willReadFrequently: true });
-            tempCtx.drawImage(source, 0, 0);
-            const pixels = tempCtx.getImageData(0, 0, entry.width, entry.height);
-            const ctx = canvas.getContext("2d", { willReadFrequently: true });
-            const count = entry.width * entry.height;
-            // The masks are independent: already-overlapping native color zones survive.
-            const masks = entry.colorZones.map(() => new Uint8Array(count));
-            const originals = [];
-            for (let z = 0; z < entry.colorZones.length; z++) {
-                const data = wardrobeLayerManifest.items[entry.name].zones[entry.colorZones[z]];
-                const image = await createImage(`data:image/png;base64,${data}`);
-                if (!root.isConnected) return false;
-                tempCtx.clearRect(0, 0, entry.width, entry.height); tempCtx.drawImage(image, 0, 0);
-                const rgba = tempCtx.getImageData(0, 0, entry.width, entry.height).data;
-                originals.push(new Uint8ClampedArray(rgba));
-                for (let p = 0; p < count; p++) if (rgba[p * 4 + 3] > 0) masks[z][p] = 1;
+        zoneList.addEventListener("change",()=>{selectedZone=zoneList.value;redraw();});
+        const requestName=(label,fallback)=>{
+            const name=window.prompt(label,fallback);
+            if(name===null)return null;
+            const trimmed=name.trim();
+            if(!/^[A-Za-z][A-Za-z0-9]{0,31}$/.test(trimmed)){status.textContent="Use 1–32 letters/digits, starting with a letter, and no spaces.";return null;}
+            return trimmed;
+        };
+        makeButton("+ Zone",()=>{
+            const name=requestName("New zone name (letters/numbers only)","NewZone");if(!name)return;
+            if(zones.includes(name)||zones.length>=16){status.textContent="Zone already exists or 16-zone limit reached.";return;}
+            remember();zones.push(name);zoneDefaults[name]="#FFFFFF";
+            for(const layerMap of masksByPose.values())layerMap.set(name,new Uint8ClampedArray(count));
+            selectedZone=name;updateMenus();redraw();status.textContent=`Added ${name}. Export both the manifest and userscript-compatible metadata.`;
+        },zoneControls);
+        makeButton("Rename",()=>{
+            const prev=selectedZone, name=requestName("Rename color zone",prev);if(!name||prev===name)return;
+            if(zones.includes(name)){status.textContent="Zone name already exists.";return;}
+            remember();zones[zones.indexOf(prev)]=name;
+            zoneDefaults[name]=zoneDefaults[prev];delete zoneDefaults[prev];
+            if(Object.hasOwn(zonePriorities,prev)){zonePriorities[name]=zonePriorities[prev];delete zonePriorities[prev];}
+            for(const layerMap of masksByPose.values()){const data=layerMap.get(prev);layerMap.delete(prev);layerMap.set(name,data);}
+            if(locks.delete(prev))locks.add(name);selectedZone=name;updateMenus();redraw();
+        },zoneControls);
+        makeButton("Delete",()=>{
+            if(zones.length<=1){status.textContent="At least one color zone is required.";return;}
+            if(locks.has(selectedZone)){status.textContent="Unlock this zone before deleting it.";return;}
+            if(!window.confirm(`Delete zone ${selectedZone} from every pose? This can be undone.`))return;
+            remember();delete zoneDefaults[selectedZone];delete zonePriorities[selectedZone];
+            zones=zones.filter(name=>name!==selectedZone);
+            for(const layerMap of masksByPose.values())layerMap.delete(selectedZone);
+            selectedZone=zones[0];updateMenus();redraw();
+        },zoneControls);
+        makeButton("Merge",()=>{
+            if(locks.has(selectedZone)){status.textContent="Unlock the target zone first.";return;}
+            const target=window.prompt(`Merge ${selectedZone} INTO which zone?`,zones.find(name=>name!==selectedZone)||"");
+            if(!target||target===selectedZone||!zones.includes(target)||locks.has(target))return;
+            remember();for(const layerMap of masksByPose.values()){
+                const dest=layerMap.get(target),src=layerMap.get(selectedZone);
+                for(let i=0;i<count;i++)dest[i]=Math.max(dest[i],src[i]);layerMap.delete(selectedZone);
+            } delete zoneDefaults[selectedZone];delete zonePriorities[selectedZone];
+            zones=zones.filter(name=>name!==selectedZone);selectedZone=target;updateMenus();redraw();
+        },zoneControls);
+        makeButton("🔒 Lock / Unlock",()=>{
+            remember();
+            if(locks.has(selectedZone))locks.delete(selectedZone);else locks.add(selectedZone);updateMenus();
+            status.textContent=`${selectedZone}: ${locks.has(selectedZone)?"locked":"unlocked"}.`;
+        },zoneControls);
+        slotList.addEventListener("change",()=>{
+            const value=slotList.value;
+            if(value!==entry.group && !window.confirm(`Change ${entry.name} to native ${value}? Players will have to remove the old item from ${entry.group} before re-equipping. Apply after publish/refresh.`)){
+                slotList.value=slot;return;
             }
-            const overlayCanvas = document.createElement("canvas");
-            overlayCanvas.width = entry.width; overlayCanvas.height = entry.height;
-            const overlayCtx = overlayCanvas.getContext("2d");
-            const overlay = ctx.createImageData(entry.width, entry.height);
-            const paintOverlay = () => {
-                ctx.clearRect(0, 0, entry.width, entry.height); ctx.putImageData(pixels, 0, 0);
-                if (overlaySelect.value === "none") return;
-                overlay.data.fill(0);
-                const active = entry.colorZones.indexOf(zoneSelect.value);
-                for (let p = 0; p < count; p++) {
-                    const z = overlaySelect.value === "selected"
-                        ? (masks[active]?.[p] ? active : -1)
-                        : (masks[active]?.[p] ? active : masks.findIndex(mask => mask[p]));
-                    if (z < 0 || !pixels.data[p * 4 + 3]) continue;
-                    const hex = zoneColors[z % zoneColors.length];
-                    overlay.data[p * 4] = parseInt(hex.slice(1, 3), 16);
-                    overlay.data[p * 4 + 1] = parseInt(hex.slice(3, 5), 16);
-                    overlay.data[p * 4 + 2] = parseInt(hex.slice(5, 7), 16);
-                    overlay.data[p * 4 + 3] = overlaySelect.value === "selected" ? 145 : 110;
+            remember();slot=value;status.textContent=`Selected ${slot}. This changes the slot after the exported manifest is published.`;
+        });
+        // Pose imports use PNG files at the same dimensions as the standing asset.
+        const ensurePose=async pose=>{
+            if(sourceByPose.has(pose))return true;
+            const spec=stored.poses?.[pose];
+            if(!spec)return false;
+            const source=await imageDataFrom(`${WARDROBE_ASSET_ROOT}/${encodeURIComponent(spec.file)}`);
+            sourceByPose.set(pose,source);fileByPose.set(pose,spec.file);
+            const layerMap=new Map();
+            for(const name of zones){
+                const data=spec.zones?.[name];if(!data){layerMap.set(name,new Uint8ClampedArray(count));continue;}
+                const img=await imageDataFrom(`data:image/png;base64,${data}`);
+                const alpha=new Uint8ClampedArray(count);for(let i=0;i<count;i++)alpha[i]=img.data[i*4+3];
+                layerMap.set(name,alpha);
+            }
+            masksByPose.set(pose,layerMap);originalsByPose.set(pose,{source, zones:spec.zones});return true;
+        };
+        poseList.addEventListener("change",async()=>{
+            const pose=poseList.value;
+            if(!workingPoses.has(pose)){status.textContent=`Import ${pose} PNG first. One full PNG, ${W}×${H} pixels.`;
+                return;}
+            try{await ensurePose(pose);selectedPose=pose;selectedRegion.fill(0);redraw();}
+            catch(e){status.textContent=String(e.message||e);selectedPose="Standing";poseList.value="Standing";}
+        });
+        uploadPose.addEventListener("change",async()=>{
+            const file=uploadPose.files?.[0];if(!file)return;
+            const pose=poseList.value;
+            if(pose==="Standing"){status.textContent="Standing artwork is the existing main PNG. Choose another pose before importing.";return;}
+            const url=URL.createObjectURL(file);
+            try{
+                const data=await imageDataFrom(url);
+                remember();workingPoses.add(pose);sourceByPose.set(pose,data);
+                fileByPose.set(pose,`${entry.name}_${pose}.png`);
+                const layerMap=new Map(zones.map(name=>[name,new Uint8ClampedArray(count)]));
+                // Preserve per-zone mask layout as a starting point only when requested.
+                if(window.confirm("Copy Standing zone masks into this pose as a starting point? Choose Cancel for blank zones.")){
+                    for(const name of zones)layerMap.get(name).set(masksByPose.get("Standing").get(name)||new Uint8Array(count));
                 }
-                overlayCtx.putImageData(overlay, 0, 0); ctx.drawImage(overlayCanvas, 0, 0);
-            };
-            redrawOverlay = paintOverlay;
-            const undoHistory = [], redoHistory = [];
-            const snapshot = () => masks.map(mask => mask.slice());
-            const restore = state => { state.forEach((mask, i) => masks[i].set(mask)); paintOverlay(); };
-            const updateHistoryButtons = () => {
-                undoButton.disabled = !undoHistory.length;
-                redoButton.disabled = !redoHistory.length;
-                undoButton.style.opacity = undoHistory.length ? "1" : ".45";
-                redoButton.style.opacity = redoHistory.length ? "1" : ".45";
-            };
-            const remember = () => {
-                undoHistory.push(snapshot()); if (undoHistory.length > 12) undoHistory.shift();
-                redoHistory.length = 0; updateHistoryButtons();
-            };
-            doUndo = () => {
-                if (!undoHistory.length) return;
-                redoHistory.push(snapshot()); restore(undoHistory.pop()); updateHistoryButtons();
-                status.textContent = "Undid the last stroke. Export to publish your edits.";
-            };
-            doRedo = () => {
-                if (!redoHistory.length) return;
-                undoHistory.push(snapshot()); restore(redoHistory.pop()); updateHistoryButtons();
-                status.textContent = "Restored a stroke. Export to publish your edits.";
-            };
-            undoButton = makeButton("↶ Undo", doUndo, actions);
-            redoButton = makeButton("↷ Redo", doRedo, actions);
-            updateHistoryButtons();
-            // A stroke may contain many pointer events; interpolate every half-brush
-            // diameter to avoid dotted gaps when someone moves quickly.
-            const stamp = at => {
-                const z = erase.checked ? -1 : entry.colorZones.indexOf(zoneSelect.value);
-                const radius = Math.max(.5, Number(brush.value) / 2);
-                const x0 = Math.max(0, Math.floor(at.x - radius)), x1 = Math.min(entry.width - 1, Math.ceil(at.x + radius));
-                const y0 = Math.max(0, Math.floor(at.y - radius)), y1 = Math.min(entry.height - 1, Math.ceil(at.y + radius));
-                for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-                    if ((x - at.x) ** 2 + (y - at.y) ** 2 > radius * radius) continue;
-                    const p = y * entry.width + x;
-                    if (!pixels.data[p * 4 + 3]) continue;
-                    for (const mask of masks) mask[p] = 0;
-                    if (z >= 0) masks[z][p] = 1;
+                masksByPose.set(pose,layerMap);originalsByPose.set(pose,{source:data,zones:{}});
+                selectedPose=pose;updateMenus();redraw();
+                status.textContent=`Imported ${pose}. Remember to export its PNG and the color data together.`;
+            }catch(e){status.textContent=String(e.message||e);}finally{URL.revokeObjectURL(url);uploadPose.value="";}
+        });
+        makeButton("Remove pose",()=>{
+            if(selectedPose==="Standing")return;
+            if(!window.confirm(`Remove custom ${selectedPose} pose artwork and zone masks?`))return;
+            remember();workingPoses.delete(selectedPose);
+            // Retain local buffers so Undo can restore this pose without another download.
+            selectedPose="Standing";updateMenus();redraw();
+        },side);
+        const sourceCanvas=document.createElement("canvas");sourceCanvas.width=W;sourceCanvas.height=H;
+        const sourceCtx=sourceCanvas.getContext("2d",{willReadFrequently:true});
+        const ctx=canvas.getContext("2d",{willReadFrequently:true});
+        const compareCtx=afterPreview.getContext("2d");
+        const sourcePreviewCtx=origPreview.getContext("2d");
+        function blendPreview(){
+            const source=asSourceData(selectedPose);if(!source)return null;
+            const edited=new ImageData(new Uint8ClampedArray(source.data),W,H);
+            const masks=currentMasks(),base=edited.data;
+            if(overlayMode.value!=="none"){
+                for(let i=0;i<count;i++){
+                    if(!base[i*4+3])continue;
+                    const z=overlayMode.value==="selected"?zones.indexOf(selectedZone):zones.findIndex(name=>masks?.get(name)?.[i]>0);
+                    if(z<0)continue;
+                    if(overlayMode.value==="selected" && !masks.get(selectedZone)?.[i])continue;
+                    const colors=[[243,94,179],[101,185,252],[241,193,82],[122,215,155],[173,139,240],[241,151,107]];
+                    const color=colors[z%colors.length],a=.47*((masks.get(zones[z])?.[i]||0)/255);
+                    base[i*4]=Math.round(base[i*4]*(1-a)+color[0]*a);
+                    base[i*4+1]=Math.round(base[i*4+1]*(1-a)+color[1]*a);
+                    base[i*4+2]=Math.round(base[i*4+2]*(1-a)+color[2]*a);
                 }
-            };
-            applyStroke = at => {
-                if (lastPaint) {
-                    const distance = Math.hypot(at.x - lastPaint.x, at.y - lastPaint.y);
-                    const step = Math.max(.5, Number(brush.value) / 3);
-                    const segments = Math.max(1, Math.ceil(distance / step));
-                    for (let i = 1; i <= segments; i++) {
-                        stamp({ x: lastPaint.x + (at.x - lastPaint.x) * i / segments,
-                            y: lastPaint.y + (at.y - lastPaint.y) * i / segments });
-                    }
-                } else stamp(at);
-                lastPaint = at; paintOverlay();
-            };
-            canvas.addEventListener("pointerdown", event => {
-                if (event.button !== 0 && event.button !== 1 && event.pointerType === "mouse") return;
-                event.preventDefault();
-                strokePointerId = event.pointerId;
-                canvas.setPointerCapture?.(event.pointerId);
-                if (panActive || spacePressed || event.button === 1) {
-                    panning = true; panOrigin = { x: event.clientX, y: event.clientY,
-                        scrollX: previewStage.scrollLeft, scrollY: previewStage.scrollTop };
-                    canvas.style.cursor = "grabbing"; refreshCursor(); return;
-                }
-                painting = true; lastPaint = null; remember();
-                const at = eventPoint(event); lastPointer = at; applyStroke(at); refreshCursor();
-            });
-            canvas.addEventListener("pointermove", event => {
-                if (panning && event.pointerId === strokePointerId && panOrigin) {
-                    previewStage.scrollLeft = panOrigin.scrollX - (event.clientX - panOrigin.x);
-                    previewStage.scrollTop = panOrigin.scrollY - (event.clientY - panOrigin.y);
-                    return;
-                }
-                const points = painting && event.getCoalescedEvents ? event.getCoalescedEvents() : [event];
-                for (const point of points.length ? points : [event]) {
-                    const at = eventPoint(point); lastPointer = at;
-                    if (painting && event.pointerId === strokePointerId) applyStroke(at);
-                }
-                refreshCursor();
-            });
-            const finishStroke = event => {
-                if (event.pointerId !== strokePointerId) return;
-                if (painting && event.type === "pointerup") applyStroke(eventPoint(event));
-                painting = false; panning = false; lastPaint = null; panOrigin = null; strokePointerId = null;
-                canvas.style.cursor = panActive || spacePressed ? "grab" : "crosshair";
-                refreshCursor();
-            };
-            canvas.addEventListener("pointerup", finishStroke);
-            canvas.addEventListener("pointercancel", finishStroke);
-            canvas.addEventListener("lostpointercapture", finishStroke);
-            canvas.addEventListener("pointerleave", () => { if (!painting && !panning) { lastPointer = null; refreshCursor(); } });
-            canvas.addEventListener("pointerenter", event => { lastPointer = eventPoint(event); refreshCursor(); });
-            canvas.addEventListener("contextmenu", event => event.preventDefault());
-            makeButton("Reset zones", () => {
-                remember();
-                for (let z = 0; z < originals.length; z++) for (let p = 0; p < count; p++)
-                    masks[z][p] = originals[z][p * 4 + 3] > 0 ? 1 : 0;
-                paintOverlay(); status.textContent = "Original zones restored. Undo is available.";
-            }, actions);
-            makeButton("Export color-layers.json", () => {
-                try {
-                    const updated = { schemaVersion: 2, items: { ...wardrobeLayerManifest.items } };
-                    const layers = {};
-                    for (let z = 0; z < entry.colorZones.length; z++) {
-                        let modified = false;
-                        for (let p = 0; p < count; p++) {
-                            if (masks[z][p] !== (originals[z][p * 4 + 3] > 0 ? 1 : 0)) {
-                                modified = true; break;
-                            }
-                        }
-                        if (!modified) {
-                            // Important: untouched zones retain the original Base64 bytes.
-                            layers[entry.colorZones[z]] = wardrobeLayerManifest.items[entry.name].zones[entry.colorZones[z]];
-                            continue;
-                        }
-                        const data = ctx.createImageData(entry.width, entry.height);
-                        for (let p = 0; p < count; p++) if (masks[z][p]) {
-                            const i = p * 4, original = originals[z];
-                            const sourceRgba = original[i + 3] ? original : pixels.data;
-                            data.data[i] = sourceRgba[i]; data.data[i + 1] = sourceRgba[i + 1];
-                            data.data[i + 2] = sourceRgba[i + 2]; data.data[i + 3] = sourceRgba[i + 3];
-                        }
-                        tempCtx.clearRect(0, 0, entry.width, entry.height); tempCtx.putImageData(data, 0, 0);
-                        layers[entry.colorZones[z]] = temp.toDataURL("image/png").split(",")[1];
-                    }
-                    updated.items[entry.name] = { ...wardrobeLayerManifest.items[entry.name],
-                        width: entry.width, height: entry.height, zones: layers };
-                    const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(updated, null, 2)], { type: "application/json" }));
-                    const a = document.createElement("a"); a.href = objectUrl; a.download = "color-layers.json";
-                    document.body.appendChild(a); a.click(); a.remove();
-                    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-                    status.textContent = "Exported color-layers.json. Upload to data/wardrobe/ on your GitHub branch, then refresh BC.";
-                } catch (e) { status.textContent = `Export failed: ${e?.message || e}`; }
-            }, actions);
-            const shortcuts = document.createElement("div");
-            shortcuts.textContent = "Zoom: buttons or Ctrl+wheel • Pan: Hand button, Space+drag, or middle mouse • Undo: Ctrl+Z • Redo: Ctrl+Shift+Z • Brush: [ and ] • Esc: close. Eraser removes zone ownership, not the PNG artwork.";
-            Object.assign(shortcuts.style, { fontSize: "11px", opacity: ".82", paddingTop: "8px", lineHeight: "1.45" });
-            footer.appendChild(shortcuts);
-            status.textContent = "Ready. Move your pointer over the artwork to preview your brush. Editing keeps your image intact until you export.";
-            paintOverlay();
-            return true;
-        } catch (e) {
-            status.textContent = `Cannot open editor: ${e?.message || e}`;
-            return false;
+            }
+            if(regionSelection?.length===count){for(let i=0;i<count;i++)if(regionSelection[i]){
+                base[i*4]=Math.round(base[i*4]*.52+255*.48);
+                base[i*4+1]=Math.round(base[i*4+1]*.52+244*.48);
+                base[i*4+2]=Math.round(base[i*4+2]*.52+70*.48);
+            }}
+            return edited;
         }
+        function redraw(){
+            if(destroyed||!asSourceData(selectedPose))return;
+            const source=asSourceData(selectedPose);
+            sourcePreviewCtx.putImageData(source,0,0);
+            ctx.putImageData(blendPreview(),0,0);
+            compareCtx.clearRect(0,0,W,H);compareCtx.drawImage(canvas,0,0);
+            scheduleGamePreview();refreshCursor();
+        }
+        function refreshCursor(){
+            if(!pointer||spaceHeld||selectedTool==="pan"||selectedTool==="wand"||selectedTool==="fill"){
+                circle.style.display="none";return;
+            }
+            circle.style.display="block";const diameter=Math.max(2,brushSize*zoom);
+            circle.style.width=`${diameter}px`;circle.style.height=`${diameter}px`;
+            circle.style.left=`${2+pointer.x*zoom}px`;circle.style.top=`${2+pointer.y*zoom}px`;
+            circle.style.borderColor=selectedTool==="erase"?"#fa5151":locks.has(selectedZone)?"#f1aa50":"#fff";
+            circle.style.background=selectedTool==="erase"?"#fc444466":"#df8fdb55";
+        }
+        function displayScale(){
+            const width=Math.max(1,W*zoom),height=Math.max(1,H*zoom);
+            imageFrame.style.width=`${width+4}px`;imageFrame.style.height=`${height+4}px`;
+            canvas.style.setProperty("width",`${width}px`,"important");canvas.style.setProperty("height",`${height}px`,"important");refreshCursor();
+        }
+        function fitZoom(){
+            if(!stage.clientWidth||!stage.clientHeight)return;
+            zoom=Math.max(.15,Math.min(3,(stage.clientWidth-30)/W,(stage.clientHeight-30)/H));displayScale();
+        }
+        const zoomText=create("strong",toolbar,"100%");
+        const setZoom=(value)=>{zoomMode="manual";zoom=Math.max(.15,Math.min(8,value));displayScale();zoomText.textContent=`${Math.round(zoom*100)}%`;};
+        makeButton("−",()=>setZoom(zoom/1.25),toolbar);
+        makeButton("+",()=>setZoom(zoom*1.25),toolbar);
+        makeButton("Fit",()=>{zoomMode="fit";fitZoom();zoomText.textContent=`${Math.round(zoom*100)}%`;},toolbar);
+        makeButton("100%",()=>setZoom(1),toolbar);
+        stage.addEventListener("wheel",e=>{if(e.ctrlKey||e.metaKey){e.preventDefault();setZoom(zoom*(e.deltaY<0?1.2:1/1.2));}},{passive:false});
+        if(typeof ResizeObserver==="function"){
+            const ro=new ResizeObserver(()=>{if(zoomMode==="fit"){fitZoom();zoomText.textContent=`${Math.round(zoom*100)}%`;}});
+            ro.observe(stage);cleanups.push(()=>ro.disconnect());
+        }
+        const pointOf=event=>{
+            const r=canvas.getBoundingClientRect();
+            return {x:(event.clientX-r.left-(canvas.clientLeft||0))*W/Math.max(1,canvas.clientWidth),
+                    y:(event.clientY-r.top-(canvas.clientTop||0))*H/Math.max(1,canvas.clientHeight)};
+        };
+        const colorDistance=(pixels,a,b)=>{
+            const i=a*4,j=b*4;
+            return Math.max(Math.abs(pixels[i]-pixels[j]),Math.abs(pixels[i+1]-pixels[j+1]),Math.abs(pixels[i+2]-pixels[j+2]));
+        };
+        function connectedRegion(pt, smart=false){
+            const source=asSourceData(selectedPose);if(!source)return new Uint8Array(count);
+            const x=Math.floor(pt.x),y=Math.floor(pt.y),result=new Uint8Array(count);
+            if(x<0||y<0||x>=W||y>=H)return result;
+            const seed=y*W+x; if(!source.data[seed*4+3])return result;
+            const queue=new Int32Array(count);let head=0,tail=0;queue[tail++]=seed;result[seed]=1;
+            const map=currentMasks(),baseline=smart?zones.map(name=>map.get(name)[seed]>0):null;
+            while(head<tail){const p=queue[head++],px=p%W,py=(p-px)/W;
+                const next=[px>0?p-1:-1,px<W-1?p+1:-1,py>0?p-W:-1,py<H-1?p+W:-1];
+                for(const q of next){if(q<0||result[q]||!source.data[q*4+3])continue;
+                    if(colorDistance(source.data,seed,q)>tolerance)continue;
+                    if(smart && zones.some((name,i)=>(map.get(name)[q]>0)!==baseline[i]))continue;
+                    result[q]=1;queue[tail++]=q;
+                }
+            }
+            return result;
+        }
+        const canEdit=()=>{
+            if(locks.has(selectedZone)){status.textContent=`${selectedZone} is locked. Unlock it before painting.`;return false;}
+            return true;
+        };
+        function applyOwnership(index,weight,erase=false){
+            const source=asSourceData(selectedPose);if(!source||!source.data[index*4+3])return;
+            const map=currentMasks(),alpha=Math.max(0,Math.min(255,source.data[index*4+3]));
+            const target=map.get(selectedZone);
+            if(!target)return;
+            const add=Math.round(255*weight);
+            if(erase){target[index]=Math.max(0,target[index]-add);return;}
+            target[index]=Math.min(alpha,Math.round(target[index]+(alpha-target[index])*weight));
+            // Only unlocked neighboring zones lose ownership; keep artist-authored overlaps at soft brush edges.
+            for(const name of zones)if(name!==selectedZone && !locks.has(name)){
+                const mask=map.get(name);mask[index]=Math.round(mask[index]*(1-weight));
+            }
+        }
+        function paintStamp(at,eraser=false){
+            const r=Math.max(.5,brushSize/2),hard=hardness/100;
+            for(let y=Math.max(0,Math.floor(at.y-r));y<=Math.min(H-1,Math.ceil(at.y+r));y++){
+                for(let x=Math.max(0,Math.floor(at.x-r));x<=Math.min(W-1,Math.ceil(at.x+r));x++){
+                    const distance=Math.hypot(x+.5-at.x,y+.5-at.y)/r;
+                    if(distance>1)continue;
+                    const w=distance<=hard?1:Math.max(0,(1-distance)/Math.max(.0001,1-hard));
+                    applyOwnership(y*W+x,(opacity/100)*w,eraser);
+                }
+            }
+        }
+        function paintLine(a,b,eraser){
+            const steps=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/Math.max(.5,brushSize/3)));
+            for(let i=0;i<=steps;i++)paintStamp({x:a.x+(b.x-a.x)*i/steps,y:a.y+(b.y-a.y)*i/steps},eraser);
+        }
+        function fillRegion(selection){
+            if(!canEdit())return;
+            remember();for(let p=0;p<count;p++)if(selection[p])applyOwnership(p,opacity/100,selectedTool==="erase");
+            regionSelection=null;redraw();
+        }
+        makeButton("Apply Wand Selection",()=>{
+            if(!regionSelection?.some(Boolean)){status.textContent="Use Magic Wand first.";return;}
+            fillRegion(regionSelection);
+        },actions);
+        makeButton("Clear Selection",()=>{regionSelection=null;redraw();},actions);
+        canvas.addEventListener("pointerdown",e=>{
+            if(e.button!==0&&e.button!==1)return;
+            if(!asSourceData(selectedPose))return;e.preventDefault();
+            const pt=pointOf(e);pointer=pt;canvas.setPointerCapture?.(e.pointerId);
+            if(selectedTool==="pan"||spaceHeld||e.button===1){stroke={mode:"pan",id:e.pointerId,x:e.clientX,y:e.clientY,sx:stage.scrollLeft,sy:stage.scrollTop};return;}
+            if(selectedTool==="wand"){regionSelection=connectedRegion(pt,false);redraw();status.textContent="Magic Wand selection highlighted. Choose Apply Wand Selection to assign it.";return;}
+            if(selectedTool==="fill"){if(!canEdit())return;remember();const reg=connectedRegion(pt,true);
+                for(let p=0;p<count;p++)if(reg[p])applyOwnership(p,opacity/100,false);
+                redraw();status.textContent="Smart Fill applied to the connected similar-color region.";return;
+            }
+            if(!canEdit())return;remember();stroke={mode:"paint",id:e.pointerId,last:pt};
+            paintStamp(pt,selectedTool==="erase");redraw();
+        });
+        canvas.addEventListener("pointermove",e=>{
+            const pt=pointOf(e);pointer=pt;
+            if(stroke?.id===e.pointerId){
+                if(stroke.mode==="pan"){
+                    stage.scrollLeft=stroke.sx+stroke.x-e.clientX;stage.scrollTop=stroke.sy+stroke.y-e.clientY;
+                }else if(stroke.mode==="paint"){
+                    paintLine(stroke.last,pt,selectedTool==="erase");stroke.last=pt;redraw();
+                }
+            }refreshCursor();
+        });
+        for(const t of ["pointerup","pointercancel","lostpointercapture"])canvas.addEventListener(t,e=>{
+            if(stroke?.id===e.pointerId){stroke=null;redraw();}
+        });
+        canvas.addEventListener("pointerleave",()=>{if(!stroke){pointer=null;refreshCursor();}});
+        canvas.addEventListener("contextmenu",e=>e.preventDefault());
+        // Live preview is opt-in and LOCAL only; revert native image maps on close.
+        function restoreGamePreview(){
+            if(originalPreviewLayers){WARDROBE_LAYER_IMAGES.set(entry.name,originalPreviewLayers);originalPreviewLayers=null;}
+            gamePreview=false;
+            try{window.CharacterLoadCanvas?.(window.Player);}catch(_){}
+        }
+        async function layersForPose(pose){
+            const map=new Map(),source=sourceByPose.get(pose),masks=masksByPose.get(pose);
+            for(const name of zones){
+                const output=new ImageData(new Uint8ClampedArray(source.data),W,H),mask=masks.get(name);
+                for(let i=0;i<count;i++)output.data[i*4+3]=Math.min(output.data[i*4+3],mask?.[i]||0);
+                sourceCtx.putImageData(output,0,0);
+                map.set(name,sourceCanvas.toDataURL("image/png"));
+            }
+            return map;
+        }
+        async function refreshGamePreview(){
+            if(!gamePreview||destroyed||!window.Player)return;
+            if(!wardrobeEquippedItem(entry)){
+                status.textContent="Equip this item before enabling the in-game preview.";restoreGamePreview();return;
+            }
+            try{
+                const pose=selectedPose==="Standing"?"Standing":selectedPose;
+                const layerImages=await layersForPose(pose);
+                if(!gamePreview||destroyed)return;
+                WARDROBE_LAYER_IMAGES.set(entry.name,layerImages);
+                window.CharacterLoadCanvas?.(window.Player);
+            }catch(e){status.textContent=`Live preview: ${e?.message||e}`;}
+        }
+        function scheduleGamePreview(){
+            if(!gamePreview||destroyed)return;
+            clearTimeout(livePreviewTimer);livePreviewTimer=setTimeout(()=>{void refreshGamePreview();},150);
+        }
+        const liveButton=makeButton("In-game preview: OFF",()=>{
+            if(!gamePreview){
+                if(!wardrobeEquippedItem(entry)){status.textContent="Equip the item to preview it on your character.";return;}
+                originalPreviewLayers=WARDROBE_LAYER_IMAGES.get(entry.name);
+                gamePreview=true;liveButton.textContent="In-game preview: ON";scheduleGamePreview();
+            }else{restoreGamePreview();liveButton.textContent="In-game preview: OFF";}
+        },toolbar);
+        // Build new transparent artwork over the user's live BC character pose.
+        // The character stays a reference: only painted pixels can enter a PNG.
+        makeButton("Draw / Trace Asset",()=>{
+            const pose=selectedPose;
+            openWardrobeAssetDrawingStudio(entry,{
+                pose,sourceData:sourceByPose.get(pose),
+                onApply:newArt=>{
+                    if(destroyed)return;
+                    if(sourceByPose.get(pose)?.width!==newArt.width || sourceByPose.get(pose)?.height!==newArt.height)return;
+                    remember();
+                    const previous=sourceByPose.get(pose);
+                    const maskMap=masksByPose.get(pose);
+                    const target=maskMap?.get(selectedZone);
+                    if(!target){status.textContent="Select an unlocked color zone before applying artwork.";return;}
+                    // Preserve existing ownership where possible and assign new
+                    // opaque pixels to the selected zone so exports never become invisible.
+                    for(let i=0;i<count;i++){
+                        const newAlpha=newArt.data[i*4+3];
+                        if(!newAlpha)continue;
+                        const owned=zones.some(name=>maskMap.get(name)?.[i]>0);
+                        if(!owned)target[i]=newAlpha;
+                    }
+                    sourceByPose.set(pose,newArt);
+                    // Canvas/PNG edits change the art source. Do not reuse untouched
+                    // old mask PNG bytes if their RGB came from the old artwork.
+                    regionSelection=null;selectedRegion.fill(0);
+                    redraw();
+                    status.textContent=`Drawing applied to ${pose}. Export the new PNG and color-layers.json together.`;
+                },
+            });
+        },toolbar);
+        // Export the standing PNG too when artwork has been drawn in Studio.
+        makeButton("Export main PNG",async()=>{
+            try{
+                const src=sourceByPose.get("Standing");if(!src)throw new Error("Standing art is missing");
+                sourceCtx.putImageData(src,0,0);
+                download(`${entry.name}.png`,await pngBlob(sourceCanvas));
+                status.textContent="Exported main PNG. Upload to assets/wardrobe/ along with updated color-layers.json.";
+            }catch(e){status.textContent=`Main PNG export failed: ${e?.message||e}`;}
+        },actions);
+        // Export original PNGs, masks, and the backward-compatible v2 manifest.
+        makeButton("Export pose PNGs",async()=>{
+            try{for(const pose of workingPoses){
+                if(pose==="Standing")continue;
+                const src=sourceByPose.get(pose);if(!src)continue;
+                sourceCtx.putImageData(src,0,0);
+                download(`${entry.name}_${pose}.png`,await pngBlob(sourceCanvas));
+            }status.textContent="Downloaded each imported pose PNG. Upload to assets/wardrobe/.";}
+            catch(e){status.textContent=`Pose export failed: ${e?.message||e}`;}
+        },actions);
+        makeButton("Export color-layers.json",async()=>{
+            try{
+                if(!zones.length)throw new Error("At least one zone is required");
+                const manifest={schemaVersion:2,items:{...wardrobeLayerManifest.items}};
+                const existing=wardrobeLayerManifest.items[entry.name];
+                const buildZoneData=async pose=>{
+                    const zonesOut={},source=sourceByPose.get(pose),masks=masksByPose.get(pose);
+                    for(const name of zones){
+                        const originalMasks=originalsByPose.get(pose)?.zones||{};
+                        const originalData=originalMasks[name];
+                        // Preserve unchanged masks bit for bit only if the original source pixels are identical.
+                        const originalSource=originalsByPose.get(pose)?.source;
+                        // Source art may have been edited in Asset Drawing Studio.
+                        // Never reuse old RGB zone PNGs against a newly drawn source.
+                        let unchanged=!!originalData && !!originalSource && originalSource.data.length===source.data.length;
+                        if(unchanged){
+                            for(let j=0;j<source.data.length;j++)if(source.data[j]!==originalSource.data[j]){unchanged=false;break;}
+                        }
+                        if(unchanged){
+                            const img=await imageDataFrom(`data:image/png;base64,${originalData}`);
+                            for(let i=0;i<count;i++)if(img.data[i*4+3]!==masks.get(name)[i]){unchanged=false;break;}
+                        }
+                        if(unchanged){zonesOut[name]=originalData;continue;}
+                        const data=new ImageData(new Uint8ClampedArray(source.data),W,H),mask=masks.get(name);
+                        for(let i=0;i<count;i++)data.data[i*4+3]=Math.min(data.data[i*4+3],mask[i]);
+                        sourceCtx.putImageData(data,0,0);
+                        zonesOut[name]=sourceCanvas.toDataURL("image/png").split(",")[1];
+                    }return zonesOut;
+                };
+                // Safety guard: a bad alpha mask must never make a published garment disappear.
+                // Check every pose, including freshly imported ones, before starting downloads.
+                for(const pose of workingPoses){
+                    if(!sourceByPose.has(pose))await ensurePose(pose);
+                    const source=sourceByPose.get(pose), masks=masksByPose.get(pose);
+                    let visible=0, recovered=0, covered=0;
+                    for(let i=0;i<count;i++){
+                        const sourceAlpha=source.data[i*4+3];if(sourceAlpha<=32)continue;
+                        visible++;let maskAlpha=0;
+                        for(const name of zones)maskAlpha=Math.max(maskAlpha,masks.get(name)?.[i]||0);
+                        if(maskAlpha>0)covered++;
+                        recovered+=Math.min(1,maskAlpha/sourceAlpha);
+                    }
+                    if(visible && (covered/visible<.5 || recovered/visible<.3)){
+                        throw new Error(`${pose} zones cover too little artwork (${Math.round(100*covered/visible)}% coverage). Export blocked to prevent invisible clothing. Paint the zones first.`);
+                    }
+                }
+                const standingZones=await buildZoneData("Standing");
+                const next={...existing,width:W,height:H,slot,zoneOrder:[...zones],zoneColors:{...zoneDefaults},
+                    layerPriorities:{...zonePriorities},zones:standingZones,poses:{}};
+                for(const pose of workingPoses){if(pose==="Standing")continue;
+                    if(!sourceByPose.has(pose))await ensurePose(pose);
+                    next.poses[pose]={width:W,height:H,file:`${entry.name}_${pose}.png`,zones:await buildZoneData(pose)};
+                }
+                manifest.items[entry.name]=next;
+                // Protect against disappearance: require visible source alpha to have matching zone coverage,
+                // except if artist intentionally leaves pixels uncolored; report uncovered count.
+                let uncovered=0,src=sourceByPose.get("Standing"),base=masksByPose.get("Standing");
+                for(let i=0;i<count;i++)if(src.data[i*4+3]>32&&!zones.some(name=>base.get(name)[i]>0))uncovered++;
+                if(uncovered>0&&!window.confirm(`${uncovered} visible artwork pixels are not assigned to a color zone. Export anyway?`))return;
+                download("color-layers.json",new Blob([JSON.stringify(manifest,null,2)],{type:"application/json"}));
+                status.textContent=`Exported ${zones.length} zones, ${workingPoses.size} pose(s), and slot ${slot}. Upload JSON and any new pose PNGs, then refresh BC.`;
+            }catch(e){status.textContent=`Export failed: ${e?.message||e}`;}
+        },actions);
+        const keydown=e=>{
+            if(destroyed)return;
+            if(e.key==="Escape"){close();return;}
+            if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target?.tagName||""))return;
+            if(e.key===" "){spaceHeld=true;refreshCursor();e.preventDefault();}
+            if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();e.shiftKey?historyRedo():historyUndo();}
+            if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="y"){e.preventDefault();historyRedo();}
+        };
+        const keyup=e=>{if(e.key===" "){spaceHeld=false;refreshCursor();}};
+        window.addEventListener("keydown",keydown,true);window.addEventListener("keyup",keyup,true);
+        cleanups.push(()=>{window.removeEventListener("keydown",keydown,true);window.removeEventListener("keyup",keyup,true);});
+        makeButton("↶ Undo",historyUndo,actions);makeButton("↷ Redo",historyRedo,actions);
+        makeButton("Reset selected zone",()=>{
+            if(!canEdit())return;remember();const m=currentMasks().get(selectedZone);m.fill(0);
+            const source=originalsByPose.get(selectedPose)?.zones?.[selectedZone];
+            if(source){void imageDataFrom(`data:image/png;base64,${source}`).then(data=>{
+                for(let i=0;i<count;i++)m[i]=data.data[i*4+3];redraw();});}
+            else redraw();
+        },actions);
+        try{
+            const standing=await imageDataFrom(WARDROBE_IMAGE_BY_NAME.get(entry.name));
+            if(destroyed)return false;
+            sourceByPose.set("Standing",standing);fileByPose.set("Standing",`${entry.name}.png`);
+            const standingMap=new Map();
+            for(const name of zones){
+                const data=stored.zones[name],alpha=new Uint8ClampedArray(count);
+                if(data){const img=await imageDataFrom(`data:image/png;base64,${data}`);
+                    for(let i=0;i<count;i++)alpha[i]=img.data[i*4+3];}
+                standingMap.set(name,alpha);
+            }
+            masksByPose.set("Standing",standingMap);originalsByPose.set("Standing",{source:standing,zones:{...stored.zones}});
+            // Eagerly load named poses so a saved editor project can export them reliably.
+            for(const pose of workingPoses)if(pose!=="Standing")await ensurePose(pose);
+            updateMenus();refreshTool();fitZoom();zoomText.textContent=`${Math.round(zoom*100)}%`;
+            redraw();status.textContent="Ready. Move the titlebar to reposition; drag the bottom-right corner to resize. Export JSON plus any new pose PNGs.";
+            return true;
+        }catch(e){status.textContent=`Unable to load Wardrobe Studio: ${e?.message||e}`;return false;}
     }
 
     function renderExtensionsWardrobe(container) {
@@ -8906,6 +9880,9 @@ function SubbysPlushiesPageMain() {
             controls.appendChild(wear);
             controls.appendChild(makeExtensionsButton("Remove", () => { wardrobeRemoveByName(entry.name); }));
             controls.appendChild(makeExtensionsButton("Edit Color Zones", () => { void openWardrobeColorZoneEditor(entry); }));
+            controls.appendChild(makeExtensionsButton("Draw Asset", () => {
+                openWardrobeAssetDrawingStudio(entry, { pose: "Standing" });
+            }));
             const placement = wardrobePlacement(entry);
             const positionLabel = document.createElement("span");
             positionLabel.textContent = `Native fit: ${entry.width}×${entry.height} BC pixels • X ${placement.left} / Y ${placement.top} • no character-height changes`;
@@ -17488,6 +18465,7 @@ function SubbysPlushiesPageMain() {
     // Fabric zone/color slot intact: only its Z-order differs from the suit.
     function wardrobeNativeLayerDefinition(entry, zone) {
         const layer = { Name: zone, AllowColorize: true };
+        if (entry.poses?.size) layer.PoseMapping = { ...WARDROBE_NATIVE_POSE };
         const priority = entry.layerPriorities?.[zone];
         if (Number.isInteger(priority)) layer.Priority = priority;
         return layer;
@@ -17537,6 +18515,7 @@ function SubbysPlushiesPageMain() {
                         // Never raise/lower the PLAYER to fit clothing artwork.
                         HeightModifier: 0,
                         Priority: entry.priority,
+                        ...(entry.poses?.size ? { PoseMapping: { ...WARDROBE_NATIVE_POSE } } : {}),
                         ParentGroup: {},
                         DefaultColor: [...entry.defaultColors],
                         ColorableLayerCount: entry.colorZones.length,
@@ -17561,6 +18540,10 @@ function SubbysPlushiesPageMain() {
                 // Also repair the native BC AssetAdd-normalized layers when the
                 // asset was already registered in this page session.
                 wardrobeRepairLayerPriorities(entry, asset);
+                if (entry.poses?.size) {
+                    asset.PoseMapping = { ...WARDROBE_NATIVE_POSE };
+                    for (const layer of asset.Layer || []) layer.PoseMapping = { ...WARDROBE_NATIVE_POSE };
+                }
                 ensureWardrobePickerCatalog(asset, runtimeGroup, entry);
                 wardrobeNeutralizeHeight(entry);
                 wardrobeState.registered.push(entry.name);
@@ -19094,7 +20077,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.4.8";
+    const VERSION = "3.5.1";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
