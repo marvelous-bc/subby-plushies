@@ -2,7 +2,7 @@
 // @name         BC - Subby's Plushies + Wardrobe
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.1
+// @version      3.5.2
 // @description  Subby’s Plushies + Wardrobe: Paint-style tools, asset drawing, color-zone editor and poses
 // @released     2026-10-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.5.1";
+    const VERSION = "3.5.2";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -8596,10 +8596,10 @@ function SubbysPlushiesPageMain() {
             ["brush","Paintbrush"],["pencil","Pencil"],["erase","Eraser"],["fill","Paint Bucket"],
             ["gradient","Gradient"],["clone","Clone Stamp"],["recolor","Recolor"],["picker","Eyedropper"],
             ["text","Text"],["line","Line"],["curve","Curve"],["rectangle","Rectangle"],
-            ["roundRect","Rounded Rect"],["ellipse","Ellipse"],["freeform","Freeform Shape"]
+            ["roundRect","Rounded Rect"],["ellipse","Ellipse"]
         ];
         for(const [name,displayName] of toolEntries){const b=button(displayName,()=>{
-            tool=name;curvePoints=null;polygonPoints=null;previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);refreshTool();},controlGroup);
+            tool=name;curvePoints=null;previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);refreshTool();},controlGroup);
             b.dataset.paintTool=name;toolsByName.set(name,b);
         }
         const makeRange=(name,min,max,start,callback)=>{
@@ -8609,9 +8609,7 @@ function SubbysPlushiesPageMain() {
                 callback(Number(input.value));refreshCursor();});return input;
         };
         const colorPicker=add("input",tools);colorPicker.type="color";colorPicker.value=drawColor;
-        label("Primary / new color",colorPicker);colorPicker.addEventListener("input",()=>{drawColor=colorPicker.value;});
-        const secondaryPicker=add("input",tools);secondaryPicker.type="color";secondaryPicker.value="#ffffff";
-        label("Secondary / source color",secondaryPicker);secondaryPicker.addEventListener("input",()=>{secondaryColor=secondaryPicker.value;});
+        label("Paint color",colorPicker);colorPicker.addEventListener("input",()=>{drawColor=colorPicker.value;});
         makeRange("Brush size",1,80,brush,v=>brush=v);
         makeRange("Hardness",0,100,hardness,v=>hardness=v);
         makeRange("Opacity",1,100,opacity,v=>opacity=v);
@@ -8645,7 +8643,7 @@ function SubbysPlushiesPageMain() {
         const boldToggle=add("input",tools);boldToggle.type="checkbox";
         label("Bold text",boldToggle);boldToggle.addEventListener("change",()=>{textBold=boldToggle.checked;});
         makeRange("Character opacity",0,100,refOpacity,v=>{refOpacity=v;reference.style.opacity=String(v/100);});
-        css(add("div",tools,"Tips: Ctrl+click Clone to choose a source. Ctrl+click Recolor to sample the old color. Select before cutting, moving or painting within a region. Curve: draw a line, then click the bend. Freeform: click corners, double-click to finish."),
+        css(add("div",tools,"Tips: Ctrl+click Clone to choose a source. Ctrl+click Recolor to sample which existing color to replace; paint with the Paint color. Gradient fades to transparency. Select before cutting, moving or painting within a region. Curve: draw a line, then click the bend."),
             {fontSize:"11px",lineHeight:"1.5",marginBottom:"12px",color:"#d4bfd9"});
         const poseStatus=css(add("div",tools),{fontSize:"11px",marginBottom:"10px",lineHeight:"1.5",whiteSpace:"pre-wrap"});
         const refreshPoseLabel=()=>{
@@ -8753,12 +8751,12 @@ function SubbysPlushiesPageMain() {
         // Paint.NET-inspired tools (independent implementation; no Paint.NET code is bundled).
         const PIXELS=NATIVE_W*NATIVE_H;
         let selection=null, selectedCount=0, selectionMode="replace", clipboard=null;
-        let tolerance=30, floodGlobal=false, secondaryColor="#ffffff", shapeFill="outline", gradientType="linear";
+        let tolerance=30, floodGlobal=false, recolorSourceColor=null, shapeFill="outline", gradientType="linear";
         let fontSize=28, fontName="Arial", textContent="Text", textBold=false;
-        let cloneSource=null, clonePixels=null, cloneOffset=null, curvePoints=null, polygonPoints=null;
+        let cloneSource=null, clonePixels=null, cloneOffset=null, curvePoints=null;
         let drawingStartImage=null, paintingTemp=null, operation=null;
         const selectTools=new Set(["selectRect","selectEllipse","lasso","wand","moveSelection"]);
-        const shapeTools=new Set(["line","curve","rectangle","roundRect","ellipse","freeform"]);
+        const shapeTools=new Set(["line","curve","rectangle","roundRect","ellipse"]);
         const brushTools=new Set(["brush","pencil","erase","clone","recolor"]);
         const colorRGB=(hex)=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)];
         const hexRGB=()=>colorRGB(drawColor);
@@ -8918,7 +8916,6 @@ function SubbysPlushiesPageMain() {
             else if(kind==="rectangle")p.rect(l,t,w,h);
             else if(kind==="roundRect")p.roundRect(l,t,w,h,Math.min(18,w/4,h/4));
             else if(kind==="ellipse")p.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.max(.5,w/2),Math.max(.5,h/2),0,0,Math.PI*2);
-            else if(kind==="freeform"&&points?.length){p.moveTo(points[0].x,points[0].y);for(const pt of points.slice(1))p.lineTo(pt.x,pt.y);p.closePath();}
             return p;
         }
         function drawShape(dest,a,b,kind=tool,points=null){dest.save();dest.globalAlpha=opacity/100;
@@ -8927,11 +8924,13 @@ function SubbysPlushiesPageMain() {
             if(kind!=="line"&&kind!=="curve"&&shapeFill!=="outline")dest.fill(path);
             if(shapeFill!=="filled"||kind==="line"||kind==="curve")dest.stroke(path);
             dest.restore();}
-        function drawGradient(dest,a,b){const rgb1=drawColor,rgb2=secondaryColor;
+        // A single-color gradient fades the selected paint color to transparency.
+        // Recolor keeps an independent sampled source value, not a second swatch.
+        function drawGradient(dest,a,b){
             dest.save();dest.globalAlpha=opacity/100;
             const d=Math.max(1,Math.hypot(b.x-a.x,b.y-a.y));
             const g=gradientType==="radial"?dest.createRadialGradient(a.x,a.y,0,a.x,a.y,d):dest.createLinearGradient(a.x,a.y,b.x,b.y);
-            g.addColorStop(0,rgb1);g.addColorStop(1,rgb2);
+            g.addColorStop(0,drawColor);g.addColorStop(1,`${drawColor}00`);
             dest.fillStyle=g;dest.fillRect(0,0,NATIVE_W,NATIVE_H);dest.restore();}
         function stampOrRecolor(dest,x,y,mode){if(!clonePixels)return;
             const r=Math.max(1,Math.floor(brush/2));
@@ -8940,7 +8939,7 @@ function SubbysPlushiesPageMain() {
             const w=x1-x0+1,h=y1-y0+1;
             const base=dest.getImageData(x0,y0,w,h),d=base.data,source=clonePixels.data;
             const ox=Math.round(cloneOffset?.x||0),oy=Math.round(cloneOffset?.y||0);
-            const primary=hexRGB(),secondary=colorRGB(secondaryColor);
+            const primary=hexRGB(),sampled=mode==="recolor"&&recolorSourceColor?colorRGB(recolorSourceColor):null;
             for(let yy=y0;yy<=y1;yy++)
                 for(let xx=x0;xx<=x1;xx++){
                     const distance=Math.hypot(xx-x,yy-y);if(distance>r)continue;
@@ -8954,9 +8953,10 @@ function SubbysPlushiesPageMain() {
                         paintPixel(d,localI,[source[si],source[si+1],source[si+2]],Math.round(a*source[si+3]/255));
                     }else{
                         const k=localI*4;if(!d[k+3])continue;
-                        const error=Math.max(Math.abs(d[k]-secondary[0]),Math.abs(d[k+1]-secondary[1]),Math.abs(d[k+2]-secondary[2]));
+                        if(!sampled)continue;
+                        const error=Math.max(Math.abs(d[k]-sampled[0]),Math.abs(d[k+1]-sampled[1]),Math.abs(d[k+2]-sampled[2]));
                         if(error>tolerance)continue;
-                        const lum=(d[k]+d[k+1]+d[k+2])/3,baseLum=(secondary[0]+secondary[1]+secondary[2])/3;
+                        const lum=(d[k]+d[k+1]+d[k+2])/3,baseLum=(sampled[0]+sampled[1]+sampled[2])/3;
                         const mult=Math.min(2.5,Math.max(.35,(lum+32)/(baseLum+32)));
                         const influence=a/255;
                         for(let j=0;j<3;j++)d[k+j]=Math.round(d[k+j]*(1-influence)+Math.min(255,primary[j]*mult)*influence);
@@ -8972,23 +8972,6 @@ function SubbysPlushiesPageMain() {
             ctx.drawImage(c,0,0);if(selection)replaceImageSelected(ctx.getImageData(0,0,NATIVE_W,NATIVE_H),before);
             status.textContent="Text placed onto artwork (Undo available).";
         }
-        function applyBitmapTransform(kind){saveHistory();const source=selectionOnlyCanvas(),b=selectionBounds();if(!b)return;
-            const snapshot=undo[undo.length-1].pixels;
-            const d=ctx.getImageData(0,0,NATIVE_W,NATIVE_H);
-            for(let i=0;i<PIXELS;i++)if(!selection||selection[i])d.data.fill(0,i*4,i*4+4);
-            ctx.putImageData(d,0,0);
-            const t=document.createElement("canvas");t.width=b.w;t.height=b.h;
-            const c=t.getContext("2d");c.translate(b.w/2,b.h/2);
-            if(kind==="flipH")c.scale(-1,1);else if(kind==="flipV")c.scale(1,-1);
-            else c.rotate(kind==="rotateCW"?Math.PI/2:-Math.PI/2);
-            c.drawImage(source,b.x,b.y,b.w,b.h,-b.w/2,-b.h/2,b.w,b.h);
-            ctx.drawImage(t,b.x,b.y);
-            // Selected region now follows the transformed alpha bounding box.
-            if(selection){const curr=ctx.getImageData(0,0,NATIVE_W,NATIVE_H).data;
-                const mask=new Uint8Array(PIXELS);for(let i=0;i<PIXELS;i++)if(curr[i*4+3]&&(!snapshot.data[i*4+3]||selection[i]))mask[i]=1;
-                selection=mask;refreshSelection();}
-            status.textContent="Pixels transformed. Undo available.";
-        }
         function drawToolStaging(a,b,kind,points=null){previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);
             if(kind==="gradient")drawGradient(previewCtx,a,b);
             else if(shapeTools.has(kind))drawShape(previewCtx,a,b,kind,points);
@@ -9000,17 +8983,13 @@ function SubbysPlushiesPageMain() {
         const selButtons=css(add("div",tools),{display:"flex",flexWrap:"wrap",gap:"4px",marginBottom:"12px"});
         for(const [name,fn] of [["Select All",selectAll],["Deselect",deselect],["Invert",invertSelection],
             ["Cut",cutSelection],["Copy",copySelection],["Paste",pasteSelection],["Clear",eraseSelected]])button(name,fn,selButtons);
-        const transformButtons=css(add("div",tools),{display:"flex",flexWrap:"wrap",gap:"4px",marginBottom:"12px"});
-        for(const [name,mode] of [["Flip H","flipH"],["Flip V","flipV"],["Rotate ↻","rotateCW"],["Rotate ↺","rotateCCW"]])
-            button(name,()=>applyBitmapTransform(mode),transformButtons);
         let pan=null;
         function resolveSelectionMode(e){return e.altKey?"subtract":e.ctrlKey?"add":selectionMode;}
         paint.addEventListener("pointerdown",e=>{
             const pos=imageCoordinate(e);hover=pos;
             if(tool==="picker"){
                 const d=ctx.getImageData(Math.floor(pos.x),Math.floor(pos.y),1,1).data;
-                if(d[3]){const hex="#"+[...d.slice(0,3)].map(v=>v.toString(16).padStart(2,"0")).join("");
-                    if(e.button===2){secondaryColor=hex;secondaryPicker.value=hex;}else{drawColor=hex;colorPicker.value=hex;}}
+                if(d[3]){drawColor="#"+[...d.slice(0,3)].map(v=>v.toString(16).padStart(2,"0")).join("");colorPicker.value=drawColor;}
                 return;
             }
             if(tool==="zoom"){setZoom(zoom*(e.button===2?.8:1.25));return;}
@@ -9026,13 +9005,13 @@ function SubbysPlushiesPageMain() {
                 const before=undo[undo.length-1].pixels;ctx.drawImage(preview,0,0);
                 if(selection)replaceImageSelected(ctx.getImageData(0,0,NATIVE_W,NATIVE_H),before);
                 previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);curvePoints=null;status.textContent="Curve committed.";return;}
-            if(tool==="freeform"&&polygonPoints){polygonPoints.push(pos);status.textContent="Click more polygon corners, double click to close.";return;}
             if(tool==="clone"&&e.ctrlKey){cloneSource=pos;status.textContent="Clone source set. Paint to copy from that location.";return;}
             if(tool==="recolor"&&e.ctrlKey){const d=ctx.getImageData(Math.floor(pos.x),Math.floor(pos.y),1,1).data;
-                secondaryColor="#"+[...d.slice(0,3)].map(v=>v.toString(16).padStart(2,"0")).join("");secondaryPicker.value=secondaryColor;
-                status.textContent="Recolor source color sampled.";return;}
+                if(!d[3]){status.textContent="Sample a visible pixel with Ctrl+click to choose the recolor source.";return;}
+                recolorSourceColor="#"+[...d.slice(0,3)].map(v=>v.toString(16).padStart(2,"0")).join("");
+                status.textContent=`Recolor source sampled (${recolorSourceColor}). Paint with ${drawColor}.`;return;}
             if(tool==="clone"&&!cloneSource){status.textContent="Ctrl+click to set Clone source first.";return;}
-            if(tool==="freeform"){polygonPoints=[pos];status.textContent="Click to add polygon corners; double click to finish.";return;}
+            if(tool==="recolor"&&!recolorSourceColor){status.textContent="Ctrl+click a visible color to sample what Recolor should replace.";return;}
             if(tool==="moveSelection"&&!selection){status.textContent="Create a selection first.";return;}
             saveHistory();drawing={id:e.pointerId,start:pos,prev:pos,selectionMode:resolveSelectionMode(e)};
             drawingStartImage=undo[undo.length-1].pixels;
@@ -9092,13 +9071,6 @@ function SubbysPlushiesPageMain() {
             status.textContent=tool==="curve"?"Click to set curve bend point.":"Drawing updated. Undo and transparent PNG export available.";
         };
         paint.addEventListener("pointerup",endStroke);paint.addEventListener("pointercancel",endStroke);
-        paint.addEventListener("dblclick",e=>{
-            if(tool!=="freeform"||!polygonPoints||polygonPoints.length<3)return;
-            saveHistory();const before=undo[undo.length-1].pixels;
-            drawShape(ctx,polygonPoints[0],polygonPoints[polygonPoints.length-1],"freeform",polygonPoints);
-            if(selection)replaceImageSelected(ctx.getImageData(0,0,NATIVE_W,NATIVE_H),before);
-            polygonPoints=null;status.textContent="Freeform shape committed.";e.preventDefault();
-        });
         paint.addEventListener("pointerleave",()=>{hover=null;refreshCursor();});
         paint.addEventListener("contextmenu",e=>e.preventDefault());
         const allowWheel=e=>{if(!e.ctrlKey)return;e.preventDefault();setZoom(zoom*(e.deltaY<0?1.15:1/1.15));};
@@ -9139,8 +9111,7 @@ function SubbysPlushiesPageMain() {
         const keydown=e=>{
             if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target?.tagName||""))return;
             if(e.key==="Escape"){
-                if(polygonPoints){polygonPoints=null;previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);}
-                else if(curvePoints){curvePoints=null;previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);}
+                if(curvePoints){curvePoints=null;previewCtx.clearRect(0,0,NATIVE_W,NATIVE_H);}
                 else if(selection)deselect();else close();return;
             }
             const key=e.key.toLowerCase(),control=e.ctrlKey||e.metaKey;
@@ -20077,7 +20048,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.1";
+    const VERSION = "3.5.2";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
