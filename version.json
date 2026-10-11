@@ -1,5 +1,5 @@
 {
-  "version": "3.5.1",
+  "version": "3.5.7",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Public Paint Tools Studio release. Carries over the full v3.5.0-beta.6 drawing toolkit: selections, magic wand, move tools, gradients, clone, recolor, text, shapes, transformations and history, alongside Wardrobe Studio custom zones, poses, and transparent PNG export. Includes prior beta undo/redo and character-guide fitting changes. Main-branch URLs and update caches. No changes to wardrobe artwork, masks, or default fitting."
+  "notes": "New: Quick Chat Reactions! React to public chat and emote messages with ❤️ 😂 😮 👏 🥺 👍 💜 🔥 without sending extra visible messages. Reactions synchronize between users running the updated addon. Toggle in Settings → General or use /plushiereactions on|off. Also retains 500×1000 Wardrobe Studio exports and existing plushie/wardrobe functionality."
 }
