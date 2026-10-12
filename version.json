@@ -1,5 +1,5 @@
 {
-  "version": "3.5.7",
+  "version": "3.5.11",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "New: Quick Chat Reactions! React to public chat and emote messages with ❤️ 😂 😮 👏 🥺 👍 💜 🔥 without sending extra visible messages. Reactions synchronize between users running the updated addon. Toggle in Settings → General or use /plushiereactions on|off. Also retains 500×1000 Wardrobe Studio exports and existing plushie/wardrobe functionality."
+  "notes": "Quick Chat Reactions: incoming reactions from other addon users now follow the bottom of chat naturally when you are already near the latest messages, including after emoji badges increase message height. Scrolling through older messages is respected; incoming reaction removals do not force scroll. Your own added reactions still scroll to the bottom. Includes hover-only picker, who-reacted tooltips, multiplayer sync, and all existing Plushies + Wardrobe features."
 }

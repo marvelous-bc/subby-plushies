@@ -2,9 +2,9 @@
 // @name         BC - Subby's Plushies + Wardrobe
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.7
+// @version      3.5.11
 // @description  Subby’s Plushies + Wardrobe: Paint-style tools, asset drawing, color-zone editor and poses
-// @released     2026-10-10
+// @released     2026-10-11
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.5.7";
+    const VERSION = "3.5.11";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -10049,7 +10049,7 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow("Speech Bubbles", "Allow local mood-based plush speech bubbles.", settings.speechBubbles, () => toggleFeatureSetting("speechBubbles")),
             extensionsSettingRow("Highlight My Name", "Locally highlight mentions of your character display name in chat (not your account name). Off by default.", settings.highlightMyName, () => toggleFeatureSetting("highlightMyName")),
             extensionsSettingRow("Extra Actions", "Adds optional non-plush social actions after all plushie actions. Disabled by default.", settings.extraActions, () => toggleFeatureSetting("extraActions")),
-            extensionsSettingRow("Quick Chat Reactions", "React beneath normal chat and emote messages. Hidden sync packets share emoji counts only with updated addon users. No visible chat lines.", settings.quickReactions, () => toggleFeatureSetting("quickReactions")),
+            extensionsSettingRow("Quick Chat Reactions", "Hover a public chat or emote message to show the reaction picker. Hover an emoji count to see who reacted. Sync is hidden from normal chat.", settings.quickReactions, () => toggleFeatureSetting("quickReactions")),
             extensionsSettingRow("Shared Emote Chains", "A Wave from an addon user can ripple left-to-right through addon users in the room.", settings.sharedEmoteChains, () => toggleFeatureSetting("sharedEmoteChains")),
             extensionsSettingRow("Expression Reactions", "Friendly plushie and Extra Actions can trigger short facial reactions on the recipient's own client.", settings.expressionReactions, () => toggleFeatureSetting("expressionReactions")),
             extensionsSettingRow("Automatic Update Checks", "Check the repository manifest at most once per day.", settings.autoUpdateChecks, () => toggleFeatureSetting("autoUpdateChecks"))
@@ -13438,8 +13438,10 @@ function SubbysPlushiesPageMain() {
     const quickReactionRecords = [];
     const quickReactionPending = [];
     const quickReactionSeenPackets = new Map();
+    const quickReactionActorNames = new Map();
     let quickReactionRendering = null;
     let quickReactionOpenPicker = null;
+    let quickReactionCloseTimer = null;
     let quickReactionLastSendAt = 0;
     let quickReactionNextId = 0;
 
@@ -13475,6 +13477,9 @@ function SubbysPlushiesPageMain() {
             const old = quickReactionRecords.shift();
             quickReactionClosePicker(old);
             old.bar?.remove();
+            old.active = false;
+            if (old.row?.style) old.row.style.position = old.priorPosition;
+            if (old.row) old.row.tabIndex = old.priorTabIndex;
         }
         for (const [token, received] of quickReactionSeenPackets) {
             if (now - received > QUICK_REACTION_TTL_MS) quickReactionSeenPackets.delete(token);
@@ -13484,11 +13489,115 @@ function SubbysPlushiesPageMain() {
         }
     }
 
+    // Resolve the sender ID against the actual BC room roster. Never trust a
+    // nickname sent by an unrelated client; cache resolved names for users
+    // who leave the room after reacting.
+    function quickReactionActorName(member) {
+        const memberNo = Number(member);
+        const people = [window.Player, ...(Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [])];
+        const character = people.find(C => Number(C?.MemberNumber) === memberNo);
+        const current = character ? getCharacterDisplayName(character) : null;
+        if (current) quickReactionActorNames.set(memberNo, current.slice(0, 70));
+        const name = current || quickReactionActorNames.get(memberNo);
+        return name ? `${String(name).slice(0, 70)} (#${memberNo})` : `Member #${memberNo}`;
+    }
+
+    // The tooltip is immediately visible on hover, rather than waiting for
+    // the browser's delayed native title tooltip. Use textContent (never HTML).
+    function quickReactionWhoTooltip(chip, emoji, names, action) {
+        const label = `${emoji} by ${names.join(', ')}. ${action}`;
+        chip.setAttribute("aria-label", label);
+        chip.removeAttribute("title");
+        chip.style.position = "relative";
+        let tip = null;
+        const show = () => {
+            if (tip || !chip.isConnected) return;
+            tip = document.createElement("span");
+            tip.className = "SubbysPlushiesReactionNames";
+            tip.setAttribute("role", "tooltip");
+            tip.textContent = `${emoji} reacted by:\n${names.map(name => `• ${name}`).join('\n')}`;
+            Object.assign(tip.style, {
+                position: "absolute", left: "0", bottom: "calc(100% + 5px)",
+                zIndex: "30", pointerEvents: "none", whiteSpace: "pre-line",
+                width: "max-content", maxWidth: "270px", boxSizing: "border-box",
+                textAlign: "left", fontFamily: "Arial, sans-serif", fontSize: "12px",
+                fontWeight: "normal", lineHeight: "1.45", color: "#fff",
+                background: "#302638", border: "1px solid #8e719a",
+                borderRadius: "7px", padding: "6px 9px", boxShadow: "0 3px 12px #0006",
+            });
+            chip.appendChild(tip);
+        };
+        const hide = () => { tip?.remove(); tip = null; };
+        chip.addEventListener("mouseenter", show);
+        chip.addEventListener("mouseleave", hide);
+        chip.addEventListener("focus", show);
+        chip.addEventListener("blur", hide);
+    }
+
+    function quickReactionCancelClose() {
+        if (quickReactionCloseTimer != null) window.clearTimeout(quickReactionCloseTimer);
+        quickReactionCloseTimer = null;
+    }
+
     function quickReactionClosePicker(onlyRecord = null) {
+        if (onlyRecord && quickReactionOpenPicker?.record !== onlyRecord) return;
+        quickReactionCancelClose();
         if (!quickReactionOpenPicker) return;
-        if (onlyRecord && quickReactionOpenPicker.record !== onlyRecord) return;
         quickReactionOpenPicker.panel.remove();
         quickReactionOpenPicker = null;
+        // Only listen for viewport changes while a picker is displayed.
+        window.removeEventListener?.("resize", quickReactionPositionPicker);
+        document.removeEventListener?.("scroll", quickReactionPositionPicker, true);
+    }
+
+    function quickReactionScheduleClose(record, relatedTarget = null) {
+        if (quickReactionOpenPicker?.record !== record) return;
+        const panel = quickReactionOpenPicker.panel;
+        if (relatedTarget && (record.row.contains(relatedTarget) || panel.contains(relatedTarget))) {
+            quickReactionCancelClose();
+            return;
+        }
+        quickReactionCancelClose();
+        // Allows the pointer to cross the small gap between the chat row and
+        // the floating picker without losing the menu before reaching an emoji.
+        quickReactionCloseTimer = window.setTimeout(() => {
+            quickReactionCloseTimer = null;
+            quickReactionClosePicker(record);
+        }, 220);
+    }
+
+    function quickReactionPositionPicker() {
+        const shown = quickReactionOpenPicker;
+        if (!shown) return;
+        const { panel, record } = shown;
+        if (!record.active || !record.row?.isConnected || !panel.isConnected) {
+            quickReactionClosePicker(record);
+            return;
+        }
+        const rowRect = record.row.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const viewportW = Math.max(1, window.innerWidth || document.documentElement?.clientWidth || 1000);
+        const viewportH = Math.max(1, window.innerHeight || document.documentElement?.clientHeight || 1000);
+        const width = Math.min(viewportW - 16, Math.max(1, panelRect.width || panel.offsetWidth || 310));
+        const height = Math.min(viewportH - 16, Math.max(1, panelRect.height || panel.offsetHeight || 40));
+        const logRect = getOfferChatRoot()?.getBoundingClientRect();
+        const areaTop = Math.max(8, Number.isFinite(logRect?.top) ? logRect.top : 8);
+        const areaBottom = Math.min(viewportH - 8, Number.isFinite(logRect?.bottom) ? logRect.bottom : viewportH - 8);
+        const areaLeft = Math.max(8, Number.isFinite(logRect?.left) ? logRect.left : 8);
+        const areaRight = Math.min(viewportW - 8, Number.isFinite(logRect?.right) ? logRect.right : viewportW - 8);
+        const above = rowRect.top - areaTop;
+        const below = areaBottom - rowRect.bottom;
+        const putAbove = above >= height - 2 || (above > below && below < height - 2);
+        // Overlap the message by 2px so the pointer enters the palette
+        // directly, without triggering the neighboring chat row.
+        const proposedY = putAbove ? rowRect.top - height + 2 : rowRect.bottom - 2;
+        const maxY = Math.max(areaTop, areaBottom - height);
+        const top = Math.max(areaTop, Math.min(maxY, proposedY));
+        const minX = areaRight - areaLeft >= width ? areaLeft : 8;
+        const maxX = Math.max(minX, (areaRight - areaLeft >= width ? areaRight : viewportW - 8) - width);
+        const left = Math.max(minX, Math.min(maxX, rowRect.right - width - 7));
+        panel.style.top = `${Math.round(top)}px`;
+        panel.style.left = `${Math.round(left)}px`;
     }
 
     function quickReactionButton(label, title, onClick) {
@@ -13511,10 +13620,20 @@ function SubbysPlushiesPageMain() {
     }
 
     function quickReactionRender(record) {
-        if (!record?.row?.isConnected) return;
+        if (!record?.row?.isConnected || !record.active) return;
         if (!getFeatureSettings().quickReactions) {
             record.bar?.remove(); record.bar = null;
             quickReactionClosePicker(record);
+            return;
+        }
+        const counts = new Map();
+        for (const emoji of record.reactions.values()) {
+            counts.set(emoji, (counts.get(emoji) || 0) + 1);
+        }
+        // An untouched message has no visible reaction controls. The picker
+        // appears only when someone hovers/focuses the message itself.
+        if (!counts.size) {
+            record.bar?.remove(); record.bar = null;
             return;
         }
         if (!record.bar) {
@@ -13527,19 +13646,17 @@ function SubbysPlushiesPageMain() {
             record.row.appendChild(record.bar);
         }
         record.bar.replaceChildren();
-        const counts = new Map();
-        for (const emoji of record.reactions.values()) {
-            counts.set(emoji, (counts.get(emoji) || 0) + 1);
-        }
         const myMember = Number(window.Player?.MemberNumber);
         const mine = record.reactions.get(myMember) || "";
-        const plus = quickReactionButton(mine ? "☺+" : "☺+", "React to this message", () => quickReactionTogglePicker(record));
-        plus.style.opacity = ".7";
-        record.bar.appendChild(plus);
         for (const emoji of QUICK_REACTION_SET) {
             const count = counts.get(emoji);
             if (!count) continue;
-            const chip = quickReactionButton(`${emoji} ${count}`, `${count} reaction${count === 1 ? "" : "s"} — click to ${mine === emoji ? "remove yours" : "react"}`, () => quickReactionSend(record, emoji));
+            const action = `Click to ${mine === emoji ? "remove your reaction" : "react"}`;
+            const chip = quickReactionButton(`${emoji} ${count}`, action, () => quickReactionSend(record, emoji));
+            const members = [...record.reactions.entries()]
+                .filter(([, value]) => value === emoji)
+                .map(([member]) => quickReactionActorName(member));
+            quickReactionWhoTooltip(chip, emoji, members, action);
             if (mine === emoji) {
                 chip.style.borderColor = "#ba79d4";
                 chip.style.background = "rgba(190,119,212,.24)";
@@ -13548,27 +13665,57 @@ function SubbysPlushiesPageMain() {
         }
     }
 
-    function quickReactionTogglePicker(record) {
-        if (!getFeatureSettings().quickReactions || !record?.row?.isConnected) return;
+    function quickReactionShowPicker(record) {
+        if (!getFeatureSettings().quickReactions || !record?.active || !record.row?.isConnected ||
+            window.CurrentScreen !== "ChatRoom") return;
+        quickReactionCancelClose();
         if (quickReactionOpenPicker?.record === record) {
-            quickReactionClosePicker(); return;
+            quickReactionPositionPicker();
+            return;
         }
         quickReactionClosePicker();
         const panel = document.createElement("div");
         panel.className = "SubbysPlushiesReactionPicker";
+        panel.setAttribute("role", "group");
+        panel.setAttribute("aria-label", "React to this message");
         Object.assign(panel.style, {
-            display: "flex", flexWrap: "wrap", gap: "4px", padding: "5px", margin: "3px 0 1px 7px",
-            width: "fit-content", maxWidth: "260px", background: "#302638", color: "#fff",
-            border: "1px solid #8e719a", borderRadius: "9px", position: "relative", zIndex: "5",
+            display: "flex", flexWrap: "wrap", gap: "4px", padding: "5px",
+            width: "max-content", maxWidth: "min(330px, calc(100vw - 16px))", boxSizing: "border-box",
+            background: "#302638", color: "#fff", border: "1px solid #8e719a",
+            borderRadius: "9px", position: "fixed", left: "0px", top: "0px",
+            zIndex: "2147483000", boxShadow: "0 3px 12px #0006",
+            pointerEvents: "auto",
         });
         for (const emoji of QUICK_REACTION_SET) {
             panel.appendChild(quickReactionButton(emoji, `React ${emoji}`, () => {
                 quickReactionSend(record, emoji);
-                quickReactionClosePicker();
+                quickReactionClosePicker(record);
             }));
         }
-        record.bar?.after(panel);
+        // Attach to the document, not the ChatMessage: BC's chat log clips
+        // descendants that extend outside its scrollable area. Fixed placement
+        // also keeps this above the chat input and other messages.
+        document.body.appendChild(panel);
         quickReactionOpenPicker = { record, panel };
+        panel.addEventListener("mouseenter", quickReactionCancelClose);
+        panel.addEventListener("mouseleave", event => quickReactionScheduleClose(record, event.relatedTarget));
+        panel.addEventListener("focusin", quickReactionCancelClose);
+        panel.addEventListener("keydown", event => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                quickReactionClosePicker(record);
+            }
+        });
+        panel.addEventListener("focusout", event => {
+            if (!event.relatedTarget ||
+                (!record.row.contains(event.relatedTarget) && !panel.contains(event.relatedTarget))) {
+                quickReactionScheduleClose(record, event.relatedTarget);
+            }
+        });
+        quickReactionPositionPicker();
+        window.addEventListener?.("resize", quickReactionPositionPicker);
+        document.addEventListener?.("scroll", quickReactionPositionPicker, true);
     }
 
     function quickReactionMatch(packet) {
@@ -13599,9 +13746,24 @@ function SubbysPlushiesPageMain() {
         if (!getFeatureSettings().quickReactions) return false;
         const record = quickReactionMatch(packet);
         if (!record) return false;
+        // BC follows new chat content when the reader is near the bottom, but
+        // leaves manually scrolled-up history alone. Capture BEFORE rendering:
+        // adding the first badge can increase the chat log's scrollHeight.
+        const scroller = packet.emoji ? quickReactionChatScroller(record) : null;
+        const follow = scroller && quickReactionIsNearBottom(scroller);
         if (packet.emoji) record.reactions.set(actor, packet.emoji);
         else record.reactions.delete(actor);
         quickReactionRender(record);
+        if (follow) {
+            quickReactionScrollToBottom(record, scroller);
+            // Account for BC's next layout pass. If the user scrolls away in
+            // the meantime, don't override their choice on the next frame.
+            if (typeof window.requestAnimationFrame === "function") {
+                window.requestAnimationFrame(() => {
+                    if (quickReactionIsNearBottom(scroller)) quickReactionScrollToBottom(record, scroller);
+                });
+            }
+        }
         return true;
     }
 
@@ -13633,10 +13795,43 @@ function SubbysPlushiesPageMain() {
             typeof packet.room !== "string" || packet.room !== quickReactionRoomKey()) return true;
         if (quickReactionSeenPackets.has(packet.token)) return true;
         quickReactionSeenPackets.set(packet.token, Date.now());
+        quickReactionActorName(actor);
         quickReactionPurge();
         if (!quickReactionApplyPacket(packet, actor)) {
             if (quickReactionPending.length < 24) quickReactionPending.push({ packet, actor, received: Date.now() });
         }
+        return true;
+    }
+
+    // Resolve the same chat scroller for both native-like remote follow and
+    // locally triggered scroll. Keep per-room/row guards to avoid stale frames.
+    function quickReactionChatScroller(record) {
+        if (!record?.active || !record.row?.isConnected ||
+            window.CurrentScreen !== "ChatRoom" || record.room !== quickReactionRoomKey()) return null;
+        const root = getOfferChatRoot();
+        if (!root || !root.contains(record.row)) return null;
+        // TextAreaChatLog usually scrolls, but some themes use its parent.
+        for (let node = root; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+            if (Number(node.scrollHeight) > Number(node.clientHeight) + 1) return node;
+        }
+        return root;
+    }
+
+    // Match normal chat's auto-follow behavior without dragging someone away
+    // from older messages. Use a small tolerance for fractional CSS pixels.
+    function quickReactionIsNearBottom(scroller) {
+        if (!scroller?.isConnected) return false;
+        const top = Number(scroller.scrollTop);
+        const height = Number(scroller.scrollHeight);
+        const viewport = Number(scroller.clientHeight);
+        return Number.isFinite(top) && Number.isFinite(height) && Number.isFinite(viewport) &&
+            height - viewport - top <= 48;
+    }
+
+    function quickReactionScrollToBottom(record, expectedScroller = null) {
+        const target = quickReactionChatScroller(record);
+        if (!target || (expectedScroller && target !== expectedScroller)) return false;
+        target.scrollTop = target.scrollHeight;
         return true;
     }
 
@@ -13661,11 +13856,18 @@ function SubbysPlushiesPageMain() {
             });
             quickReactionLastSendAt = now;
             quickReactionSeenPackets.set(packet.token, now);
+            quickReactionActorName(me);
             // The sending client knows the exact clicked row, even when two
             // identical messages were posted too close together to distinguish.
             if (value) record.reactions.set(me, value);
             else record.reactions.delete(me);
             quickReactionRender(record);
+            if (value) {
+                quickReactionScrollToBottom(record);
+                if (typeof window.requestAnimationFrame === "function") {
+                    window.requestAnimationFrame(() => quickReactionScrollToBottom(record));
+                }
+            }
             return true;
         } catch (e) {
             warn("Quick Reaction sync failed:", e);
@@ -13683,7 +13885,28 @@ function SubbysPlushiesPageMain() {
         const record = {
             row, room: context.room, sender: context.sender, kind: context.kind,
             signature: context.signature, created: context.created, reactions: new Map(), bar: null,
+            active: true, priorPosition: row.style.position || "", priorTabIndex: row.tabIndex,
         };
+        // Avoid shifting the chat history when the picker opens.
+        if (!row.style.position) row.style.position = "relative";
+        // Also allow keyboard users to focus the message and select an emoji.
+        if (row.tabIndex < 0) row.tabIndex = 0;
+        row.addEventListener("mouseenter", () => quickReactionShowPicker(record));
+        row.addEventListener("mouseleave", event => quickReactionScheduleClose(record, event.relatedTarget));
+        row.addEventListener("focusin", () => quickReactionShowPicker(record));
+        row.addEventListener("keydown", event => {
+            if (["Enter", " ", "ArrowDown"].includes(event.key)) {
+                event.preventDefault();
+                quickReactionShowPicker(record);
+                quickReactionOpenPicker?.panel?.querySelector("button")?.focus();
+            }
+        });
+        row.addEventListener("focusout", event => {
+            const next = event.relatedTarget;
+            if (!next || (!row.contains(next) && !quickReactionOpenPicker?.panel?.contains(next))) {
+                quickReactionScheduleClose(record, next);
+            }
+        });
         quickReactionRecords.push(record);
         quickReactionPurge();
         quickReactionRender(record);
@@ -13734,10 +13957,16 @@ function SubbysPlushiesPageMain() {
 
     function quickReactionReset() {
         quickReactionClosePicker();
-        for (const record of quickReactionRecords) record.bar?.remove();
+        for (const record of quickReactionRecords) {
+            record.active = false;
+            record.bar?.remove();
+            if (record.row?.style) record.row.style.position = record.priorPosition;
+            if (record.row) record.row.tabIndex = record.priorTabIndex;
+        }
         quickReactionRecords.length = 0;
         quickReactionPending.length = 0;
         quickReactionSeenPackets.clear();
+        quickReactionActorNames.clear();
         quickReactionRendering = null;
         quickReactionLastSendAt = 0;
     }
@@ -20464,7 +20693,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.7";
+    const VERSION = "3.5.11";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
