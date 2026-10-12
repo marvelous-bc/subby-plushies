@@ -1,5 +1,5 @@
 {
-  "version": "3.5.26",
+  "version": "3.5.32",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Corrected Mod SDK registered mod list entry from 'SubbysPlushies' to 'Subbycat's essentials'. Tampermonkey display name, wardrobe, reactions, Echo-compatible outfit history, user data, and existing commands remain unchanged. Reload BC after updating."
+  "notes": "Removed Collaborative Stylist (outfitting buddy) entirely: no editor, invitations, proposal messaging, buttons, or /plushiestylist command. Retained Outfit Time Machine, plushies, Quick Reactions, favorites, and existing save data."
 }

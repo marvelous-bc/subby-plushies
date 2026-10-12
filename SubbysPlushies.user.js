@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.26
-// @description  Subby's Plushies & Essentials: plushies, wardrobe tools, outfit history, hover previews, Quick Reactions, and Echo-compatible batch restore
+// @version      3.5.32
+// @description  Subby's Plushies & Essentials: plushies, wardrobe tools, Outfit Time Machine, Quick Reactions, permanent favorites, and Echo-compatible batch restore
 // @released     2026-10-12
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -25,7 +25,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.26";
+    const VERSION = "3.5.32";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -18672,33 +18672,34 @@ function SubbysPlushiesPageMain() {
         }
         return null;
       }
-      function compactPortrait(canvas) {
+      function compactPortrait(canvas, outputWidth=168) {
         if (!canvas || !canvas.width || !canvas.height) return null;
         try {
           const mini = document.createElement('canvas');
-          mini.width = 168; mini.height = 336;
+          const w=outputWidth>=260?288:168,h=w*2;
+          mini.width=w; mini.height=h;
           const ctx = mini.getContext('2d');
           if (!ctx) return null;
-          ctx.clearRect(0,0,168,336);
+          ctx.clearRect(0,0,w,h);
           const sourceY = canvas.height >= 1600 ? 600 : 0;
           const sourceH = canvas.height >= 1600 ? Math.min(1000,canvas.height-sourceY) : canvas.height;
           const sourceRatio = canvas.width / sourceH;
           const destRatio = 0.5;
-          let dw = 168, dh = 336, dx = 0, dy = 0;
-          if(sourceRatio > destRatio) { dh = dw / sourceRatio; dy = (336 - dh)/2; }
-          else { dw = dh*sourceRatio; dx = (168 - dw)/2; }
+          let dw = w, dh = h, dx = 0, dy = 0;
+          if(sourceRatio > destRatio) { dh = dw / sourceRatio; dy = (h - dh)/2; }
+          else { dw = dh*sourceRatio; dx = (w - dw)/2; }
           ctx.drawImage(canvas,0,sourceY,canvas.width,sourceH,dx,dy,dw,dh);
-          const rgba=ctx.getImageData(0,0,168,336).data;
+          const rgba=ctx.getImageData(0,0,w,h).data;
           let visible=0;
           for(let i=3;i<rgba.length;i+=4) if(rgba[i]>18)visible++;
           if(visible<140) return null;
           const data = mini.toDataURL('image/webp', 0.7);
           const fallback = data.startsWith('data:image/webp;') ? data : mini.toDataURL('image/jpeg',0.66);
-          return fallback.length < 105000 ? fallback : null;
+          return fallback.length < (w>168?300000:105000) ? fallback : null;
         } catch (_) { return null; }
       }
-      function thumbnail(C = player()) {
-        return compactPortrait(imageCanvas(C));
+      function thumbnail(C = player(), width=168) {
+        return compactPortrait(imageCanvas(C),width);
       }
       function offscreenCharacter(snapshot) {
         const source = player();
