@@ -1,5 +1,5 @@
 {
-  "version": "3.5.11",
+  "version": "3.5.14",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Quick Chat Reactions: incoming reactions from other addon users now follow the bottom of chat naturally when you are already near the latest messages, including after emoji badges increase message height. Scrolling through older messages is respected; incoming reaction removals do not force scroll. Your own added reactions still scroll to the bottom. Includes hover-only picker, who-reacted tooltips, multiplayer sync, and all existing Plushies + Wardrobe features."
+  "notes": "Outfit Time Machine: automatic outfit history is now limited to the 50 most recent looks. New star buttons permanently save favorite outfits separately from history; favorites and named saved looks never expire automatically. Includes favorites in export/import, retains existing saves and history storage, Echo extra-slot compatibility, and atomic batch restore. All plushie, wardrobe, and chat reaction functionality remains unchanged."
 }

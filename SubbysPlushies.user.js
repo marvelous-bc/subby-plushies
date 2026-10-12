@@ -2,8 +2,8 @@
 // @name         BC - Subby's Plushies + Wardrobe
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.11
-// @description  Subby’s Plushies + Wardrobe: Paint-style tools, asset drawing, color-zone editor and poses
+// @version      3.5.14
+// @description  Subby’s Plushies + Wardrobe: Outfit Time Machine: 50 outfit history, permanent favorites, Echo batch restore, Quick Reactions
 // @released     2026-10-11
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -27,7 +27,7 @@
 function SubbysPlushiesPageMain() {
     "use strict";
 
-    const VERSION = "3.5.11";
+    const VERSION = "3.5.14";
 
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
@@ -1359,6 +1359,7 @@ function SubbysPlushiesPageMain() {
     });
 
     const FEATURE_MENU = Object.freeze({
+        TimeMachine: Object.freeze({ x: 1510, y: 770, w: 430, h: 58 }),
         Emotes: Object.freeze({ x: 1040, y: 842, w: 280, h: 58 }),
         Mascot: Object.freeze({ x: 1335, y: 842, w: 300, h: 58 }),
         Settings: Object.freeze({ x: 1650, y: 842, w: 300, h: 58 }),
@@ -1412,6 +1413,7 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushieextensions", description: "Open the Subby's Plushies Extensions control center on Settings." }),
                 Object.freeze({ command: "/plushiestatus", description: "Open the Status tab." }),
                 Object.freeze({ command: "/plushiewardrobe", description: "Open Wardrobe: multicolor cat-ear headband and heart charm, with position controls." }),
+                Object.freeze({ command: "/plushietimemachine", description: "Open outfit history, undo/redo, saved looks and Echo-compatible wardrobe batch restore." }),
                 Object.freeze({ command: "/plushiesettings", description: "Open Settings → General." }),
                 Object.freeze({ command: "/plushielayout", description: "Open Settings → Layout customization." }),
                 Object.freeze({ command: "/plushieplushies", description: "Open Progress → Plushies with relationships, favorites, emotes, and saved poses." }),
@@ -9892,6 +9894,7 @@ function SubbysPlushiesPageMain() {
         intro.textContent = "The Headband, Heart Charm and Draped Wrap Dress appear in BC's normal Appearance picker (Hair Accessory 2, Necklace, and Upper Clothing). Each uses one GitHub PNG with independent color zones. Positioning moves the clothing, not the character. Other viewers need the matching plugin and assets.";
         Object.assign(intro.style, { color: getExtensionsStyle().muted, marginBottom: "12px", lineHeight: "1.45" });
         section.appendChild(intro);
+        section.appendChild(makeExtensionsButton("⏪ Open Outfit Time Machine", openOutfitTimeMachineFromExtensions));
         for (const entry of WARDROBE_ITEMS) {
             const itemSection = document.createElement("div");
             Object.assign(itemSection.style, { display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap", marginBottom: "16px", paddingBottom: "12px", borderBottom: `1px solid ${getExtensionsStyle().border}55` });
@@ -10941,6 +10944,10 @@ function SubbysPlushiesPageMain() {
             tabs.appendChild(button);
         }
 
+        const outfitTimeMachineButton = makeExtensionsButton("⏪ Outfit Time Machine", openOutfitTimeMachineFromExtensions);
+        outfitTimeMachineButton.title = "Open outfit history, saved looks, compare and Echo-compatible batch restore";
+        tabs.appendChild(outfitTimeMachineButton);
+
         const content = document.createElement("div");
         content.className = "SubbysPlushiesExtensionsContent";
         Object.assign(content.style, {
@@ -11263,6 +11270,10 @@ function SubbysPlushiesPageMain() {
         }
         if (command === "/plushiewardrobe") {
             requireReady(() => openExtensionsPanel("wardrobe"));
+            return true;
+        }
+        if (command === "/plushietimemachine") {
+            requireReady(openOutfitTimeMachine);
             return true;
         }
         if (command === "/plushielore") {
@@ -19547,6 +19558,7 @@ function SubbysPlushiesPageMain() {
             SUBBYCAT_MENU.forEach((entry, index) => drawButton(menuRect("subbycat", index), entry.label, selected === entry.option, { favoriteOption: entry.option }));
             drawButton(USE_MENU_BACK_RECT, "Back to characters");
             drawPlushMenuHoverPreview();
+            drawButton(FEATURE_MENU.TimeMachine, "Outfit Time Machine");
             return;
         }
 
@@ -19557,10 +19569,11 @@ function SubbysPlushiesPageMain() {
                 drawLofiTextFit("No favorites yet — click ☆ beside any plushie to add one.", 1495, 350, 760, getUseMenuStyle().muted, 19);
             } else {
                 page.items.forEach((entry, index) => drawButton(menuGridRect(index), entry.label, selected === entry.option, { favoriteOption: entry.option }));
-                if (page.label) drawButton(USE_MENU_NAV_RECT, page.label);
             }
             drawButton(USE_MENU_BACK_RECT, "Back to plushies");
             drawPlushMenuHoverPreview();
+            if (page.label) drawButton(USE_MENU_NAV_RECT, page.label);
+            drawButton(FEATURE_MENU.TimeMachine, "Outfit Time Machine");
             return;
         }
 
@@ -19577,8 +19590,9 @@ function SubbysPlushiesPageMain() {
             const favoriteOption = entry.submenu ? 0 : entry.option;
             drawButton(menuGridRect(index), entry.submenu ? `${entry.label} >` : entry.label, selectedEntry, { favoriteOption });
         });
-        if (page.label) drawButton(USE_MENU_NAV_RECT, page.label);
         drawPlushMenuHoverPreview();
+        if (page.label) drawButton(USE_MENU_NAV_RECT, page.label);
+        drawButton(FEATURE_MENU.TimeMachine, "Outfit Time Machine");
     }
 
     function closeCustomPlushMenu() {
@@ -19666,6 +19680,10 @@ function SubbysPlushiesPageMain() {
             return mouseInRect({ x: MENU.PanelX, y: MENU.PanelY, w: MENU.PanelW, h: MENU.PanelH });
         }
 
+        if (mouseInRect(FEATURE_MENU.TimeMachine)) {
+            openOutfitTimeMachineFromUseMenu();
+            return true;
+        }
         if (mouseInRect(FEATURE_MENU.Emotes)) {
             plushMenuReturnPage = "characters";
             plushMenuPage = "emotes";
@@ -20613,6 +20631,639 @@ function SubbysPlushiesPageMain() {
         }
     }
 
+    // Outfit Time Machine v0.1.2, embedded without a second Tampermonkey script.
+    // Its saved-data key and BC/Echo batch restore algorithm are intentionally unchanged.
+    function installSubbysOutfitTimeMachine() {
+      'use strict';
+      const NAME = "Subby's Outfit Time Machine";
+      const VERSION = '0.1.2';
+      const KEY_PREFIX = 'BCOutfitTimeMachine:v1:';
+      const MAX_HISTORY = 50; // Automatic timeline only; starred favorites and saved looks never expire.
+      const POLL_MS = 1400;
+      const SETTLE_MS = 950;
+      const MAX_PROPERTY_BYTES = 24000;
+      const PAGE_ID = 'bc-otm-overlay';
+      if (window.__BCOutfitTimeMachine) return;
+      const state = { history: [], cursor: -1, saved: [], favorites: [], baseline: null, watchSignature: null,
+        watchPending: null, account: null, show: false, compare: [], body: true,
+        record: true, panel: null, message: '', storageOK: true, loaded: false,
+        restoring: false, lastCaptureAt: 0, initializedAt: Date.now() };
+
+      const clone = (value, fallback = null) => {
+        try { return value === undefined ? fallback : JSON.parse(JSON.stringify(value)); }
+        catch (_) { return fallback; }
+      };
+      function player() {
+        const p = window.Player;
+        return p && Array.isArray(p.Appearance) && (p.AssetFamily || 'Female3DCG') ? p : null;
+      }
+      const groupName = a => a?.Asset?.Group?.Name || null;
+      const isAppearanceGroup = g => g?.Category === 'Appearance';
+      const clothingOnly = g => Boolean(g?.Clothing);
+      const isEligible = g => isAppearanceGroup(g) && (state.body || clothingOnly(g));
+      const groupId = g => String(g?.Name || '');
+      function registryGroups(C = player()) {
+        if (!C) return new Map();
+        const out = new Map();
+        for (const g of (Array.isArray(window.AssetGroup) ? window.AssetGroup : [])) {
+          if (g?.Family && g.Family !== C.AssetFamily) continue;
+          if (g?.Name && isEligible(g)) out.set(g.Name, g);
+        }
+        for (const item of C.Appearance) {
+          const g = item?.Asset?.Group;
+          if (g?.Name && isEligible(g)) out.set(g.Name, g);
+        }
+        return out;
+      }
+      function cleanProperty(property) {
+        if (!property || typeof property !== 'object') return null;
+        const copy = clone(property);
+        if (!copy || typeof copy !== 'object' || Array.isArray(copy)) return null;
+        // Never carry lock metadata to a different outfit or bypass restraint semantics.
+        for (const k of ['LockedBy', 'LockMemberNumber', 'LockTimer', 'LockPickSeed', 'CombinationNumber', 'Password', 'MemberNumber', 'RemoveItem']) delete copy[k];
+        try { if (JSON.stringify(copy).length > MAX_PROPERTY_BYTES) return null; } catch (_) { return null; }
+        return copy;
+      }
+      function normalizedColor(color) {
+        if (Array.isArray(color)) return color.slice(0, 20).map(c => typeof c === 'string' ? c.slice(0, 50) : 'Default');
+        return typeof color === 'string' ? color.slice(0, 50) : 'Default';
+      }
+      function collect(C = player()) {
+        if (!C) return null;
+        const groups = registryGroups(C);
+        const items = [];
+        for (const a of C.Appearance) {
+          const group = groupName(a);
+          if (!group || !groups.has(group) || !a.Asset?.Name) continue;
+          items.push({ group, name: String(a.Asset.Name), color: normalizedColor(a.Color),
+            property: cleanProperty(a.Property), difficulty: Number(a.Difficulty) || 0 });
+        }
+        items.sort((a,b) => a.group.localeCompare(b.group));
+        // Scope retains every existing Appearance group; useful when Echo registers extra slots later.
+        return { items, scope: Array.from(groups.keys()).sort(), family: String(C.AssetFamily || 'Female3DCG') };
+      }
+      function fingerprint(s) { return JSON.stringify(s?.items || []) + '|' + JSON.stringify(s?.scope || []); }
+      function compactLabel(s) {
+        const n = s?.items?.filter(x=> !/^(Body|Eyes|Eyebrows|Mouth|Nose|HairFront|HairBack|HairAccessory[0-9]*$)/.test(x.group)).length || 0;
+        return `${n} items · ${s?.items?.length || 0} appearance slots`;
+      }
+      function timeLabel(t) { return new Date(t).toLocaleString(); }
+      function imageCanvas(C = player()) {
+        const candidates = [C?.Canvas, C?.DrawCanvas, C?.CanvasCharacter, C?.CanvasFull];
+        for (const entry of candidates) {
+          const possibilities = Array.isArray(entry) ? entry : [entry];
+          for (const v of possibilities) {
+            if (v && typeof v.toDataURL === 'function' && Number(v.width) >= 120 && Number(v.height) >= 250) return v;
+            if (v?.canvas && typeof v.canvas.toDataURL === 'function') return v.canvas;
+          }
+        }
+        return null;
+      }
+      function thumbnail(C = player()) {
+        const canvas = imageCanvas(C);
+        if (!canvas) return null;
+        try {
+          const mini = document.createElement('canvas');
+          mini.width = 120; mini.height = 240;
+          const ctx = mini.getContext('2d');
+          if (!ctx) return null;
+          ctx.clearRect(0,0,120,240);
+          ctx.drawImage(canvas,0,0,canvas.width,canvas.height,0,0,120,240);
+          const data = mini.toDataURL('image/jpeg',0.5);
+          return data.length < 70000 ? data : null;
+        } catch (_) { return null; }
+      }
+      function memberKey() {
+        const C = player();
+        const id = C && Number(C.MemberNumber);
+        return Number.isFinite(id) && id > 0 ? String(Math.floor(id)) : null;
+      }
+      function storageKey() { return KEY_PREFIX + state.account; }
+      const validEntry = e => !!(e && e.snapshot?.family && Array.isArray(e.snapshot?.items) && Array.isArray(e.snapshot?.scope));
+      function flush() {
+        if (!state.account) return;
+        const payload = { version: 1, saved: state.saved, favorites: state.favorites,
+          history: state.history, cursor: state.cursor,
+          options: { body: state.body, record: state.record } };
+        const write = () => { localStorage.setItem(storageKey(), JSON.stringify(payload)); state.storageOK = true; };
+        try { write(); return; } catch (err) {
+          state.storageOK = false;
+          if (err?.name !== 'QuotaExceededError') return;
+        }
+        // Fallback order: discard previews, then oldest UNSTARRED timeline entries.
+        // Never silently discard an outfit the user favorited or explicitly saved.
+        for (const entry of state.history) entry.image = null;
+        try { write(); return; } catch (_) {}
+        for (const entry of state.saved) entry.image = null;
+        for (const entry of state.favorites) entry.image = null;
+        try { write(); return; } catch (_) {}
+        while (state.history.length > 1) {
+          state.history.shift();
+          state.cursor = Math.max(0, state.cursor - 1);
+          try { write(); return; } catch (_) {}
+        }
+        state.storageOK = false;
+        state.message = 'Browser storage is full: favorites remain available for this session, but could not be saved. Export your saved looks and favorites to avoid losing them.';
+        console.warn(`[${NAME}] ${state.message}`);
+      }
+      function loadAccount() {
+        const id = memberKey();
+        if (!id) return false;
+        if (state.loaded && state.account === id) return true;
+        state.account = id;
+        state.history = []; state.saved = []; state.favorites = []; state.cursor = -1;
+        try {
+          const doc = JSON.parse(localStorage.getItem(storageKey()) || 'null');
+          if (doc?.version === 1) {
+            // v1 storage key/format intentionally retained: existing saves migrate in place.
+            state.saved = (Array.isArray(doc.saved) ? doc.saved : []).filter(validEntry);
+            state.favorites = (Array.isArray(doc.favorites) ? doc.favorites : []).filter(validEntry);
+            const history = (Array.isArray(doc.history) ? doc.history : []).filter(validEntry);
+            const removed = Math.max(0, history.length - MAX_HISTORY);
+            state.history = history.slice(-MAX_HISTORY);
+            state.cursor = state.history.length ? Math.max(0, Math.min(Number(doc.cursor ?? history.length - 1) - removed, state.history.length - 1)) : -1;
+            state.body = doc.options?.body !== false;
+            state.record = doc.options?.record !== false;
+          }
+        } catch (_) {}
+        state.loaded = true;
+        state.watchSignature = null; state.watchPending = null;
+        // Persist the 50-item migration without losing the user's separate collections.
+        if (state.history.length) flush();
+        return true;
+      }
+      function recordSnapshot(label = 'Outfit change', explicit = false) {
+        if (!loadAccount() || state.restoring) return false;
+        const snap = collect(); if (!snap) return false;
+        const sig = fingerprint(snap);
+        const current = state.history[state.cursor];
+        if (current && fingerprint(current.snapshot) === sig) return false;
+        // Manual edit after undo creates a new history branch.
+        if (state.cursor < state.history.length - 1) state.history.length = state.cursor + 1;
+        state.history.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+          at: Date.now(), label, snapshot: snap, image: thumbnail() });
+        if (state.history.length > MAX_HISTORY) state.history.splice(0,state.history.length - MAX_HISTORY);
+        state.cursor = state.history.length - 1;
+        state.watchSignature = sig; state.watchPending = null;
+        state.lastCaptureAt = Date.now(); flush(); render();
+        return true;
+      }
+      function monitor() {
+        if (state.restoring || !loadAccount()) return;
+        const snap = collect(); if (!snap) return;
+        const sig = fingerprint(snap);
+        if (!state.history.length) { recordSnapshot('First outfit', true); return; }
+        // A snapshot must be recorded at the final stable state, not each temporary intermediate change.
+        if (sig === fingerprint(state.history[state.cursor]?.snapshot)) { state.watchPending = null; state.watchSignature = sig; return; }
+        if (!state.watchPending || state.watchPending.sig !== sig) state.watchPending = { sig, at: Date.now() };
+        if (state.record && Date.now() - state.watchPending.at >= SETTLE_MS) recordSnapshot('Outfit change');
+      }
+      function editableTarget(t) { return t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)); }
+      function notify(s, bad = false) {
+        state.message = String(s || '');
+        if (state.show) render();
+        (bad ? console.warn : console.info)(`[${NAME}]`,s);
+      }
+      function restoredAsset(C, record) {
+        try { return typeof window.AssetGet === 'function' && window.AssetGet(C.AssetFamily,record.group,record.name); }
+        catch (_) { return null; }
+      }
+      function currentItem(C, group) { return C.Appearance.find(a => groupName(a) === group) || null; }
+      function hasAccessToAsset(C, asset, record) {
+        // BC's normal inventory availability check is respected; this is not an unlocker.
+        if (asset.Value == null || Number(asset.Value) <= 0) return true;
+        if (currentItem(C,record.group)?.Asset?.Name === record.name) return true;
+        try { return typeof window.InventoryAvailable === 'function'
+          ? !!window.InventoryAvailable(C,record.name,record.group)
+          : false; }
+        catch (_) { return false; }
+      }
+      function canEditGroup(C, group) {
+        if (!group || !isEligible(group)) return false;
+        // Never remove or change a locked appearance item. Equipment/Item categories are excluded entirely.
+        const item = currentItem(C,group.Name);
+        if (item?.Property?.LockedBy || item?.Property?.LockMemberNumber) return false;
+        return true;
+      }
+      function planRestore(target) {
+        const C = player();
+        if (!C || !target || !Array.isArray(target.items)) return null;
+        const registry = registryGroups(C);
+        const desired = new Map(target.items.map(x=>[x.group,x]));
+        const now = collect(C); const actual = new Map(now.items.map(x=>[x.group,x]));
+        const changes = [], skips = [];
+        const scope = Array.isArray(target.scope) ? target.scope : [];
+        // Only touch slots recorded in this snapshot. Newly installed Echo groups stay intact.
+        const groupSet = new Set(scope);
+        for (const g of groupSet) {
+          const group = registry.get(g);
+          if (!group) { if (desired.has(g)) skips.push(`${g}: Echo/custom slot not loaded`); continue; }
+          if (!canEditGroup(C,group)) { skips.push(`${g}: locked or restricted`); continue; }
+          const from = actual.get(g); const to = desired.get(g);
+          if (JSON.stringify(from || null) === JSON.stringify(to || null)) continue;
+          // Absence means remove, but never remove required body groups.
+          if (!to && group.AllowNone === false) { skips.push(`${g}: required slot`); continue; }
+          if (to) {
+            const asset = restoredAsset(C,to);
+            if (!asset || !isEligible(asset.Group)) { skips.push(`${g}: asset not registered`); continue; }
+            if (!hasAccessToAsset(C,asset,to)) { skips.push(`${g}: item not available`); continue; }
+          }
+          changes.push({ group:g, to:to || null, from:from || null });
+        }
+        return { changes, skips };
+      }
+      // A wardrobe restore must be one atomic appearance replacement, not N calls to
+      // InventoryWear/InventoryRemove. Each InventoryWear may render or synchronize the
+      // character on its own; doing that for an entire outfit can flood the server.
+      // Build everything off-character, preserving every non-Appearance item unchanged.
+      function buildAppearanceBatch(C, plan) {
+        const replacements = new Map();
+        const skipped = [...plan.skips];
+        for (const move of plan.changes) {
+          if (!move.to) { replacements.set(move.group, null); continue; }
+          try {
+            const asset = restoredAsset(C, move.to);
+            if (!asset || asset.Group?.Name !== move.group || !isEligible(asset.Group)) {
+              skipped.push(`${move.group}: asset unavailable during restore`); continue;
+            }
+            if (!hasAccessToAsset(C, asset, move.to)) {
+              skipped.push(`${move.group}: item no longer available`); continue;
+            }
+            const color = clone(move.to.color, 'Default');
+            const difficulty = Number(move.to.difficulty) || 0;
+            const prop = cleanProperty(move.to.property);
+            // AppearanceItem.fromAsset exists on current BC builds, but is not
+            // guaranteed in older clients. The plain Item fallback matches the
+            // wardrobe code's item shape and avoids all item-level game hooks.
+            const fromAsset = window.AppearanceItem?.fromAsset;
+            let item;
+            if (typeof fromAsset === 'function') {
+              item = fromAsset.call(window.AppearanceItem, asset, { color, difficulty });
+              if (!item || item.Asset !== asset) throw Error('BC rejected item construction');
+            } else {
+              item = { Asset: asset, Color: color, Difficulty: difficulty };
+            }
+            item.Color = color;
+            item.Difficulty = difficulty;
+            if (prop) item.Property = prop;
+            else delete item.Property;
+            replacements.set(move.group, item);
+          } catch (err) {
+            skipped.push(`${move.group}: ${String(err?.message || err)}`);
+          }
+        }
+        const next = [];
+        const applied = new Set();
+        for (const item of C.Appearance) {
+          const group = groupName(item);
+          if (!replacements.has(group)) { next.push(item); continue; }
+          if (!applied.has(group)) {
+            const replacement = replacements.get(group);
+            if (replacement) next.push(replacement);
+            applied.add(group);
+          }
+        }
+        // Fill empty groups (including new Echo slots) after existing entries;
+        // leave everything else, particularly restraints, exactly where it was.
+        for (const [group, item] of replacements) {
+          if (!applied.has(group) && item) next.push(item);
+        }
+        return { next, changed: replacements.size, skipped };
+      }
+      function applyRestore(entry, opts = {}) {
+        if (!entry?.snapshot) return { ok:false, changed:0, skipped:['Invalid outfit'] };
+        const C = player(); if (!C || !loadAccount()) return {ok:false,changed:0,skipped:['BC not ready']};
+        if (state.restoring) return {ok:false,changed:0,skipped:['Restore already running']};
+        if (entry.snapshot.family !== C.AssetFamily) return {ok:false,changed:0,skipped:['Asset family does not match']};
+        const plan = planRestore(entry.snapshot);
+        if (!plan) return {ok:false,changed:0,skipped:['Cannot prepare restore']};
+        if (plan.changes.length && !opts.noConfirm && !window.confirm(
+          `Restore “${entry.label || 'outfit'}” on your own character?\n\n`+
+          `${plan.changes.length} appearance slots will change. ${plan.skips.length} groups will be skipped.\n`+
+          `Only BC Appearance slots will be touched; restraints and locks won't be removed.`)) return {ok:false, changed:0, skipped:['Cancelled']};
+        // Preflight every replacement before changing Player.Appearance.
+        const batch = buildAppearanceBatch(C, plan);
+        let changed = 0;
+        const skipped = [...batch.skipped];
+        if (batch.changed) {
+          const current = collect(C);
+          // Capture the outfit we're leaving before the atomic swap.
+          if (opts.addHistory !== false && fingerprint(current) !== fingerprint(state.history[state.cursor]?.snapshot))
+            recordSnapshot('Before restore',true);
+          const previousAppearance = C.Appearance;
+          state.restoring = true;
+          try {
+            C.Appearance = batch.next; // One complete wardrobe-style change, never per-item updates.
+            // WardrobeFastLoad uses CharacterLoadCanvas once and then sends one
+            // complete appearance sync. CharacterRefresh/InventoryWear are avoided.
+            if (typeof window.CharacterLoadCanvas === 'function') window.CharacterLoadCanvas(C);
+            changed = batch.changed;
+          } catch (err) {
+            C.Appearance = previousAppearance;
+            skipped.push(`Batch cancelled (original outfit preserved): ${String(err?.message || err)}`);
+            try { window.CharacterLoadCanvas?.(C); } catch (_) {}
+          } finally {
+            state.restoring = false;
+          }
+          if (changed) {
+            // These are the same full-outfit update paths used by BC's wardrobe:
+            // one account synchronization and one room broadcast (when connected).
+            try { window.ServerPlayerAppearanceSync?.(); }
+            catch (err) { skipped.push(`Account sync: ${String(err?.message || err)}`); }
+            if (window.CurrentScreen === 'ChatRoom' && C.OnlineID != null) {
+              try { window.ChatRoomCharacterUpdate?.(C); }
+              catch (err) { skipped.push(`Room sync: ${String(err?.message || err)}`); }
+            }
+          }
+        }
+        const result = collect(C);
+        state.watchSignature = fingerprint(result); state.watchPending = null;
+        if (opts.historyIndex != null) {
+          const i=opts.historyIndex;
+          if (!skipped.length && fingerprint(result) === fingerprint(entry.snapshot)) state.cursor=i;
+          else if (changed) recordSnapshot('Partial restore');
+        } else if (changed) recordSnapshot(`Restored: ${entry.label || 'outfit'}`);
+        flush(); render();
+        notify(changed ? `Restored ${changed} slot(s) in one batch${skipped.length ? `; ${skipped.length} skipped` : ''}.` :
+          `Nothing changed${skipped.length ? `; ${skipped.length} skipped` : ''}.`, !!skipped.length);
+        return {ok:skipped.length === 0, changed, skipped};
+      }
+      function navigate(delta) {
+        if (!loadAccount()) return false;
+        const at=state.cursor + delta;
+        if (at < 0 || at >= state.history.length) return false;
+        const result=applyRestore(state.history[at],{historyIndex:at});
+        return result.changed>0 || result.ok;
+      }
+      function favoriteKey(entry) {
+        return entry?.snapshot ? `${entry.snapshot.family}|${fingerprint(entry.snapshot)}` : null;
+      }
+      function findFavorite(entry) {
+        const key = favoriteKey(entry);
+        return key ? state.favorites.find(f => favoriteKey(f) === key) : null;
+      }
+      function toggleFavoriteOutfit(entry, askBeforeRemoving = true) {
+        if (!loadAccount() || !validEntry(entry)) return false;
+        const previous = findFavorite(entry);
+        if (previous) {
+          if (askBeforeRemoving && !window.confirm(`Remove “${previous.label}” from permanent favorites?`)) return false;
+          state.favorites = state.favorites.filter(f => f !== previous);
+        } else {
+          // Copy snapshot/thumbnail: pruning history and editing saved looks cannot alter a favorite.
+          state.favorites.unshift({id:`fav-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+            at:entry.at || Date.now(), label:String(entry.label || 'Favorite outfit').slice(0,70),
+            snapshot:clone(entry.snapshot), image:entry.image || null});
+        }
+        flush(); render(); return !previous;
+      }
+      function makeSaved(label) {
+        if (!loadAccount()) return false;
+        const snap=collect(); if (!snap) return false;
+        const id=`saved-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+        const entry={ id,at:Date.now(),label:String(label||'Saved look').slice(0,70),snapshot:snap,image:thumbnail() };
+        state.saved.unshift(entry); // Saved looks are permanent too: no automatic count limit.
+        flush(); render(); return true;
+      }
+      function downloadJSON() {
+        if (!loadAccount()) return;
+        const data=JSON.stringify({format:'BCOutfitTimeMachine',version:1,
+          saved:state.saved,favorites:state.favorites},null,2);
+        const obj=new Blob([data],{type:'application/json'}); const url=URL.createObjectURL(obj);
+        const a=document.createElement('a');a.download='BC-Outfit-Time-Machine-saved-and-favorites.json';a.href=url;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }
+      function uploadJSON(file) {
+        if (!file) return;
+        file.text().then(s=>{
+          const data=JSON.parse(s);
+          if (data?.format !== 'BCOutfitTimeMachine' || data.version!==1 || !Array.isArray(data.saved)) throw Error('Invalid Time Machine export');
+          const saved=data.saved.filter(validEntry);
+          const favorites=(Array.isArray(data.favorites) ? data.favorites : []).filter(validEntry);
+          if (!window.confirm(`Import ${saved.length} saved looks and ${favorites.length} favorites? (No items will be equipped.)`)) return;
+          const ids=new Set(state.saved.map(e=>e.id));
+          for (const entry of saved) if (!ids.has(entry.id)) { state.saved.push(entry); ids.add(entry.id); }
+          const existing=new Set(state.favorites.map(favoriteKey));
+          for (const entry of favorites) {
+            const key=favoriteKey(entry);
+            if (key && !existing.has(key)) { state.favorites.push(entry); existing.add(key); }
+          }
+          flush();render();notify(`Imported saved looks and favorites. ${state.saved.length} saved, ${state.favorites.length} favorites total.`);
+        }).catch(err=>notify(String(err.message||err),true));
+      }
+      function itemDiff(a,b) {
+        const left=new Map((a?.items||[]).map(x=>[x.group,x]));
+        const right=new Map((b?.items||[]).map(x=>[x.group,x]));
+        const out=[];
+        for (const g of new Set([...left.keys(),...right.keys()])) {
+          const before=left.get(g), after=right.get(g);
+          if (JSON.stringify(before||null)===JSON.stringify(after||null)) continue;
+          out.push({ group:g, before:before?.name||'Empty', after:after?.name||'Empty',
+            colorChanged: !!before && !!after && JSON.stringify(before.color)!==JSON.stringify(after.color),
+            propertyChanged: !!before && !!after && JSON.stringify(before.property)!==JSON.stringify(after.property) });
+        }
+        return out.sort((x,y)=>x.group.localeCompare(y.group));
+      }
+      // --- Self-contained DOM UI, intentionally avoiding BC canvas / drawing hooks ---
+      let sheet=null, sheetMounted=false;
+      function el(tag, className='',content=null) {
+        const n=document.createElement(tag);if(className)n.className='otm-'+className;
+        if(content!=null)n.textContent=String(content);return n;
+      }
+      function button(text, fn, options={}) {
+        const b=el('button','button'+(options.primary?' primary':''),text);
+        b.type='button';b.disabled=!!options.disabled;b.addEventListener('click',fn);return b;
+      }
+      function section(parent,title) { const s=el('section','section');s.append(el('h3','section-title',title));parent.append(s);return s; }
+      function colorPreview(node,snap) {
+        const colors=[];
+        for(const item of (snap?.items||[])) {
+          const c=Array.isArray(item.color)?item.color:item.color?[item.color]:[];
+          for(const x of c) if (/^#[\da-f]{6}$/i.test(x)) colors.push(x);
+          if(colors.length>=8)break;
+        }
+        const strip=el('div','swatches');
+        for(const c of colors.slice(0,8)) { const sw=el('span','swatch');sw.style.background=c;sw.title=c;strip.append(sw); }
+        if(!colors.length)strip.append(el('span','muted','No custom colors'));
+        node.append(strip);
+      }
+      function preview(parent,entry) {
+        const box=el('div','portrait');
+        if(entry?.image && /^data:image\/(png|jpeg|webp);base64,/.test(entry.image)) {
+          const img=el('img','portrait-image');img.src=entry.image;img.alt='Captured outfit preview';box.append(img);
+        } else { box.append(el('span','portrait-placeholder','👗'));colorPreview(box,entry?.snapshot); }
+        parent.append(box);
+      }
+      function historyCard(entry,idx,kind = 'history') {
+        const c=el('div','entry');
+        preview(c,entry);
+        const content=el('div','entry-body');c.append(content);
+        content.append(el('strong','entry-title',entry.label));
+        content.append(el('div','muted',timeLabel(entry.at)));
+        content.append(el('div','muted',compactLabel(entry.snapshot)));
+        const buttons=el('div','entry-actions');content.append(buttons);
+        buttons.append(button('Restore',()=>applyRestore(entry)));
+        buttons.append(button('Compare',()=>{
+          if(state.compare.find(x=>x.id===entry.id))state.compare=state.compare.filter(x=>x.id!==entry.id);
+          else state.compare=[...state.compare.slice(-1),entry];render();
+        }));
+        const starred = kind === 'favorite' || !!findFavorite(entry);
+        buttons.append(button(starred ? '★ Favorited' : '☆ Favorite',()=>toggleFavoriteOutfit(entry)));
+        if(kind==='saved') buttons.append(button('Delete saved look',()=>{
+          if(!window.confirm(`Delete saved look “${entry.label}”?`))return;
+          state.saved=state.saved.filter(x=>x.id!==entry.id);flush();render();
+        }));
+        else if(kind==='history' && idx===state.cursor)c.classList.add('current');
+        return c;
+      }
+      function renderCompare(container) {
+        if(state.compare.length===0)return;
+        const s=section(container,'Compare');
+        const pair=el('div','compare-pair');s.append(pair);
+        for (const e of state.compare) { const half=el('div','compare-half');pair.append(half);preview(half,e);half.append(el('strong','',e.label)); }
+        if(state.compare.length===1){const current={label:'Current outfit',snapshot:collect(),image:thumbnail()};const half=el('div','compare-half');pair.append(half);preview(half,current);half.append(el('strong','',current.label));}
+        const a=state.compare[0]?.snapshot;
+        const b=state.compare[1]?.snapshot||collect();
+        const changes=itemDiff(a,b);
+        s.append(el('p','muted',`${changes.length} differing slot(s)`));
+        for(const change of changes.slice(0,80)) {
+          const row=el('div','diff-row');
+          row.append(el('strong','',change.group),el('span','',`${change.before} → ${change.after}${change.colorChanged?' · color':''}${change.propertyChanged?' · settings':''}`));s.append(row);
+        }
+        s.append(button('Clear comparison',()=>{state.compare=[];render();}));
+      }
+      function render() {
+        if(!sheetMounted || !sheet || !state.show)return;
+        const body=sheet.querySelector('.otm-content');if(!body)return;body.replaceChildren();
+        const p=player();
+        if(!p){body.append(el('p','muted','Waiting for Bondage Club to load your character…'));return;}
+        const current=collect(p);const echoExtra=current?.scope.filter(n=>!/^(Body|Eyes|Eyebrows|Mouth|Nose|Hair|Cloth|ClothLower|Bra|Panties|Socks|Shoes|Suit|HairAccessory|Gloves|Hat|Necklace|Bracelet|Wings|Tail|Mask|Corset)/i.test(n))||[];
+        const status=el('p','muted',`${current?.scope.length||0} Appearance groups available (including dynamically registered Echo slots). ${state.storageOK?'Stored locally':'Storage unavailable: session only'}.`);
+        body.append(status);
+        const knownBase = new Set(['BodyUpper','BodyLower','BodyLegs','BodyArms','BodyHands','BodySkin','Height','Eyes','Eyes2','Eyebrows','Mouth','Mouth2','Nose','HairFront','HairBack','HairAccessory1','HairAccessory2','HairAccessory3','Cloth','ClothLower','ClothAccessory','Bra','Panties','Socks','SocksLeft','SocksRight','Shoes','Suit','Gloves','Hat','Mask','Necklace','Bracelet','Corset','Wings','Tail','TailStraps','Garters','Jewelry','LeftHand','RightHand']);
+        const extraGroups = (current?.scope || []).filter(name => !knownBase.has(name));
+        if (extraGroups.length) {
+          const details = el('details','slot-details');
+          const summary = el('summary','',`${extraGroups.length} additional Appearance group(s) detected`);
+          details.append(summary,el('p','muted',extraGroups.join(', ')));
+          body.append(details);
+        }
+        const controls=section(body,`Timeline (last ${MAX_HISTORY} outfits · ${state.history.length}/${MAX_HISTORY})`);
+        const bar=el('div','toolbar');controls.append(bar);
+        bar.append(button('↶ Undo',()=>navigate(-1),{disabled:state.cursor<=0}));
+        bar.append(button('Redo ↷',()=>navigate(1),{disabled:state.cursor<0||state.cursor>=state.history.length-1}));
+        bar.append(button('Capture now',()=>{const added=recordSnapshot('Manual checkpoint',true);notify(added?'Checkpoint captured.':'Your outfit already matches the newest checkpoint.');}));
+        bar.append(button('Save named look',()=>{const name=prompt('Name your saved look:','Saved outfit');if(name!=null)makeSaved(name);} ,{primary:true}));
+        const options=el('div','toolbar');controls.append(options);
+        const toggle=(text,key)=>{const label=el('label','option');const input=el('input');input.type='checkbox';input.checked=state[key];
+          input.addEventListener('change',()=>{state[key]=input.checked;flush();state.watchSignature=null;state.watchPending=null;if(key==='body')recordSnapshot('Scope changed',true);render();});label.append(input,document.createTextNode(' '+text));options.append(label);};
+        toggle('Auto history','record');toggle('Include body / face / non-clothing Appearance groups','body');
+        controls.append(el('p','muted','The oldest automatic outfits drop off after 50. Click ☆ Favorite on any history entry to keep it permanently, separately from the timeline. Saved looks also never expire. Echo groups are included; restraint groups are never modified.'));
+        const list=el('div','history-list');controls.append(list);
+        for(const [i,e] of [...state.history].reverse().entries())list.append(historyCard(e,state.history.length-1-i,'history'));
+        if(!state.history.length)list.append(el('p','muted','No history yet.'));
+        const favorites=section(body,`★ Favorite outfits (${state.favorites.length}) · permanent`);
+        const pinned=el('div','history-list');favorites.append(pinned);
+        for(const e of state.favorites)pinned.append(historyCard(e,-1,'favorite'));
+        if(!state.favorites.length)favorites.append(el('p','muted','Star an outfit in your timeline to preserve it even after the oldest 50 history entries are cleared.'));
+        const saved=section(body,`Saved looks (${state.saved.length}) · permanent`);
+        const io=el('div','toolbar');saved.append(io);
+        io.append(button('Export favorites + saved looks',downloadJSON));
+        io.append(button('Import favorites + saved looks',()=>sheet.querySelector('.otm-import').click()));
+        const input=sheet.querySelector('.otm-import');if(input)input.value='';
+        const grid=el('div','history-list');saved.append(grid);
+        for(const e of state.saved)grid.append(historyCard(e,-1,'saved'));
+        if(!state.saved.length)grid.append(el('p','muted','Save an outfit to keep it permanently.'));
+        renderCompare(body);
+        if(state.message)body.append(el('p','notice',state.message));
+      }
+      function mount() {
+        if(sheetMounted||!document.body)return;
+        const css=el('style');css.textContent=`
+          #${PAGE_ID} {font-family:system-ui,-apple-system,Segoe UI,sans-serif;box-sizing:border-box;line-height:1.35}
+          #${PAGE_ID} *{box-sizing:border-box}
+          #${PAGE_ID}{display:none;position:fixed;right:12px;top:7vh;bottom:7vh;width:min(490px,calc(100vw - 24px));z-index:2147483400;background:#201a2b;color:#f4efff;border:1px solid #ac8acc;box-shadow:0 15px 50px #000b;border-radius:12px;overflow:hidden;font-size:13px}
+          #${PAGE_ID}.open{display:flex;flex-direction:column}
+          #${PAGE_ID} .otm-head{padding:13px 15px;display:flex;align-items:center;justify-content:space-between;background:#322640;border-bottom:1px solid #58426d}
+          #${PAGE_ID} .otm-head strong{font-size:16px}
+          #${PAGE_ID} .otm-content{padding:12px;overflow-y:auto;flex:1;overscroll-behavior:contain}
+          #${PAGE_ID} .otm-button{background:#433254;color:#f8eafa;border:1px solid #8b6bad;border-radius:7px;padding:6px 9px;cursor:pointer;font:inherit}
+          #${PAGE_ID} .otm-button.primary{background:#654678}
+          #${PAGE_ID} .otm-button:disabled{opacity:.4;cursor:not-allowed}
+          #${PAGE_ID} .otm-button:hover:not(:disabled){background:#70558b}
+          #${PAGE_ID} .otm-section{border-top:1px solid #544164;padding:10px 0}
+          #${PAGE_ID} .otm-section-title{font-size:15px;margin:4px 0 10px}
+          #${PAGE_ID} .otm-toolbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+          #${PAGE_ID} .otm-option{display:flex;align-items:center;gap:4px;color:#d4c0e2;font-size:12px}
+          #${PAGE_ID} .otm-muted{color:#b8a8c8;font-size:12px;margin:4px 0 7px}
+          #${PAGE_ID} .otm-history-list{max-height:380px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:2px}
+          #${PAGE_ID} .otm-entry{display:flex;gap:11px;border:1px solid #544267;border-radius:9px;padding:8px;background:#2c2337;min-height:110px}
+          #${PAGE_ID} .otm-entry.current{border-color:#d8a9f7}
+          #${PAGE_ID} .otm-entry-body{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}
+          #${PAGE_ID} .otm-entry-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+          #${PAGE_ID} .otm-portrait{position:relative;width:72px;height:107px;background:#1b1622;border:1px solid #534361;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;flex:none}
+          #${PAGE_ID} .otm-portrait-image{height:100%;max-width:100%;object-fit:contain}
+          #${PAGE_ID} .otm-portrait-placeholder{font-size:33px}
+          #${PAGE_ID} .otm-swatches{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-top:5px}
+          #${PAGE_ID} .otm-swatch{width:11px;height:11px;border-radius:50%;border:1px solid #fff5}
+          #${PAGE_ID} .otm-compare-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+          #${PAGE_ID} .otm-compare-half{display:flex;align-items:center;flex-direction:column;gap:6px;border:1px solid #544267;border-radius:8px;padding:10px}
+          #${PAGE_ID} .otm-compare-half .otm-portrait{width:105px;height:150px}
+          #${PAGE_ID} .otm-diff-row{display:flex;align-items:start;justify-content:space-between;gap:6px;padding:6px;border-bottom:1px solid #3e3448;font-size:12px}
+          #${PAGE_ID} .otm-diff-row span{text-align:right;overflow-wrap:anywhere}
+          #${PAGE_ID} .otm-notice{padding:7px;background:#493957;border-radius:7px}
+          @media(max-width:600px){#${PAGE_ID}{top:3vh;bottom:3vh;right:6px;width:calc(100vw - 12px)}}
+        `;document.head.append(css);
+        sheet=el('aside');sheet.id=PAGE_ID;sheet.setAttribute('role','dialog');sheet.setAttribute('aria-label','BC Outfit Time Machine');
+        const header=el('div','head');header.append(el('strong','',`⏪ Outfit Time Machine ${VERSION}`));
+        header.append(button('× Close',togglePanel));sheet.append(header);
+        sheet.append(el('div','content'));
+        const input=el('input','import');input.type='file';input.accept='.json,application/json';input.hidden=true;input.addEventListener('change',e=>uploadJSON(e.target.files?.[0]));sheet.append(input);
+        document.body.append(sheet);sheetMounted=true;
+      }
+      function togglePanel() { if(!sheetMounted)mount();loadAccount();state.show=!state.show;sheet?.classList.toggle('open',state.show);if(state.show)render(); }
+      function init() { if(window.__BCOutfitTimeMachine)return;window.__BCOutfitTimeMachine=Object.freeze({
+        version:VERSION,open:()=>{if(!state.show)togglePanel();},close:()=>{if(state.show)togglePanel();},
+        capture:(label='Manual checkpoint')=>recordSnapshot(label,true),save:makeSaved,
+        undo:()=>navigate(-1),redo:()=>navigate(1),
+        favoriteHistory:(index)=>{if(!loadAccount())return false;return toggleFavoriteOutfit(state.history[index],false);},
+        favoriteSaved:(index)=>{if(!loadAccount())return false;return toggleFavoriteOutfit(state.saved[index],false);},
+        diagnose:()=>{loadAccount();return {account:state.account, history:state.history.length,cursor:state.cursor,
+          appearanceSlots:collect()?.scope||[],saved:state.saved.length,favorites:state.favorites.length,storageOK:state.storageOK};}
+      });
+      if(document.body)mount();else document.addEventListener('DOMContentLoaded',mount,{once:true});
+      setInterval(monitor,POLL_MS);
+      setTimeout(monitor,1000);
+      window.addEventListener('keydown',e=>{
+        if(e.key==='Escape'&&state.show){togglePanel();return;}
+        if(editableTarget(e.target))return;
+        if(e.ctrlKey&&e.altKey&&!e.shiftKey&&e.key.toLowerCase()==='z'){e.preventDefault();navigate(-1);}
+        if(e.ctrlKey&&e.altKey&&!e.shiftKey&&e.key.toLowerCase()==='y'){e.preventDefault();navigate(1);}
+      });
+      console.info(`[${NAME}] v${VERSION} ready (Echo Appearance slots auto-detected).`);
+    }
+    init();
+    }
+
+    function openOutfitTimeMachine() {
+        // If the old standalone addon is still present, open the existing UI,
+        // instead of running two competing history recorders.
+        if (!window.__BCOutfitTimeMachine) installSubbysOutfitTimeMachine();
+        const api = window.__BCOutfitTimeMachine;
+        if (typeof api?.open === "function") api.open();
+        else warn("Outfit Time Machine could not be opened; check browser console.");
+    }
+
+    function openOutfitTimeMachineFromUseMenu() {
+        closeCustomPlushMenu();
+        window.setTimeout(openOutfitTimeMachine, 0);
+    }
+
+    function openOutfitTimeMachineFromExtensions() {
+        // Native Preferences > Extensions also hosts this panel. Closing it
+        // avoids an overlay being buried underneath the existing dialog.
+        closeExtensionsPanel(false);
+        window.setTimeout(openOutfitTimeMachine, 0);
+    }
+
     async function main() {
         log(`Starting standalone v${VERSION}...`);
 
@@ -20638,6 +21289,8 @@ function SubbysPlushiesPageMain() {
         // The source PNG previews are served from GitHub, while individual
         // recolorable layers are populated asynchronously after registration.
         setupWardrobeAssets();
+        try { installSubbysOutfitTimeMachine(); }
+        catch (e) { warn("Outfit Time Machine initialization failed:", e); }
         installWardrobeNativePickerHooks();
         // Some BC builds load their Appearance editor later than the asset table.
         // Bounded one-shot retries, no permanent frame loop or polling observer.
@@ -20693,7 +21346,7 @@ function SubbysPlushiesPageMain() {
     "use strict";
 
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.11";
+    const VERSION = "3.5.14";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
 
