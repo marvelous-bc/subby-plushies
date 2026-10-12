@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         BC - Subby's Plushies + Wardrobe
+// @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.14
-// @description  Subby’s Plushies + Wardrobe: Outfit Time Machine: 50 outfit history, permanent favorites, Echo batch restore, Quick Reactions
-// @released     2026-10-11
+// @version      3.5.26
+// @description  Subby's Plushies & Essentials: plushies, wardrobe tools, outfit history, hover previews, Quick Reactions, and Echo-compatible batch restore
+// @released     2026-10-12
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -23,12 +23,9 @@
 // @sandbox      raw
 // @inject-into  page
 // ==/UserScript==
-
 function SubbysPlushiesPageMain() {
     "use strict";
-
-    const VERSION = "3.5.14";
-
+    const VERSION = "3.5.26";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -38,10 +35,12 @@ function SubbysPlushiesPageMain() {
             document.documentElement?.setAttribute("data-subbys-plushies-load-source", "direct");
         }
     } catch (_) {}
-    const BUILD_DATE = "2026-10-11";
-    const TAG = "[Subby's Plushies]";
+    const BUILD_DATE = "2026-10-12";
+    const TAG = "[Subby's Plushies & Essentials]";
     const MOD_NAME = "SubbysPlushies";
-    const DISPLAY_NAME = "Subby's Plushies";
+    const DISPLAY_NAME = "Subby's Plushies";   
+    const PLUGIN_DISPLAY_NAME = "Subby's Plushies & Essentials";
+    const MOD_SDK_DISPLAY_NAME = "Subbycat's essentials";
     const FAMILY = "Female3DCG";
     const GROUP = "ItemHandheld";
     const ADDON_GROUP = "ItemAddon";
@@ -54,12 +53,10 @@ function SubbysPlushiesPageMain() {
     const PET_SUIT_ASSET_NAMES = new Set(["BitchSuit", "ShinyPetSuit", "PetCrawler"]);
     const ADDON_PRESENCE_CONTENT = "SubbysPlushiesPresence";
     const ADDON_PRESENCE_TAG = "SubbysPlushiesPresence";
-
     const HUG_TIGHTLY_ACTIVITY_NAME = "SubbysPlushiesHugTightlyItem";
     const HUG_TIGHTLY_ACTIVITY_LABEL = "Hug Tightly";
     const HUG_TIGHTLY_ACTIVITY_ID_BASE = 9000;
     const HUG_TIGHTLY_MARKER_TAG = "SubbysPlushiesHugTightly";
-
     const CUSTOM_ACTIVITY_ID_BASE = 9010;
     const EXTRA_ACTION_ID_BASE = 9060;
     const SHARED_WAVE_CONTENT = "SubbysPlushiesSharedWave";
@@ -74,7 +71,6 @@ function SubbysPlushiesPageMain() {
     const CUSTOM_ACTIVITY_SOURCE_NAME_TAG = "SubbysPlushiesSourceName";
     const CUSTOM_ACTIVITY_TARGET_MEMBER_TAG = "SubbysPlushiesTargetMember";
     const CUSTOM_ACTIVITY_TARGET_NAME_TAG = "SubbysPlushiesTargetName";
-
     const CUSTOM_PLUSH_ACTIVITIES = Object.freeze([
         {
             key: "rubFace",
@@ -261,7 +257,6 @@ function SubbysPlushiesPageMain() {
             otherText: "{Source} starts a wave emote.",
         },
     ].map(spec => Object.freeze(spec)));
-
     const EXTRA_ACTIONS = Object.freeze([
         {
             key: "extraRuffleHair",
@@ -467,7 +462,6 @@ function SubbysPlushiesPageMain() {
             otherText: "{Source} points dramatically at {Target}.",
         },
     ].map(spec => Object.freeze(spec)));
-
     const ALL_PLUGIN_ACTIVITIES = Object.freeze([...CUSTOM_PLUSH_ACTIVITIES, ...EXTRA_ACTIONS]);
     const CUSTOM_ACTIVITY_BY_KEY = new Map(CUSTOM_PLUSH_ACTIVITIES.map(spec => [spec.key, spec]));
     const CUSTOM_ACTIVITY_BY_NAME = new Map(CUSTOM_PLUSH_ACTIVITIES.map(spec => [spec.name, spec]));
@@ -475,14 +469,12 @@ function SubbysPlushiesPageMain() {
     const EXTRA_ACTION_BY_NAME = new Map(EXTRA_ACTIONS.map(spec => [spec.name, spec]));
     const PLUGIN_ACTIVITY_BY_KEY = new Map(ALL_PLUGIN_ACTIVITIES.map(spec => [spec.key, spec]));
     const PLUGIN_ACTIVITY_BY_NAME = new Map(ALL_PLUGIN_ACTIVITIES.map(spec => [spec.name, spec]));
-
     const HAIR_ACTION_KEYS = new Set([
         "extraRuffleHair",
         "extraBrushHairFromFace",
         "extraTuckHairBehindEar",
         "extraTwirlHair",
     ]);
-
     const FACE_ACTION_KEYS = new Set([
         "rubFace",
         "hideBehind",
@@ -496,11 +488,9 @@ function SubbysPlushiesPageMain() {
         "extraCupCheek",
         "extraBrushCheek",
     ]);
-
     const POINTING_ACTION_KEYS = new Set([
         "extraPointDramatically",
     ]);
-
     function customActionImageCategory(spec) {
         const key = String(spec?.key || "");
         if (HAIR_ACTION_KEYS.has(key)) return "hair";
@@ -524,9 +514,7 @@ function SubbysPlushiesPageMain() {
         TranslationY: -170,
         Rotation: 0,
     });
-
     let HIDE_BEHIND_DURATION_MS = 8000;
-
     const ACTIVITY_INTEGRITY_INTERVAL_MS = 5 * 60 * 1000;
     const ROOM_ROSTER_WATCHDOG_INTERVAL_MS = 10 * 60 * 1000;
     const LAYERING_BRIDGE_MONITOR_INTERVAL_MS = 1000;
@@ -535,7 +523,6 @@ function SubbysPlushiesPageMain() {
         TranslationY: -105,
         Rotation: 0,
     });
-
     const FEATURE_SETTINGS_STORAGE_KEY = "SubbysPlushies:feature-settings:v1";
     const LAYOUT_SETTINGS_STORAGE_KEY = "SubbysPlushies:layout-settings:v1";
     const MOOD_STORAGE_KEY = "SubbysPlushies:moods:v1";
@@ -592,12 +579,10 @@ function SubbysPlushiesPageMain() {
     let SPEECH_IDLE_CHANCE = 0.32;
     const BATTLE_CHALLENGE_RE = /(.+?)\((\d+)\) challenges (.+?)\((\d+)\) to a plushie battle with (.+?)\./i;
     const BATTLE_RESULT_RE = /Plushie battle result: (.+?)\((\d+)\) \[([^\]]+)\] (wins|loses|draws) against (.+?)\((\d+)\) \[([^\]]+)\]\. Scores (\d+)-(\d+)\./i;
-    // Public and beta branches track their own update-check clock.
     const UPDATE_CHECK_STORAGE_KEY = "SubbysPlushies:main:last-update-check:v1";
     const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
     const UPDATE_REPOSITORY_API = "https://api.github.com/repos/marvelous-bc/subby-plushies/contents/?ref=main";
     const UPDATE_REPOSITORY_PAGE = "https://github.com/marvelous-bc/subby-plushies/tree/main";
-
     let PROTECT_DURATION_MS = 2800;
     let PROTECT_TRANSFORM = Object.freeze({
         TranslationX: 0,
@@ -613,7 +598,6 @@ function SubbysPlushiesPageMain() {
     let JEALOUS_ACTIVITY_KEYWORDS = Object.freeze([
         "kiss", "hug", "cuddle", "caress", "nuzzle", "snuggle", "pet", "lick", "smooch", "poke",
     ]);
-
     let MOOD_DEFAULT_SCORE = 60;
     let MOOD_MIN_SCORE = 0;
     let MOOD_MAX_SCORE = 100;
@@ -629,13 +613,11 @@ function SubbysPlushiesPageMain() {
         Object.freeze({ maxScore: 92, label: "Very Happy" }),
         Object.freeze({ maxScore: 100, label: "Adoring" }),
     ]);
-
     let MOOD_DELTAS = Object.freeze({
         rubFace: 4, cuddleChest: 7, nuzzle: 5, pat: 3, pet: 6, hideBehind: 1,
         kissPlushie: 6, kissWith: 3, noseBoop: 3, cheekRest: 4, foreheadBump: 2, snugglePlushie: 5, bonk: -8, balanceHead: 2, show: 2,
         whisper: 3, squeezeCheeks: -2, wave: 1, hugTightly: 10, protect: 4, jealous: -4,
     });
-
     let RELATIONSHIP_LEVELS = Object.freeze([
         Object.freeze({ name: "Stranger", minInteractions: 0 }),
         Object.freeze({ name: "Familiar", minInteractions: 5 }),
@@ -651,7 +633,6 @@ function SubbysPlushiesPageMain() {
     });
     let SLEEPY_AFTER_MS = 30 * 60 * 1000;
     const SAVED_POSE_SLOTS = Object.freeze([1, 2, 3]);
-
     let PLUSH_SPEECH = Object.freeze({
         grumpy: Object.freeze(["Hmph.", "No more bonks.", "I require cuddles.", "Excuse me?!"]),
         calm: Object.freeze(["Comfy.", "Hi there.", "Just plushie things.", "I'm watching."]),
@@ -664,7 +645,6 @@ function SubbysPlushiesPageMain() {
         Object.freeze({ delayMs: 340, deltaY: -2, rotationMultiplier: 2, restore: false }),
         Object.freeze({ delayMs: 520, deltaY: 0, rotationMultiplier: 0, restore: true }),
     ]);
-
     let BATTLE_ROUNDS = 3;
     let BATTLE_RESULT_DELAY_MS = 180;
     let BATTLE_MOVES = Object.freeze([
@@ -691,7 +671,6 @@ function SubbysPlushiesPageMain() {
         Object.freeze({ id: "bestie_material", name: "Bestie Material", description: "Reach Bestie relationship with any plushie.", test: s => achievementMetricValue(s, "maxRelationshipInteractions") >= 50 }),
         Object.freeze({ id: "stitched_together", name: "Stitched Together", description: "Reach Bonded relationship with any plushie.", test: s => achievementMetricValue(s, "maxRelationshipInteractions") >= 100 }),
         Object.freeze({ id: "mascot_maker", name: "Mascot Maker", description: "Set a room mascot once.", test: s => (s.mascotSets || 0) >= 1 }),
-
         Object.freeze({ id: "royal_cuddle", name: "Royal Cuddle", description: "Use Bondage Club's base Cuddle action on Subbycat.", hidden: true, test: s => progressMetric(s, "baseCuddleSubbycat") >= 1 }),
         Object.freeze({ id: "professional_plushie_wrangler", name: "Professional Plushie Wrangler", description: "Use 10 different plushies in one session.", hidden: true, test: s => progressMetric(s, "professionalPlushieWrangler") >= 1 }),
         Object.freeze({ id: "actually_this_one", name: "Actually, This One", description: "Switch back to the same plushie 5 times within 2 minutes.", test: s => progressMetric(s, "actuallyThisOne") >= 1 }),
@@ -720,21 +699,16 @@ function SubbysPlushiesPageMain() {
         Object.freeze({ id: "royal_audience", name: "Royal Audience", description: "Be in the cuddle room with the Cuddle Queen while holding a Bonded plushie.", hidden: true, test: s => progressMetric(s, "royalAudience") >= 1 }),
     ]);
     const BUILTIN_ACHIEVEMENTS = ACHIEVEMENTS;
-
     const ROOM_MASCOT_SET_RE = /(.+?)\s+sets\s+(.+?)\s+as\s+the\s+room\s+mascot\s+plushie\.?/i;
     const ROOM_MASCOT_RANDOM_RE = /(.+?)\s+was\s+chosen\s+randomly\s+as\s+the\s+room\s+mascot\s+plushie\.?/i;
     const ROOM_MASCOT_CLEAR_RE = /(.+?)\s+clears\s+the\s+room\s+mascot\s+plushie\.?/i;
-
     const ACTIVE_GUARD = "__SUBBYS_PLUSHIES_ACTIVE__";
     if (window[ACTIVE_GUARD]) {
         console.warn(TAG, "Another Subby's Plushies build is already loaded.");
         return;
     }
-
     window[ACTIVE_GUARD] = VERSION;
-
     console.log(`[Subby v${VERSION}] Userscript injected.`);
-
     const REPOSITORY_RAW_ROOT = "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main";
     const DATA_INDEX_URL = `${REPOSITORY_RAW_ROOT}/data/index.json`;
     const GIT_DATA_SCHEMA_VERSION = 1;
@@ -756,10 +730,6 @@ function SubbysPlushiesPageMain() {
     ]);
     const UPDATE_MANIFEST_URL = `${REPOSITORY_RAW_ROOT}/version.json`;
     const PLUSH_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/plushies`;
-
-    // Three wardrobe PNGs are hosted on GitHub, even when the script runs
-    // locally. BC layers are supplied by shared color-layers.json (schema v2).
-    // Uses Plushies' existing image-source mapper (no raw drawing overrides).
     const WARDROBE_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/wardrobe`;
     const WARDROBE_LAYERS_URL = `${REPOSITORY_RAW_ROOT}/data/wardrobe/color-layers.json`;
     const WARDROBE_ITEMS = [
@@ -771,7 +741,6 @@ function SubbysPlushiesPageMain() {
     const WARDROBE_IMAGE_BY_NAME = new Map(WARDROBE_ITEMS.map(entry =>
         [entry.name, `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(entry.name)}.png`]));
     const WARDROBE_LAYER_IMAGES = new Map(WARDROBE_ITEMS.map(entry => [entry.name, new Map()]));
-    // Optional pose art follows the same per-zone native path lookup as standing.
     const WARDROBE_POSE_IMAGES = new Map();
     const WARDROBE_SLOTS = new Set(["Cloth", "Suit", "ClothLower", "Necklace", "HairAccessory2", "HairAccessory1", "Bra", "Panties", "Socks", "Shoes"]);
     const WARDROBE_POSES = ["Standing", "ArmsUp", "ArmsUpWide", "ArmsBehind", "Kneel", "AllFours"];
@@ -825,8 +794,6 @@ function SubbysPlushiesPageMain() {
                 const poses = new Map();
                 if (remote.poses && typeof remote.poses === "object") {
                     for (const [pose, spec] of Object.entries(remote.poses)) {
-                        // A previously exported OverTheHead robe pose is retired.
-                        // Ignore it without rejecting the other wardrobe artwork.
                         if (entry.name === "SubbyDrapedWrapDress" && pose === "OverTheHead") continue;
                         if (!WARDROBE_POSES.includes(pose) || pose === "Standing" || !spec ||
                             spec.width !== entry.width || spec.height !== entry.height ||
@@ -840,7 +807,6 @@ function SubbysPlushiesPageMain() {
                 pending.push([entry.name, zones, poses]);
                 metadata.push([entry, names, slot, poses]);
             }
-            // Commit metadata atomically after validation; no partial modifications.
             const remoteColorValue = (name, zone) => {
                 const color = payload.items?.[name]?.zoneColors?.[zone];
                 return typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) ? color.toUpperCase() : null;
@@ -868,10 +834,8 @@ function SubbysPlushiesPageMain() {
             return false;
         } finally { window.clearTimeout(timeout); }
     }
-    // Start the remote asset fetch immediately at document-start, while BC loads.
     const wardrobeEarlyLayerPromise = loadWardrobeColorLayers();
     const wardrobeState = { status: "waiting", registered: [], errors: [], methods: [], attempted: false };
-    // Retain v4 accessory positions but discard removed/unknown Wardrobe assets.
     const WARDROBE_PLACEMENT_STORAGE_KEY = "SubbysPlushies:beta:wardrobe-placements:v4";
     const wardrobePlacements = (() => {
         try {
@@ -885,8 +849,6 @@ function SubbysPlushiesPageMain() {
                         saved[entry.name] = previous[entry.name];
                 }
             }
-            // v3.4.8 updated the native dress baseline for 155 cm / Echo -40.
-            // Forget exact old defaults without overwriting genuinely custom fits.
             const dressSaved = saved.SubbyDrapedWrapDress;
             if (dressSaved && Number(dressSaved.left) === 85 &&
                 (Number(dressSaved.top) === 170 || Number(dressSaved.top) === 167)) {
@@ -896,7 +858,6 @@ function SubbysPlushiesPageMain() {
             return saved;
         } catch (_) { return {}; }
     })();
-    // Native asset coordinates are in the 500 x 1000 character coordinate system.
     function wardrobePlacement(entry) {
         const saved = wardrobePlacements[entry.name];
         const coordinate = (value, fallback) => Number.isFinite(Number(value))
@@ -906,7 +867,6 @@ function SubbysPlushiesPageMain() {
             top: saved && typeof saved === "object" ? coordinate(saved.top, entry.top) : entry.top,
         };
     }
-
     function wardrobeApplyPlacement(entry, asset) {
         if (!asset) return false;
         const { left, top } = wardrobePlacement(entry);
@@ -916,16 +876,10 @@ function SubbysPlushiesPageMain() {
         const dy = Number.isFinite(oldTop) ? top - oldTop : 0;
         asset.Left = left;
         asset.Top = top;
-        // These are image dimensions, NOT BC's character HeightModifier. Without
-        // explicit zero, some BC implementations can include an undefined or
-        // inherited modifier when recalculating character vertical placement.
         asset.HeightModifier = 0;
         if (asset.OverrideHeight != null) asset.OverrideHeight = null;
-        // Keep renderer metadata and the actual PNG dimensions identical.
         asset.Width = entry.width;
         asset.Height = entry.height;
-        // Some BC builds materialize native layer positions/sizes separately.
-        // Never set undefined layer offsets (which could double-add the asset's offset).
         for (const layer of (Array.isArray(asset.Layer) ? asset.Layer : [])) {
             if (Number.isFinite(layer.Left)) layer.Left += dx;
             if (Number.isFinite(layer.Top)) layer.Top += dy;
@@ -934,10 +888,6 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
-    // The Wardrobe item must never be able to move the character. BC can
-    // calculate HeightModifier using BOTH Asset and equipped Item.Property.
-    // Normalize only OUR Wardrobe assets; leave all unrelated clothing alone.
     function wardrobeNeutralizeHeight(entry, item = null) {
         if (!entry) return false;
         const asset = window.AssetGet?.(FAMILY, entry.group, entry.name);
@@ -947,13 +897,11 @@ function SubbysPlushiesPageMain() {
         const equipped = item || (window.Player && window.InventoryGet?.(window.Player, entry.group)) ||
             window.Player?.Appearance?.find?.(a => a?.Asset?.Group?.Name === entry.group);
         if (equipped?.Asset?.Name === entry.name && equipped.Property && typeof equipped.Property === "object") {
-            // Legacy versions may have persisted an unwanted height override.
             delete equipped.Property.HeightModifier;
             delete equipped.Property.OverrideHeight;
         }
         return true;
     }
-
     function wardrobeSetPlacement(name, deltaLeft = 0, deltaTop = 0, reset = false) {
         const entry = wardrobeEntryByName(name);
         if (!entry) return false;
@@ -970,16 +918,11 @@ function SubbysPlushiesPageMain() {
         try { window.localStorage?.setItem(WARDROBE_PLACEMENT_STORAGE_KEY, JSON.stringify(wardrobePlacements)); } catch (_) {}
         wardrobeApplyPlacement(entry, asset);
         wardrobeNeutralizeHeight(entry);
-        // Redraw on demand only (never a drag-time timer or global render hook).
         try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
         if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return wardrobePlacement(entry);
     }
-
-    // The Appearance picker may consult BC's loaded translation table directly,
-    // instead of calling the mod-hooked AssetTextGet function. Keep all backends in sync.
     function wardrobeRepairAssetText(entry) {
-        // BC, BCX, and appearance extensions use slightly different forms.
         const groups = entry.group === "HairAccessory2" ? ["HairAccessory1", "HairAccessory2"] : [entry.group];
         const names = groups.flatMap(group => [
             `${group}${entry.name}`, `${group}-${entry.name}`, `${group}:${entry.name}`,
@@ -1000,7 +943,6 @@ function SubbysPlushiesPageMain() {
             }
         }
     }
-
     function wardrobeSpriteForPath(path) {
         if (typeof path !== "string" || !/subby/i.test(path) || !/\.png(?:[?#]|$)/i.test(path)) return null;
         const normalized = path.replace(/\\/g, "/").split(/[?#]/, 1)[0];
@@ -1014,7 +956,6 @@ function SubbysPlushiesPageMain() {
             const image = WARDROBE_IMAGE_BY_NAME.get(entry.name);
             if (filename === `${entry.name}.png` || filename === `${entry.name}_Preview.png` ||
                 suffix === `Preview/${entry.name}.png` || suffix === `Preview/${entry.name}_0.png`) {
-                // BC's pose router may request a pose-folder copy of the base item.
                 const folderPose = normalized.split("/").find(part => WARDROBE_POSES.includes(part));
                 const posed = WARDROBE_POSE_IMAGES.get(entry.name)?.get(folderPose);
                 return posed ? `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(posed.file)}` : image || null;
@@ -1026,7 +967,6 @@ function SubbysPlushiesPageMain() {
                     filename.toLowerCase().includes(`_${candidate.toLowerCase()}_`) ||
                     filename.toLowerCase().endsWith(`_${candidate.toLowerCase()}.png`)) pose = candidate;
             }
-            // BC may ask for original pose names (e.g. OverTheHead) before mapping.
             for (const [nativePose, mapped] of Object.entries(WARDROBE_NATIVE_POSE)) {
                 if (poseByFolder.includes(nativePose.toLowerCase())) pose = mapped;
             }
@@ -1050,7 +990,6 @@ function SubbysPlushiesPageMain() {
         }
         return null;
     }
-
     Object.defineProperty(window, "SubbysWardrobeCurated", {
         configurable: true,
         value: Object.freeze({
@@ -1091,8 +1030,6 @@ function SubbysPlushiesPageMain() {
             displayText: wardrobeResolveMissingVisibleLabel,
             get methods() { return [...wardrobeState.methods]; },
             get assets() { return WARDROBE_ITEMS.map(wardrobeCatalogStatus); },
-            // BC scales native clothing and the whole character together.
-            // This is diagnostic only; do not add a second scale for Echo.
             heightFit: (name = "SubbyDrapedWrapDress", C = window.Player) => {
                 const entry = WARDROBE_ITEMS.find(item => item.name === name);
                 if (!entry || !C) return null;
@@ -1125,29 +1062,23 @@ function SubbysPlushiesPageMain() {
             resetMoveResize: name => wardrobeResetMoveResize(name),
             getColors: name => wardrobeGetColors(name),
             setColors: (name, values) => wardrobeSetColors(name, values),
-            // Use in console to confirm BC's exact generated layer paths.
             resolveSpritePath: path => {
                 const image = wardrobeSpriteForPath(path);
                 return image ? { matched: true, embedded: image.startsWith("data:image/png;") } : { matched: false };
             },
         }),
     });
-
     const SFX_ASSET_ROOT = `${REPOSITORY_RAW_ROOT}/assets/sfx`;
     const plushAsset = fileName => `${PLUSH_ASSET_ROOT}/${fileName}`;
-
     const HAIR_ACTION_ICON_URL = plushAsset("hairaction.png");
     const FACE_ACTION_ICON_URL = plushAsset("faceaction.png");
     const POINTING_ACTION_ICON_URL = plushAsset("pointing.png");
-
     const PURR_SFX_URLS = Object.freeze([
         `${SFX_ASSET_ROOT}/purr.mp3`,
         `${SFX_ASSET_ROOT}/purr.ogg`,
         `${SFX_ASSET_ROOT}/purr.wav`,
     ]);
-
     const PLUSH_FALLBACK_IMAGE = plushAsset("subbycat.png");
-
     const PLUSHES = Object.freeze([
         { name: "Subbycat", image: plushAsset("subbycat.png") },
         { name: "Ale", image: plushAsset("ale.png") },
@@ -1167,21 +1098,16 @@ function SubbysPlushiesPageMain() {
         { name: "Hira", image: plushAsset("hira.png") },
         { name: "Pink", image: plushAsset("pink.png") },
         { name: "Kyu", image: PLUSH_FALLBACK_IMAGE },
-
         { name: "Subbycat", image: plushAsset("subbycat.png"), wireAlias: true },
-
         { name: "Rey", image: plushAsset("rey.png") },
         { name: "Margot", image: plushAsset("margot.png") },
         { name: "Mara", image: plushAsset("mara.png") },
         { name: "Eva", image: plushAsset("eva.png") },
     ].map(Object.freeze));
-
     const PUBLIC_PLUSH_COUNT = 22;
     const SUBBYCAT_WIRE_OPTION = 18;
-
     const PLUSH_NAMES = Object.freeze(PLUSHES.map(plush => plush.name));
     const PLUSH_IMAGES = Object.freeze(PLUSHES.map(plush => plush.image));
-
     const BUILTIN_PLUSH_LORE = Object.freeze({
         Rey: Object.freeze({
             title: "Rey",
@@ -1199,7 +1125,6 @@ function SubbysPlushiesPageMain() {
         }),
     });
     let PLUSH_LORE = BUILTIN_PLUSH_LORE;
-
     const CHARACTER_MENU = Object.freeze([
         { label: "Subbycat", submenu: true },
         { label: "Ale", option: 1 },
@@ -1219,7 +1144,6 @@ function SubbysPlushiesPageMain() {
         { label: "Margot", option: 19 },
         { label: "Mara", option: 20 },
     ].map(Object.freeze));
-
     const SUBBYCAT_MENU = Object.freeze([
         { label: "Subbycat", option: 0 },
         { label: "Subbycat and luna", option: 5 },
@@ -1228,7 +1152,6 @@ function SubbysPlushiesPageMain() {
         { label: "Subbycat and pink", option: 8 },
         { label: "Subbycat and Steele", option: 9 },
     ].map(Object.freeze));
-
     const PLUSH_DRAW_PRIORITY = 51;
     const PLUSH_RENDER = Object.freeze({
         Left: 186,
@@ -1236,7 +1159,6 @@ function SubbysPlushiesPageMain() {
         Width: 128,
         Height: 128,
     });
-
     const DEFAULT_TRANSFORM = Object.freeze({
         TranslationX: 0,
         TranslationY: 0,
@@ -1244,7 +1166,6 @@ function SubbysPlushiesPageMain() {
         ScaleY: 1,
         Rotation: 0,
     });
-
     const NATIVE_LAYER_TRANSFORM_KEYS = Object.freeze([
         "TranslationX",
         "TranslationY",
@@ -1259,7 +1180,6 @@ function SubbysPlushiesPageMain() {
         ScaleY: "LayerScaleY",
         Rotation: "LayerRotation",
     });
-
     const MENU = Object.freeze({
         PanelX: 1000,
         PanelY: 0,
@@ -1286,7 +1206,6 @@ function SubbysPlushiesPageMain() {
         BackW: 420,
         BackH: 75,
     });
-
     const LOFI_MENU_STYLE = Object.freeze({
         background: "#211B2B",
         header: "#2A2233",
@@ -1310,12 +1229,10 @@ function SubbysPlushiesPageMain() {
         extensionsDensity: "cozy",
         loreListSide: "left",
     });
-
     const INTERFACE_COLOR_KEYS = Object.freeze([
         "background", "header", "surface", "surfaceHover", "selected",
         "border", "accent", "text", "muted", "shadow",
     ]);
-
     const INTERFACE_COLOR_LABELS = Object.freeze({
         background: "Background",
         header: "Header",
@@ -1328,7 +1245,6 @@ function SubbysPlushiesPageMain() {
         muted: "Muted text",
         shadow: "Shadow",
     });
-
     const INTERFACE_COLOR_PRESETS = Object.freeze({
         "Lo-fi": Object.freeze({ ...LOFI_MENU_STYLE }),
         "Midnight": Object.freeze({
@@ -1357,7 +1273,6 @@ function SubbysPlushiesPageMain() {
             accent: "#D0D0D0", text: "#F4F4F4", muted: "#B8B8B8", shadow: "#0B0B0B",
         }),
     });
-
     const FEATURE_MENU = Object.freeze({
         TimeMachine: Object.freeze({ x: 1510, y: 770, w: 430, h: 58 }),
         Emotes: Object.freeze({ x: 1040, y: 842, w: 280, h: 58 }),
@@ -1380,7 +1295,6 @@ function SubbysPlushiesPageMain() {
         IgnorePoseChanges: Object.freeze({ x: 1650, y: 770, w: 300, h: 58 }),
         SettingsBack: Object.freeze({ x: 1640, y: 103, w: 235, h: 38 }),
     });
-
     const USE_MENU_EMOTES = Object.freeze([
         Object.freeze({ rect: FEATURE_MENU.Emotes, label: "♥ Happy", type: "happy" }),
         Object.freeze({ rect: FEATURE_MENU.Mascot, label: "!! Angry", type: "angry" }),
@@ -1388,16 +1302,14 @@ function SubbysPlushiesPageMain() {
         Object.freeze({ rect: FEATURE_MENU.Presets, label: "! Protective", type: "protective" }),
         Object.freeze({ rect: FEATURE_MENU.Extensions, label: "… Sulky", type: "sulky" }),
     ]);
-
     const EXTENSIONS_IDENTIFIER = "SubbysPlushies";
-    const EXTENSIONS_BUTTON_TEXT = "Subby's Plushies";
+    const EXTENSIONS_BUTTON_TEXT = PLUGIN_DISPLAY_NAME;
     const EXTENSIONS_TABS = Object.freeze(["status", "lore", "wardrobe", "settings", "progress", "commands"]);
-
     const CURRENT_COMMAND_GROUPS = Object.freeze([
         Object.freeze({
             title: "General",
             commands: Object.freeze([
-                Object.freeze({ command: "/help plushie", description: "Show the complete Subby's Plushies command reference in chat." }),
+                Object.freeze({ command: "/help plushie", description: "Show the complete Subby's Plushies & Essentials command reference in chat." }),
                 Object.freeze({ command: "/help plushies", description: "Alias for /help plushie." }),
                 Object.freeze({ command: "/plushie", description: "Equip Subby's Plushies in ItemHandheld." }),
                 Object.freeze({ command: "/plushieuse", description: "Open the plushie selector / Use menu." }),
@@ -1410,7 +1322,7 @@ function SubbysPlushiesPageMain() {
         Object.freeze({
             title: "Extensions & Navigation",
             commands: Object.freeze([
-                Object.freeze({ command: "/plushieextensions", description: "Open the Subby's Plushies Extensions control center on Settings." }),
+                Object.freeze({ command: "/plushieextensions", description: "Open the Subby's Plushies & Essentials Extensions control center on Settings." }),
                 Object.freeze({ command: "/plushiestatus", description: "Open the Status tab." }),
                 Object.freeze({ command: "/plushiewardrobe", description: "Open Wardrobe: multicolor cat-ear headband and heart charm, with position controls." }),
                 Object.freeze({ command: "/plushietimemachine", description: "Open outfit history, undo/redo, saved looks and Echo-compatible wardrobe batch restore." }),
@@ -1488,8 +1400,8 @@ function SubbysPlushiesPageMain() {
         Object.freeze({
             title: "Backup / Restore",
             commands: Object.freeze([
-                Object.freeze({ command: "/plushieexport", description: "Export a portable Subby's Plushies JSON backup." }),
-                Object.freeze({ command: "/plushieimport", description: "Choose and restore a Subby's Plushies JSON backup." }),
+                Object.freeze({ command: "/plushieexport", description: "Export a portable Subby's Plushies & Essentials JSON backup." }),
+                Object.freeze({ command: "/plushieimport", description: "Choose and restore a Subby's Plushies & Essentials JSON backup." }),
             ]),
         }),
         Object.freeze({
@@ -1504,16 +1416,13 @@ function SubbysPlushiesPageMain() {
             ]),
         }),
     ]);
-
     let EXTENSIONS_COMMAND_GROUPS = CURRENT_COMMAND_GROUPS;
-
     const SIZE_TOKENS = Object.freeze(["Normal", "Small", "Large", "XLarge"]);
     const assetBaseForGroup = groupName => `Assets/${FAMILY}/${groupName}/${ASSET_NAME}`;
     const extendedPrefixForGroup = groupName => `Inventory${groupName}${ASSET_NAME}`;
     const ASSET_BASE = assetBaseForGroup(GROUP);
     const EXTENDED_PREFIX = extendedPrefixForGroup(GROUP);
     const EXTENSIONS_ICON_PATH = `${ASSET_BASE}.png`;
-
     const renderImages = new Array(PLUSHES.length);
     const renderImagePromises = new Map();
     const lazyNativeImageElementsBySource = new Map();
@@ -1522,7 +1431,6 @@ function SubbysPlushiesPageMain() {
     let hairActionIconImage = null;
     let faceActionIconImage = null;
     let pointingActionIconImage = null;
-
     function uiPlushImageSource(optionIndex) {
         const index = Math.trunc(Number(optionIndex));
         if (!Number.isFinite(index) || index < 0 || index >= PLUSH_IMAGES.length) {
@@ -1532,7 +1440,6 @@ function SubbysPlushiesPageMain() {
         if (prepared && prepared !== renderFallbackImage) return prepared;
         return PLUSH_IMAGES[index] || prepared || renderFallbackImage || PLUSH_FALLBACK_IMAGE;
     }
-
     function installUiPlushImageFallback(image) {
         if (!image || typeof image.addEventListener !== "function") return image;
         image.addEventListener("error", () => {
@@ -1583,7 +1490,6 @@ function SubbysPlushiesPageMain() {
     let lastOfferSignalReceived = null;
     let lastOfferPromptDisplayed = null;
     let lastOfferActionSeen = null;
-
     let offerChatObserver = null;
     let offerChatObservedRoot = null;
     let offerChatObserverMonitor = null;
@@ -1599,7 +1505,6 @@ function SubbysPlushiesPageMain() {
     const processedBalanceHeadChatRows = new WeakSet();
     const processedHideBehindChatRows = new WeakSet();
     const processedProtectChatRows = new WeakSet();
-
     const OFFER_TRANSFER_PENDING_MS = 120000;
     const pendingOutgoingPlushOffers = new Map();
     let offerTransferReceiveAttempts = 0;
@@ -1613,7 +1518,6 @@ function SubbysPlushiesPageMain() {
     let lastOfferDecisionSeen = null;
     let offerPendingCapturedFromRenderedAction = 0;
     let lastRenderedOutgoingOfferCapture = null;
-
     let balanceHeadGeneration = 0;
     let activeBalanceHeadSession = null;
     let balanceHeadMinigameElement = null;
@@ -1647,7 +1551,6 @@ function SubbysPlushiesPageMain() {
     let lastHideBehindRenderedAction = null;
     let lastHideBehindTriggerSource = null;
     let lastHideBehindEffect = null;
-
     let featureSettingsState = null;
     let layoutSettingsState = null;
     let moodState = null;
@@ -1669,7 +1572,6 @@ function SubbysPlushiesPageMain() {
     let dragSession = null;
     let dragFrameRequest = null;
     let dragHandlersInstalled = false;
-
     const directDragOverlayBoundsByGroup = new Map();
     const directDragOverlayErrorByGroup = new Map();
     let dragToggleButton = null;
@@ -1734,7 +1636,6 @@ function SubbysPlushiesPageMain() {
     const manualPlushMainBounds = new Map();
     const canvasOverlayImageCache = new Map();
     const lastCharacterChatRoomDraw = new Map();
-
     let backupImportInput = null;
     let lastPlayerChatRoomDraw = null;
     let plushSearchInput = null;
@@ -1753,7 +1654,6 @@ function SubbysPlushiesPageMain() {
         indexPluginVersion: null,
         lastError: null,
     };
-
     let extensionsPanelElement = null;
     let extensionsPanelContent = null;
     let extensionsActiveTab = "status";
@@ -1764,11 +1664,9 @@ function SubbysPlushiesPageMain() {
     let extensionsIntegrationInstalled = false;
     let extensionsNativeRegistered = false;
     let extensionsOpenedFromNativePreference = false;
-
     let activitySearchInput = null;
     let activitySearchQuery = "";
     let activitySearchLastGroup = null;
-
     let nativeLayeringBridgeTimer = null;
     let nativeLayeringBridgeRoot = null;
     let nativeLayeringBridgeInputHandler = null;
@@ -1780,7 +1678,6 @@ function SubbysPlushiesPageMain() {
     let nativeLayeringResizeWrapCount = 0;
     let lastNativeLayeringSync = null;
     let lastNativeLayeringInput = null;
-
     let purrAudioContext = null;
     let purrSfxWorkingUrl = null;
     let activePurrAudio = null;
@@ -1791,26 +1688,22 @@ function SubbysPlushiesPageMain() {
     let hugTightlyEventSequence = 0;
     let pendingLocalHugTightlyUntil = 0;
     const recentPurrTokens = new Map();
-
     let lastPlushOption = SUBBYCAT_WIRE_OPTION;
     let plushStateRepairCount = 0;
     let lastPlushStateRepair = null;
     let stabilizerGeneration = 0;
-
     const plushStateByCharacter = new Map();
     let actionRecoveryCount = 0;
     let lastActionRecovery = null;
     let actionRecoveryGeneration = 0;
     let localPlushRepairSuppressedUntil = 0;
     let lastLocalPlushRepairSuppression = null;
-
     let roomRosterSignature = null;
     let roomRosterWatchdog = null;
     let roomRosterEventHookCount = 0;
     let roomRosterEventCheckGeneration = 0;
     let roomRosterRecoveryCount = 0;
     let lastRoomRosterRecovery = null;
-
     const installedHooks = new Set();
     const CUSTOM_HOOK_MARK = Symbol("SubbysPlushiesHook");
     const NATIVE_LAYERING_RESIZE_MARK = Symbol("SubbysPlushiesLayeringResizeBridge");
@@ -1828,23 +1721,20 @@ function SubbysPlushiesPageMain() {
     let dogsCompatibilityLateModApi = null;
     let plushieCommandAutocompleteState = null;
     let plushieCommandAutocompleteCache = null;
-
     const log = (...args) => console.log(TAG, ...args);
     const warn = (...args) => console.warn(TAG, ...args);
     const error = (...args) => console.error(TAG, ...args);
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
     function initHookBackend() {
         const sdk = window.bcModSdk || window.bcModSDK;
         if (!sdk || typeof sdk.registerMod !== "function") {
             hookBackend = "direct";
             return;
         }
-
         try {
             modApi = sdk.registerMod({
-                name: MOD_NAME,
-                fullName: DISPLAY_NAME,
+                name: MOD_SDK_DISPLAY_NAME,
+                fullName: MOD_SDK_DISPLAY_NAME,
                 version: VERSION,
                 repository: "https://github.com/marvelous-bc/subby-plushies",
             });
@@ -1855,48 +1745,39 @@ function SubbysPlushiesPageMain() {
             warn("Hook registration was unavailable; using local wrappers instead:", e);
         }
     }
-
     function installHook(functionName, priority, handler) {
         if (installedHooks.has(functionName)) return true;
         const original = window[functionName];
         if (typeof original !== "function") return false;
-
         if (modApi && typeof modApi.hookFunction === "function") {
             modApi.hookFunction(functionName, priority, (args, next) => handler(args, next));
             installedHooks.add(functionName);
             return true;
         }
-
         if (original[CUSTOM_HOOK_MARK]) {
             installedHooks.add(functionName);
             return true;
         }
-
         const wrapped = function (...args) {
             const next = nextArgs => original.apply(this, Array.isArray(nextArgs) ? nextArgs : args);
             return handler(args, next);
         };
-
         try {
             Object.defineProperty(wrapped, CUSTOM_HOOK_MARK, { value: true });
         } catch (_) {}
-
         window[functionName] = wrapped;
         installedHooks.add(functionName);
         return true;
     }
-
     function dogsLockAssetName(lock) {
         if (typeof lock === "string") return lock;
         return lock?.Asset?.Name || lock?.Name || null;
     }
-
     function dogsAddonDetected() {
         try {
             if (typeof window.AssetGet === "function" &&
                 window.AssetGet(FAMILY, "ItemMisc", DOGS_DEVIOUS_PADLOCK_NAME)) return true;
         } catch (_) {}
-
         try {
             const sdk = window.bcModSdk || window.bcModSDK;
             const mods = typeof sdk?.getModsInfo === "function" ? sdk.getModsInfo() : null;
@@ -1906,43 +1787,35 @@ function SubbysPlushiesPageMain() {
                 return name.toUpperCase() === "DOGS" || /Devious\s+Obligate\s+Great\s+Stuff/i.test(fullName);
             })) return true;
         } catch (_) {}
-
         try {
             if (window.Player?.DOGS) return true;
             if (Array.isArray(window.ChatRoomCharacter) && window.ChatRoomCharacter.some(C => !!C?.DOGS)) return true;
         } catch (_) {}
         return false;
     }
-
     function dogsInventoryLockCompatibilityHandler(args, next) {
         const C = args?.[0];
         const itemOrGroup = args?.[1];
         const lock = args?.[2];
         if (dogsLockAssetName(lock) !== DOGS_DEVIOUS_PADLOCK_NAME) return next(args);
-
         const groupName = typeof itemOrGroup === "string"
             ? itemOrGroup
             : itemOrGroup?.Asset?.Group?.Name;
         if (!PLUSH_GROUPS.includes(groupName)) return next(args);
-
         const item = typeof itemOrGroup === "string"
             ? getInventoryItem(C, groupName)
             : itemOrGroup;
         if (!isOurs(item)) return next(args);
-
         const forwarded = Array.isArray(args) ? args.slice() : Array.from(args || []);
         const convertedGroupToItem = typeof itemOrGroup === "string";
         if (convertedGroupToItem) forwarded[1] = item;
-
         const result = next(forwarded);
         const property = getProperty(item);
         let markerRestored = false;
-
         if (property && itemHasActiveLock(item) && property.Name !== DOGS_DEVIOUS_PADLOCK_NAME) {
             property.Name = DOGS_DEVIOUS_PADLOCK_NAME;
             markerRestored = true;
         }
-
         dogsCompatibilityFixCount++;
         lastDogsCompatibilityFix = {
             groupName,
@@ -1952,7 +1825,6 @@ function SubbysPlushiesPageMain() {
             lockMemberNumber: property?.LockMemberNumber ?? null,
             at: new Date().toISOString(),
         };
-
         if (markerRestored && C === window.Player && window.CurrentScreen === "ChatRoom") {
             window.setTimeout(() => {
                 try {
@@ -1964,10 +1836,8 @@ function SubbysPlushiesPageMain() {
                 } catch (_) {}
             }, 0);
         }
-
         return result;
     }
-
     function installDogsCompatibilitySdkHook(api, label = "SDK") {
         if (dogsCompatibilitySdkHookInstalled || !api || typeof api.hookFunction !== "function") return false;
         try {
@@ -1984,21 +1854,18 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function scheduleLateDogsCompatibilitySdkUpgrade(attempt = 0) {
         if (dogsCompatibilitySdkHookInstalled || modApi || attempt >= DOGS_COMPAT_SDK_RETRY_DELAYS_MS.length) return false;
         if (dogsCompatibilityRetryTimer != null) return true;
-
         dogsCompatibilityRetryTimer = window.setTimeout(() => {
             dogsCompatibilityRetryTimer = null;
             if (dogsCompatibilitySdkHookInstalled || modApi) return;
-
             const sdk = window.bcModSdk || window.bcModSDK;
             if (sdk && typeof sdk.registerMod === "function") {
                 try {
                     dogsCompatibilityLateModApi = sdk.registerMod({
                         name: `${MOD_NAME}DOGSCompat`,
-                        fullName: `${DISPLAY_NAME} — DOGS compatibility`,
+                        fullName: `${MOD_SDK_DISPLAY_NAME} — DOGS compatibility`,
                         version: VERSION,
                         repository: "https://github.com/marvelous-bc/subby-plushies",
                     });
@@ -2014,12 +1881,10 @@ function SubbysPlushiesPageMain() {
         }, DOGS_COMPAT_SDK_RETRY_DELAYS_MS[attempt]);
         return true;
     }
-
     function installDogsCompatibilityBridge() {
         if (modApi && typeof modApi.hookFunction === "function") {
             return installDogsCompatibilitySdkHook(modApi, "SDK high-priority bridge");
         }
-
         const directInstalled = installHook(
             "InventoryLock",
             DOGS_COMPAT_HOOK_PRIORITY,
@@ -2032,7 +1897,6 @@ function SubbysPlushiesPageMain() {
         scheduleLateDogsCompatibilitySdkUpgrade();
         return directInstalled;
     }
-
     function dogsCompatibilityDebugSnapshot() {
         const equipped = getEquippedPlushItems(window.Player).map(item => ({
             group: item?.Asset?.Group?.Name || null,
@@ -2055,7 +1919,6 @@ function SubbysPlushiesPageMain() {
             equipped,
         };
     }
-
     function readLocalJSON(key, fallback) {
         try {
             const raw = window.localStorage?.getItem(key);
@@ -2066,7 +1929,6 @@ function SubbysPlushiesPageMain() {
             return fallback;
         }
     }
-
     function writeLocalJSON(key, value) {
         try {
             window.localStorage?.setItem(key, JSON.stringify(value));
@@ -2075,7 +1937,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function getFeatureSettings() {
         if (featureSettingsState) return featureSettingsState;
         const stored = readLocalJSON(FEATURE_SETTINGS_STORAGE_KEY, {});
@@ -2100,7 +1961,6 @@ function SubbysPlushiesPageMain() {
         };
         return featureSettingsState;
     }
-
     function setFeatureSetting(key, enabled) {
         const settings = getFeatureSettings();
         if (!Object.prototype.hasOwnProperty.call(settings, key) || key === "performanceMode") return false;
@@ -2135,22 +1995,18 @@ function SubbysPlushiesPageMain() {
         if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return settings[key];
     }
-
     function isLowCpuMode() {
         return getFeatureSettings().performanceMode === "low";
     }
-
     function performanceInterval(normalMs, lowCpuMs) {
         return isLowCpuMode() ? lowCpuMs : normalMs;
     }
-
     function restartPerformanceSensitiveMonitors() {
         if (plushStatusIconTimer != null) {
             window.clearTimeout(plushStatusIconTimer);
             plushStatusIconTimer = null;
         }
         startPlushStatusIconMonitor();
-
         if (roomRosterWatchdog != null) {
             window.clearInterval(roomRosterWatchdog);
             roomRosterWatchdog = window.setInterval(
@@ -2158,16 +2014,13 @@ function SubbysPlushiesPageMain() {
                 performanceInterval(ROOM_ROSTER_WATCHDOG_INTERVAL_MS, ROOM_ROSTER_WATCHDOG_INTERVAL_MS * 2)
             );
         }
-
         if (hugTightlyActivityMonitor != null) {
             window.clearTimeout(hugTightlyActivityMonitor);
             hugTightlyActivityMonitor = null;
             scheduleActivityIntegrityCheck();
         }
-
         return true;
     }
-
     function setPerformanceMode(mode) {
         const normalized = String(mode || "").trim().toLowerCase();
         const next = normalized === "low" || normalized === "low cpu" || normalized === "lowcpu" ? "low" : "normal";
@@ -2181,17 +2034,14 @@ function SubbysPlushiesPageMain() {
         emitPluginApiEvent("performance", { mode: next });
         return next;
     }
-
     function toggleFeatureSetting(key) {
         const settings = getFeatureSettings();
         return setFeatureSetting(key, !settings[key]);
     }
-
     function sanitizeInterfaceColor(value, fallback) {
         const normalized = String(value || "").trim();
         return /^#[0-9a-f]{6}$/i.test(normalized) ? normalized.toUpperCase() : fallback;
     }
-
     function normalizeInterfacePalette(value) {
         const source = value && typeof value === "object" ? value : {};
         const palette = {};
@@ -2200,7 +2050,6 @@ function SubbysPlushiesPageMain() {
         }
         return palette;
     }
-
     function getLayoutSettings() {
         if (layoutSettingsState) return layoutSettingsState;
         const stored = readLocalJSON(LAYOUT_SETTINGS_STORAGE_KEY, {});
@@ -2214,15 +2063,12 @@ function SubbysPlushiesPageMain() {
         };
         return layoutSettingsState;
     }
-
     function getUseMenuStyle() {
         return getLayoutSettings().useMenuColors;
     }
-
     function getExtensionsStyle() {
         return getLayoutSettings().extensionsColors;
     }
-
     function setLayoutSetting(key, value) {
         const settings = getLayoutSettings();
         if (!Object.prototype.hasOwnProperty.call(settings, key)) return false;
@@ -2237,7 +2083,6 @@ function SubbysPlushiesPageMain() {
         if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return value;
     }
-
     function setInterfaceColor(scope, key, value) {
         if (!INTERFACE_COLOR_KEYS.includes(key)) return false;
         const settings = getLayoutSettings();
@@ -2250,7 +2095,6 @@ function SubbysPlushiesPageMain() {
         if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return palette[key];
     }
-
     function applyInterfacePalette(scope, palette) {
         const settings = getLayoutSettings();
         const settingsKey = scope === "extensions" ? "extensionsColors" : "useMenuColors";
@@ -2260,16 +2104,13 @@ function SubbysPlushiesPageMain() {
         if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return { ...settings[settingsKey] };
     }
-
     function resetInterfacePalette(scope) {
         return applyInterfacePalette(scope, LOFI_MENU_STYLE);
     }
-
     function copyInterfacePalette(fromScope, toScope) {
         const source = fromScope === "extensions" ? getExtensionsStyle() : getUseMenuStyle();
         return applyInterfacePalette(toScope, source);
     }
-
     function applySharedInterfaceTheme(palette) {
         const settings = getLayoutSettings();
         const normalized = normalizeInterfacePalette(palette);
@@ -2280,7 +2121,6 @@ function SubbysPlushiesPageMain() {
         if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return { ...normalized };
     }
-
     function resetLayoutSettings() {
         layoutSettingsState = {
             ...LAYOUT_DEFAULTS,
@@ -2297,37 +2137,31 @@ function SubbysPlushiesPageMain() {
             extensionsColors: { ...layoutSettingsState.extensionsColors },
         };
     }
-
     function useMenuLayoutMetrics() {
         const compact = getLayoutSettings().useMenuDensity === "compact";
         return compact
             ? { startY: 162, rowGap: 66, buttonH: 50, subStartY: 176, subRowGap: 90, searchTop: 105, searchHeight: 26, searchWidth: 340 }
             : { startY: 164, rowGap: 70, buttonH: 58, subStartY: 182, subRowGap: 106, searchTop: 104, searchHeight: 28, searchWidth: 350 };
     }
-
     function extensionsLayoutMetrics() {
         const compact = getLayoutSettings().extensionsDensity === "compact";
         return compact
             ? { buttonMinHeight: 32, buttonPadding: "4px 9px", sectionPadding: 10, sectionGap: 9, headingSize: 17, fontSize: 14, rowPadding: "5px 2px" }
             : { buttonMinHeight: 38, buttonPadding: "6px 11px", sectionPadding: 13, sectionGap: 12, headingSize: 19, fontSize: 15, rowPadding: "7px 2px" };
     }
-
     function currentWirePlushOption() {
         const option = canonicalWirePlushOption(getItemPlushOption(getHeld(window.Player)));
         return validPlushOption(option) ? option : SUBBYCAT_WIRE_OPTION;
     }
-
     function currentPlushName() {
         return PLUSH_NAMES[currentWirePlushOption()] || "Subbycat";
     }
-
     function publicPlushName(option) {
         const numeric = Number(option);
         if (!validPublicPlushOption(numeric)) return null;
         const wire = publicToWirePlushOption(numeric);
         return PLUSH_NAMES[wire] || null;
     }
-
     function publicOptionForPlushName(name) {
         const wanted = normalizeLoreLookupKey(name);
         if (!wanted) return -1;
@@ -2336,14 +2170,12 @@ function SubbysPlushiesPageMain() {
         }
         return -1;
     }
-
     function clonePluginApiPayload(value) {
         try {
             if (typeof structuredClone === "function") return structuredClone(value);
         } catch (_) {}
         try { return JSON.parse(JSON.stringify(value)); } catch (_) { return value; }
     }
-
     function emitPluginApiEvent(eventName, payload = {}) {
         const key = String(eventName || "").trim().toLowerCase();
         if (!key) return false;
@@ -2359,7 +2191,6 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function onPluginApiEvent(eventName, listener) {
         const key = String(eventName || "").trim().toLowerCase();
         if (!key || typeof listener !== "function") return () => false;
@@ -2368,7 +2199,6 @@ function SubbysPlushiesPageMain() {
         listeners.add(listener);
         return () => offPluginApiEvent(key, listener);
     }
-
     function offPluginApiEvent(eventName, listener) {
         const key = String(eventName || "").trim().toLowerCase();
         const listeners = pluginApiListeners.get(key);
@@ -2377,7 +2207,6 @@ function SubbysPlushiesPageMain() {
         if (!listeners.size) pluginApiListeners.delete(key);
         return removed;
     }
-
     function oncePluginApiEvent(eventName, listener) {
         if (typeof listener !== "function") return () => false;
         let unsubscribe = null;
@@ -2387,7 +2216,6 @@ function SubbysPlushiesPageMain() {
         unsubscribe = onPluginApiEvent(eventName, wrapped);
         return unsubscribe;
     }
-
     function moodReasonLabel(reason) {
         const key = String(reason || "interaction").trim();
         const map = {
@@ -2403,17 +2231,14 @@ function SubbysPlushiesPageMain() {
         if (key.startsWith("protect me:")) return "Protect Me";
         return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, char => char.toUpperCase());
     }
-
     function currentAccountMemberNumber() {
         const member = Number(window.Player?.MemberNumber);
         return Number.isFinite(member) && member > 0 ? Math.trunc(member) : null;
     }
-
     function accountStorageKey(prefix) {
         const member = currentAccountMemberNumber();
         return member == null ? null : `${prefix}${member}`;
     }
-
     function getBattleStatsStore() {
         const member = currentAccountMemberNumber();
         if (battleStatsState && battleStatsStateMember === member) return battleStatsState;
@@ -2428,12 +2253,10 @@ function SubbysPlushiesPageMain() {
         };
         return battleStatsState;
     }
-
     function saveBattleStatsStore() {
         const key = accountStorageKey(BATTLE_STATS_STORAGE_KEY_PREFIX);
         return key ? writeLocalJSON(key, getBattleStatsStore()) : false;
     }
-
     function getBattleHistoryStore() {
         const member = currentAccountMemberNumber();
         if (battleHistoryState && battleHistoryStateMember === member) return battleHistoryState;
@@ -2444,11 +2267,9 @@ function SubbysPlushiesPageMain() {
         battleHistoryState = { entries };
         return battleHistoryState;
     }
-
     function battleHistory(limit = 20) {
         return getBattleHistoryStore().entries.slice(-Math.max(1, Math.min(20, Number(limit) || 20))).map(entry => ({ ...entry }));
     }
-
     function recordBattleHistory(entry) {
         const store = getBattleHistoryStore();
         const normalized = {
@@ -2467,14 +2288,12 @@ function SubbysPlushiesPageMain() {
         if (key) writeLocalJSON(key, store);
         return { ...normalized };
     }
-
     function getRelationshipStore() {
         if (relationshipState) return relationshipState;
         const stored = readLocalJSON(RELATIONSHIP_STORAGE_KEY, {});
         relationshipState = stored && typeof stored === "object" ? stored : {};
         return relationshipState;
     }
-
     function relationshipLevelForInteractions(interactions) {
         const count = Math.max(0, Math.floor(Number(interactions) || 0));
         let level = RELATIONSHIP_LEVELS[0] || { name: "Stranger", minInteractions: 0 };
@@ -2484,7 +2303,6 @@ function SubbysPlushiesPageMain() {
         }
         return level;
     }
-
     function getPlushRelationshipRecord(name = currentPlushName()) {
         const plushName = String(name || currentPlushName() || "Subbycat");
         const store = getRelationshipStore();
@@ -2501,7 +2319,6 @@ function SubbysPlushiesPageMain() {
         record.updatedAt = Number(record.updatedAt) || record.lastInteractionAt;
         return record;
     }
-
     function relationshipStatus(name = currentPlushName()) {
         const record = getPlushRelationshipRecord(name);
         const level = relationshipLevelForInteractions(record.interactions);
@@ -2517,7 +2334,6 @@ function SubbysPlushiesPageMain() {
             lastInteractionAt: record.lastInteractionAt,
         };
     }
-
     function maxRelationshipInteractions() {
         let best = 0;
         for (const record of Object.values(getRelationshipStore())) {
@@ -2525,7 +2341,6 @@ function SubbysPlushiesPageMain() {
         }
         return best;
     }
-
     function showRelationshipMilestone(plushName, levelName) {
         if (!levelName || levelName === "Stranger") return false;
         const symbols = { Familiar: "♡", Friend: "♥", Bestie: "♥♥", Bonded: "✦♥✦" };
@@ -2533,7 +2348,6 @@ function SubbysPlushiesPageMain() {
         showSpeechBubble(`${symbol} ${levelName}! ${symbol}`, { force: true, durationMs: 5200 });
         return true;
     }
-
     function touchPlushRelationship(name = currentPlushName(), { increment = 0, wake = true } = {}) {
         const plushName = String(name || currentPlushName() || "Subbycat");
         const store = getRelationshipStore();
@@ -2553,12 +2367,10 @@ function SubbysPlushiesPageMain() {
         if (amount) emitPluginApiEvent("relationship", { plushName, ...status, milestone });
         return { ...status, milestone };
     }
-
     function isPlushSleepy(name = currentPlushName()) {
         const record = getPlushRelationshipRecord(name);
         return Date.now() - (Number(record.lastInteractionAt) || Date.now()) >= SLEEPY_AFTER_MS;
     }
-
     function getFavoritesStore() {
         if (favoritesState) return favoritesState;
         const stored = readLocalJSON(FAVORITES_STORAGE_KEY, {});
@@ -2572,16 +2384,13 @@ function SubbysPlushiesPageMain() {
         favoritesState = { names };
         return favoritesState;
     }
-
     function favoritePlushNames() {
         return [...getFavoritesStore().names];
     }
-
     function isFavoritePlush(name) {
         const wanted = normalizeLoreLookupKey(name);
         return !!wanted && getFavoritesStore().names.some(entry => normalizeLoreLookupKey(entry) === wanted);
     }
-
     function toggleFavoritePlush(name) {
         const option = publicOptionForPlushName(name);
         if (option < 0) return false;
@@ -2597,13 +2406,11 @@ function SubbysPlushiesPageMain() {
         emitPluginApiEvent("favorite", { plushName: canonical, favorite: enabled });
         return enabled;
     }
-
     function favoriteMenuEntries() {
         return favoritePlushNames()
             .map(name => ({ label: name, option: publicOptionForPlushName(name) }))
             .filter(entry => entry.option >= 0);
     }
-
     function sanitizeSavedPoseTransform(value) {
         const source = value && typeof value === "object" ? value : {};
         const finite = (key, fallback, min, max) => {
@@ -2618,21 +2425,18 @@ function SubbysPlushiesPageMain() {
             Rotation: finite("Rotation", 0, -1080, 1080),
         };
     }
-
     function getSavedPosesStore() {
         if (savedPosesState) return savedPosesState;
         const stored = readLocalJSON(SAVED_POSES_STORAGE_KEY, {});
         savedPosesState = stored && typeof stored === "object" ? stored : {};
         return savedPosesState;
     }
-
     function getSavedPose(slot, name = currentPlushName()) {
         const numericSlot = Number(slot);
         if (!SAVED_POSE_SLOTS.includes(numericSlot)) return null;
         const raw = getSavedPosesStore()?.[name]?.[String(numericSlot)];
         return raw && typeof raw === "object" ? sanitizeSavedPoseTransform(raw) : null;
     }
-
     function saveCurrentPose(slot) {
         const numericSlot = Number(slot);
         if (!SAVED_POSE_SLOTS.includes(numericSlot)) return null;
@@ -2649,7 +2453,6 @@ function SubbysPlushiesPageMain() {
         emitPluginApiEvent("pose", { action: "save", plushName: name, slot: numericSlot, pose });
         return { ...pose };
     }
-
     function applySavedPose(slot) {
         const numericSlot = Number(slot);
         const pose = getSavedPose(numericSlot);
@@ -2670,7 +2473,6 @@ function SubbysPlushiesPageMain() {
         emitPluginApiEvent("pose", { action: "apply", plushName: currentPlushName(), slot: numericSlot, pose });
         return true;
     }
-
     function clearSavedPose(slot, name = currentPlushName()) {
         const numericSlot = Number(slot);
         if (!SAVED_POSE_SLOTS.includes(numericSlot)) return false;
@@ -2682,11 +2484,9 @@ function SubbysPlushiesPageMain() {
         emitPluginApiEvent("pose", { action: "clear", plushName: name, slot: numericSlot });
         return true;
     }
-
     function cloneBackupValue(value) {
         try { return JSON.parse(JSON.stringify(value ?? {})); } catch (_) { return {}; }
     }
-
     function stableBackupStringify(value) {
         if (Array.isArray(value)) return `[${value.map(stableBackupStringify).join(",")}]`;
         if (value && typeof value === "object") {
@@ -2694,7 +2494,6 @@ function SubbysPlushiesPageMain() {
         }
         return JSON.stringify(value);
     }
-
     async function sealBackupProgress(progress) {
         const payload = `${BACKUP_PROGRESS_SEAL_VERSION}|${BACKUP_PROGRESS_SEAL_KEY}|${stableBackupStringify(progress)}`;
         if (!window.crypto?.subtle || typeof TextEncoder !== "function") {
@@ -2708,7 +2507,6 @@ function SubbysPlushiesPageMain() {
         const digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
         return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")}`;
     }
-
     async function createBackupPayload() {
         const stats = cloneBackupValue(getStatsStore());
         delete stats.battles;
@@ -2747,7 +2545,6 @@ function SubbysPlushiesPageMain() {
             },
         };
     }
-
     async function exportPlushBackup() {
         const payload = await createBackupPayload();
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -2762,10 +2559,9 @@ function SubbysPlushiesPageMain() {
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
         return payload;
     }
-
     async function restorePlushBackup(payload) {
         if (!payload || typeof payload !== "object" || Number(payload.schemaVersion) !== BACKUP_SCHEMA_VERSION || !payload.data || typeof payload.data !== "object") {
-            throw new Error("Unsupported Subby's Plushies backup file. This build only accepts the current backup format.");
+            throw new Error("Unsupported Subby's Plushies & Essentials backup file. This build only accepts the current backup format.");
         }
         cancelPendingStatsWork();
         const data = payload.data;
@@ -2773,12 +2569,10 @@ function SubbysPlushiesPageMain() {
         const layout = safeObject(data.layouts) || {};
         if (safeObject(data.themes?.useMenuColors)) layout.useMenuColors = normalizeInterfacePalette(data.themes.useMenuColors);
         if (safeObject(data.themes?.extensionsColors)) layout.extensionsColors = normalizeInterfacePalette(data.themes.extensionsColors);
-
         const progress = safeObject(data.progress);
         const suppliedSeal = typeof data.progressSeal === "string" ? data.progressSeal : "";
         const expectedSeal = progress ? await sealBackupProgress(progress) : "";
         const progressVerified = !!progress && !!suppliedSeal && suppliedSeal === expectedSeal;
-
         const writes = [
             [MOOD_STORAGE_KEY, safeObject(data.moods)],
             [FAVORITES_STORAGE_KEY, safeObject(data.favorites)],
@@ -2796,11 +2590,9 @@ function SubbysPlushiesPageMain() {
                 [RELATIONSHIP_STORAGE_KEY, safeObject(progress.relationships)]
             );
         }
-
         for (const [key, value] of writes) {
             if (value) writeLocalJSON(key, value);
         }
-
         const battle = safeObject(data.accountBattle);
         const backupBattleMember = Number(battle?.memberNumber ?? payload.account?.memberNumber);
         const currentMember = currentAccountMemberNumber();
@@ -2815,7 +2607,6 @@ function SubbysPlushiesPageMain() {
             if (historyKey) writeLocalJSON(historyKey, battleHistoryData);
             battleRestored = !!statsKey && !!historyKey;
         }
-
         featureSettingsState = null;
         layoutSettingsState = null;
         moodState = null;
@@ -2842,7 +2633,6 @@ function SubbysPlushiesPageMain() {
             currentMember,
         };
     }
-
     function importPlushBackupFromFile() {
         if (!backupImportInput?.isConnected) {
             const input = document.createElement("input");
@@ -2855,7 +2645,7 @@ function SubbysPlushiesPageMain() {
                 if (!file) return;
                 try {
                     const payload = JSON.parse(await file.text());
-                    if (typeof window.confirm === "function" && !window.confirm("Restore this Subby's Plushies backup? Current local plush settings will be replaced. Progress is restored only when its integrity seal is valid.")) return;
+                    if (typeof window.confirm === "function" && !window.confirm("Restore this Subby's Plushies & Essentials backup? Current local plush settings will be replaced. Progress is restored only when its integrity seal is valid.")) return;
                     const result = await restorePlushBackup(payload);
                     appendLocalInfoBox("Backup restored", [
                         "Preferences, moods/history, favorites, layouts/themes, nicknames, and saved poses were restored.",
@@ -2876,18 +2666,15 @@ function SubbysPlushiesPageMain() {
         backupImportInput.click();
         return true;
     }
-
     function getMoodStore() {
         if (moodState) return moodState;
         const stored = readLocalJSON(MOOD_STORAGE_KEY, {});
         moodState = stored && typeof stored === "object" ? stored : {};
         return moodState;
     }
-
     function clampMood(value) {
         return Math.max(MOOD_MIN_SCORE, Math.min(MOOD_MAX_SCORE, Math.round(Number(value) || 0)));
     }
-
     function moodLabel(score) {
         const numeric = clampMood(score);
         for (const entry of MOOD_LABELS) {
@@ -2895,7 +2682,6 @@ function SubbysPlushiesPageMain() {
         }
         return MOOD_LABELS.at?.(-1)?.label || "Adoring";
     }
-
     function isPlushNameEquippedLocally(name) {
         const wanted = normalizeLoreLookupKey(name);
         if (!wanted) return false;
@@ -2903,7 +2689,6 @@ function SubbysPlushiesPageMain() {
             normalizeLoreLookupKey(plushNameForItem(item)) === wanted
         );
     }
-
     function getPlushMoodRecord(name = currentPlushName()) {
         const store = getMoodStore();
         const now = Date.now();
@@ -2914,13 +2699,11 @@ function SubbysPlushiesPageMain() {
             scheduleMoodStoreSave();
             return record;
         }
-
         record.score = clampMood(Number.isFinite(Number(record.score)) ? Number(record.score) : MOOD_DEFAULT_SCORE);
         record.interactions = Math.max(0, Math.floor(Number(record.interactions) || 0));
         if (!Number.isFinite(Number(record.decayBaseScore))) record.decayBaseScore = record.score;
         record.decayBaseScore = clampMood(record.decayBaseScore);
         const last = Number(record.updatedAt) || now;
-
         if (isPlushNameEquippedLocally(name)) {
             if (now - last >= MOOD_HELD_CLOCK_WRITE_MS) {
                 record.updatedAt = now;
@@ -2929,7 +2712,6 @@ function SubbysPlushiesPageMain() {
             }
             return record;
         }
-
         const steps = Math.floor(Math.max(0, now - last) / MOOD_DRIFT_EVERY_MS);
         if (steps > 0) {
             const beforeScore = record.score;
@@ -2947,7 +2729,6 @@ function SubbysPlushiesPageMain() {
         }
         return record;
     }
-
     function roomMascotAffectionModifier(name, delta, reason = "interaction") {
         if (!(Number(delta) > 0)) return 0;
         if (String(reason || "").toLowerCase() === "room mascot") return 0;
@@ -2956,7 +2737,6 @@ function SubbysPlushiesPageMain() {
         const shared = Number(roomMascotState?.affectionModifier);
         return Number.isFinite(shared) ? shared : ROOM_MASCOT_AFFECTION_MODIFIER;
     }
-
     function adjustCurrentPlushMood(delta, reason = "interaction") {
         if (!Number.isFinite(delta) || delta === 0) return getPlushMoodRecord();
         const name = currentPlushName();
@@ -2977,11 +2757,9 @@ function SubbysPlushiesPageMain() {
         trackMoodAchievementTransition(name, beforeScore, record.score);
         return record;
     }
-
     function appendLocalInfoBox(title, lines, options = null) {
         const normalizedLines = Array.isArray(lines) ? lines.map(v => String(v)) : [String(lines ?? "")];
         log(title, ...normalizedLines);
-
         if (typeof window.ChatRoomAppendChat !== "function") return false;
         try {
             const row = document.createElement("div");
@@ -3013,7 +2791,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function getStatsStore() {
         if (!statsState) {
             const stored = readLocalJSON(STATS_STORAGE_KEY, {});
@@ -3033,36 +2810,30 @@ function SubbysPlushiesPageMain() {
         statsState.battles = getBattleStatsStore();
         return statsState;
     }
-
     function saveGeneralStatsStore() {
         const stats = getStatsStore();
         const portable = { ...stats };
         delete portable.battles;
         return writeLocalJSON(STATS_STORAGE_KEY, portable);
     }
-
     function flushMoodStoreSave() {
         if (moodStoreSaveTimer != null) { window.clearTimeout(moodStoreSaveTimer); moodStoreSaveTimer = null; }
         return moodState ? writeLocalJSON(MOOD_STORAGE_KEY, moodState) : true;
     }
-
     function scheduleMoodStoreSave(delayMs = 80) {
         if (moodStoreSaveTimer != null) return false;
         moodStoreSaveTimer = window.setTimeout(() => { moodStoreSaveTimer = null; if (moodState) writeLocalJSON(MOOD_STORAGE_KEY, moodState); }, Math.max(0, Number(delayMs) || 0));
         return true;
     }
-
     function flushRelationshipStoreSave() {
         if (relationshipStoreSaveTimer != null) { window.clearTimeout(relationshipStoreSaveTimer); relationshipStoreSaveTimer = null; }
         return relationshipState ? writeLocalJSON(RELATIONSHIP_STORAGE_KEY, relationshipState) : true;
     }
-
     function scheduleRelationshipStoreSave(delayMs = 80) {
         if (relationshipStoreSaveTimer != null) return false;
         relationshipStoreSaveTimer = window.setTimeout(() => { relationshipStoreSaveTimer = null; if (relationshipState) writeLocalJSON(RELATIONSHIP_STORAGE_KEY, relationshipState); }, Math.max(0, Number(delayMs) || 0));
         return true;
     }
-
     function flushGeneralStatsSave() {
         if (generalStatsSaveTimer != null) {
             window.clearTimeout(generalStatsSaveTimer);
@@ -3070,7 +2841,6 @@ function SubbysPlushiesPageMain() {
         }
         return saveGeneralStatsStore();
     }
-
     function scheduleGeneralStatsSave(delayMs = 80) {
         if (generalStatsSaveTimer != null) return false;
         generalStatsSaveTimer = window.setTimeout(() => {
@@ -3079,7 +2849,6 @@ function SubbysPlushiesPageMain() {
         }, Math.max(0, Number(delayMs) || 0));
         return true;
     }
-
     function scheduleAchievementCheck(showNew = true, delayMs = 25) {
         achievementCheckShowNew = achievementCheckShowNew || !!showNew;
         if (achievementCheckTimer != null) return false;
@@ -3091,13 +2860,11 @@ function SubbysPlushiesPageMain() {
         }, Math.max(0, Number(delayMs) || 0));
         return true;
     }
-
     function queueStatsAchievementFlush(showNew = true) {
         scheduleGeneralStatsSave();
         scheduleAchievementCheck(showNew);
         return true;
     }
-
     function cancelPendingStatsWork() {
         if (generalStatsSaveTimer != null) window.clearTimeout(generalStatsSaveTimer);
         if (moodStoreSaveTimer != null) window.clearTimeout(moodStoreSaveTimer);
@@ -3109,13 +2876,11 @@ function SubbysPlushiesPageMain() {
         achievementCheckTimer = null;
         achievementCheckShowNew = false;
     }
-
     function flushDeferredProgressStores() {
         flushMoodStoreSave();
         flushRelationshipStoreSave();
         flushGeneralStatsSave();
     }
-
     function cachedAchievementMetric(key, compute) {
         if (!(achievementMetricCache instanceof Map)) return compute();
         if (achievementMetricCache.has(key)) return achievementMetricCache.get(key);
@@ -3123,7 +2888,6 @@ function SubbysPlushiesPageMain() {
         achievementMetricCache.set(key, value);
         return value;
     }
-
     function getAchievementProgress(stats = getStatsStore()) {
         if (!stats.progress || typeof stats.progress !== "object" || Array.isArray(stats.progress)) stats.progress = {};
         const p = stats.progress;
@@ -3138,15 +2902,12 @@ function SubbysPlushiesPageMain() {
         ]) p[key] = Math.max(0, Number(p[key]) || 0);
         return p;
     }
-
     function progressMetric(stats, key) {
         return Math.max(0, Number(getAchievementProgress(stats)?.[key]) || 0);
     }
-
     function objectKeyCount(value) {
         return value && typeof value === "object" ? Object.keys(value).length : 0;
     }
-
     function allAvailablePlushNames() {
         if (allAvailablePlushNamesCache) return allAvailablePlushNamesCache;
         const names = [];
@@ -3159,11 +2920,9 @@ function SubbysPlushiesPageMain() {
         allAvailablePlushNamesCache = Object.freeze(names);
         return allAvailablePlushNamesCache;
     }
-
     function relationshipRank(name) {
         return Math.max(0, RELATIONSHIP_LEVELS.findIndex(entry => entry.name === name));
     }
-
     function countPlushiesAtRelationship(levelName) {
         return cachedAchievementMetric(`relationship:${levelName}`, () => {
             const wanted = relationshipRank(levelName);
@@ -3176,12 +2935,10 @@ function SubbysPlushiesPageMain() {
             return count;
         });
     }
-
     function allAvailablePlushiesAtRelationship(levelName) {
         const names = allAvailablePlushNames();
         return names.length > 0 && countPlushiesAtRelationship(levelName) >= names.length;
     }
-
     function maxPlushMoodScore() {
         return cachedAchievementMetric("maxMoodScore", () => {
             const store = getMoodStore();
@@ -3193,7 +2950,6 @@ function SubbysPlushiesPageMain() {
             return best;
         });
     }
-
     function interactionDayDifference(previousDay, nextDay) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(String(previousDay || "")) || !/^\d{4}-\d{2}-\d{2}$/.test(String(nextDay || ""))) return null;
         const previous = Date.parse(`${previousDay}T00:00:00Z`);
@@ -3201,22 +2957,18 @@ function SubbysPlushiesPageMain() {
         if (!Number.isFinite(previous) || !Number.isFinite(next)) return null;
         return Math.round((next - previous) / 86400000);
     }
-
     function interactionDayRecord(value) {
         if (!value || typeof value !== "object" || Array.isArray(value)) {
             return { count: 0, lastDay: "", currentStreak: 0, longestStreak: 0 };
         }
-
         const count = Math.max(0, Math.floor(Number(value.count) || 0));
         const lastDay = /^\d{4}-\d{2}-\d{2}$/.test(String(value.lastDay || ""))
             ? String(value.lastDay)
             : "";
         const currentStreak = Math.max(0, Math.floor(Number(value.currentStreak) || 0));
         const longestStreak = Math.max(currentStreak, Math.floor(Number(value.longestStreak) || 0));
-
         return { count, lastDay, currentStreak, longestStreak };
     }
-
     function maxInteractionDaysForOnePlush(stats = getStatsStore()) {
         return cachedAchievementMetric("maxInteractionDays", () => {
             const days = getAchievementProgress(stats).interactionDays;
@@ -3225,7 +2977,6 @@ function SubbysPlushiesPageMain() {
             return best;
         });
     }
-
     function maxInteractionStreakForOnePlush(stats = getStatsStore()) {
         return cachedAchievementMetric("maxInteractionStreak", () => {
             const days = getAchievementProgress(stats).interactionDays;
@@ -3234,7 +2985,6 @@ function SubbysPlushiesPageMain() {
             return best;
         });
     }
-
     function markProgress(key, value = 1, { mode = "max", check = true } = {}) {
         const stats = getStatsStore();
         const p = getAchievementProgress(stats);
@@ -3247,19 +2997,16 @@ function SubbysPlushiesPageMain() {
         if (check) scheduleAchievementCheck(true);
         return next;
     }
-
     function currentAchievementInteractionItem() {
         const selected = getDragTargetItem();
         if (isOurs(selected)) return selected;
         return getHeld(window.Player);
     }
-
     function trackDualEquippedAchievement() {
         const hand = getInventoryItem(window.Player, GROUP);
         const addon = getInventoryItem(window.Player, ADDON_GROUP);
         if (isOurs(hand) && isOurs(addon)) markProgress("plushieHoarder", 1);
     }
-
     function trackSelectionAchievements(name, groupName = null) {
         const now = Date.now();
         const normalizedName = String(name || "Plushie");
@@ -3272,10 +3019,8 @@ function SubbysPlushiesPageMain() {
         if (groupName && PLUSH_GROUPS.includes(groupName)) achievementSession.equipSinceByGroup.set(groupName, { name: normalizedName, at: now });
         trackDualEquippedAchievement();
     }
-
     const PERSONAL_SPACE_ACTIONS = Object.freeze(["rubFace", "noseBoop", "foreheadBump", "cheekRest"]);
     const PERSONAL_SPACE_ACTION_SET = new Set(PERSONAL_SPACE_ACTIONS);
-
     function trackInteractionAchievements(actionKey, plushName) {
         const stats = getStatsStore();
         const p = getAchievementProgress(stats);
@@ -3310,7 +3055,6 @@ function SubbysPlushiesPageMain() {
             if (!p.doubleTrouble && hand && addon && now - hand.at <= 30000 && now - addon.at <= 30000 && normalizeLoreLookupKey(hand.name) !== normalizeLoreLookupKey(addon.name)) p.doubleTrouble = 1;
         }
     }
-
     function trackMoodAchievementTransition(plushName, beforeScore, afterScore) {
         const stats = getStatsStore();
         const p = getAchievementProgress(stats);
@@ -3325,7 +3069,6 @@ function SubbysPlushiesPageMain() {
         if (changed) scheduleGeneralStatsSave();
         if (changed || (beforeScore < 100 && afterScore >= 100)) scheduleAchievementCheck(true);
     }
-
     function trackCommittedAchievement() {
         const now = Date.now();
         for (const groupName of PLUSH_GROUPS) {
@@ -3340,12 +3083,10 @@ function SubbysPlushiesPageMain() {
             if (now - current.at >= 8 * 60 * 60 * 1000) markProgress("committed", 1);
         }
     }
-
     function roomAchievementKey() {
         const name = currentChatRoomName();
         return name ? name.toLowerCase().replace(/\s+/g, " ").trim() : "";
     }
-
     function trackRoomAchievements() {
         if (window.CurrentScreen !== "ChatRoom") return false;
         const stats = getStatsStore();
@@ -3364,7 +3105,6 @@ function SubbysPlushiesPageMain() {
         scheduleAchievementCheck(true);
         return true;
     }
-
     function trackSocialPlayer(memberNumber) {
         const member = Number(memberNumber);
         if (!Number.isFinite(member) || member === Number(window.Player?.MemberNumber)) return false;
@@ -3376,7 +3116,6 @@ function SubbysPlushiesPageMain() {
         queueStatsAchievementFlush(true);
         return true;
     }
-
     function trackProtectAchievement() {
         achievementSession.protectCountInRoom++;
         const stats = getStatsStore();
@@ -3385,7 +3124,6 @@ function SubbysPlushiesPageMain() {
         if (achievementSession.protectCountInRoom >= 5) p.overprotective = 1;
         queueStatsAchievementFlush(true);
     }
-
     function trackBattleAchievement(result, ownScore, opponentScore) {
         const stats = getStatsStore();
         const p = getAchievementProgress(stats);
@@ -3398,7 +3136,6 @@ function SubbysPlushiesPageMain() {
         }
         queueStatsAchievementFlush(true);
     }
-
     function trackResizeAchievement(item, transform) {
         if (!isOurs(item) || item !== getInventoryItem(window.Player, item?.Asset?.Group?.Name)) return false;
         const p = getAchievementProgress();
@@ -3412,7 +3149,6 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function actionLooksLikeBaseCuddle(data) {
         if (!isChatAction(data)) return false;
         const strings = [data.Content, data.Name, data.ActivityName, data.Activity?.Name, data.Activity?.ActivityName];
@@ -3424,7 +3160,6 @@ function SubbysPlushiesPageMain() {
         }
         return strings.some(value => typeof value === "string" && /(^|[^a-z])cuddle([^a-z]|$)/i.test(value) && !/SubbysPlushiesCuddle/i.test(value));
     }
-
     function maybeTrackBaseCuddleAchievement(data) {
         if (getStatsStore().achievements?.royal_cuddle) return false;
         if (!actionLooksLikeBaseCuddle(data)) return false;
@@ -3436,7 +3171,6 @@ function SubbysPlushiesPageMain() {
         markProgress("baseCuddleSubbycat", 1);
         return true;
     }
-
     function browserZoomEstimate() {
         const outer = Number(window.outerWidth), inner = Number(window.innerWidth);
         if (Number.isFinite(outer) && Number.isFinite(inner) && inner > 0) {
@@ -3445,7 +3179,6 @@ function SubbysPlushiesPageMain() {
         }
         return 1;
     }
-
     function applyBattleTextZoomCompensation(row) {
         if (!row?.style) return row;
         const zoom = browserZoomEstimate();
@@ -3454,11 +3187,9 @@ function SubbysPlushiesPageMain() {
         row.dataset.subbysPlushiesFixedBattleText = "true";
         return row;
     }
-
     function statAffectionCount(stats = getStatsStore()) {
         return AFFECTION_ACTION_KEYS.reduce((sum, key) => sum + (Number(stats.actions?.[key]) || 0), 0);
     }
-
     function checkAchievements(showNew = true) {
         const stats = getStatsStore();
         const unlocked = [];
@@ -3485,7 +3216,6 @@ function SubbysPlushiesPageMain() {
         }
         return unlocked;
     }
-
     function recordStat(kind, amount = 1, detail = null) {
         const stats = getStatsStore();
         const value = Math.max(0, Number(amount) || 0);
@@ -3510,14 +3240,12 @@ function SubbysPlushiesPageMain() {
         scheduleAchievementCheck(true);
         return stats;
     }
-
     function recordPlushSelection(name = currentPlushName(), groupName = null) {
         const stats = getStatsStore();
         stats.plushesUsed[name] = (Number(stats.plushesUsed[name]) || 0) + 1;
         trackSelectionAchievements(name, groupName);
         queueStatsAchievementFlush(true);
     }
-
     function showStats() {
         const s = getStatsStore();
         appendLocalInfoBox("Plushie stats", [
@@ -3530,7 +3258,6 @@ function SubbysPlushiesPageMain() {
         ]);
         return { ...s };
     }
-
     function showAchievements() {
         const stats = getStatsStore();
         checkAchievements(false);
@@ -3542,7 +3269,6 @@ function SubbysPlushiesPageMain() {
         appendLocalInfoBox(`Achievements (${Object.keys(stats.achievements).length}/${ACHIEVEMENTS.length})`, lines);
         return ACHIEVEMENTS.map(a => ({ ...a, unlocked: !!stats.achievements[a.id] }));
     }
-
     function randomPlushSpeech() {
         const score = getPlushMoodRecord().score;
         const bucket = score <= 38 ? PLUSH_SPEECH.grumpy : score <= 65 ? PLUSH_SPEECH.calm : score <= 92 ? PLUSH_SPEECH.happy : PLUSH_SPEECH.adoring;
@@ -3554,7 +3280,6 @@ function SubbysPlushiesPageMain() {
         }
         return moodLines[Math.floor(Math.random() * moodLines.length)] || "Hi!";
     }
-
     function removeSpeechBubble() {
         if (speechBubbleTimer != null) window.clearTimeout(speechBubbleTimer);
         speechBubbleTimer = null;
@@ -3563,7 +3288,6 @@ function SubbysPlushiesPageMain() {
         speechBubbleGroupName = null;
         localOverlayPositionSignature = null;
     }
-
     function characterChatRoomDraw(C) {
         if (!C) return null;
         const playerMember = Number(window.Player?.MemberNumber);
@@ -3571,7 +3295,6 @@ function SubbysPlushiesPageMain() {
         if (C === window.Player || (Number.isFinite(playerMember) && member === playerMember)) return lastPlayerChatRoomDraw;
         return Number.isFinite(member) ? lastCharacterChatRoomDraw.get(member) || null : null;
     }
-
     function currentCanvasTransformSnapshot() {
         const ctx = window.MainCanvas;
         if (!ctx || typeof ctx.getTransform !== "function") return null;
@@ -3584,7 +3307,6 @@ function SubbysPlushiesPageMain() {
             return null;
         }
     }
-
     function applyDrawMatrix(draw, x, y) {
         const matrix = draw?.matrix;
         if (!matrix) return { x, y };
@@ -3593,7 +3315,6 @@ function SubbysPlushiesPageMain() {
             y: matrix.b * x + matrix.d * y + matrix.f,
         };
     }
-
     function invertDrawMatrix(draw, x, y) {
         const matrix = draw?.matrix;
         if (!matrix) return { x, y };
@@ -3606,12 +3327,10 @@ function SubbysPlushiesPageMain() {
             y: (-matrix.b * px + matrix.a * py) / det,
         };
     }
-
     function characterDrawMetrics(C, draw) {
         if (!draw || !Number.isFinite(draw.x) || !Number.isFinite(draw.y) || !Number.isFinite(draw.zoom)) return null;
         let heightRatio = Number(C?.HeightRatio);
         if (!Number.isFinite(heightRatio) || heightRatio <= 0) heightRatio = 1;
-
         let xOffset = 0;
         let yOffset = 0;
         try {
@@ -3631,12 +3350,10 @@ function SubbysPlushiesPageMain() {
         } catch (_) {
             yOffset = 0;
         }
-
         const scale = draw.zoom * heightRatio;
         if (!Number.isFinite(scale) || Math.abs(scale) < 1e-8) return null;
         return { heightRatio, xOffset, yOffset, scale };
     }
-
     function characterPointToMainCanvas(C, characterX, characterY) {
         const draw = characterChatRoomDraw(C);
         let mainX = Number(characterX);
@@ -3651,7 +3368,6 @@ function SubbysPlushiesPageMain() {
         if (!Number.isFinite(transformed.x) || !Number.isFinite(transformed.y)) return null;
         return transformed;
     }
-
     function characterPointToScreen(C, characterX, characterY) {
         const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
         const rect = canvas?.getBoundingClientRect?.();
@@ -3665,7 +3381,6 @@ function SubbysPlushiesPageMain() {
             y: rect.top + (point.y / logicalHeight) * rect.height,
         };
     }
-
     function characterCanvasCoordinates(C, event) {
         const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
         if (!canvas || event?.target !== canvas) return null;
@@ -3675,7 +3390,6 @@ function SubbysPlushiesPageMain() {
         const logicalHeight = Number(canvas.height) || 1000;
         const mainX = (event.clientX - rect.left) * logicalWidth / rect.width;
         const mainY = (event.clientY - rect.top) * logicalHeight / rect.height;
-
         const draw = characterChatRoomDraw(C);
         const untransformed = invertDrawMatrix(draw, mainX, mainY);
         if (!untransformed) return null;
@@ -3689,24 +3403,20 @@ function SubbysPlushiesPageMain() {
             mainY,
         };
     }
-
     function petSuitOverlayKey(C) {
         const member = Number(C?.MemberNumber);
         if (Number.isFinite(member)) return `member:${member}`;
         if (C === window.Player) return "player";
         return `character:${String(C?.ID ?? C?.Name ?? "unknown")}`;
     }
-
     function characterPetSuitItem(C) {
         const appearance = Array.isArray(C?.Appearance) ? C.Appearance : [];
         return appearance.find(item => item?.Asset?.Group?.Name === "ItemArms") || null;
     }
-
     function clearPetSuitPlushOverlays() {
         petSuitRenderStates.clear();
         manualPlushMainBounds.clear();
     }
-
     function schedulePetSuitNativeRestore(C, key) {
         const state = petSuitRenderStates.get(key) || {};
         if (state.restorePending) return false;
@@ -3729,14 +3439,12 @@ function SubbysPlushiesPageMain() {
         }, 0);
         return true;
     }
-
     function petSuitPlushOverlaySource(item) {
         if (!isOurs(item)) return null;
         const option = canonicalWirePlushOption(getItemPlushOption(item));
         if (!validPlushOption(option)) return null;
         return uiPlushImageSource(option) || null;
     }
-
     function syncPetSuitPlushOverlay(C) {
         if (!C) return false;
         const key = petSuitOverlayKey(C);
@@ -3758,7 +3466,6 @@ function SubbysPlushiesPageMain() {
         if (window.CurrentScreen === "ChatRoom" && wasActive && !suitActive) schedulePetSuitNativeRestore(C, key);
         return window.CurrentScreen === "ChatRoom" && suitActive;
     }
-
     function getCanvasOverlayImage(source, onReady = null) {
         if (typeof source !== "string" || !source) return null;
         try {
@@ -3783,7 +3490,6 @@ function SubbysPlushiesPageMain() {
         }
         return ready ? image : null;
     }
-
     function drawPetSuitPlushCanvasOverlay(C) {
         if (!syncPetSuitPlushOverlay(C)) return false;
         const item = getHandheldItem(C);
@@ -3822,9 +3528,7 @@ function SubbysPlushiesPageMain() {
         yPoint.y += translation.y;
         const xVec = { x: xPoint.x - center.x, y: xPoint.y - center.y };
         const yVec = { x: yPoint.x - center.x, y: yPoint.y - center.y };
-
         storeManualPlushMainBounds(C, item, center, xVec, yVec);
-
         const width = Math.max(8, Math.hypot(xVec.x, xVec.y) * 2);
         const height = Math.max(8, Math.hypot(yVec.x, yVec.y) * 2);
         const angle = Math.atan2(xVec.y, xVec.x);
@@ -3842,7 +3546,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function prunePetSuitPlushOverlays() {
         const present = new Set();
         if (window.CurrentScreen === "ChatRoom") {
@@ -3854,15 +3557,12 @@ function SubbysPlushiesPageMain() {
             if (!present.has(key)) petSuitRenderStates.delete(key);
         }
     }
-
     function startPetSuitOverlaySweep() {
         return true;
     }
-
     function playerCharacterPointToScreen(characterX, characterY) {
         return characterPointToScreen(window.Player, characterX, characterY);
     }
-
     function plushOverlayPositionSignature(C, item) {
         if (!C || !isOurs(item)) return "";
         const draw = characterChatRoomDraw(C);
@@ -3874,7 +3574,6 @@ function SubbysPlushiesPageMain() {
             transform.TranslationX, transform.TranslationY, transform.ScaleX, transform.ScaleY, transform.Rotation,
         ].join("|");
     }
-
     function mainCanvasCssScale() {
         const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
         const rect = canvas?.getBoundingClientRect?.();
@@ -3890,7 +3589,6 @@ function SubbysPlushiesPageMain() {
             cssPerMainY: rect.height / logicalHeight,
         };
     }
-
     function boundsFromCanvasPoints(points) {
         if (!Array.isArray(points) || !points.length) return null;
         const valid = points.filter(point => Number.isFinite(point?.x) && Number.isFinite(point?.y));
@@ -3910,7 +3608,6 @@ function SubbysPlushiesPageMain() {
             points: valid.map(point => ({ x: point.x, y: point.y })),
         };
     }
-
     function plushTransformSignature(item) {
         if (!isOurs(item)) return "";
         const transform = readActivePlushLayerTransform(item);
@@ -3925,7 +3622,6 @@ function SubbysPlushiesPageMain() {
             transform.Rotation,
         ].join("|");
     }
-
     function cloneBounds(bounds) {
         if (!bounds) return null;
         const points = Array.isArray(bounds.points)
@@ -3938,7 +3634,6 @@ function SubbysPlushiesPageMain() {
             ];
         return boundsFromCanvasPoints(points);
     }
-
     function screenBoundsToMainBounds(bounds) {
         const scale = mainCanvasCssScale();
         if (!bounds || !scale) return null;
@@ -3955,7 +3650,6 @@ function SubbysPlushiesPageMain() {
             }));
         return boundsFromCanvasPoints(points);
     }
-
     function mainBoundsToScreenBounds(bounds) {
         const scale = mainCanvasCssScale();
         if (!bounds || !scale) return null;
@@ -3972,7 +3666,6 @@ function SubbysPlushiesPageMain() {
             }));
         return boundsFromCanvasPoints(points);
     }
-
     function translateMainBounds(bounds, dx, dy) {
         if (!bounds) return null;
         const x = Number(dx) || 0;
@@ -3987,19 +3680,16 @@ function SubbysPlushiesPageMain() {
             ]).map(point => ({ x: Number(point.x) + x, y: Number(point.y) + y }));
         return boundsFromCanvasPoints(points);
     }
-
     function characterProjectionKey(C) {
         const member = Number(C?.MemberNumber);
         if (Number.isFinite(member)) return `member:${member}`;
         if (C === window.Player) return "player";
         return `character:${String(C?.ID ?? C?.Name ?? "unknown")}`;
     }
-
     function overlayBoundsKey(C, item) {
         const group = item?.Asset?.Group?.Name || GROUP;
         return `${characterProjectionKey(C)}|${group}`;
     }
-
     function storeManualPlushMainBounds(C, item, center, xVec, yVec) {
         if (!C || !isOurs(item) || !center || !xVec || !yVec) return false;
         const points = [
@@ -4017,7 +3707,6 @@ function SubbysPlushiesPageMain() {
         });
         return true;
     }
-
     function manualPlushScreenBounds(C, item) {
         if (!C || !isOurs(item)) return null;
         const entry = manualPlushMainBounds.get(overlayBoundsKey(C, item));
@@ -4025,22 +3714,17 @@ function SubbysPlushiesPageMain() {
         if (entry.transformSignature !== plushTransformSignature(item)) return null;
         return mainBoundsToScreenBounds(entry.bounds);
     }
-
     function dragOverlayBoundsForItem(C, item) {
         if (!C || !isOurs(item) || C !== window.Player) return null;
         const groupName = item?.Asset?.Group?.Name || GROUP;
-
         if (dragSession?.groupName === groupName && dragSession.overlayCurrentMainBounds) {
             return mainBoundsToScreenBounds(dragSession.overlayCurrentMainBounds);
         }
-
         const entry = directDragOverlayBoundsByGroup.get(groupName);
         if (!entry || entry.transformSignature !== plushTransformSignature(item)) return null;
-
         const calculated = calculatedPlushScreenBounds(C, item);
         const calculatedMain = screenBoundsToMainBounds(calculated);
         if (!calculatedMain) return mainBoundsToScreenBounds(entry.bounds);
-
         const currentDraw = characterChatRoomDraw(C);
         const currentZoom = Number(currentDraw?.zoom);
         const storedZoom = Number(entry.drawZoom);
@@ -4048,34 +3732,29 @@ function SubbysPlushiesPageMain() {
             Number.isFinite(storedZoom) && storedZoom > 0
             ? currentZoom / storedZoom
             : 1;
-
         return mainBoundsToScreenBounds(translateMainBounds(
             calculatedMain,
             Number(entry.correctionX || 0) * zoomRatio,
             Number(entry.correctionY || 0) * zoomRatio
         ));
     }
-
     function applyLearnedOverlayError(C, item, calculatedBounds) {
         if (!C || C !== window.Player || !isOurs(item) || !calculatedBounds) return calculatedBounds;
         const groupName = item?.Asset?.Group?.Name || GROUP;
         const learned = directDragOverlayErrorByGroup.get(groupName);
         const transform = readActivePlushLayerTransform(item);
         if (!learned || !transform) return calculatedBounds;
-
         const tx = Number(transform.TranslationX) || 0;
         const ty = Number(transform.TranslationY) || 0;
         let dx = 0;
         let dy = 0;
         if (Number.isFinite(learned.errorPerTranslationX)) dx += tx * learned.errorPerTranslationX;
         if (Number.isFinite(learned.errorPerTranslationY)) dy += ty * learned.errorPerTranslationY;
-
         if (!dx && !dy) return calculatedBounds;
         const main = screenBoundsToMainBounds(calculatedBounds);
         if (!main) return calculatedBounds;
         return mainBoundsToScreenBounds(translateMainBounds(main, dx, dy)) || calculatedBounds;
     }
-
     function commitDirectDragOverlayBounds(session, item) {
         if (!session || !isOurs(item) || !session.overlayCurrentMainBounds) return false;
         const groupName = session.groupName;
@@ -4083,12 +3762,10 @@ function SubbysPlushiesPageMain() {
         const calculatedMain = screenBoundsToMainBounds(calculated);
         const direct = cloneBounds(session.overlayCurrentMainBounds);
         if (!calculatedMain || !direct) return false;
-
         const correctionX = direct.centerX - calculatedMain.centerX;
         const correctionY = direct.centerY - calculatedMain.centerY;
         const draw = characterChatRoomDraw(window.Player);
         const transform = readActivePlushLayerTransform(item);
-
         directDragOverlayBoundsByGroup.set(groupName, {
             bounds: direct,
             correctionX,
@@ -4097,7 +3774,6 @@ function SubbysPlushiesPageMain() {
             drawZoom: Number(draw?.zoom) || 1,
             at: Date.now(),
         });
-
         if (transform) {
             const previous = directDragOverlayErrorByGroup.get(groupName) || {};
             const next = { ...previous };
@@ -4114,18 +3790,15 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function layerTranslationHeightRatio(C) {
         const ratio = Number(C?.HeightRatio);
         return Number.isFinite(ratio) && ratio > 0.01 ? ratio : 1;
     }
-
     function layerTranslationMainCanvasDelta(C, originX, originY, translationX, translationY) {
         const origin = characterPointToMainCanvas(C, originX, originY);
         const unitX = characterPointToMainCanvas(C, originX + 1, originY);
         const unitY = characterPointToMainCanvas(C, originX, originY + 1);
         if (!origin || !unitX || !unitY) return null;
-
         const ratio = layerTranslationHeightRatio(C);
         const tx = Number(translationX) || 0;
         const ty = Number(translationY) || 0;
@@ -4134,15 +3807,12 @@ function SubbysPlushiesPageMain() {
             y: ((unitX.y - origin.y) * tx + (unitY.y - origin.y) * ty) / ratio,
         };
     }
-
     function layerTranslationScreenDelta(C, originX, originY, translationX, translationY) {
         const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
         const rect = canvas?.getBoundingClientRect?.();
         if (!canvas || !rect || rect.width <= 0 || rect.height <= 0) return null;
-
         const delta = layerTranslationMainCanvasDelta(C, originX, originY, translationX, translationY);
         if (!delta) return null;
-
         const logicalWidth = Number(canvas.width) || 2000;
         const logicalHeight = Number(canvas.height) || 1000;
         return {
@@ -4150,23 +3820,19 @@ function SubbysPlushiesPageMain() {
             y: delta.y * rect.height / logicalHeight,
         };
     }
-
     function calculatedPlushScreenBounds(C, item) {
         if (!C || !isOurs(item)) return null;
         const transform = readActivePlushLayerTransform(item);
         if (!transform) return null;
-
         const scaleX = Math.max(0.05, Math.abs(Number(transform.ScaleX) || 1));
         const scaleY = Math.max(0.05, Math.abs(Number(transform.ScaleY) || 1));
         const halfWidth = PLUSH_RENDER.Width * scaleX / 2;
         const halfHeight = PLUSH_RENDER.Height * scaleY / 2;
-
         const baseCenterX = PLUSH_RENDER.Left + PLUSH_RENDER.Width / 2;
         const baseCenterY = PLUSH_RENDER.Top + PLUSH_RENDER.Height / 2;
         const radians = (Number(transform.Rotation) || 0) * Math.PI / 180;
         const cos = Math.cos(radians);
         const sin = Math.sin(radians);
-
         const translation = layerTranslationScreenDelta(
             C,
             baseCenterX,
@@ -4175,14 +3841,12 @@ function SubbysPlushiesPageMain() {
             Number(transform.TranslationY) || 0
         );
         if (!translation) return null;
-
         const localCorners = [
             [-halfWidth, -halfHeight],
             [halfWidth, -halfHeight],
             [halfWidth, halfHeight],
             [-halfWidth, halfHeight],
         ];
-
         const points = [];
         for (const [localX, localY] of localCorners) {
             const characterX = baseCenterX + localX * cos - localY * sin;
@@ -4194,14 +3858,12 @@ function SubbysPlushiesPageMain() {
                 y: point.y + translation.y,
             });
         }
-
         const xs = points.map(point => point.x);
         const ys = points.map(point => point.y);
         const left = Math.min(...xs);
         const right = Math.max(...xs);
         const top = Math.min(...ys);
         const bottom = Math.max(...ys);
-
         return {
             left,
             right,
@@ -4214,69 +3876,53 @@ function SubbysPlushiesPageMain() {
             points,
         };
     }
-
     function plushScreenBounds(C, item) {
         if (!C || !isOurs(item)) return null;
-
         const groupName = item?.Asset?.Group?.Name || GROUP;
-
         if (C === window.Player &&
             dragSession?.groupName === groupName &&
             dragSession.overlayCurrentMainBounds) {
             const activeDragBounds = mainBoundsToScreenBounds(dragSession.overlayCurrentMainBounds);
             if (activeDragBounds) return activeDragBounds;
         }
-
         const manual = manualPlushScreenBounds(C, item);
         if (manual) return manual;
-
         const direct = dragOverlayBoundsForItem(C, item);
         if (direct) return direct;
-
         const calculated = calculatedPlushScreenBounds(C, item);
         return applyLearnedOverlayError(C, item, calculated);
     }
-
     function speechBubbleTargetItem() {
         if (dragSession?.groupName) {
             const dragged = getInventoryItem(window.Player, dragSession.groupName);
             if (isOurs(dragged)) return dragged;
         }
-
         if (speechBubbleGroupName) {
             const owned = getInventoryItem(window.Player, speechBubbleGroupName);
             if (isOurs(owned)) return owned;
         }
-
         const selected = getDragTargetItem();
         if (isOurs(selected)) return selected;
-
         return getHeld(window.Player);
     }
-
     function statusOverlayTargetItem() {
         if (dragSession?.groupName) {
             const dragged = getInventoryItem(window.Player, dragSession.groupName);
             if (isOurs(dragged)) return dragged;
         }
-
         const selected = getDragTargetItem();
         if (isOurs(selected)) return selected;
-
         return getHeld(window.Player);
     }
-
     function positionSpeechBubble() {
         if (!speechBubbleElement?.isConnected) return false;
         const item = speechBubbleTargetItem();
         const bounds = plushScreenBounds(window.Player, item);
         if (!bounds) return false;
-
         speechBubbleElement.style.left = `${Math.round(bounds.centerX)}px`;
         speechBubbleElement.style.top = `${Math.round(bounds.top + SPEECH_BUBBLE_Y_OFFSET_CSS_PX - 5)}px`;
         return true;
     }
-
     function showSpeechBubble(text = null, { force = false, durationMs = SPEECH_BUBBLE_DURATION_MS } = {}) {
         if (!force && !getFeatureSettings().speechBubbles) return false;
         const bubbleItem = dragSession?.groupName
@@ -4304,28 +3950,23 @@ function SubbysPlushiesPageMain() {
         speechBubbleTimer = window.setTimeout(removeSpeechBubble, Math.max(250, Number(durationMs) || SPEECH_BUBBLE_DURATION_MS));
         return true;
     }
-
     function plushStatusDescriptor(item = statusOverlayTargetItem()) {
         const now = Date.now();
         if (manualPlushEmote && Number(manualPlushEmote.until) > now) return manualPlushEmote;
         if (manualPlushEmote && Number(manualPlushEmote.until) <= now) manualPlushEmote = null;
         if (activeProtectSession) return { type: "protective", symbol: "!", color: "#FFD166" };
-
         const plushName = isOurs(item) ? plushNameForItem(item) : currentPlushName();
         if (isPlushSleepy(plushName)) return { type: "sleepy", symbol: "zZ", color: "#D8C8FF" };
-
         const score = getPlushMoodRecord(plushName).score;
         if (score <= 38) return { type: "sulky", symbol: "…", color: "#C8B9C8" };
         if (score >= 66) return { type: "happy", symbol: "♥", color: "#FF8FC7" };
         return null;
     }
-
     function removePlushStatusIcon() {
         try { plushStatusIconElement?.remove?.(); } catch (_) {}
         plushStatusIconElement = null;
         localOverlayPositionSignature = null;
     }
-
     function positionPlushStatusIcon() {
         if (!plushStatusIconElement?.isConnected) return false;
         const item = statusOverlayTargetItem();
@@ -4335,7 +3976,6 @@ function SubbysPlushiesPageMain() {
         plushStatusIconElement.style.top = `${Math.round(bounds.top + 10)}px`;
         return true;
     }
-
     function scheduleLocalOverlayReposition() {
         if (!plushScreenVisible()) return;
         if (localOverlayRepositionFrame != null) return;
@@ -4348,7 +3988,6 @@ function SubbysPlushiesPageMain() {
             if (isOurs(item)) localOverlayPositionSignature = plushOverlayPositionSignature(window.Player, item);
         });
     }
-
     function refreshPlushStatusIcon() {
         const targetItem = statusOverlayTargetItem();
         if (!plushScreenVisible() || !isOurs(targetItem)) {
@@ -4386,31 +4025,26 @@ function SubbysPlushiesPageMain() {
         schedulePlushStatusSleepRefresh(targetItem);
         return positioned;
     }
-
     function schedulePlushStatusSleepRefresh(item = statusOverlayTargetItem()) {
         if (plushStatusIconTimer != null) window.clearTimeout(plushStatusIconTimer);
         plushStatusIconTimer = null;
         if (document.hidden || window.CurrentScreen !== "ChatRoom" || !isOurs(item)) return false;
-
         const plushName = plushNameForItem(item);
         const record = getPlushRelationshipRecord(plushName);
         const dueAt = (Number(record?.lastInteractionAt) || Date.now()) + SLEEPY_AFTER_MS;
         const wait = dueAt - Date.now();
         if (wait <= 0) return false;
-
         plushStatusIconTimer = window.setTimeout(() => {
             plushStatusIconTimer = null;
             refreshPlushStatusIcon();
         }, Math.max(50, Math.min(0x7fffffff, wait + 50)));
         return true;
     }
-
     function startPlushStatusIconMonitor() {
         const result = refreshPlushStatusIcon();
         schedulePlushStatusSleepRefresh(statusOverlayTargetItem());
         return result;
     }
-
     function plushEmoteDefinition(type) {
         const key = String(type || "").trim().toLowerCase();
         const definitions = {
@@ -4423,7 +4057,6 @@ function SubbysPlushiesPageMain() {
         };
         return definitions[key] || null;
     }
-
     function sendSyncedPlushEmote(type) {
         const selected = plushEmoteDefinition(type);
         if (!selected || window.CurrentScreen !== "ChatRoom" || typeof window.ServerSend !== "function") return false;
@@ -4443,7 +4076,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function syncedPlushEmoteType(data) {
         if (!data || typeof data !== "object") return null;
         const content = String(data.Content || "");
@@ -4456,11 +4088,9 @@ function SubbysPlushiesPageMain() {
         const selected = plushEmoteDefinition(entry?.Text);
         return selected?.type || null;
     }
-
     function isSyncedPlushEmotePacket(data) {
         return !!syncedPlushEmoteType(data) && (data?.Type === "Hidden" || data?.Type === "Action");
     }
-
     function removeRemotePlushEmote(memberNumber) {
         const member = Number(memberNumber);
         const state = remotePlushEmotes.get(member);
@@ -4471,13 +4101,11 @@ function SubbysPlushiesPageMain() {
         remotePlushEmotes.delete(member);
         return true;
     }
-
     function clearRemotePlushEmotes() {
         for (const member of [...remotePlushEmotes.keys()]) removeRemotePlushEmote(member);
         clearPetSuitPlushOverlays();
         lastCharacterChatRoomDraw.clear();
     }
-
     function positionRemotePlushEmote(memberNumber) {
         const member = Number(memberNumber);
         const state = remotePlushEmotes.get(member);
@@ -4491,7 +4119,6 @@ function SubbysPlushiesPageMain() {
         if (!C || !isOurs(item)) return false;
         const bounds = currentPlushCanvasBounds(item);
         if (!bounds) return false;
-
         const iconPoint = characterPointToScreen(C, bounds.visualRight + 3, bounds.visualTop + 10);
         const bubblePoint = characterPointToScreen(C, bounds.centerX, bounds.visualTop - 8);
         if (iconPoint && state.icon?.isConnected) {
@@ -4504,7 +4131,6 @@ function SubbysPlushiesPageMain() {
         }
         return !!(iconPoint || bubblePoint);
     }
-
     function showRemotePlushEmote(memberNumber, type) {
         const member = Number(memberNumber);
         const playerMember = Number(window.Player?.MemberNumber);
@@ -4512,7 +4138,6 @@ function SubbysPlushiesPageMain() {
         const selected = plushEmoteDefinition(type);
         const C = getRoomCharacterByMember(member);
         if (!selected || !C || !isOurs(getHeld(C))) return false;
-
         removeRemotePlushEmote(member);
         const icon = document.createElement("div");
         icon.className = "SubbysPlushiesRemoteMoodVisual";
@@ -4523,7 +4148,6 @@ function SubbysPlushiesPageMain() {
             lineHeight: "1", textShadow: "0 1px 2px rgba(0,0,0,.85)", whiteSpace: "nowrap",
             color: selected.color || "#FFFFFF",
         });
-
         const bubble = document.createElement("div");
         bubble.className = "SubbysPlushiesRemoteSpeechBubble";
         bubble.textContent = selected.bubble;
@@ -4534,7 +4158,6 @@ function SubbysPlushiesPageMain() {
             font: "13px Arial, sans-serif", lineHeight: "1.25", textAlign: "center", pointerEvents: "none",
             boxShadow: "0 1px 3px rgba(0,0,0,.25)",
         });
-
         document.body.append(icon, bubble);
         const state = {
             type: selected.type,
@@ -4549,21 +4172,18 @@ function SubbysPlushiesPageMain() {
         positionRemotePlushEmote(member);
         return true;
     }
-
     function processSyncedPlushEmote(data) {
         const type = syncedPlushEmoteType(data);
         const sender = Number(data?.Sender);
         if (!type || !Number.isFinite(sender)) return false;
         return showRemotePlushEmote(sender, type);
     }
-
     function rememberAddonPresence(memberNumber, version = "") {
         const member = Number(memberNumber);
         if (!Number.isFinite(member)) return false;
         addonPresenceMembers.set(member, { version: String(version || ""), at: Date.now() });
         return true;
     }
-
     function sendAddonPresence(force = false) {
         if (window.CurrentScreen !== "ChatRoom" || typeof window.ServerSend !== "function") return false;
         const now = Date.now();
@@ -4582,16 +4202,13 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function processAddonPresencePacket(data) {
         if (!data || data.Type !== "Hidden" || data.Content !== ADDON_PRESENCE_CONTENT) return false;
         const sender = Number(data.Sender);
         if (!Number.isFinite(sender)) return false;
-
         rememberAddonPresence(sender, getDictionaryText(data, ADDON_PRESENCE_TAG) || "");
         return true;
     }
-
     function pruneAddonPresence() {
         const present = new Set((Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [])
             .map(C => Number(C?.MemberNumber))
@@ -4602,7 +4219,6 @@ function SubbysPlushiesPageMain() {
             if (!present.has(member)) addonPresenceMembers.delete(member);
         }
     }
-
     function characterHasAddonPresence(C) {
         if (!C) return false;
         const member = Number(C.MemberNumber);
@@ -4610,11 +4226,9 @@ function SubbysPlushiesPageMain() {
         if (C === window.Player || (Number.isFinite(member) && member === playerMember)) return true;
         return Number.isFinite(member) && addonPresenceMembers.has(member);
     }
-
     function pruneSharedWaveChains(now = Date.now()) {
         for (const [id, at] of seenSharedWaveChains) if (now - Number(at || 0) > 60000) seenSharedWaveChains.delete(id);
     }
-
     function sharedWaveCharacterX(C, fallbackIndex = 0) {
         try {
             const point = characterPointToMainCanvas(C, 500, 500);
@@ -4624,13 +4238,11 @@ function SubbysPlushiesPageMain() {
         if (Number.isFinite(id)) return id * 1000;
         return fallbackIndex * 1000;
     }
-
     function sharedWaveParticipantsLeftToRight() {
         const chars = [];
         const room = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
         const all = [window.Player, ...room].filter(Boolean);
         const seen = new Set();
-
         for (let i = 0; i < all.length; i++) {
             const C = all[i];
             const member = Number(C?.MemberNumber);
@@ -4638,11 +4250,9 @@ function SubbysPlushiesPageMain() {
             seen.add(member);
             chars.push({ member, x: sharedWaveCharacterX(C, i), index: i });
         }
-
         chars.sort((a, b) => a.x - b.x || a.index - b.index || a.member - b.member);
         return chars.map(entry => entry.member);
     }
-
     function applySharedWavePose(C, durationMs) {
         if (!C) return false;
         return applyTemporaryRaisedArm(
@@ -4651,33 +4261,25 @@ function SubbysPlushiesPageMain() {
             "shared-wave"
         );
     }
-
     function scheduleSharedWavePayload(payload) {
         if (!getFeatureSettings().sharedEmoteChains || !payload || typeof payload !== "object") return false;
-
         const id = String(payload.id || "");
         const members = Array.isArray(payload.members)
             ? [...new Set(payload.members.map(Number).filter(Number.isFinite))]
             : [];
         const startAt = Number(payload.startAt);
-
         if (!id || !members.length || !Number.isFinite(startAt)) return false;
-
         pruneSharedWaveChains();
         if (seenSharedWaveChains.has(id)) return true;
         seenSharedWaveChains.set(id, Date.now());
-
         const localMember = Number(window.Player?.MemberNumber);
-
         for (let index = 0; index < members.length; index++) {
             const member = members[index];
             const C =
                 Number.isFinite(localMember) && member === localMember
                     ? window.Player
                     : getRoomCharacterByMember(member);
-
             if (!C) continue;
-
             const delay = Math.max(
                 0,
                 startAt + index * SHARED_WAVE_STEP_MS - Date.now()
@@ -4687,10 +4289,8 @@ function SubbysPlushiesPageMain() {
                 delay
             );
         }
-
         return true;
     }
-
     function processSharedWaveChainPacket(data) {
         if (!data || data.Type !== "Hidden" || data.Content !== SHARED_WAVE_CONTENT) return false;
         const sender = Number(data.Sender);
@@ -4700,36 +4300,29 @@ function SubbysPlushiesPageMain() {
         try { scheduleSharedWavePayload(JSON.parse(raw)); } catch (_) {}
         return true;
     }
-
     function actionLooksLikeWave(data) {
         if (!isChatAction(data)) return false;
         const spec = getCustomActivityFromAction(data);
         if (spec?.key === "wave") return true;
         return /\bwav(?:e|es|ed|ing)\b/i.test(actionSearchText(data));
     }
-
     function maybeStartSharedWaveChain(data, force = false) {
         if (window.CurrentScreen !== "ChatRoom") return false;
         if (!force && !actionLooksLikeWave(data)) return false;
-
         const settings = getFeatureSettings();
         if (!settings.sharedEmoteChains) {
             if (force && window.Player) return applySharedWavePose(window.Player, SHARED_WAVE_POSE_MS);
             return false;
         }
-
         const now = Date.now();
         if (now - lastSharedWaveStartedAt < SHARED_WAVE_COOLDOWN_MS) return false;
-
         const members = sharedWaveParticipantsLeftToRight();
         if (members.length < 2) {
             lastSharedWaveStartedAt = now;
             return window.Player ? applySharedWavePose(window.Player, SHARED_WAVE_POSE_MS) : false;
         }
-
         lastSharedWaveStartedAt = now;
         sendAddonPresence(false);
-
         const starter = Number(window.Player?.MemberNumber);
         const payload = {
             v: 1,
@@ -4737,9 +4330,7 @@ function SubbysPlushiesPageMain() {
             startAt: now + SHARED_WAVE_LEAD_MS,
             members,
         };
-
         scheduleSharedWavePayload(payload);
-
         try {
             window.ServerSend("ChatRoomChat", {
                 Content: SHARED_WAVE_CONTENT,
@@ -4751,7 +4342,6 @@ function SubbysPlushiesPageMain() {
             return true;
         }
     }
-
     function expressionReactionTargetIsLocal(data) {
         const context = getActionCharacterContext(data);
         const localMember = Number(window.Player?.MemberNumber);
@@ -4762,7 +4352,6 @@ function SubbysPlushiesPageMain() {
             .filter(Boolean).map(name => normalizeDialogueName(name, "").toLowerCase());
         return localNames.includes(target);
     }
-
     function processExpressionReaction(data, spec) {
         if (!getFeatureSettings().expressionReactions || !spec || !expressionReactionTargetIsLocal(data)) return false;
         const sender = Number(data?.Sender);
@@ -4781,23 +4370,18 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     const ADDON_PRESENCE_ICON_SLOT_X = 229;
     const ADDON_PRESENCE_ICON_SLOT_TOP = 4;
     const ADDON_PRESENCE_ICON_CHARACTER_SIZE = 42;
     const ADDON_PRESENCE_ICON_ALPHA = 0.55;
-
     function addonPresenceIconHiddenByNativeUI() {
         const state = Number(window.ChatRoomHideIconState);
         return Number.isFinite(state) && state !== 0;
     }
-
     function addonPresenceCharacterVisible(C) {
         if (!C || !characterHasAddonPresence(C)) return false;
-
         const member = Number(C?.MemberNumber);
         const localMember = Number(window.Player?.MemberNumber);
-
         if (
             Number.isFinite(member) &&
             member !== localMember &&
@@ -4806,14 +4390,11 @@ function SubbysPlushiesPageMain() {
         ) {
             return false;
         }
-
         return true;
     }
-
     function nativePresenceIconRect(C, placement = null) {
         const draw = placement || characterChatRoomDraw(C);
         if (!draw || !Number.isFinite(Number(draw.at)) || Date.now() - draw.at > 1200) return null;
-
         if (
             draw &&
             Number.isFinite(Number(draw.x)) &&
@@ -4834,34 +4415,26 @@ function SubbysPlushiesPageMain() {
                 };
             }
         }
-
         return null;
     }
-
     const nativePresenceDomBadges = new Map();
     const nativePresencePendingOverlayWork = new Map();
     const nativePresenceCaptureTimes = new Map();
     const nativePresenceEffectProbeTimes = new Map();
     let nativePresenceBadgePruneTimer = null;
     let nativePresenceOverlayWorkRaf = 0;
-    // The addon indicator is a hover-only decoration, never a permanent badge.
-    // Keep the pointer in CSS screen coordinates so browser zoom and canvas scaling
-    // are handled by the same character-coordinate helpers used by plushie overlays.
     let nativePresenceHoverPointer = null;
     let nativePresenceHoveredKey = null;
     let nativePresenceHoverFrame = 0;
     let nativePresenceHoverListenersInstalled = false;
-
     function nativePresenceBadgeKey(C) {
         const member = Number(C?.MemberNumber);
         if (Number.isFinite(member)) return `member:${member}`;
         return C === window.Player ? "player" : null;
     }
-
     function nativePresenceCanvasElement() {
         return document.getElementById("MainCanvas") || document.querySelector("canvas");
     }
-
     function nativePresenceHoveredCharacterKey() {
         const pointer = nativePresenceHoverPointer;
         if (!pointer || window.CurrentScreen !== "ChatRoom" || document.hidden || addonPresenceIconHiddenByNativeUI()) return null;
@@ -4869,7 +4442,6 @@ function SubbysPlushiesPageMain() {
         const canvasRect = canvas?.getBoundingClientRect?.();
         if (!canvasRect || pointer.x < canvasRect.left || pointer.x > canvasRect.right ||
             pointer.y < canvasRect.top || pointer.y > canvasRect.bottom) return null;
-
         const roster = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
         const members = roster.includes(window.Player) ? roster : [...roster, window.Player];
         let winner = null;
@@ -4878,8 +4450,6 @@ function SubbysPlushiesPageMain() {
             if (!addonPresenceCharacterVisible(C)) continue;
             const draw = characterChatRoomDraw(C);
             if (!draw || !Number.isFinite(draw.at) || Date.now() - draw.at > 1200) continue;
-            // BC draws characters on a native 500 x 1000 character canvas.
-            // The existing helper accounts for height, zoom, and appearance offsets.
             const start = characterPointToScreen(C, 0, 0);
             const end = characterPointToScreen(C, 500, 1000);
             if (!start || !end) continue;
@@ -4891,8 +4461,6 @@ function SubbysPlushiesPageMain() {
             const height = bottom - top;
             if (width < 5 || height < 5 || pointer.x < left || pointer.x > right ||
                 pointer.y < top || pointer.y > bottom) continue;
-            // If avatars overlap, prefer the one whose center is closest, so
-            // hovering one person never lights up several addon indicators.
             const score = Math.pow((pointer.x - (left + right) / 2) / width, 2) +
                 Math.pow((pointer.y - (top + bottom) / 2) / height, 2);
             if (score < bestScore) {
@@ -4902,7 +4470,6 @@ function SubbysPlushiesPageMain() {
         }
         return winner;
     }
-
     function refreshNativePresenceBadgeHover() {
         nativePresenceHoveredKey = nativePresenceHoveredCharacterKey();
         if (nativePresenceHoveredKey && !nativePresenceDomBadges.has(nativePresenceHoveredKey)) {
@@ -4920,7 +4487,6 @@ function SubbysPlushiesPageMain() {
             image.style.display = key === nativePresenceHoveredKey && age <= 1200 ? "block" : "none";
         }
     }
-
     function scheduleNativePresenceBadgeHoverRefresh() {
         if (nativePresenceHoverFrame) return;
         nativePresenceHoverFrame = window.requestAnimationFrame(() => {
@@ -4928,12 +4494,9 @@ function SubbysPlushiesPageMain() {
             refreshNativePresenceBadgeHover();
         });
     }
-
     function installNativePresenceBadgeHoverListeners() {
         if (nativePresenceHoverListenersInstalled) return;
         nativePresenceHoverListenersInstalled = true;
-        // Using a document listener avoids fragile per-canvas attachment after BC
-        // re-creates its canvas; pointer events still must originate on MainCanvas.
         document.addEventListener("pointermove", event => {
             const canvas = nativePresenceCanvasElement();
             nativePresenceHoverPointer = event.target === canvas && event.pointerType !== "touch"
@@ -4960,14 +4523,11 @@ function SubbysPlushiesPageMain() {
             refreshNativePresenceBadgeHover();
         });
     }
-
     function ensureNativePresenceDomBadge(C) {
         const key = nativePresenceBadgeKey(C);
         if (!key) return null;
-
         const existing = nativePresenceDomBadges.get(key);
         if (existing?.isConnected) return existing;
-
         const image = document.createElement("img");
         image.className = "SubbysPlushiesPresenceBadge";
         image.alt = "";
@@ -4987,12 +4547,10 @@ function SubbysPlushiesPageMain() {
             background: "transparent",
             transformOrigin: "top left",
         });
-
         document.body.appendChild(image);
         nativePresenceDomBadges.set(key, image);
         return image;
     }
-
     function hideNativePresenceDomBadges(remove = false) {
         for (const [key, image] of nativePresenceDomBadges) {
             if (!image) {
@@ -5018,7 +4576,6 @@ function SubbysPlushiesPageMain() {
             lastPlayerChatRoomDraw = null;
         }
     }
-
     function positionNativePresenceDomBadge(C, placement) {
         if (
             window.CurrentScreen !== "ChatRoom" ||
@@ -5027,31 +4584,23 @@ function SubbysPlushiesPageMain() {
         ) {
             return false;
         }
-
         const logicalRect = nativePresenceIconRect(C, placement);
         if (!logicalRect) return false;
-
         const canvas = nativePresenceCanvasElement();
         const screenRect = canvas?.getBoundingClientRect?.();
         if (!canvas || !screenRect || screenRect.width <= 0 || screenRect.height <= 0) return false;
-
         const logicalWidth = Number(canvas.width) || 2000;
         const logicalHeight = Number(canvas.height) || 1000;
         const scaleX = screenRect.width / logicalWidth;
         const scaleY = screenRect.height / logicalHeight;
-
         const left = screenRect.left + logicalRect.x * scaleX;
         const top = screenRect.top + logicalRect.y * scaleY;
         const width = Math.max(14, logicalRect.width * scaleX);
         const height = Math.max(14, logicalRect.height * scaleY);
-
         if (![left, top, width, height].every(Number.isFinite)) return false;
-
-        // Do not allocate DOM badges for all remote members every render.
         if (nativePresenceHoveredKey !== nativePresenceBadgeKey(C)) return false;
         const image = ensureNativePresenceDomBadge(C);
         if (!image) return false;
-
         image.dataset.lastSubbysDrawAt = String(placement.at || Date.now());
         Object.assign(image.style, {
             display: nativePresenceHoveredKey === nativePresenceBadgeKey(C) ? "block" : "none",
@@ -5060,17 +4609,14 @@ function SubbysPlushiesPageMain() {
             width: `${Math.round(width)}px`,
             height: `${Math.round(height)}px`,
         });
-
         if (nativePresenceHoveredKey) scheduleNativeBadgeExpiry();
         nativePresenceDrawMethod = "DOM overlay after character render";
         nativePresenceDrawCount++;
         lastNativePresenceDrawAt = Date.now();
         return true;
     }
-
     function flushNativePresenceOverlayWork() {
         nativePresenceOverlayWorkRaf = 0;
-
         if (
             !plushScreenVisible() ||
             addonPresenceIconHiddenByNativeUI()
@@ -5079,25 +4625,20 @@ function SubbysPlushiesPageMain() {
             hideNativePresenceDomBadges(false);
             return;
         }
-
         const pending = [...nativePresencePendingOverlayWork.values()];
         nativePresencePendingOverlayWork.clear();
         for (const entry of pending) {
             const C = entry?.C;
             const placement = entry?.placement;
             if (!C || !placement) continue;
-
             try {
                 rememberVisibleOverlayPlacement(C, placement);
                 refreshCharacterPlushOverlaysFromNativeOverlay(C, placement);
-
                 if (addonPresenceCharacterVisible(C)) positionNativePresenceDomBadge(C, placement);
             } catch (e) {
                 warn("Deferred character-overlay plush rendering failed:", e);
             }
         }
-
-        // The mouse may already be over a player when the next draw is queued.
         refreshNativePresenceBadgeHover();
         const now = Date.now();
         if (now - (flushNativePresenceOverlayWork.lastPruneAt || 0) > 1200) {
@@ -5105,7 +4646,6 @@ function SubbysPlushiesPageMain() {
             pruneNativePresenceDomBadges();
         }
     }
-
     function pruneNativePresenceDomBadges() {
         const inRoom = window.CurrentScreen === "ChatRoom" && !document.hidden &&
             !addonPresenceIconHiddenByNativeUI();
@@ -5126,33 +4666,26 @@ function SubbysPlushiesPageMain() {
                 image.style.display = "none";
             }
         }
-        // Re-evaluate geometry while the pointer is stationary and BC changes poses.
         if (inRoom && nativePresenceHoverPointer) refreshNativePresenceBadgeHover();
     }
-
     function scheduleNativeBadgeExpiry() {
         if (nativePresenceBadgePruneTimer != null || !nativePresenceHoveredKey || !nativePresenceDomBadges.size) return;
         nativePresenceBadgePruneTimer = window.setTimeout(() => {
             nativePresenceBadgePruneTimer = null;
             pruneNativePresenceDomBadges();
-            // Keep the stale-badge safeguard while hovered only. No idle loop.
             if (nativePresenceHoveredKey && nativePresenceDomBadges.size) scheduleNativeBadgeExpiry();
         }, 1500);
     }
-
     function queueNativePresenceOverlayWork(C, placement) {
         if (!C || !placement || !plushScreenVisible()) return false;
         const key = nativePresenceBadgeKey(C) || C;
         nativePresencePendingOverlayWork.set(key, { C, placement });
-
         if (!nativePresenceOverlayWorkRaf) {
             nativePresenceOverlayWorkRaf = requestAnimationFrame(flushNativePresenceOverlayWork);
         }
         return true;
     }
-
     let lastNativePresenceOverlayContext = null;
-
     function rememberVisibleOverlayPlacement(C, placement) {
         if (!C || !placement) return false;
         const member = Number(C.MemberNumber);
@@ -5163,21 +4696,17 @@ function SubbysPlushiesPageMain() {
         if (Number.isFinite(member)) lastCharacterChatRoomDraw.set(member, placement);
         return true;
     }
-
     function refreshCharacterPlushOverlaysFromNativeOverlay(C, placement) {
         if (!C || !placement || window.CurrentScreen !== "ChatRoom") return false;
         rememberVisibleOverlayPlacement(C, placement);
-
         const handheld = getHandheldItem(C);
         if (isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C))) {
             try { drawPetSuitPlushCanvasOverlay(C); } catch (_) {}
         }
-
         const member = Number(C.MemberNumber);
         const playerMember = Number(window.Player?.MemberNumber);
         const samePlayer = C === window.Player ||
             (Number.isFinite(playerMember) && member === playerMember);
-
         if (samePlayer && (speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected)) {
             const dragTarget = getDragTargetItem();
             const signatureItem = isOurs(dragTarget) ? dragTarget : getHeld(C);
@@ -5198,7 +4727,6 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function scheduleNativeAddonPresenceOverlayRetry(reason = "character drawing unavailable") {
         if (nativePresenceChatRoomRunHooked || nativePresenceOverlayRetryTimer != null) return false;
         const index = Math.min(nativePresenceOverlayRetryAttempt, NATIVE_PRESENCE_OVERLAY_RETRY_DELAYS_MS.length - 1);
@@ -5212,14 +4740,12 @@ function SubbysPlushiesPageMain() {
         }, delay);
         return true;
     }
-
     function installNativeAddonPresenceOverlayHook({ scheduleRetry = true } = {}) {
         if (nativePresenceChatRoomRunHooked) return true;
         if (typeof window.DrawCharacter !== "function") {
             if (scheduleRetry) scheduleNativeAddonPresenceOverlayRetry("DrawCharacter unavailable");
             return false;
         }
-
         const hooked = installHook("DrawCharacter", 10000, (args, next) => {
             let C = null;
             let placement = null;
@@ -5247,8 +4773,6 @@ function SubbysPlushiesPageMain() {
                 const key = nativePresenceBadgeKey(C);
                 const member = Number(C.MemberNumber);
                 const local = C === window.Player || member === Number(window.Player?.MemberNumber);
-                // Detect restraint overlays once every 1.5s when idle, not on
-                // every native DrawCharacter invocation for each remote avatar.
                 const activeRestraintOverlay = !!petSuitRenderStates.get(petSuitOverlayKey(C))?.active;
                 const lastProbe = nativePresenceEffectProbeTimes.get(key) || 0;
                 let newlyRestrained = false;
@@ -5288,7 +4812,6 @@ function SubbysPlushiesPageMain() {
         installNativePresenceBadgeHoverListeners();
         return true;
     }
-
     window.SubbysPlushiesPerformanceDiag = () => ({
         visible: plushScreenVisible(), loadedPlushImages: renderImages.filter(image => image && image !== renderFallbackImage).length,
         pendingPlushLoads: renderImagePromises.size, pendingActionIcons: actionIconLoads.size, pendingCanvasRedraws: dirtyPlushCharacters.size,
@@ -5296,7 +4819,6 @@ function SubbysPlushiesPageMain() {
         queuedPresenceDraws: nativePresencePendingOverlayWork.size,
         cachedLore: (gitDataState.loadedFiles || []).includes("lore.json"),
     });
-
     window.SubbysPlushiesDialogueTest = (actionKey = "pet") => {
         const spec = PLUGIN_ACTIVITY_BY_KEY.get(String(actionKey || "pet"));
         if (!spec) return null;
@@ -5310,10 +4832,9 @@ function SubbysPlushiesPageMain() {
             sourceName,
             currentPlushName()
         );
-        console.log("[Subby's Plushies dialogue test]", value);
+        console.log("[Subby's Plushies & Essentials dialogue test]", value);
         return value;
     };
-
     window.SubbysPlushiesPresenceDiag = () => {
         const C = window.Player || null;
         const info = {
@@ -5360,7 +4881,6 @@ function SubbysPlushiesPageMain() {
         return info;
     };
     window.SubbysPlushiesPresenceDiagnostic = window.SubbysPlushiesPresenceDiag;
-
     function triggerPlushEmote(type) {
         const selected = plushEmoteDefinition(type);
         if (!selected || !isOurs(getHeld(window.Player))) return false;
@@ -5377,7 +4897,6 @@ function SubbysPlushiesPageMain() {
         }, PLUSH_EMOTE_DURATION_MS + 50);
         return true;
     }
-
     function cancelIdleAnimation(reschedule = true) {
         if (idleAnimationTimer != null) window.clearTimeout(idleAnimationTimer);
         idleAnimationTimer = null;
@@ -5399,11 +4918,9 @@ function SubbysPlushiesPageMain() {
         if (reschedule && getFeatureSettings().idleAnimations) scheduleNextIdleAnimation();
         return true;
     }
-
     function runIdleAnimation() {
         const settings = getFeatureSettings();
         if (!settings.idleAnimations || isLowCpuMode() || window.CurrentScreen !== "ChatRoom" || dragSession || nativeLayeringVisible() || activeIdleAnimationSession) return false;
-
         const temporaryHandPose = !!(activeBalanceHeadSession || activeHideBehindSession || activeProtectSession);
         const entries = [];
         for (const item of getEquippedPlushItems(window.Player)) {
@@ -5417,7 +4934,6 @@ function SubbysPlushiesPageMain() {
             entries.push({ groupName, layerName, plushName, base: { ...base } });
         }
         if (!entries.length) return false;
-
         const generation = ++idleAnimationGeneration;
         activeIdleAnimationSession = { generation, entries };
         const direction = Math.random() < 0.5 ? -1 : 1;
@@ -5427,13 +4943,11 @@ function SubbysPlushiesPageMain() {
             rot: frame.rotationMultiplier * direction,
             restore: !!frame.restore,
         }));
-
         for (const frame of frames) {
             window.setTimeout(() => {
                 const session = activeIdleAnimationSession;
                 if (!session || session.generation !== generation) return;
                 let changed = false;
-
                 for (const entry of session.entries) {
                     const current = getInventoryItem(window.Player, entry.groupName);
                     if (!isOurs(current) || getActivePlushLayerName(current) !== entry.layerName) continue;
@@ -5446,12 +4960,10 @@ function SubbysPlushiesPageMain() {
                         };
                     if (setPlushLayerTransform(current, entry.layerName, nextTransform)) changed = true;
                 }
-
                 if (changed) {
                     rebuildCharacterCanvas(window.Player, frame.restore ? "idle plush animation restore" : "idle plush animation");
                     scheduleLocalOverlayReposition();
                 }
-
                 if (frame.restore) {
                     const finished = session.entries.slice();
                     activeIdleAnimationSession = null;
@@ -5462,7 +4974,6 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function plushScreenVisible() {
         if (document.hidden || window.CurrentScreen !== "ChatRoom") return false;
         const canvas = document.getElementById("MainCanvas");
@@ -5471,7 +4982,6 @@ function SubbysPlushiesPageMain() {
         if (rect.width <= 0 || rect.height <= 0) return false;
         return rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
     }
-
     function scheduleNextIdleAnimation(delay = null) {
         if (idleAnimationTimer != null) window.clearTimeout(idleAnimationTimer);
         if (!getFeatureSettings().idleAnimations || isLowCpuMode() || !plushScreenVisible()) { idleAnimationTimer = null; return false; }
@@ -5483,9 +4993,7 @@ function SubbysPlushiesPageMain() {
         }, wait);
         return true;
     }
-
     let visibilityPerformanceHooksInstalled = false;
-
     function installVisibilityPerformanceHooks() {
         if (visibilityPerformanceHooksInstalled) return true;
         visibilityPerformanceHooksInstalled = true;
@@ -5512,7 +5020,6 @@ function SubbysPlushiesPageMain() {
                 }
                 return;
             }
-
             syncHugTightlyActivityAvailability("tab visible");
             scheduleActivityIntegrityCheck();
             if (!installedHooks.has("ChatRoomAppendChat")) ensureOfferChatObserver("tab visible fallback");
@@ -5525,7 +5032,6 @@ function SubbysPlushiesPageMain() {
         }, { passive: true });
         return true;
     }
-
     function showCurrentPlushInfo() {
         void ensureRemotePlushLore();
         const name = currentPlushName();
@@ -5544,7 +5050,6 @@ function SubbysPlushiesPageMain() {
         ]);
         return { name, lore, mood: { ...mood }, relationship: { ...relationship } };
     }
-
     function handleLocalPlushInteraction(key) {
         const delta = MOOD_DELTAS[key] || 0;
         if (delta) adjustCurrentPlushMood(delta, key);
@@ -5563,7 +5068,6 @@ function SubbysPlushiesPageMain() {
             relationship: { ...relationship },
         });
     }
-
     function activityNameFromRunArgsFast(args) {
         const values = Array.isArray(args) ? args : [args];
         const candidates = [];
@@ -5585,26 +5089,22 @@ function SubbysPlushiesPageMain() {
         }
         return candidates.find(isAffectionateActivityName) || candidates[0] || "";
     }
-
     function isAffectionateActivityName(value) {
         const lower = String(value || "").toLowerCase();
         return !!lower && JEALOUS_ACTIVITY_KEYWORDS.some(token => lower.includes(token));
     }
-
     function triggerJealousReaction(target, activityName = "") {
         if (!getFeatureSettings().jealousPlushie || !isOurs(getHeld(window.Player))) return false;
         const now = Date.now();
         if (now - lastJealousReactionAt < 12000) return false;
         lastJealousReactionAt = now;
         adjustCurrentPlushMood(MOOD_DELTAS.jealous, `jealous:${activityName || "affection"}`);
-
         const sourceName = getCharacterDisplayName(window.Player) || "Someone";
         const targetName = getCharacterDisplayName(target) || "someone else";
         const plushName = currentPlushName();
         sendStandaloneActionMessage(`${plushName} plushie gives ${targetName} a tiny jealous stare while ${sourceName} gives away attention.`);
         return true;
     }
-
     function actionSearchText(data) {
         let text = typeof data?.Content === "string" ? data.Content : "";
         const dictionary = data?.Dictionary;
@@ -5615,51 +5115,40 @@ function SubbysPlushiesPageMain() {
         }
         return text.toLowerCase();
     }
-
     function actionLooksProtectable(data) {
         if (!getFeatureSettings().protectMe || !isChatAction(data) || !isOurs(getHeld(window.Player))) return false;
         const text = actionSearchText(data);
         return PROTECT_KEYWORDS.some(token => text.includes(token));
     }
-
     function protectContextTargetsLocalPlayer(context) {
         const playerMember = Number(window.Player?.MemberNumber);
         if (!Number.isFinite(playerMember)) return false;
-
         if (Number.isFinite(context?.targetMember)) return Number(context.targetMember) === playerMember;
-
         return offerTargetIsLocalPlayer(context?.targetName);
     }
-
     function protectSourceIsLocal(context, data = null) {
         const playerMember = Number(window.Player?.MemberNumber);
         if (Number.isFinite(playerMember)) {
             if (Number.isFinite(context?.sourceMember) && Number(context.sourceMember) === playerMember) return true;
             if (Number(data?.Sender) === playerMember) return true;
         }
-
         const source = normalizeOfferName(context?.sourceName);
         return !!source && localOfferNameVariants().has(source);
     }
-
     function triggerProtectReaction(sourceName = null, triggerSource = "activity packet") {
         if (!getFeatureSettings().protectMe || !isOurs(getHeld(window.Player))) return false;
-
         const now = Date.now();
         if (now - lastProtectReactionAt < 1200) return false;
         lastProtectReactionAt = now;
         trackProtectAchievement();
-
         adjustCurrentPlushMood(MOOD_DELTAS.protect, `protect me:${triggerSource}`);
         window.setTimeout(movePlushToProtectTemporarily, 40);
-
         const plushName = currentPlushName();
         const holderName = getCharacterDisplayName(window.Player) || "its holder";
         const troubleName = sourceName || "the incoming trouble";
         sendStandaloneActionMessage(`${plushName} plushie jumps into a protective pose between ${holderName} and ${troubleName}.`);
         return true;
     }
-
     function maybeTriggerProtect(data, prechecked = false) {
         if (!prechecked && !actionLooksProtectable(data)) return false;
         const context = getActionCharacterContext(data);
@@ -5667,50 +5156,40 @@ function SubbysPlushiesPageMain() {
         if (protectSourceIsLocal(context, data)) return false;
         return triggerProtectReaction(context.sourceName, "activity packet");
     }
-
     function parseRenderedProtectAction(text) {
         let value = String(text || "")
             .replace(/[\u2018\u2019]/g, "'")
             .replace(/\s+/g, " ")
             .trim();
         if (!value || !PROTECT_RENDER_VERB_RE.test(value)) return null;
-
         value = value.replace(/^\(+\s*/, "");
         const match = value.match(PROTECT_RENDER_ACTION_RE);
         if (!match) return null;
-
         return {
             sourceName: String(match[1] || "").trim(),
             verb: String(match[2] || "").trim(),
             targetName: String(match[3] || "").trim(),
         };
     }
-
     function inspectRenderedProtectRow(row) {
         if (!(row instanceof Element)) return false;
         if (processedProtectChatRows.has(row)) return false;
         if (!getFeatureSettings().protectMe || !isOurs(getHeld(window.Player))) return false;
-
         const text = String(row.textContent || "").replace(/\s+/g, " ").trim();
         const parsed = parseRenderedProtectAction(text);
         if (!parsed) return false;
-
         processedProtectChatRows.add(row);
         if (!offerTargetIsLocalPlayer(parsed.targetName)) return false;
-
         const resolvedSource = resolveRenderedOfferSource(row, parsed.sourceName);
         if (balanceRenderedSourceIsLocal(resolvedSource.sourceName, resolvedSource.sourceMember)) return false;
-
         return triggerProtectReaction(resolvedSource.sourceName, `rendered ${parsed.verb}`);
     }
-
     function animatePetting() {
         const item = getHeld(window.Player);
         if (!isOurs(item) || activeBalanceHeadSession || activeHideBehindSession || activeProtectSession || activeIdleAnimationSession) return false;
         const layerName = getActivePlushLayerName(item);
         const base = readActivePlushLayerTransform(item);
         if (!layerName || !base) return false;
-
         const generation = ++petAnimationGeneration;
         const frames = [
             { delay: 0, dy: -3, rot: -4 },
@@ -5718,7 +5197,6 @@ function SubbysPlushiesPageMain() {
             { delay: 180, dy: -3, rot: -3 },
             { delay: 270, dy: 0, rot: 0 },
         ];
-
         for (const frame of frames) {
             window.setTimeout(() => {
                 if (generation !== petAnimationGeneration) return;
@@ -5734,13 +5212,11 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function battleCharacterLabel(C) {
         const name = getCharacterDisplayName(C) || C?.Name || "Someone";
         const member = Number(C?.MemberNumber);
         return Number.isFinite(member) ? `${name}(${member})` : name;
     }
-
     function resolveBattleTarget(query = "") {
         const playerMember = Number(window.Player?.MemberNumber);
         const focused = window.DialogFocusCharacter;
@@ -5751,23 +5227,19 @@ function SubbysPlushiesPageMain() {
         if (wanted) return characters.find(C => [getCharacterDisplayName(C), C?.Name, C?.Nickname].filter(Boolean).some(n => String(n).toLowerCase().includes(wanted))) || null;
         return null;
     }
-
     function closeBattleTargetPrompt() {
         try { battleTargetPromptElement?.remove?.(); } catch (_) {}
         battleTargetPromptElement = null;
     }
-
     function showBattleTargetPrompt() {
         if (!isOurs(getHeld(window.Player))) {
             appendLocalInfoBox("Plushie battle", ["Equip a plushie first."], { compact: true });
             return false;
         }
-
         closeBattleTargetPrompt();
         const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
         const rect = canvas?.getBoundingClientRect?.();
         if (!rect || rect.width <= 0 || rect.height <= 0) return false;
-
         const root = document.createElement("div");
         root.className = "SubbysPlushiesBattleTargetPrompt";
         Object.assign(root.style, {
@@ -5786,14 +5258,12 @@ function SubbysPlushiesPageMain() {
             boxShadow: "0 12px 36px rgba(0,0,0,0.48)",
             font: "14px Arial, sans-serif",
         });
-
         const title = document.createElement("div");
         title.textContent = "Plushie Battle";
         Object.assign(title.style, { fontSize: "20px", fontWeight: "bold", color: "#D8A8C9", marginBottom: "5px" });
         const subtitle = document.createElement("div");
         subtitle.textContent = "Who do you want to battle?";
         Object.assign(subtitle.style, { opacity: "0.82", marginBottom: "10px" });
-
         const input = document.createElement("input");
         input.type = "text";
         input.placeholder = "Type a player name or member number";
@@ -5809,7 +5279,6 @@ function SubbysPlushiesPageMain() {
             color: "#F7EEF5",
             font: "14px Arial, sans-serif",
         });
-
         const suggestions = document.createElement("div");
         Object.assign(suggestions.style, { marginTop: "8px", fontSize: "12px", color: "#C5B6C8", lineHeight: "1.35" });
         const playerMember = Number(window.Player?.MemberNumber);
@@ -5819,10 +5288,8 @@ function SubbysPlushiesPageMain() {
             .filter(Boolean)
             .slice(0, 8);
         suggestions.textContent = roomNames.length ? `In room: ${roomNames.join(", ")}` : "Enter the exact name or member number.";
-
         const errorText = document.createElement("div");
         Object.assign(errorText.style, { minHeight: "18px", marginTop: "7px", fontSize: "12px", color: "#F0A9B7" });
-
         const controls = document.createElement("div");
         Object.assign(controls.style, { display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "8px" });
         const cancel = document.createElement("button");
@@ -5841,7 +5308,6 @@ function SubbysPlushiesPageMain() {
         });
         cancel.style.background = "#302638";
         battle.style.background = "#5A4565";
-
         const submit = () => {
             const query = String(input.value || "").trim();
             if (!query) {
@@ -5859,7 +5325,6 @@ function SubbysPlushiesPageMain() {
             closeBattleTargetPrompt();
             challengePlushBattle(Number.isFinite(member) ? String(member) : query);
         };
-
         cancel.addEventListener("click", closeBattleTargetPrompt);
         battle.addEventListener("click", submit);
         input.addEventListener("keydown", event => {
@@ -5874,25 +5339,21 @@ function SubbysPlushiesPageMain() {
         window.setTimeout(() => input.focus(), 0);
         return true;
     }
-
     function closeBattlePrompt() {
         if (!battlePromptElement) return;
         try { battlePromptElement.querySelectorAll("button").forEach(button => button.disabled = true); } catch (_) {}
         battlePromptElement = null;
     }
-
     function rollBattleRound() {
         const move = BATTLE_MOVES[Math.floor(Math.random() * BATTLE_MOVES.length)];
         const score = move.min + Math.floor(Math.random() * (move.max - move.min + 1));
         return { move: move.name, score };
     }
-
     function pruneRecentBattleDataTokens(now = Date.now()) {
         for (const [token, seenAt] of recentBattleDataTokens) {
             if (!Number.isFinite(seenAt) || now - seenAt > BATTLE_DATA_DEDUPE_MS) recentBattleDataTokens.delete(token);
         }
     }
-
     function normalizeBattleData(value) {
         if (!value || typeof value !== "object" || value.protocol !== BATTLE_DATA_PROTOCOL) return null;
         const challengerMember = Number(value.challengerMember);
@@ -5917,14 +5378,12 @@ function SubbysPlushiesPageMain() {
             rounds,
         };
     }
-
     function battleDataFromAction(data) {
         const dictionary = Array.isArray(data?.Dictionary) ? data.Dictionary : [];
         const entry = dictionary.find(part => part?.Tag === BATTLE_DATA_TAG && typeof part?.Text === "string");
         if (!entry) return null;
         try { return normalizeBattleData(JSON.parse(entry.Text)); } catch (_) { return null; }
     }
-
     function showBattleRoundSummary(payload) {
         const data = normalizeBattleData(payload);
         if (!data) return false;
@@ -5940,7 +5399,6 @@ function SubbysPlushiesPageMain() {
         ], { compact: true, fixedBattleText: true });
         return true;
     }
-
     function sendBattleResultAction(message, payload) {
         if (typeof window.ServerSend !== "function" || !message) return false;
         const data = normalizeBattleData(payload);
@@ -5967,7 +5425,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function resolveAcceptedBattle(challengerMember, challengerName, challengerPlush) {
         const playerMember = Number(window.Player?.MemberNumber);
         const playerName = getCharacterDisplayName(window.Player) || "Someone";
@@ -6015,7 +5472,6 @@ function SubbysPlushiesPageMain() {
         }, BATTLE_RESULT_DELAY_MS);
         return true;
     }
-
     function showBattlePrompt(challengerMember, challengerName, challengerPlush) {
         if (Number(challengerMember) === Number(window.Player?.MemberNumber)) return false;
         if (typeof window.ChatRoomAppendChat !== "function") return false;
@@ -6055,7 +5511,6 @@ function SubbysPlushiesPageMain() {
         battlePromptElement = row;
         return true;
     }
-
     function challengePlushBattle(targetQuery = "") {
         if (!isOurs(getHeld(window.Player))) {
             appendLocalInfoBox("Plushie battle", ["Equip a plushie first."], { compact: true });
@@ -6072,7 +5527,6 @@ function SubbysPlushiesPageMain() {
         sendStandaloneActionMessage(`${sourceLabel} challenges ${targetLabel} to a plushie battle with ${plushName}.`);
         return true;
     }
-
     function processBattleAction(data) {
         if (!isChatAction(data)) return false;
         const msg = getDictionaryText(data, "msg") || "";
@@ -6082,7 +5536,6 @@ function SubbysPlushiesPageMain() {
             if (targetMember === Number(window.Player?.MemberNumber) && sourceMember !== targetMember) showBattlePrompt(sourceMember, match[1].trim(), match[5].trim());
             return true;
         }
-
         match = msg.match(BATTLE_RESULT_RE);
         if (match) {
             const battleData = battleDataFromAction(data);
@@ -6118,10 +5571,8 @@ function SubbysPlushiesPageMain() {
             emitPluginApiEvent("battle", historyEntry);
             return true;
         }
-
         return false;
     }
-
     function compareVersions(a, b) {
         const parse = value => String(value || "0").split(/[.-]/).map(part => /^\d+$/.test(part) ? Number(part) : part);
         const A = parse(a), B = parse(b), length = Math.max(A.length, B.length);
@@ -6136,12 +5587,10 @@ function SubbysPlushiesPageMain() {
         }
         return 0;
     }
-
     function versionFromScriptText(text) {
         const match = String(text || "").match(/@version\s+([^\s]+)/i) || String(text || "").match(/const\s+VERSION\s*=\s*["']([^"']+)/);
         return match?.[1] || null;
     }
-
     async function fetchTextWithTimeout(url, timeoutMs = 6000) {
         const controller = typeof AbortController === "function" ? new AbortController() : null;
         const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
@@ -6153,22 +5602,18 @@ function SubbysPlushiesPageMain() {
             if (timer != null) window.clearTimeout(timer);
         }
     }
-
     function gitDataPlainObject(value) {
         return !!value && typeof value === "object" && !Array.isArray(value);
     }
-
     function gitDataFinite(value, fallback, min = -Infinity, max = Infinity) {
         const number = Number(value);
         return Number.isFinite(number) && number >= min && number <= max ? number : fallback;
     }
-
     function gitDataString(value, fallback = "", maxLength = 8000) {
         if (typeof value !== "string") return fallback;
         const normalized = value.trim();
         return normalized ? normalized.slice(0, maxLength) : fallback;
     }
-
     function gitDataStringArray(value, fallback = [], maxItems = 100, maxLength = 180) {
         if (!Array.isArray(value)) return [...fallback];
         const result = [];
@@ -6178,11 +5623,9 @@ function SubbysPlushiesPageMain() {
         }
         return result.length ? result : [...fallback];
     }
-
     function escapeRegExp(value) {
         return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
-
     function protectVerbForms(verbs) {
         const forms = new Set();
         for (const raw of verbs) {
@@ -6195,7 +5638,6 @@ function SubbysPlushiesPageMain() {
         }
         return [...forms].sort((a, b) => b.length - a.length);
     }
-
     function rebuildProtectRenderRegex(verbs) {
         const forms = protectVerbForms(verbs);
         if (!forms.length) return false;
@@ -6204,14 +5646,12 @@ function SubbysPlushiesPageMain() {
         PROTECT_RENDER_ACTION_RE = new RegExp(`(.+?)\\s+(${alternation})\\s+(.+?)(?:'s|')\\s+[^.)]+`, "i");
         return true;
     }
-
     function cuddleQueenEncounterValue() {
         if (Number(window.Player?.MemberNumber) === CUDDLE_QUEEN_MEMBER_NUMBER) return 1;
         if (window.CurrentScreen !== "ChatRoom") return 0;
         const characters = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
         return characters.some(C => Number(C?.MemberNumber) === CUDDLE_QUEEN_MEMBER_NUMBER) ? 1 : 0;
     }
-
     function currentChatRoomName() {
         const candidates = [
             window.ChatRoomData?.Name,
@@ -6221,7 +5661,6 @@ function SubbysPlushiesPageMain() {
         const value = candidates.find(entry => typeof entry === "string" && entry.trim());
         return String(value || "").trim();
     }
-
     function cuddleRoomJoinedValue() {
         if (window.CurrentScreen !== "ChatRoom") return 0;
         const normalize = value => String(value || "")
@@ -6231,7 +5670,6 @@ function SubbysPlushiesPageMain() {
             .toLowerCase();
         return normalize(currentChatRoomName()) === normalize(CUDDLE_ROOM_NAME) ? 1 : 0;
     }
-
     function ensureRequiredAchievements(definitions) {
         const list = Array.isArray(definitions) ? [...definitions] : [];
         if (!list.some(entry => entry?.id === "meet_cuddle_queen")) {
@@ -6272,7 +5710,6 @@ function SubbysPlushiesPageMain() {
         }
         return Object.freeze(list);
     }
-
     function achievementMetricValue(stats, metric) {
         if (metric === "affectionCount") return statAffectionCount(stats);
         if (metric === "uniquePlushiesUsed") return Object.keys(stats?.plushesUsed || {}).length;
@@ -6294,7 +5731,6 @@ function SubbysPlushiesPageMain() {
         }
         return Number(value) || 0;
     }
-
     function achievementConditionPasses(stats, condition) {
         if (!gitDataPlainObject(condition)) return false;
         const actual = achievementMetricValue(stats, condition.metric);
@@ -6310,7 +5746,6 @@ function SubbysPlushiesPageMain() {
             default: return false;
         }
     }
-
     function normalizeLoreLookupKey(value) {
         return String(value || "")
             .toLowerCase()
@@ -6319,7 +5754,6 @@ function SubbysPlushiesPageMain() {
             .replace(/kyutie/g, "kyu")
             .replace(/[^a-z0-9]/g, "");
     }
-
     function getPlushLore(name) {
         const direct = PLUSH_LORE?.[name];
         if (direct) return direct;
@@ -6330,10 +5764,8 @@ function SubbysPlushiesPageMain() {
         }
         return null;
     }
-
     function normalizeGitDataFile(fileName, payload) {
         if (!gitDataPlainObject(payload) || Number(payload.schemaVersion) !== GIT_DATA_SCHEMA_VERSION) return null;
-
         if (fileName === "lore.json") {
             if (!gitDataPlainObject(payload.lore)) return null;
             const lore = Object.create(null);
@@ -6345,7 +5777,6 @@ function SubbysPlushiesPageMain() {
             }
             return Object.keys(lore).length ? { lore: Object.freeze(lore) } : null;
         }
-
         if (fileName === "speech.json") {
             if (!gitDataPlainObject(payload.moodBuckets)) return null;
             const buckets = Object.create(null);
@@ -6367,7 +5798,6 @@ function SubbysPlushiesPageMain() {
                 idleChance: gitDataFinite(triggers.idleChance, SPEECH_IDLE_CHANCE, 0, 1),
             };
         }
-
         if (fileName === "moods.json") {
             const labels = Array.isArray(payload.labels)
                 ? payload.labels.map(entry => ({
@@ -6396,7 +5826,6 @@ function SubbysPlushiesPageMain() {
                 deltas: Object.freeze(deltas),
             };
         }
-
         if (fileName === "achievements.json") {
             if (!Array.isArray(payload.achievements)) return null;
             const definitions = [];
@@ -6418,7 +5847,6 @@ function SubbysPlushiesPageMain() {
                 achievements: Object.freeze(definitions),
             };
         }
-
         if (fileName === "battle.json") {
             if (!Array.isArray(payload.moves)) return null;
             const moves = [];
@@ -6435,7 +5863,6 @@ function SubbysPlushiesPageMain() {
                 moves: Object.freeze(moves),
             };
         }
-
         if (fileName === "commands.json") {
             if (!Array.isArray(payload.groups)) return null;
             const groups = [];
@@ -6453,7 +5880,6 @@ function SubbysPlushiesPageMain() {
             }
             return groups.length ? { groups: Object.freeze(groups) } : null;
         }
-
         if (fileName === "poses.json") {
             const temporary = gitDataPlainObject(payload.temporaryPoses) ? payload.temporaryPoses : {};
             const normalizePose = (entry, fallbackDuration, fallbackTransform) => {
@@ -6472,7 +5898,6 @@ function SubbysPlushiesPageMain() {
                 hideBehind: normalizePose(temporary.hideBehindFace, HIDE_BEHIND_DURATION_MS, HIDE_BEHIND_FACE_TRANSFORM),
             };
         }
-
         if (fileName === "defaults.json") {
             if (!gitDataPlainObject(payload.featureDefaults)) return null;
             const current = FEATURE_DEFAULTS;
@@ -6484,7 +5909,6 @@ function SubbysPlushiesPageMain() {
             }
             return { featureDefaults: Object.freeze(next) };
         }
-
         if (fileName === "idle.json") {
             if (!Array.isArray(payload.frames)) return null;
             const frames = [];
@@ -6506,18 +5930,15 @@ function SubbysPlushiesPageMain() {
                 speechChanceAfterAnimation: gitDataFinite(payload.speechChanceAfterAnimation, SPEECH_IDLE_CHANCE, 0, 1),
             };
         }
-
         if (fileName === "protect.json") {
             const keywords = gitDataStringArray(payload.keywords, PROTECT_KEYWORDS, 100, 40)
                 .map(value => value.toLowerCase())
                 .filter(value => !/^pokes?$/.test(value));
             for (const required of ["boop", "bap"]) if (!keywords.includes(required)) keywords.push(required);
-
             const verbs = gitDataStringArray(payload.renderVerbs, keywords, 100, 40)
                 .map(value => value.toLowerCase())
                 .filter(value => !/^pokes?$/.test(value));
             for (const required of ["boop", "bap"]) if (!verbs.includes(required)) verbs.push(required);
-
             const jealous = gitDataStringArray(payload.jealousActivityKeywords, JEALOUS_ACTIVITY_KEYWORDS, 100, 40)
                 .map(value => value.toLowerCase());
             if (!jealous.includes("poke")) jealous.push("poke");
@@ -6534,7 +5955,6 @@ function SubbysPlushiesPageMain() {
                 jealousKeywords: Object.freeze(jealous),
             };
         }
-
         if (fileName === "relationships.json") {
             if (!Array.isArray(payload.levels)) return null;
             const levels = payload.levels
@@ -6559,10 +5979,8 @@ function SubbysPlushiesPageMain() {
                 speechLines: Object.freeze(speechLines),
             };
         }
-
         return null;
     }
-
     function applyNormalizedGitDataFile(fileName, normalized) {
         if (!normalized) return false;
         if (fileName === "lore.json") {
@@ -6641,12 +6059,10 @@ function SubbysPlushiesPageMain() {
         } else return false;
         return true;
     }
-
     function validateAndApplyGitDataFile(fileName, payload) {
         const normalized = normalizeGitDataFile(fileName, payload);
         return normalized ? applyNormalizedGitDataFile(fileName, normalized) : false;
     }
-
     function readGitDataCache() {
         try {
             const raw = window.localStorage?.getItem(GIT_DATA_CACHE_KEY);
@@ -6657,7 +6073,6 @@ function SubbysPlushiesPageMain() {
             return null;
         }
     }
-
     function writeGitDataCache(cache) {
         try {
             window.localStorage?.setItem(GIT_DATA_CACHE_KEY, JSON.stringify(cache));
@@ -6666,7 +6081,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function loadCachedGitData() {
         const cache = readGitDataCache();
         if (!cache || !gitDataPlainObject(cache.files)) return false;
@@ -6686,26 +6100,22 @@ function SubbysPlushiesPageMain() {
         log(`Loaded ${loaded.length} validated Git data file${loaded.length === 1 ? "" : "s"} from local cache.`);
         return true;
     }
-
     function gitDataPathFromIndex(index, fileName) {
         const candidate = index?.files?.[fileName]?.path;
         const path = typeof candidate === "string" && candidate.trim() ? candidate.trim() : `data/${fileName}`;
         if (!/^data\/[A-Za-z0-9._/-]+\.json$/.test(path) || path.includes("..")) return null;
         return path;
     }
-
     async function fetchGitDataJson(url, timeoutMs = 8000) {
         const text = await fetchTextWithTimeout(url, timeoutMs);
         return JSON.parse(text);
     }
-
     function gitDataStatusText() {
         const count = gitDataState.loadedFiles?.length || 0;
         if (gitDataState.source === "github") return `GitHub live (${count}/${GIT_DATA_FILES.length} files)`;
         if (gitDataState.source === "cache") return `Cached Git data (${count}/${GIT_DATA_FILES.length} files)`;
         return "Built-in fallback";
     }
-
     async function refreshGitDataFromGitHub({ force = false, silent = true, includeLore = false } = {}) {
         if (gitDataRefreshPromise) return gitDataRefreshPromise;
         if (!force) {
@@ -6713,7 +6123,6 @@ function SubbysPlushiesPageMain() {
             try { lastCheck = Number(window.localStorage?.getItem(GIT_DATA_LAST_CHECK_KEY)) || 0; } catch (_) {}
             if (Date.now() - lastCheck < GIT_DATA_REFRESH_INTERVAL_MS && gitDataState.loadedFiles.length) return { ...gitDataState };
         }
-
         gitDataRefreshPromise = (async () => {
             try {
                 const stamp = Date.now();
@@ -6721,25 +6130,21 @@ function SubbysPlushiesPageMain() {
                 if (!gitDataPlainObject(index) || Number(index.schemaVersion) !== GIT_DATA_SCHEMA_VERSION || !gitDataPlainObject(index.files)) {
                     throw new Error("Unsupported or invalid data/index.json schema.");
                 }
-
                 const previous = readGitDataCache();
                 const cachedFiles = gitDataPlainObject(previous?.files) ? { ...previous.files } : {};
                 const loaded = [];
                 const failures = [];
-
                 const results = await Promise.allSettled(GIT_DATA_FILES.filter(fileName => includeLore || fileName !== "lore.json").map(async fileName => {
                     const path = gitDataPathFromIndex(index, fileName);
                     if (!path) throw new Error(`${fileName}: invalid path in data/index.json`);
                     const payload = await fetchGitDataJson(`${REPOSITORY_RAW_ROOT}/${path}?t=${stamp}`);
                     return { fileName, payload };
                 }));
-
                 const fetched = new Map();
                 for (const result of results) {
                     if (result.status === "fulfilled") fetched.set(result.value.fileName, result.value.payload);
                     else failures.push(String(result.reason || "unknown failure"));
                 }
-
                 for (const fileName of GIT_DATA_FILES) {
                     if (!fetched.has(fileName)) continue;
                     const payload = fetched.get(fileName);
@@ -6750,9 +6155,7 @@ function SubbysPlushiesPageMain() {
                     loaded.push(fileName);
                     cachedFiles[fileName] = payload;
                 }
-
                 if (!loaded.length) throw new Error(failures[0] || "No Git data files could be loaded.");
-
                 const savedAt = Date.now();
                 writeGitDataCache({
                     schemaVersion: GIT_DATA_SCHEMA_VERSION,
@@ -6761,7 +6164,6 @@ function SubbysPlushiesPageMain() {
                     files: cachedFiles,
                 });
                 try { window.localStorage?.setItem(GIT_DATA_LAST_CHECK_KEY, String(savedAt)); } catch (_) {}
-
                 gitDataState = {
                     source: "github",
                     loadedFiles: [...new Set([...(gitDataState.loadedFiles || []), ...loaded])],
@@ -6770,7 +6172,6 @@ function SubbysPlushiesPageMain() {
                     indexPluginVersion: typeof index.pluginVersion === "string" ? index.pluginVersion : null,
                     lastError: failures.length ? `${failures.length} file(s) kept their cached/fallback copy.` : null,
                 };
-
                 if (featureSettingsState == null) {
                 }
                 if (speechBubbleElement) positionSpeechBubble();
@@ -6790,9 +6191,6 @@ function SubbysPlushiesPageMain() {
         })();
         return gitDataRefreshPromise;
     }
-
-    // Lore is fetched on first inspection, not during every startup data refresh.
-    // Local cached lore and built-in stories remain usable offline immediately.
     let onDemandLorePromise = null;
     let onDemandLoreFetched = false;
     let onDemandLoreRetryAfter = 0;
@@ -6826,7 +6224,6 @@ function SubbysPlushiesPageMain() {
         })();
         return onDemandLorePromise;
     }
-
     function showGitDataStatus() {
         const refreshed = gitDataState.refreshedAt ? new Date(gitDataState.refreshedAt).toLocaleString() : "Not this session";
         const cached = gitDataState.cachedAt ? new Date(gitDataState.cachedAt).toLocaleString() : "None";
@@ -6839,7 +6236,6 @@ function SubbysPlushiesPageMain() {
         ]);
         return { ...gitDataState };
     }
-
     function normalizeReleaseUrl(value) {
         try {
             const url = new URL(String(value || ""), UPDATE_REPOSITORY_PAGE);
@@ -6848,7 +6244,6 @@ function SubbysPlushiesPageMain() {
             return UPDATE_REPOSITORY_PAGE;
         }
     }
-
     async function resolveLatestAddonVersion() {
         try {
             const text = await fetchTextWithTimeout(`${UPDATE_MANIFEST_URL}?t=${Date.now()}`);
@@ -6862,7 +6257,6 @@ function SubbysPlushiesPageMain() {
                 };
             }
         } catch (_) {}
-
         try {
             const listingText = await fetchTextWithTimeout(`${UPDATE_REPOSITORY_API}&t=${Date.now()}`);
             const listing = JSON.parse(listingText);
@@ -6881,7 +6275,6 @@ function SubbysPlushiesPageMain() {
         } catch (_) {}
         return null;
     }
-
     async function checkForUpdates({ silent = false } = {}) {
         if (updateCheckPromise) return updateCheckPromise;
         updateCheckPromise = (async () => {
@@ -6889,25 +6282,24 @@ function SubbysPlushiesPageMain() {
                 const latest = await resolveLatestAddonVersion();
                 if (!latest) {
                     lastUpdateInfo = { ok: false, version: VERSION, at: new Date().toISOString(), reason: "No release metadata found." };
-                    if (!silent) appendLocalInfoBox("Subby's Plushies updater", ["Could not find release metadata in the GitHub repository.", "Add a version.json file or publish the userscript in the repository root to enable update detection."]);
+                    if (!silent) appendLocalInfoBox("Subby's Plushies & Essentials updater", ["Could not find release metadata in the GitHub repository.", "Add a version.json file or publish the userscript in the repository root to enable update detection."]);
                     return lastUpdateInfo;
                 }
-
                 const comparison = compareVersions(latest.version, VERSION);
                 lastUpdateInfo = { ok: true, current: VERSION, latest: latest.version, updateAvailable: comparison > 0, ...latest, at: new Date().toISOString() };
                 if (comparison > 0) {
-                    appendLocalInfoBox("Subby's Plushies update available", [
+                    appendLocalInfoBox("Subby's Plushies & Essentials update available", [
                         `Installed: v${VERSION} • Latest: v${latest.version}`,
                         latest.notes || "A newer build is available in the repository.",
                         "The updater only checks versions; it never executes downloaded code automatically.",
                     ]);
                 } else if (!silent) {
-                    appendLocalInfoBox("Subby's Plushies updater", [`v${VERSION} is up to date.`, `Release source: ${latest.source}`]);
+                    appendLocalInfoBox("Subby's Plushies & Essentials updater", [`v${VERSION} is up to date.`, `Release source: ${latest.source}`]);
                 }
                 return lastUpdateInfo;
             } catch (e) {
                 lastUpdateInfo = { ok: false, version: VERSION, error: String(e), at: new Date().toISOString() };
-                if (!silent) appendLocalInfoBox("Subby's Plushies updater", [`Update check failed: ${String(e)}`]);
+                if (!silent) appendLocalInfoBox("Subby's Plushies & Essentials updater", [`Update check failed: ${String(e)}`]);
                 return lastUpdateInfo;
             } finally {
                 try { window.localStorage?.setItem(UPDATE_CHECK_STORAGE_KEY, String(Date.now())); } catch (_) {}
@@ -6916,7 +6308,6 @@ function SubbysPlushiesPageMain() {
         })();
         return updateCheckPromise;
     }
-
     function scheduleAutomaticUpdateCheck() {
         if (!getFeatureSettings().autoUpdateChecks) return;
         let previous = 0;
@@ -6926,7 +6317,6 @@ function SubbysPlushiesPageMain() {
             if (getFeatureSettings().autoUpdateChecks) void checkForUpdates({ silent: true });
         }, 5000);
     }
-
     async function openLatestUpdatePage() {
         const info = lastUpdateInfo?.ok ? lastUpdateInfo : await checkForUpdates({ silent: false });
         const url = normalizeReleaseUrl(info?.downloadUrl);
@@ -6937,27 +6327,23 @@ function SubbysPlushiesPageMain() {
             return null;
         }
     }
-
     function roomAdminMembers() {
         const admins = window.ChatRoomData?.Admin;
         return Array.isArray(admins)
             ? admins.map(Number).filter(Number.isFinite)
             : [];
     }
-
     function isRoomAdminMember(memberNumber) {
         const member = Number(memberNumber);
         if (!Number.isFinite(member)) return false;
         return roomAdminMembers().includes(member);
     }
-
     function canSetRoomMascot() {
         try {
             if (typeof window.ChatRoomPlayerIsAdmin === "function" && window.ChatRoomPlayerIsAdmin()) return true;
         } catch (_) {}
         return isRoomAdminMember(window.Player?.MemberNumber);
     }
-
     function currentRoomMascotCacheKey() {
         const data = window.ChatRoomData;
         const name = String(data?.Name || "").trim();
@@ -6965,21 +6351,18 @@ function SubbysPlushiesPageMain() {
         const space = String(data?.Space || "MainHall").trim() || "MainHall";
         return `${space}::${name}`;
     }
-
     function getRoomMascotCache() {
         if (roomMascotCacheState) return roomMascotCacheState;
         const stored = readLocalJSON(ROOM_MASCOT_CACHE_STORAGE_KEY, {});
         roomMascotCacheState = stored && typeof stored === "object" ? stored : {};
         return roomMascotCacheState;
     }
-
     function getRoomMascotLocalPositionStore() {
         if (roomMascotPositionState) return roomMascotPositionState;
         const stored = readLocalJSON(ROOM_MASCOT_POSITION_STORAGE_KEY, {});
         roomMascotPositionState = stored && typeof stored === "object" ? stored : {};
         return roomMascotPositionState;
     }
-
     function getLocalRoomMascotPosition() {
         const key = currentRoomMascotCacheKey();
         const stored = key ? getRoomMascotLocalPositionStore()?.[key] : null;
@@ -6990,7 +6373,6 @@ function SubbysPlushiesPageMain() {
             y: Number.isFinite(y) ? Math.max(0, Math.min(1, y)) : 0.16,
         };
     }
-
     function setLocalRoomMascotPosition(x, y) {
         const key = currentRoomMascotCacheKey();
         if (!key) return false;
@@ -7002,7 +6384,6 @@ function SubbysPlushiesPageMain() {
         writeLocalJSON(ROOM_MASCOT_POSITION_STORAGE_KEY, store);
         return true;
     }
-
     function cacheRoomMascotState(state) {
         const key = currentRoomMascotCacheKey();
         if (!key) return false;
@@ -7012,7 +6393,6 @@ function SubbysPlushiesPageMain() {
         writeLocalJSON(ROOM_MASCOT_CACHE_STORAGE_KEY, cache);
         return true;
     }
-
     function roomMascotFromSharedRoomData() {
         const raw = window.ChatRoomData?.Custom?.[ROOM_MASCOT_CUSTOM_KEY];
         if (!raw) return null;
@@ -7031,7 +6411,6 @@ function SubbysPlushiesPageMain() {
             shared: true,
         };
     }
-
     function recoverRoomMascotState({ allowCache = true } = {}) {
         const roomLoaded = !!String(window.ChatRoomData?.Name || "").trim();
         const shared = roomMascotFromSharedRoomData();
@@ -7041,14 +6420,12 @@ function SubbysPlushiesPageMain() {
             refreshRoomMascotOverlay();
             return { source: "room", state: { ...shared } };
         }
-
         if (roomLoaded) {
             cacheRoomMascotState(null);
             roomMascotState = null;
             removeRoomMascotOverlay();
             return { source: "room-none", state: null };
         }
-
         const key = currentRoomMascotCacheKey();
         const cached = allowCache && key ? getRoomMascotCache()?.[key] : null;
         if (cached?.name && mascotRenderIndex(cached.name) >= 0) {
@@ -7056,16 +6433,13 @@ function SubbysPlushiesPageMain() {
             refreshRoomMascotOverlay();
             return { source: "cache", state: { ...roomMascotState } };
         }
-
         roomMascotState = null;
         removeRoomMascotOverlay();
         return { source: "none", state: null };
     }
-
     function buildRoomUpdatePayloadWithCustom(custom) {
         const data = window.ChatRoomData;
         if (!data || typeof data !== "object") return null;
-
         const room = {};
         const keys = [
             "Name", "Description", "Background", "Limit", "Admin", "Ban", "Private", "Locked",
@@ -7078,7 +6452,6 @@ function SubbysPlushiesPageMain() {
         room.Custom = custom && Object.keys(custom).length ? custom : undefined;
         return room;
     }
-
     function roomMascotMapViewDetected() {
         try {
             if (window.ChatRoomActiveView && window.ChatRoomViews?.Map && window.ChatRoomActiveView === window.ChatRoomViews.Map) return true;
@@ -7089,11 +6462,9 @@ function SubbysPlushiesPageMain() {
             document.querySelector("[id^='chat-room-map-view']")
         );
     }
-
     function roomMascotMapPublishUnsafe() {
         return roomMascotMapViewDetected() && window.ChatRoomData?.MapData == null;
     }
-
     function publishRoomMascotSharedStateNow(state) {
         if (!canSetRoomMascot() || typeof window.ServerSend !== "function" || !window.ChatRoomData) return false;
         const currentCustom = window.ChatRoomData.Custom && typeof window.ChatRoomData.Custom === "object"
@@ -7110,10 +6481,8 @@ function SubbysPlushiesPageMain() {
         } else {
             delete currentCustom[ROOM_MASCOT_CUSTOM_KEY];
         }
-
         const room = buildRoomUpdatePayloadWithCustom(currentCustom);
         if (!room) return false;
-
         window.ChatRoomData.Custom = Object.keys(currentCustom).length ? currentCustom : undefined;
         lastRoomMascotSharedSyncAt = Date.now();
         try {
@@ -7128,7 +6497,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function flushQueuedRoomMascotPublish() {
         if (!queuedRoomMascotPublish) return false;
         if (roomMascotMapPublishUnsafe()) {
@@ -7147,7 +6515,6 @@ function SubbysPlushiesPageMain() {
         queuedRoomMascotPublishTimer = null;
         return publishRoomMascotSharedStateNow(pending.state);
     }
-
     function queueRoomMascotSharedState(state) {
         queuedRoomMascotPublish = {
             state: state?.name ? cloneBackupValue(state) : null,
@@ -7158,32 +6525,27 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function publishRoomMascotSharedState(state) {
         if (window.CurrentScreen === "ChatAdmin") return true;
         if (roomMascotMapPublishUnsafe()) return queueRoomMascotSharedState(state);
         return publishRoomMascotSharedStateNow(state);
     }
-
     function mascotRenderIndex(name) {
         const wanted = String(name || "").trim().toLowerCase();
         if (!wanted) return -1;
         return PLUSH_NAMES.findIndex(entry => String(entry || "").trim().toLowerCase() === wanted);
     }
-
     function removeRoomMascotOverlay() {
         try { roomMascotOverlay?.remove?.(); } catch (_) {}
         roomMascotOverlay = null;
         roomMascotOverlayImage = null;
         roomMascotOverlayLabel = null;
     }
-
     function roomMascotShouldYieldToMenus() {
         if (nativeLayeringVisible()) return true;
         if (window.DialogFocusItem) return true;
         return false;
     }
-
     function scheduleRoomMascotUiRefresh() {
         window.setTimeout(() => {
             refreshRoomMascotOverlay();
@@ -7191,28 +6553,22 @@ function SubbysPlushiesPageMain() {
             refreshRoomMascotAdminButton();
         }, 0);
     }
-
     function installRoomMascotUiSafety() {
         if (mascotUiHooksInstalled) return true;
         mascotUiHooksInstalled = true;
-
         document.addEventListener("pointerdown", event => {
             if (roomMascotOverlay && roomMascotOverlay.contains?.(event.target)) return;
             scheduleRoomMascotUiRefresh();
         }, true);
-
         document.addEventListener("keydown", event => {
             if (["Escape", "Enter", " "].includes(event.key)) scheduleRoomMascotUiRefresh();
         }, true);
-
         window.addEventListener("resize", () => {
             scheduleRoomMascotUiRefresh();
             refreshRoomMascotAdminButton();
         }, { passive: true });
-
         return true;
     }
-
     function refreshRoomMascotOverlay() {
         const settings = getFeatureSettings();
         const inRoom = window.CurrentScreen === "ChatRoom";
@@ -7350,7 +6706,6 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function setRoomMascotOverlayVisible(visible) {
         const enabled = setFeatureSetting("showRoomMascot", !!visible);
         if (enabled) refreshRoomMascotOverlay();
@@ -7360,7 +6715,6 @@ function SubbysPlushiesPageMain() {
             : "Room mascot picture is hidden locally. Use /plushiemascot show to restore it."]);
         return enabled;
     }
-
     function setRoomMascotByName(name, options = null) {
         const wanted = String(name || "").trim();
         const known = Array.from({ length: PUBLIC_PLUSH_COUNT }, (_, option) => publicPlushName(option))
@@ -7403,14 +6757,12 @@ function SubbysPlushiesPageMain() {
         recordStat("mascot", 1, { plushName: known });
         return true;
     }
-
     function setRoomMascotByOption(option, options = null) {
         const publicOption = Number(option);
         if (!validPublicPlushOption(publicOption)) return false;
         const wire = publicToWirePlushOption(publicOption);
         return setRoomMascotByName(PLUSH_NAMES[wire], options);
     }
-
     function pickRandomRoomMascot(options = null) {
         if (!canSetRoomMascot()) {
             appendLocalInfoBox("Room mascot", ["Only a verified room admin can set the shared mascot."]);
@@ -7434,13 +6786,11 @@ function SubbysPlushiesPageMain() {
         const selected = choices[Math.floor(Math.random() * choices.length)];
         return setRoomMascotByOption(selected.option, { randomPick: true });
     }
-
     function closeRoomMascotPicker() {
         try { roomMascotPickerElement?.remove?.(); } catch (_) {}
         roomMascotPickerElement = null;
         return true;
     }
-
     function openRoomMascotPicker() {
         if (!canSetRoomMascot()) return false;
         closeRoomMascotPicker();
@@ -7540,12 +6890,10 @@ function SubbysPlushiesPageMain() {
         roomMascotPickerElement = root;
         return true;
     }
-
     function removeRoomMascotAdminButton() {
         try { roomMascotAdminButton?.remove?.(); } catch (_) {}
         roomMascotAdminButton = null;
     }
-
     function refreshRoomMascotAdminButton() {
         const visible = window.CurrentScreen === "ChatAdmin" && canSetRoomMascot();
         if (!visible) {
@@ -7583,7 +6931,6 @@ function SubbysPlushiesPageMain() {
         });
         return true;
     }
-
     function installRoomMascotAdminPicker() {
         if (roomMascotAdminHookInstalled) return true;
         roomMascotAdminHookInstalled = true;
@@ -7611,7 +6958,6 @@ function SubbysPlushiesPageMain() {
         });
         return true;
     }
-
     function setCurrentPlushAsRoomMascot() {
         if (!isOurs(getHeld(window.Player))) {
             appendLocalInfoBox("Room mascot", ["Equip a Subby's Plushies plushie first."]);
@@ -7622,7 +6968,6 @@ function SubbysPlushiesPageMain() {
         if (changed) adjustCurrentPlushMood(3, "room mascot");
         return changed;
     }
-
     function clearRoomMascot() {
         if (!canSetRoomMascot()) {
             appendLocalInfoBox("Room mascot", ["Only a verified room admin can clear the shared mascot."]);
@@ -7646,14 +6991,11 @@ function SubbysPlushiesPageMain() {
         if (!persisted) appendLocalInfoBox("Room mascot", ["Mascot was cleared locally, but the shared room-state update could not be sent."]);
         return true;
     }
-
     function processRoomMascotAction(data) {
         const text = getDictionaryText(data, "msg");
         if (typeof text !== "string") return false;
-
         const senderMember = Number(data?.Sender);
         if (!isRoomAdminMember(senderMember)) return false;
-
         const clear = text.match(ROOM_MASCOT_CLEAR_RE);
         if (clear) {
             roomMascotState = null;
@@ -7694,7 +7036,6 @@ function SubbysPlushiesPageMain() {
         refreshRoomMascotOverlay();
         return true;
     }
-
     function showRoomMascot() {
         if (!roomMascotState) {
             appendLocalInfoBox("Room mascot", ["No shared mascot is currently stored for this room."]);
@@ -7707,7 +7048,6 @@ function SubbysPlushiesPageMain() {
         ]);
         return { ...roomMascotState };
     }
-
     function handleRoomMascotCommand(command) {
         const arg = String(command || "").split(/\s+/)[1] || "info";
         if (arg === "set") return setCurrentPlushAsRoomMascot();
@@ -7718,30 +7058,25 @@ function SubbysPlushiesPageMain() {
         if (arg === "picker" || arg === "pick" || arg === "open" || arg === "choose") return openRoomMascotPicker();
         return showRoomMascot();
     }
-
     function currentPlushCanvasBounds(item) {
         const transform = readActivePlushLayerTransform(item);
         if (!transform) return null;
-
         const scaleX = Math.max(0.05, Math.abs(Number(transform.ScaleX) || 1));
         const scaleY = Math.max(0.05, Math.abs(Number(transform.ScaleY) || 1));
         const width = PLUSH_RENDER.Width * scaleX;
         const height = PLUSH_RENDER.Height * scaleY;
         const centerX = PLUSH_RENDER.Left + PLUSH_RENDER.Width / 2 + transform.TranslationX;
         const centerY = PLUSH_RENDER.Top + PLUSH_RENDER.Height / 2 + transform.TranslationY;
-
         const radians = (Number(transform.Rotation) || 0) * Math.PI / 180;
         const cos = Math.abs(Math.cos(radians));
         const sin = Math.abs(Math.sin(radians));
         const boundWidth = width * cos + height * sin;
         const boundHeight = width * sin + height * cos;
         const padding = 12;
-
         const visualLeft = centerX - boundWidth / 2;
         const visualRight = centerX + boundWidth / 2;
         const visualTop = centerY - boundHeight / 2;
         const visualBottom = centerY + boundHeight / 2;
-
         return {
             left: visualLeft - padding,
             right: visualRight + padding,
@@ -7756,29 +7091,24 @@ function SubbysPlushiesPageMain() {
             transform,
         };
     }
-
     function plushNameForItem(item) {
         if (!isOurs(item)) return "Plushie";
         const option = canonicalWirePlushOption(getItemPlushOption(item));
         return validPlushOption(option) ? (PLUSH_NAMES[option] || "Plushie") : "Plushie";
     }
-
     function dragTargetLabel(groupName = getDragTargetGroup()) {
         const item = getInventoryItem(window.Player, groupName);
         const slot = groupName === ADDON_GROUP ? "Body (Ceiling Rope slot)" : "Handheld";
         return isOurs(item) ? `${slot} — ${plushNameForItem(item)}` : `${slot} — not equipped`;
     }
-
     function getDragTargetGroup() {
         if (!dragTargetGroupState) {
             const stored = readLocalJSON(DRAG_TARGET_GROUP_STORAGE_KEY, {});
             const storedGroup = String(stored?.group || "");
             dragTargetGroupState = PLUSH_GROUPS.includes(storedGroup) ? storedGroup : GROUP;
         }
-
         const preferred = getInventoryItem(window.Player, dragTargetGroupState);
         if (isOurs(preferred)) return dragTargetGroupState;
-
         const fallback = PLUSH_GROUPS.find(groupName => isOurs(getInventoryItem(window.Player, groupName)));
         if (fallback && fallback !== dragTargetGroupState) {
             dragTargetGroupState = fallback;
@@ -7786,11 +7116,9 @@ function SubbysPlushiesPageMain() {
         }
         return dragTargetGroupState;
     }
-
     function getDragTargetItem() {
         return getInventoryItem(window.Player, getDragTargetGroup());
     }
-
     function setDragTargetGroup(groupName) {
         const normalized = String(groupName || "");
         if (!PLUSH_GROUPS.includes(normalized)) return false;
@@ -7799,29 +7127,24 @@ function SubbysPlushiesPageMain() {
         if (dragSession) finishDirectDrag(true);
         dragTargetGroupState = normalized;
         writeLocalJSON(DRAG_TARGET_GROUP_STORAGE_KEY, { group: normalized });
-
         if (speechBubbleElement?.isConnected) {
             speechBubbleGroupName = normalized;
             positionSpeechBubble();
         }
         if (plushStatusIconElement?.isConnected) positionPlushStatusIcon();
-
         refreshDragToggleButton();
         renderDragUi();
         return true;
     }
-
     function closeDragUi() {
         try { dragUiElement?.remove?.(); } catch (_) {}
         dragUiElement = null;
         return true;
     }
-
     function renderDragUi() {
         if (!dragUiElement?.isConnected) return false;
         const style = getExtensionsStyle();
         dragUiElement.replaceChildren();
-
         const header = document.createElement("div");
         Object.assign(header.style, { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "10px" });
         const title = document.createElement("strong");
@@ -7829,15 +7152,12 @@ function SubbysPlushiesPageMain() {
         Object.assign(title.style, { fontSize: "20px", color: style.accent });
         const close = makeExtensionsButton("Close", closeDragUi);
         header.append(title, close);
-
         const hint = document.createElement("div");
         hint.textContent = "Choose which equipped plushie Easy Drag controls, then enable or disable dragging.";
         Object.assign(hint.style, { color: style.muted, fontSize: "12px", lineHeight: "1.4", marginBottom: "12px" });
-
         const targetTitle = document.createElement("div");
         targetTitle.textContent = "Drag target";
         Object.assign(targetTitle.style, { fontWeight: "bold", color: style.text, marginBottom: "7px" });
-
         const targets = document.createElement("div");
         Object.assign(targets.style, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" });
         const selectedGroup = getDragTargetGroup();
@@ -7854,13 +7174,11 @@ function SubbysPlushiesPageMain() {
             }
             targets.appendChild(button);
         }
-
         const mode = makeExtensionsButton(dragModeEnabled ? "Disable Easy Drag" : "Enable Easy Drag", () => {
             setDragMode(!dragModeEnabled);
             renderDragUi();
         }, { active: dragModeEnabled });
         mode.style.width = "100%";
-
         const dragButtonVisible = !!getFeatureSettings().showDragButton;
         const addDragButton = makeExtensionsButton(
             dragButtonVisible ? "Hide Drag Button" : "Show Drag Button",
@@ -7873,18 +7191,15 @@ function SubbysPlushiesPageMain() {
         );
         addDragButton.style.width = "100%";
         addDragButton.style.marginTop = "8px";
-
         const status = document.createElement("div");
         const targetItem = getDragTargetItem();
         status.textContent = isOurs(targetItem)
             ? `Current target: ${dragTargetLabel(getDragTargetGroup())} • Easy Drag ${dragModeEnabled ? "ON" : "off"}`
             : "Equip a handheld or Body-slot plushie to use Easy Drag.";
         Object.assign(status.style, { color: style.muted, fontSize: "12px", marginTop: "9px", lineHeight: "1.35" });
-
         dragUiElement.append(header, hint, targetTitle, targets, mode, addDragButton, status);
         return true;
     }
-
     function openDragUi() {
         closeDragUi();
         const root = document.createElement("div");
@@ -7912,7 +7227,6 @@ function SubbysPlushiesPageMain() {
         renderDragUi();
         return true;
     }
-
     function applyDragFrame(point) {
         const session = dragSession;
         if (!session || !point) return;
@@ -7926,7 +7240,6 @@ function SubbysPlushiesPageMain() {
             TranslationX: session.base.TranslationX + dx * layerRatio,
             TranslationY: session.base.TranslationY + dy * layerRatio,
         });
-
         if (session.overlayStartMainBounds &&
             Number.isFinite(point.mainX) && Number.isFinite(point.mainY)) {
             session.overlayCurrentMainBounds = translateMainBounds(
@@ -7935,12 +7248,10 @@ function SubbysPlushiesPageMain() {
                 point.mainY - session.startMainY
             );
         }
-
         rebuildCharacterCanvas(window.Player, "direct plush drag");
         scheduleLocalOverlayReposition();
         session.lastPoint = point;
     }
-
     function finishDirectDrag(cancelled = false) {
         const session = dragSession;
         if (dragFrameRequest != null) {
@@ -7948,46 +7259,37 @@ function SubbysPlushiesPageMain() {
             dragFrameRequest = null;
         }
         if (!session) return false;
-
         const current = getInventoryItem(window.Player, session.groupName);
         if (!isOurs(current) || getActivePlushLayerName(current) !== session.layerName) {
             dragSession = null;
             return false;
         }
-
         if (cancelled) {
             setPlushLayerTransform(current, session.layerName, { ...session.base });
             session.overlayCurrentMainBounds = cloneBounds(session.overlayStartMainBounds);
         }
-
         compactPlushLayerTransformsToActive(current, readActivePlushLayerTransform(current));
         resetGenericNativeTransform(current);
         rememberCharacterPlushState(window.Player, current);
-
         if (!cancelled) commitDirectDragOverlayBounds(session, current);
         else directDragOverlayBoundsByGroup.delete(session.groupName);
-
         dragSession = null;
-
         rebuildCharacterCanvas(
             window.Player,
             cancelled ? "direct plush drag cancel" : "direct plush drag commit"
         );
-
         if (speechBubbleElement?.isConnected) {
             speechBubbleGroupName = session.groupName;
             positionSpeechBubble();
         }
         if (plushStatusIconElement?.isConnected) positionPlushStatusIcon();
         scheduleLocalOverlayReposition();
-
         if (!cancelled && typeof ChatRoomCharacterUpdate === "function") {
             try { ChatRoomCharacterUpdate(window.Player); } catch (_) {}
         }
         if (!cancelled) recordStat("drag", 1, { plushName: plushNameForItem(current) });
         return true;
     }
-
     function getDragTogglePosition() {
         if (dragTogglePositionState) return dragTogglePositionState;
         const stored = readLocalJSON(DRAG_TOGGLE_POSITION_STORAGE_KEY, {});
@@ -7999,18 +7301,15 @@ function SubbysPlushiesPageMain() {
         };
         return dragTogglePositionState;
     }
-
     function saveDragTogglePosition() {
         if (!dragTogglePositionState) return false;
         return writeLocalJSON(DRAG_TOGGLE_POSITION_STORAGE_KEY, dragTogglePositionState);
     }
-
     function removeDragToggleButton() {
         try { dragToggleButton?.remove?.(); } catch (_) {}
         dragToggleButton = null;
         dragToggleMoveSession = null;
     }
-
     function refreshDragToggleButton() {
         const inRoom = window.CurrentScreen === "ChatRoom";
         const item = getDragTargetItem();
@@ -8098,13 +7397,11 @@ function SubbysPlushiesPageMain() {
         dragToggleButton.style.opacity = dragModeEnabled ? "1" : "0.90";
         return true;
     }
-
     function installDragToggleUi() {
         refreshDragToggleButton();
         window.addEventListener("resize", refreshDragToggleButton, { passive: true });
         return true;
     }
-
     function setDragMode(enabled) {
         const next = !!enabled;
         if (next && !isOurs(getDragTargetItem())) {
@@ -8117,39 +7414,31 @@ function SubbysPlushiesPageMain() {
         refreshDragToggleButton();
         return dragModeEnabled;
     }
-
     function toggleDragMode() {
         return setDragMode(!dragModeEnabled);
     }
-
     function installDirectDragHandlers() {
         if (dragHandlersInstalled) return true;
         dragHandlersInstalled = true;
-
         document.addEventListener("pointerdown", event => {
             if (!dragModeEnabled || event.button !== 0 || nativeLayeringVisible()) return;
             const point = characterCanvasCoordinates(window.Player, event);
             if (!point || point.x >= 1000 || point.y < 0 || point.y > 1000) return;
-
             if (activeIdleAnimationSession) cancelIdleAnimation();
             if (activeBalanceHeadSession) restoreActiveBalanceHead("Easy Drag started");
             if (activeHideBehindSession) restoreActiveHideBehind("Easy Drag started");
             if (activeProtectSession) restoreActiveProtect("Easy Drag started");
-
             const groupName = getDragTargetGroup();
             const item = getInventoryItem(window.Player, groupName);
             if (!isOurs(item)) {
                 setDragMode(false);
                 return;
             }
-
             const layerName = getActivePlushLayerName(item);
             const base = readActivePlushLayerTransform(item);
             if (!layerName || !base) return;
-
             const overlayStartScreenBounds = plushScreenBounds(window.Player, item);
             const overlayStartMainBounds = screenBoundsToMainBounds(overlayStartScreenBounds);
-
             dragSession = {
                 pointerId: event.pointerId,
                 groupName,
@@ -8169,7 +7458,6 @@ function SubbysPlushiesPageMain() {
             event.stopPropagation();
             event.stopImmediatePropagation();
         }, true);
-
         document.addEventListener("pointermove", event => {
             if (!dragSession || event.pointerId !== dragSession.pointerId) return;
             const point = characterCanvasCoordinates(window.Player, event);
@@ -8183,7 +7471,6 @@ function SubbysPlushiesPageMain() {
             }
             event.preventDefault();
         }, true);
-
         document.addEventListener("pointerup", event => {
             if (!dragSession || event.pointerId !== dragSession.pointerId) return;
             const point = characterCanvasCoordinates(window.Player, event);
@@ -8191,14 +7478,12 @@ function SubbysPlushiesPageMain() {
             finishDirectDrag(false);
             event.preventDefault();
         }, true);
-
         document.addEventListener("pointercancel", event => {
             if (!dragSession || event.pointerId !== dragSession.pointerId) return;
             finishDirectDrag(true);
         }, true);
         return true;
     }
-
     function extensionsPreferenceScreenActive() {
         if (String(window.CurrentScreen || "") !== "Preference") return false;
         const candidates = [
@@ -8211,7 +7496,6 @@ function SubbysPlushiesPageMain() {
         ];
         return candidates.some(value => String(value || "").toLowerCase() === "extensions");
     }
-
     function extensionsStatusSnapshot() {
         const held = getHeld(window.Player);
         const ours = isOurs(held);
@@ -8281,7 +7565,6 @@ function SubbysPlushiesPageMain() {
             gitDataRefreshed: gitDataState.refreshedAt ? new Date(gitDataState.refreshedAt).toLocaleString() : "Not this session",
         };
     }
-
     function styleExtensionsButton(button, active = false, hovered = false) {
         const metrics = extensionsLayoutMetrics();
         Object.assign(button.style, {
@@ -8298,7 +7581,6 @@ function SubbysPlushiesPageMain() {
             transition: "background 90ms ease, border-color 90ms ease",
         });
     }
-
     function makeExtensionsButton(label, onClick, options = {}) {
         const button = document.createElement("button");
         button.type = "button";
@@ -8314,7 +7596,6 @@ function SubbysPlushiesPageMain() {
         });
         return button;
     }
-
     function makeExtensionsSection(title) {
         const metrics = extensionsLayoutMetrics();
         const section = document.createElement("section");
@@ -8332,7 +7613,6 @@ function SubbysPlushiesPageMain() {
         section.appendChild(heading);
         return section;
     }
-
     function appendExtensionsKeyValue(section, label, value) {
         const metrics = extensionsLayoutMetrics();
         const row = document.createElement("div");
@@ -8352,7 +7632,6 @@ function SubbysPlushiesPageMain() {
         row.append(left, right);
         section.appendChild(row);
     }
-
     function extensionsSettingRow(label, description, checked, onToggle) {
         const metrics = extensionsLayoutMetrics();
         const row = document.createElement("div");
@@ -8380,7 +7659,6 @@ function SubbysPlushiesPageMain() {
         row.append(info, button);
         return row;
     }
-
     function loreBrowseNames() {
         const result = [];
         const seen = new Set();
@@ -8395,13 +7673,11 @@ function SubbysPlushiesPageMain() {
         for (const key of Object.keys(PLUSH_LORE || {})) add(key);
         return result;
     }
-
     function resolveLoreBrowseName(name, names = loreBrowseNames()) {
         const wanted = normalizeLoreLookupKey(name);
         if (!wanted) return null;
         return names.find(entry => normalizeLoreLookupKey(entry) === wanted) || null;
     }
-
     function loreBrowseImage(name) {
         const wanted = normalizeLoreLookupKey(name);
         for (let option = 0; option < PUBLIC_PLUSH_COUNT; option++) {
@@ -8410,7 +7686,6 @@ function SubbysPlushiesPageMain() {
         }
         return uiPlushImageSource(0);
     }
-
     function selectExtensionsLore(name) {
         const names = loreBrowseNames();
         const resolved = resolveLoreBrowseName(name, names) || names[0] || "Subbycat";
@@ -8419,7 +7694,6 @@ function SubbysPlushiesPageMain() {
         renderExtensionsPanel();
         return resolved;
     }
-
     function openLoreBrowser(name = null, fromNativePreference = false) {
         const names = loreBrowseNames();
         const heldName = isOurs(getHeld(window.Player)) ? currentPlushName() : null;
@@ -8431,7 +7705,6 @@ function SubbysPlushiesPageMain() {
         }
         return openExtensionsPanel("lore", fromNativePreference);
     }
-
     function renderExtensionsLore(container) {
         void ensureRemotePlushLore();
         const names = loreBrowseNames();
@@ -8443,14 +7716,12 @@ function SubbysPlushiesPageMain() {
             container.appendChild(section);
             return;
         }
-
         let selected = resolveLoreBrowseName(extensionsLoreSelectedName, names);
         if (!selected) {
             const heldName = isOurs(getHeld(window.Player)) ? currentPlushName() : null;
             selected = resolveLoreBrowseName(heldName, names) || names[0];
             extensionsLoreSelectedName = selected;
         }
-
         const layout = document.createElement("div");
         Object.assign(layout.style, {
             display: "grid",
@@ -8458,7 +7729,6 @@ function SubbysPlushiesPageMain() {
             gap: "14px",
             alignItems: "start",
         });
-
         const browser = makeExtensionsSection("Plushies");
         Object.assign(browser.style, { position: "sticky", top: "0", maxHeight: "calc(100vh - 230px)", overflowY: "auto" });
         for (const name of names) {
@@ -8466,7 +7736,6 @@ function SubbysPlushiesPageMain() {
             Object.assign(button.style, { display: "block", width: "100%", marginBottom: "7px", textAlign: "left" });
             browser.appendChild(button);
         }
-
         const detail = makeExtensionsSection(selected);
         const lore = getPlushLore(selected);
         const top = document.createElement("div");
@@ -8487,14 +7756,12 @@ function SubbysPlushiesPageMain() {
         headingWrap.append(loreTitle, moodLine);
         top.append(image, headingWrap);
         detail.appendChild(top);
-
         const body = document.createElement("div");
         body.textContent = loreHidden
             ? `${selected}'s lore is hidden for now.`
             : (lore?.text || "Lore for this plushie has not been loaded yet. Use Reload Git data on the Status page if needed.");
         Object.assign(body.style, { whiteSpace: "pre-wrap", lineHeight: "1.58", fontSize: "15px", overflowWrap: "anywhere" });
         detail.appendChild(body);
-
         const nav = document.createElement("div");
         Object.assign(nav.style, { display: "flex", flexWrap: "wrap", gap: "9px", marginTop: "18px" });
         const index = Math.max(0, names.findIndex(name => normalizeLoreLookupKey(name) === normalizeLoreLookupKey(selected)));
@@ -8509,23 +7776,10 @@ function SubbysPlushiesPageMain() {
             })
         );
         detail.appendChild(nav);
-
         if (getLayoutSettings().loreListSide === "right") layout.append(detail, browser);
         else layout.append(browser, detail);
         container.appendChild(layout);
     }
-
-    // Artwork-authoring tool: adjusts color masks without editing source PNGs.
-    // v3.4.4: source-pixel zoom, preview cursor, continuous strokes, undo/redo,
-    // pan, keyboard shortcuts and selected-zone visibility. Export remains schema v2.
-    // Wardrobe Studio v3.5: standalone editor state, no global canvas monkeypatches.
-    // The native game reads the published schema-v2 color-layer manifest on reload.
-    // Wardrobe Studio v3.5: standalone editor state, no global canvas monkeypatches.
-    // The native game reads the published schema-v2 color-layer manifest on reload.
-    // Wardrobe Studio v3.5: standalone editor state, no global canvas monkeypatches.
-    // The native game reads the published schema-v2 color-layer manifest on reload.
-    // Transparent artwork painter, aligned to BC's native 500x1000 asset space.
-    // Its character snapshot is a reference only and is never included in PNG exports.
     function openWardrobeAssetDrawingStudio(entry, options = {}) {
         if (!entry || !window.Player) {
             appendLocalInfoBox("Asset Drawing Studio", ["Load your BC character before drawing an asset."]);
@@ -8662,8 +7916,6 @@ function SubbysPlushiesPageMain() {
         const updateRef=()=>{
             referenceCtx.clearRect(0,0,NATIVE_W,NATIVE_H);
             const C=window.Player;
-            // Prefer BC's resized canvas when available so the tracing guide matches
-            // the character's actual on-screen body scale/height more closely.
             const image=[C?.CanvasResize,C?.CanvasBlink,C?.Canvas].find(c=>c&&Number(c.width)>0&&Number(c.height)>0);
             if(!image){status.textContent="BC character canvas not available yet. Open Appearance or re-enter the room, then select Refresh Character.";return false;}
             try{
@@ -8671,17 +7923,11 @@ function SubbysPlushiesPageMain() {
                 const imgH=Math.max(1,Number(image.height)||NATIVE_H);
                 const offset=imgH>=1600?600:0;
                 const sampleH=Math.max(1,Math.min(NATIVE_H,imgH-offset));
-
-                // Copy the source region first so we can detect the actual opaque
-                // character bounds. Some BC canvases include a lot of transparent
-                // margin; drawing the whole source directly makes the body appear
-                // tiny and disproportionate inside the studio.
                 const temp=document.createElement("canvas");
                 temp.width=imgW; temp.height=sampleH;
                 const tempCtx=temp.getContext("2d", { willReadFrequently: true }) || temp.getContext("2d");
                 tempCtx.clearRect(0,0,imgW,sampleH);
                 tempCtx.drawImage(image,0,offset,imgW,sampleH,0,0,imgW,sampleH);
-
                 let bounds=null;
                 try{
                     const data=tempCtx.getImageData(0,0,imgW,sampleH).data;
@@ -8709,7 +7955,6 @@ function SubbysPlushiesPageMain() {
                         };
                     }
                 }catch(_){ bounds=null; }
-
                 let usedBounds=false;
                 if(bounds && bounds.w>10 && bounds.h>10){
                     const margin=8;
@@ -8758,7 +8003,6 @@ function SubbysPlushiesPageMain() {
                 status.textContent="Imported PNG onto the editable layer. Your character remains a separate reference.";
             }catch(e){status.textContent=String(e.message||e);}finally{URL.revokeObjectURL(url);uploaded.value="";}
         });
-        // Paint.NET-inspired tools (independent implementation; no Paint.NET code is bundled).
         const PIXELS=NATIVE_W*NATIVE_H;
         let selection=null, selectedCount=0, selectionMode="replace", clipboard=null;
         let tolerance=30, floodGlobal=false, recolorSourceColor=null, shapeFill="outline", gradientType="linear";
@@ -8934,8 +8178,6 @@ function SubbysPlushiesPageMain() {
             if(kind!=="line"&&kind!=="curve"&&shapeFill!=="outline")dest.fill(path);
             if(shapeFill!=="filled"||kind==="line"||kind==="curve")dest.stroke(path);
             dest.restore();}
-        // A single-color gradient fades the selected paint color to transparency.
-        // Recolor keeps an independent sampled source value, not a second swatch.
         function drawGradient(dest,a,b){
             dest.save();dest.globalAlpha=opacity/100;
             const d=Math.max(1,Math.hypot(b.x-a.x,b.y-a.y));
@@ -9155,7 +8397,6 @@ function SubbysPlushiesPageMain() {
         const poseInterval=setInterval(()=>{
             if(!followBox.checked||!visible)return;
             const next=poseLabel();if(next===lastPose)return;lastPose=next;
-            // Snapshot only on a pose change, never run a game render loop.
             updateRef();status.textContent=`Pose changed to ${next}. Character reference refreshed; drawing retained.`;
         },1100);
         const close=()=>{if(!visible)return;visible=false;clearInterval(poseInterval);for(const fn of disposers)try{fn();}catch(_){}root.remove();};
@@ -9169,7 +8410,6 @@ function SubbysPlushiesPageMain() {
         });
         return true;
     }
-
     async function openWardrobeColorZoneEditor(entry) {
         const stored = wardrobeLayerManifest?.items?.[entry?.name];
         if (!entry || !stored) {
@@ -9239,7 +8479,6 @@ function SubbysPlushiesPageMain() {
         const imageFrame = setStyle(create("div",stage), {position:"relative",width:`${W+4}px`,height:`${H+4}px`,margin:"auto",flex:"0 0 auto"});
         const canvas = create("canvas",imageFrame); canvas.width=W;canvas.height=H;
         setStyle(canvas,{background:"repeating-conic-gradient(#a2a2a2 0% 25%,#eee 0% 50%) 0/16px 16px",cursor:"crosshair",touchAction:"none",border:"2px solid #aba0af",boxSizing:"content-box",imageRendering:"pixelated"});
-        // Native BC globally styles its canvases, sometimes with !important.
         for (const [key,value] of Object.entries({position:"relative",display:"block",left:"auto",top:"auto",bottom:"auto",right:"auto",
             transform:"none",float:"none",margin:"0",maxWidth:"none",maxHeight:"none"})) canvas.style.setProperty(key.replace(/[A-Z]/g, c=>`-${c.toLowerCase()}`),value,"important");
         const circle = setStyle(create("div",imageFrame),{position:"absolute",pointerEvents:"none",display:"none",border:"2px solid #fefefe",borderRadius:"50%",zIndex:"2",transform:"translate(-50%,-50%)",boxSizing:"border-box",background:"#ec79c766"});
@@ -9248,7 +8487,6 @@ function SubbysPlushiesPageMain() {
         const afterPreview = create("canvas",compare); afterPreview.width=W;afterPreview.height=H;
         for(const [c, caption] of [[origPreview,"Before"],[afterPreview,"After"]]) {
             setStyle(c,{position:"relative",width:"58px",height:"74px",objectFit:"contain",border:"1px solid #aba0af",background:"#ddd",imageRendering:"pixelated"});
-            // BC applies canvas position and transform with !important; isolate preview canvases too.
             for (const [key,value] of Object.entries({position:"relative",display:"block",left:"auto",top:"auto",
                 bottom:"auto",right:"auto",transform:"none",float:"none",maxWidth:"none",maxHeight:"none"}))
                 c.style.setProperty(key.replace(/[A-Z]/g,x=>`-${x.toLowerCase()}`),value,"important");
@@ -9270,7 +8508,6 @@ function SubbysPlushiesPageMain() {
         };
         root.__subbysDispose=close;
         makeButton("✕ Close",close);
-        // Drag anywhere on the header except controls, with viewport clamping.
         let moving=null;
         header.addEventListener("pointerdown",event=>{
             if(event.button!==0 || event.target.closest("button,input,select"))return;
@@ -9283,7 +8520,6 @@ function SubbysPlushiesPageMain() {
             panel.style.top=`${Math.max(0,Math.min(innerHeight-50,moving.top+event.clientY-moving.y))}px`;
         });
         for(const type of ["pointerup","pointercancel","lostpointercapture"])header.addEventListener(type,()=>{moving=null;});
-        // Ensure the window is recoverable after resizing the browser.
         const clampWindow=()=>{
             panel.style.left=`${Math.max(0,Math.min(Number.parseFloat(panel.style.left)||0,Math.max(0,innerWidth-70)))}px`;
             panel.style.top=`${Math.max(0,Math.min(Number.parseFloat(panel.style.top)||0,Math.max(0,innerHeight-70)))}px`;
@@ -9307,9 +8543,6 @@ function SubbysPlushiesPageMain() {
         };
         const asSourceData=(pose)=>sourceByPose.get(pose);
         const currentMasks=()=>masksByPose.get(selectedPose);
-        // Editor history must capture not just zone masks but also pose art and
-        // selection. Pose ImageData is never edited in-place, so Map snapshots
-        // may safely retain references to those (large) immutable buffers.
         const cloneState=()=>({zones:[...zones],locks:[...locks],poses:[...workingPoses],slot,selectedPose,selectedZone,
             zonePriorities:{...zonePriorities},zoneDefaults:{...zoneDefaults},
             sourceByPose:new Map(sourceByPose),fileByPose:new Map(fileByPose),originalsByPose:new Map(originalsByPose),
@@ -9319,7 +8552,6 @@ function SubbysPlushiesPageMain() {
         const restoreState=state=>{
             if(!state)return;
             zones=[...state.zones];locks=new Set(state.locks);slot=state.slot;
-            // workingPoses is a const Set; restore its members, not the binding.
             workingPoses.clear();for(const pose of state.poses)workingPoses.add(pose);
             zonePriorities={...state.zonePriorities};zoneDefaults={...state.zoneDefaults};
             sourceByPose=new Map(state.sourceByPose);fileByPose=new Map(state.fileByPose);
@@ -9427,7 +8659,6 @@ function SubbysPlushiesPageMain() {
             }
             remember();slot=value;status.textContent=`Selected ${slot}. This changes the slot after the exported manifest is published.`;
         });
-        // Pose imports use PNG files at the same dimensions as the standing asset.
         const ensurePose=async pose=>{
             if(sourceByPose.has(pose))return true;
             const spec=stored.poses?.[pose];
@@ -9460,7 +8691,6 @@ function SubbysPlushiesPageMain() {
                 remember();workingPoses.add(pose);sourceByPose.set(pose,data);
                 fileByPose.set(pose,`${entry.name}_${pose}.png`);
                 const layerMap=new Map(zones.map(name=>[name,new Uint8ClampedArray(count)]));
-                // Preserve per-zone mask layout as a starting point only when requested.
                 if(window.confirm("Copy Standing zone masks into this pose as a starting point? Choose Cancel for blank zones.")){
                     for(const name of zones)layerMap.get(name).set(masksByPose.get("Standing").get(name)||new Uint8Array(count));
                 }
@@ -9473,7 +8703,6 @@ function SubbysPlushiesPageMain() {
             if(selectedPose==="Standing")return;
             if(!window.confirm(`Remove custom ${selectedPose} pose artwork and zone masks?`))return;
             remember();workingPoses.delete(selectedPose);
-            // Retain local buffers so Undo can restore this pose without another download.
             selectedPose="Standing";updateMenus();redraw();
         },side);
         const sourceCanvas=document.createElement("canvas");sourceCanvas.width=W;sourceCanvas.height=H;
@@ -9581,7 +8810,6 @@ function SubbysPlushiesPageMain() {
             const add=Math.round(255*weight);
             if(erase){target[index]=Math.max(0,target[index]-add);return;}
             target[index]=Math.min(alpha,Math.round(target[index]+(alpha-target[index])*weight));
-            // Only unlocked neighboring zones lose ownership; keep artist-authored overlaps at soft brush edges.
             for(const name of zones)if(name!==selectedZone && !locks.has(name)){
                 const mask=map.get(name);mask[index]=Math.round(mask[index]*(1-weight));
             }
@@ -9639,7 +8867,6 @@ function SubbysPlushiesPageMain() {
         });
         canvas.addEventListener("pointerleave",()=>{if(!stroke){pointer=null;refreshCursor();}});
         canvas.addEventListener("contextmenu",e=>e.preventDefault());
-        // Live preview is opt-in and LOCAL only; revert native image maps on close.
         function restoreGamePreview(){
             if(originalPreviewLayers){WARDROBE_LAYER_IMAGES.set(entry.name,originalPreviewLayers);originalPreviewLayers=null;}
             gamePreview=false;
@@ -9679,8 +8906,6 @@ function SubbysPlushiesPageMain() {
                 gamePreview=true;liveButton.textContent="In-game preview: ON";scheduleGamePreview();
             }else{restoreGamePreview();liveButton.textContent="In-game preview: OFF";}
         },toolbar);
-        // Build new transparent artwork over the user's live BC character pose.
-        // The character stays a reference: only painted pixels can enter a PNG.
         makeButton("Draw / Trace Asset",()=>{
             const pose=selectedPose;
             openWardrobeAssetDrawingStudio(entry,{
@@ -9693,8 +8918,6 @@ function SubbysPlushiesPageMain() {
                     const maskMap=masksByPose.get(pose);
                     const target=maskMap?.get(selectedZone);
                     if(!target){status.textContent="Select an unlocked color zone before applying artwork.";return;}
-                    // Preserve existing ownership where possible and assign new
-                    // opaque pixels to the selected zone so exports never become invisible.
                     for(let i=0;i<count;i++){
                         const newAlpha=newArt.data[i*4+3];
                         if(!newAlpha)continue;
@@ -9702,18 +8925,12 @@ function SubbysPlushiesPageMain() {
                         if(!owned)target[i]=newAlpha;
                     }
                     sourceByPose.set(pose,newArt);
-                    // Canvas/PNG edits change the art source. Do not reuse untouched
-                    // old mask PNG bytes if their RGB came from the old artwork.
                     regionSelection=null;selectedRegion.fill(0);
                     redraw();
                     status.textContent=`Drawing applied to ${pose}. Export the new PNG and color-layers.json together.`;
                 },
             });
         },toolbar);
-        // BC's standard character canvas is 500x1000, but native item
-        // textures use their declared width/height with an independent Left/Top.
-        // Export character-aligned copies without changing the game-ready art,
-        // pose zone maps, renderer dimensions or color-layers.json schema.
         const exportFullCanvasWidth = 500, exportFullCanvasHeight = 1000;
         function fullCanvasForPose(pose) {
             const source = sourceByPose.get(pose);
@@ -9725,8 +8942,6 @@ function SubbysPlushiesPageMain() {
             full.height = exportFullCanvasHeight;
             const fullCtx = full.getContext("2d");
             if (!fullCtx) throw new Error("500×1000 export canvas unavailable.");
-            // putImageData copies native pixels without scaling, smoothing or
-            // compositing a character reference into the exported transparent PNG.
             fullCtx.putImageData(source, left, top);
             let clipped = 0;
             if (left < 0 || top < 0 || left + W > full.width || top + H > full.height) {
@@ -9767,7 +8982,6 @@ function SubbysPlushiesPageMain() {
             try { await exportFullCanvasPoses([...workingPoses]); }
             catch (e) { status.textContent = `Full-canvas export failed: ${e?.message || e}`; }
         }, actions);
-        // Export the standing PNG too when artwork has been drawn in Studio.
         makeButton("Export main PNG (game-ready)",async()=>{
             try{
                 const src=sourceByPose.get("Standing");if(!src)throw new Error("Standing art is missing");
@@ -9776,7 +8990,6 @@ function SubbysPlushiesPageMain() {
                 status.textContent="Exported main PNG. Upload to assets/wardrobe/ along with updated color-layers.json.";
             }catch(e){status.textContent=`Main PNG export failed: ${e?.message||e}`;}
         },actions);
-        // Export original PNGs, masks, and the backward-compatible v2 manifest.
         makeButton("Export pose PNGs (game-ready)",async()=>{
             try{for(const pose of workingPoses){
                 if(pose==="Standing")continue;
@@ -9796,10 +9009,7 @@ function SubbysPlushiesPageMain() {
                     for(const name of zones){
                         const originalMasks=originalsByPose.get(pose)?.zones||{};
                         const originalData=originalMasks[name];
-                        // Preserve unchanged masks bit for bit only if the original source pixels are identical.
                         const originalSource=originalsByPose.get(pose)?.source;
-                        // Source art may have been edited in Asset Drawing Studio.
-                        // Never reuse old RGB zone PNGs against a newly drawn source.
                         let unchanged=!!originalData && !!originalSource && originalSource.data.length===source.data.length;
                         if(unchanged){
                             for(let j=0;j<source.data.length;j++)if(source.data[j]!==originalSource.data[j]){unchanged=false;break;}
@@ -9815,8 +9025,6 @@ function SubbysPlushiesPageMain() {
                         zonesOut[name]=sourceCanvas.toDataURL("image/png").split(",")[1];
                     }return zonesOut;
                 };
-                // Safety guard: a bad alpha mask must never make a published garment disappear.
-                // Check every pose, including freshly imported ones, before starting downloads.
                 for(const pose of workingPoses){
                     if(!sourceByPose.has(pose))await ensurePose(pose);
                     const source=sourceByPose.get(pose), masks=masksByPose.get(pose);
@@ -9840,8 +9048,6 @@ function SubbysPlushiesPageMain() {
                     next.poses[pose]={width:W,height:H,file:`${entry.name}_${pose}.png`,zones:await buildZoneData(pose)};
                 }
                 manifest.items[entry.name]=next;
-                // Protect against disappearance: require visible source alpha to have matching zone coverage,
-                // except if artist intentionally leaves pixels uncolored; report uncovered count.
                 let uncovered=0,src=sourceByPose.get("Standing"),base=masksByPose.get("Standing");
                 for(let i=0;i<count;i++)if(src.data[i*4+3]>32&&!zones.some(name=>base.get(name)[i]>0))uncovered++;
                 if(uncovered>0&&!window.confirm(`${uncovered} visible artwork pixels are not assigned to a color zone. Export anyway?`))return;
@@ -9880,14 +9086,12 @@ function SubbysPlushiesPageMain() {
                 standingMap.set(name,alpha);
             }
             masksByPose.set("Standing",standingMap);originalsByPose.set("Standing",{source:standing,zones:{...stored.zones}});
-            // Eagerly load named poses so a saved editor project can export them reliably.
             for(const pose of workingPoses)if(pose!=="Standing")await ensurePose(pose);
             updateMenus();refreshTool();fitZoom();zoomText.textContent=`${Math.round(zoom*100)}%`;
             redraw();status.textContent="Ready. Move the titlebar to reposition; drag the bottom-right corner to resize. Export JSON plus any new pose PNGs.";
             return true;
         }catch(e){status.textContent=`Unable to load Wardrobe Studio: ${e?.message||e}`;return false;}
     }
-
     function renderExtensionsWardrobe(container) {
         const section = makeExtensionsSection("Subby's Wardrobe • clothing and accessories");
         const intro = document.createElement("div");
@@ -9959,7 +9163,6 @@ function SubbysPlushiesPageMain() {
             itemSection.append(picture, detail);
             section.appendChild(itemSection);
         }
-
         if (wardrobeState.errors.length) {
             const problems = document.createElement("div");
             problems.textContent = `Diagnostics: ${wardrobeState.errors.slice(-4).join(" | ")}`;
@@ -9968,7 +9171,6 @@ function SubbysPlushiesPageMain() {
         }
         container.appendChild(section);
     }
-
     function renderExtensionsStatus(container) {
         const status = extensionsStatusSnapshot();
         const section = makeExtensionsSection("Addon status");
@@ -9985,7 +9187,6 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(section, "Git data", status.gitData);
         appendExtensionsKeyValue(section, "Git data refreshed", status.gitDataRefreshed);
         container.appendChild(section);
-
         const wardrobePanel = makeExtensionsSection("Subby's Wardrobe • curated accessories");
         const wardrobe = window.SubbysWardrobeCurated;
         appendExtensionsKeyValue(wardrobePanel, "State", wardrobe?.status || "Loading");
@@ -9997,7 +9198,6 @@ function SubbysPlushiesPageMain() {
         Object.assign(wardrobeHelp.style, { color: getExtensionsStyle().muted, fontSize: "12px", marginTop: "8px", lineHeight: "1.4" });
         wardrobePanel.appendChild(wardrobeHelp);
         container.appendChild(wardrobePanel);
-
         const enabled = makeExtensionsSection("Feature status");
         appendExtensionsKeyValue(enabled, "Protect Me", status.protectMe ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Jealous Plushie", status.jealousPlushie ? "ON" : "Off");
@@ -10015,7 +9215,6 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(enabled, "Automatic update checks", status.autoUpdateChecks ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Performance mode", status.performanceMode === "low" ? "Low CPU" : "Normal");
         container.appendChild(enabled);
-
         const actions = document.createElement("div");
         Object.assign(actions.style, { display: "flex", gap: "10px", flexWrap: "wrap" });
         actions.append(
@@ -10026,10 +9225,8 @@ function SubbysPlushiesPageMain() {
         );
         container.appendChild(actions);
     }
-
     function renderExtensionsSettingsGeneral(container) {
         const settings = getFeatureSettings();
-
         const poseSafety = makeExtensionsSection(`Pose Safety • v${VERSION}`);
         poseSafety.append(
             extensionsSettingRow(
@@ -10040,7 +9237,6 @@ function SubbysPlushiesPageMain() {
             )
         );
         container.appendChild(poseSafety);
-
         const section = makeExtensionsSection("Settings");
         section.append(
             extensionsSettingRow("Protect Me", "The held plush reacts to selected incoming actions.", settings.protectMe, () => toggleFeatureSetting("protectMe")),
@@ -10058,7 +9254,6 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow("Automatic Update Checks", "Check the repository manifest at most once per day.", settings.autoUpdateChecks, () => toggleFeatureSetting("autoUpdateChecks"))
         );
         container.appendChild(section);
-
         const dragUi = makeExtensionsSection("Drag UI");
         const dragUiHint = document.createElement("div");
         dragUiHint.textContent = `Current target: ${dragTargetLabel(getDragTargetGroup())}. Open Drag UI to switch between your handheld and Body-slot plushie and enable Easy Drag.`;
@@ -10068,7 +9263,6 @@ function SubbysPlushiesPageMain() {
             makeExtensionsButton("Open Drag UI", openDragUi, { active: dragModeEnabled })
         );
         container.appendChild(dragUi);
-
         const performance = makeExtensionsSection("Performance mode");
         const performanceHint = document.createElement("div");
         performanceHint.textContent = settings.performanceMode === "low"
@@ -10083,10 +9277,9 @@ function SubbysPlushiesPageMain() {
         );
         performance.append(performanceHint, performanceButtons);
         container.appendChild(performance);
-
         const emotes = makeExtensionsSection("Emotes");
         const emoteHint = document.createElement("div");
-        emoteHint.textContent = "Room-synced emotes last 15 seconds. Other Subby's Plushies users in the room see the same symbol and bubble on your plushie.";
+        emoteHint.textContent = "Room-synced emotes last 15 seconds. Other Subby's Plushies & Essentials users in the room see the same symbol and bubble on your plushie.";
         Object.assign(emoteHint.style, { color: getExtensionsStyle().muted, fontSize: "12px", marginBottom: "8px" });
         const emoteButtons = document.createElement("div");
         Object.assign(emoteButtons.style, { display: "flex", flexWrap: "wrap", gap: "8px" });
@@ -10095,7 +9288,6 @@ function SubbysPlushiesPageMain() {
         }
         emotes.append(emoteHint, emoteButtons);
         container.appendChild(emotes);
-
         const utility = makeExtensionsSection("Utilities");
         const buttons = document.createElement("div");
         Object.assign(buttons.style, { display: "flex", flexWrap: "wrap", gap: "10px" });
@@ -10107,7 +9299,6 @@ function SubbysPlushiesPageMain() {
         utility.appendChild(buttons);
         container.appendChild(utility);
     }
-
     function renderExtensionsSettings(container) {
         const nav = document.createElement("div");
         Object.assign(nav.style, {
@@ -10116,25 +9307,20 @@ function SubbysPlushiesPageMain() {
             flexWrap: "wrap",
             marginBottom: "12px",
         });
-
         const options = [
             ["general", "General"],
             ["layout", "Layout"],
         ];
-
         for (const [key, label] of options) {
             nav.appendChild(makeExtensionsButton(label, () => {
                 extensionsSettingsTab = key;
                 renderExtensionsPanel();
             }, { active: extensionsSettingsTab === key }));
         }
-
         container.appendChild(nav);
-
         if (extensionsSettingsTab === "layout") renderExtensionsLayout(container);
         else renderExtensionsSettingsGeneral(container);
     }
-
     function renderExtensionsPlushies(container) {
         const name = currentPlushName();
         const mood = getPlushMoodRecord(name);
@@ -10179,10 +9365,9 @@ function SubbysPlushiesPageMain() {
         hero.append(image, info);
         heldSection.appendChild(hero);
         container.appendChild(heldSection);
-
         const emotes = makeExtensionsSection("Plushie emotes");
         const emoteText = document.createElement("div");
-        emoteText.textContent = "Room-synced emotes last 15 seconds and change the plush symbol and speech bubble for everyone in the room who has Subby's Plushies.";
+        emoteText.textContent = "Room-synced emotes last 15 seconds and change the plush symbol and speech bubble for everyone in the room who has Subby's Plushies & Essentials.";
         Object.assign(emoteText.style, { color: getExtensionsStyle().muted, fontSize: "12px", marginBottom: "9px" });
         const emoteButtons = document.createElement("div");
         Object.assign(emoteButtons.style, { display: "flex", flexWrap: "wrap", gap: "8px" });
@@ -10191,7 +9376,6 @@ function SubbysPlushiesPageMain() {
         }
         emotes.append(emoteText, emoteButtons);
         container.appendChild(emotes);
-
         const poses = makeExtensionsSection("Saved poses");
         const poseIntro = document.createElement("div");
         poseIntro.textContent = "Pose slots are saved separately for each plushie and include X/Y, scale, and rotation.";
@@ -10226,7 +9410,6 @@ function SubbysPlushiesPageMain() {
             poses.appendChild(row);
         }
         container.appendChild(poses);
-
         const favorites = makeExtensionsSection(`Favorites (${favoritePlushNames().length})`);
         const favoriteNames = favoritePlushNames();
         if (!favoriteNames.length) {
@@ -10243,7 +9426,6 @@ function SubbysPlushiesPageMain() {
             favorites.appendChild(favoriteButtons);
         }
         container.appendChild(favorites);
-
         const collection = makeExtensionsSection("Relationship collection");
         for (let option = 0; option < PUBLIC_PLUSH_COUNT; option++) {
             const plushName = publicPlushName(option);
@@ -10253,11 +9435,10 @@ function SubbysPlushiesPageMain() {
         }
         container.appendChild(collection);
     }
-
     function renderExtensionsBackup(container) {
         const section = makeExtensionsSection("Backup / Restore");
         const intro = document.createElement("div");
-        intro.textContent = "Export your local Subby's Plushies progress and preferences to a JSON file, then restore it in another browser or account. Progress is tamper-evident: edited stats/achievements/relationships will not import.";
+        intro.textContent = "Export your local Subby's Plushies & Essentials progress and preferences to a JSON file, then restore it in another browser or account. Progress is tamper-evident: edited stats/achievements/relationships will not import.";
         Object.assign(intro.style, { color: getExtensionsStyle().muted, lineHeight: "1.45", marginBottom: "10px" });
         section.appendChild(intro);
         appendExtensionsKeyValue(section, "Progress", "Stats, achievements, relationships (integrity sealed)");
@@ -10276,11 +9457,9 @@ function SubbysPlushiesPageMain() {
         section.append(note, buttons);
         container.appendChild(section);
     }
-
     function renderExtensionsLayout(container) {
         const settings = getLayoutSettings();
         const section = makeExtensionsSection("Layout customization");
-
         const choiceRow = (label, description, valueLabel, onClick) => {
             const metrics = extensionsLayoutMetrics();
             const row = document.createElement("div");
@@ -10305,7 +9484,6 @@ function SubbysPlushiesPageMain() {
             row.append(info, button);
             return row;
         };
-
         section.append(
             choiceRow(
                 "Use menu density",
@@ -10333,7 +9511,6 @@ function SubbysPlushiesPageMain() {
             )
         );
         container.appendChild(section);
-
         const themeSection = makeExtensionsSection("Theme presets");
         const themeIntro = document.createElement("div");
         themeIntro.textContent = "Apply one palette to both the Use menu and Extensions control center. You can still customize either interface separately below.";
@@ -10354,7 +9531,6 @@ function SubbysPlushiesPageMain() {
         }
         themeSection.append(themeIntro, themeButtons);
         container.appendChild(themeSection);
-
         const colorSection = makeExtensionsSection("Interface colors");
         const colorIntro = document.createElement("div");
         colorIntro.textContent = "Customize the Use menu and Extensions control center independently. Colors are stored only on this browser/account.";
@@ -10365,7 +9541,6 @@ function SubbysPlushiesPageMain() {
             marginBottom: "12px",
         });
         colorSection.appendChild(colorIntro);
-
         const makePaletteEditor = (title, scope, palette) => {
             const wrap = document.createElement("div");
             Object.assign(wrap.style, {
@@ -10375,7 +9550,6 @@ function SubbysPlushiesPageMain() {
                 marginBottom: "12px",
                 background: getExtensionsStyle().background,
             });
-
             const heading = document.createElement("div");
             heading.textContent = title;
             Object.assign(heading.style, {
@@ -10385,7 +9559,6 @@ function SubbysPlushiesPageMain() {
                 fontSize: "14px",
             });
             wrap.appendChild(heading);
-
             const presetRow = document.createElement("div");
             Object.assign(presetRow.style, {
                 display: "flex",
@@ -10400,14 +9573,12 @@ function SubbysPlushiesPageMain() {
                 presetRow.appendChild(button);
             }
             wrap.appendChild(presetRow);
-
             const grid = document.createElement("div");
             Object.assign(grid.style, {
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))",
                 gap: "7px 10px",
             });
-
             for (const key of INTERFACE_COLOR_KEYS) {
                 const row = document.createElement("label");
                 Object.assign(row.style, {
@@ -10423,11 +9594,9 @@ function SubbysPlushiesPageMain() {
                     background: getExtensionsStyle().surface,
                     cursor: "pointer",
                 });
-
                 const label = document.createElement("span");
                 label.textContent = INTERFACE_COLOR_LABELS[key] || key;
                 label.style.fontSize = "12px";
-
                 const picker = document.createElement("input");
                 picker.type = "color";
                 picker.value = sanitizeInterfaceColor(palette[key], LOFI_MENU_STYLE[key]).toLowerCase();
@@ -10442,12 +9611,10 @@ function SubbysPlushiesPageMain() {
                     cursor: "pointer",
                 });
                 picker.addEventListener("change", () => setInterfaceColor(scope, key, picker.value));
-
                 row.append(label, picker);
                 grid.appendChild(row);
             }
             wrap.appendChild(grid);
-
             const utility = document.createElement("div");
             Object.assign(utility.style, {
                 display: "flex",
@@ -10465,13 +9632,11 @@ function SubbysPlushiesPageMain() {
             wrap.appendChild(utility);
             return wrap;
         };
-
         colorSection.append(
             makePaletteEditor("Use menu", "use", getUseMenuStyle()),
             makePaletteEditor("Extensions control center", "extensions", getExtensionsStyle())
         );
         container.appendChild(colorSection);
-
         const reset = makeExtensionsSection("Reset layout");
         const text = document.createElement("div");
         text.textContent = "Layout choices are stored only on this browser/account and do not affect other players.";
@@ -10479,7 +9644,6 @@ function SubbysPlushiesPageMain() {
         reset.append(text, makeExtensionsButton("Reset to default layout", () => resetLayoutSettings()));
         container.appendChild(reset);
     }
-
     function renderExtensionsHistory(container) {
         const battles = battleHistory(20).reverse();
         const battleSection = makeExtensionsSection("Battle history — last 20");
@@ -10515,7 +9679,6 @@ function SubbysPlushiesPageMain() {
         }
         container.appendChild(battleSection);
     }
-
     function renderExtensionsStats(container) {
         const s = getStatsStore();
         const plushName = currentPlushName();
@@ -10525,7 +9688,6 @@ function SubbysPlushiesPageMain() {
         const relationship = relationshipStatus(plushName);
         appendExtensionsKeyValue(current, "Relationship", `${relationship.level} • ${relationship.interactions} interactions`);
         container.appendChild(current);
-
         const summary = makeExtensionsSection("Lifetime local stats");
         appendExtensionsKeyValue(summary, "Interactions", s.totalInteractions);
         appendExtensionsKeyValue(summary, "Affectionate interactions", statAffectionCount(s));
@@ -10544,7 +9706,6 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(summary, "Longest plushie interaction streak", `${maxInteractionStreakForOnePlush(s)} days`);
         appendExtensionsKeyValue(summary, "Most interaction days (one plushie)", maxInteractionDaysForOnePlush(s));
         container.appendChild(summary);
-
         const progress = makeExtensionsSection("Achievement progress");
         appendExtensionsKeyValue(progress, "Friend-level plushies", `${countPlushiesAtRelationship("Friend")}/${allAvailablePlushNames().length}`);
         appendExtensionsKeyValue(progress, "Bonded plushies", countPlushiesAtRelationship("Bonded"));
@@ -10554,7 +9715,6 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(progress, "Tiny Plushie reached", progressMetric(s, "tinyPlushie") ? "Yes" : "No");
         appendExtensionsKeyValue(progress, "Absolute Unit reached", progressMetric(s, "absoluteUnit") ? "Yes" : "No");
         container.appendChild(progress);
-
         const actions = makeExtensionsSection("Interaction breakdown");
         const entries = Object.entries(s.actions || {}).sort((a, b) => Number(b[1]) - Number(a[1]));
         if (!entries.length) {
@@ -10566,9 +9726,7 @@ function SubbysPlushiesPageMain() {
             for (const [key, value] of entries) appendExtensionsKeyValue(actions, key, value);
         }
         container.appendChild(actions);
-
     }
-
     function renderExtensionsAchievements(container) {
         const stats = getStatsStore();
         checkAchievements(false);
@@ -10608,7 +9766,6 @@ function SubbysPlushiesPageMain() {
         }
         container.appendChild(section);
     }
-
     function renderExtensionsProgress(container) {
         const nav = document.createElement("div");
         Object.assign(nav.style, { display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" });
@@ -10626,14 +9783,12 @@ function SubbysPlushiesPageMain() {
             }, { active: extensionsProgressTab === key }));
         }
         container.appendChild(nav);
-
         if (extensionsProgressTab === "achievements") renderExtensionsAchievements(container);
         else if (extensionsProgressTab === "plushies") renderExtensionsPlushies(container);
         else if (extensionsProgressTab === "battlehistory") renderExtensionsHistory(container);
         else if (extensionsProgressTab === "backup") renderExtensionsBackup(container);
         else renderExtensionsStats(container);
     }
-
     function commandGroupsForDisplay() {
         const cloneGroups = source => (Array.isArray(source) ? source : []).map(group => ({
             title: String(group?.title || "Commands"),
@@ -10644,7 +9799,6 @@ function SubbysPlushiesPageMain() {
                 }))
                 .filter(entry => entry.command.startsWith("/") && entry.description && !/^\/plushiesnap(?:\s|$)/i.test(entry.command)),
         })).filter(group => group.commands.length);
-
         const groups = cloneGroups(CURRENT_COMMAND_GROUPS);
         const documentedBases = new Set();
         const commandBase = command => String(command || "").trim().toLowerCase().split(/\s+/)[0];
@@ -10652,7 +9806,6 @@ function SubbysPlushiesPageMain() {
             const base = commandBase(entry.command);
             if (base) documentedBases.add(base);
         }
-
         for (const externalGroup of cloneGroups(EXTENSIONS_COMMAND_GROUPS)) {
             const additions = externalGroup.commands.filter(entry => {
                 const base = commandBase(entry.command);
@@ -10668,7 +9821,6 @@ function SubbysPlushiesPageMain() {
             }
             target.commands.push(...additions);
         }
-
         const criticalCommands = [
             {
                 command: "/plushieignoreposes",
@@ -10676,7 +9828,7 @@ function SubbysPlushiesPageMain() {
             },
             {
                 command: "/plushieversion",
-                description: "Show the currently running Subby's Plushies version and pose-safety status."
+                description: "Show the currently running Subby's Plushies & Essentials version and pose-safety status."
             },
         ];
         let safetyGroup = groups.find(group => group.title === "Safety");
@@ -10690,13 +9842,10 @@ function SubbysPlushiesPageMain() {
             documentedBases.add(base);
             safetyGroup.commands.push(entry);
         }
-
         return groups.filter(group => group.commands.length);
     }
-
     function renderExtensionsCommands(container) {
         const groups = commandGroupsForDisplay();
-
         const overview = makeExtensionsSection(`Command Reference • v${VERSION}`);
         const intro = document.createElement("div");
         intro.textContent = "All commands below are executable by this build. Commands also appear in /help and autocomplete where supported.";
@@ -10705,17 +9854,14 @@ function SubbysPlushiesPageMain() {
             lineHeight: "1.4",
             marginBottom: "8px",
         });
-
         const navigation = document.createElement("div");
         navigation.textContent = "Navigation: Settings → General / Layout • Progress → Stats / Achievements / Plushies / Battle History / Backup • Lore is a top-level tab.";
         Object.assign(navigation.style, {
             color: getExtensionsStyle().muted,
             lineHeight: "1.4",
         });
-
         overview.append(intro, navigation);
         container.appendChild(overview);
-
         for (const group of groups) {
             const section = makeExtensionsSection(group.title);
             for (const entry of group.commands) {
@@ -10748,9 +9894,7 @@ function SubbysPlushiesPageMain() {
             }
             container.appendChild(section);
         }
-
     }
-
     function applyExtensionsPanelTheme() {
         if (!extensionsPanelElement?.isConnected) return false;
         const style = getExtensionsStyle();
@@ -10775,7 +9919,6 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function renderExtensionsPanel() {
         if (!extensionsPanelElement?.isConnected || !extensionsPanelContent) return false;
         applyExtensionsPanelTheme();
@@ -10787,7 +9930,6 @@ function SubbysPlushiesPageMain() {
         else if (extensionsActiveTab === "progress") renderExtensionsProgress(extensionsPanelContent);
         else if (extensionsActiveTab === "commands") renderExtensionsCommands(extensionsPanelContent);
         else renderExtensionsStatus(extensionsPanelContent);
-
         const nav = extensionsPanelElement.querySelector?.(".SubbysPlushiesExtensionsTabs");
         if (nav) {
             for (const button of nav.querySelectorAll("button[data-tab]")) {
@@ -10799,7 +9941,6 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function positionExtensionsPanel() {
         if (!extensionsPanelElement?.isConnected) return false;
         const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
@@ -10818,7 +9959,6 @@ function SubbysPlushiesPageMain() {
         });
         return true;
     }
-
     function destroyExtensionsPanel() {
         closeDragUi();
         try { extensionsPanelElement?.remove?.(); } catch (_) {}
@@ -10827,12 +9967,10 @@ function SubbysPlushiesPageMain() {
         refreshRoomMascotOverlay?.();
         return true;
     }
-
     function closeExtensionsPanel(returnToExtensionsList = true) {
         const wasNative = extensionsOpenedFromNativePreference;
         extensionsOpenedFromNativePreference = false;
         destroyExtensionsPanel();
-
         if (wasNative && returnToExtensionsList && extensionsPreferenceScreenActive()) {
             try {
                 if (typeof window.PreferenceSubscreenExtensionsClear === "function") {
@@ -10852,10 +9990,8 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function openExtensionsPanel(tab = "status", fromNativePreference = false) {
         const requestedTab = String(tab || "status").toLowerCase();
-
         if (requestedTab === "layout") {
             extensionsSettingsTab = "layout";
             extensionsActiveTab = "settings";
@@ -10882,7 +10018,6 @@ function SubbysPlushiesPageMain() {
         destroyExtensionsPanel();
         if (fromNativePreference) extensionsOpenedFromNativePreference = true;
         removeRoomMascotOverlay?.();
-
         const root = document.createElement("div");
         root.className = "SubbysPlushiesExtensionsPanel";
         Object.assign(root.style, {
@@ -10899,7 +10034,6 @@ function SubbysPlushiesPageMain() {
             font: `${extensionsLayoutMetrics().fontSize}px Arial, sans-serif`,
             boxShadow: `7px 9px 0 ${getExtensionsStyle().shadow}, 0 12px 30px rgba(0,0,0,0.38)`,
         });
-
         const header = document.createElement("div");
         header.className = "SubbysPlushiesExtensionsHeader";
         Object.assign(header.style, {
@@ -10914,8 +10048,8 @@ function SubbysPlushiesPageMain() {
         const titleWrap = document.createElement("div");
         const title = document.createElement("div");
         title.className = "SubbysPlushiesExtensionsTitle";
-        title.textContent = "Subby's Plushies";
-        Object.assign(title.style, { fontSize: "23px", fontWeight: "bold", color: getExtensionsStyle().text, letterSpacing: "0.03em" });
+        title.textContent = PLUGIN_DISPLAY_NAME;
+        Object.assign(title.style, { fontSize: "20px", fontWeight: "bold", color: getExtensionsStyle().text, letterSpacing: "0.03em" });
         const subtitle = document.createElement("div");
         subtitle.className = "SubbysPlushiesExtensionsSubtitle";
         subtitle.textContent = `Extensions Control Center • v${VERSION}`;
@@ -10923,7 +10057,6 @@ function SubbysPlushiesPageMain() {
         titleWrap.append(title, subtitle);
         const close = makeExtensionsButton("Back", () => closeExtensionsPanel(true));
         header.append(titleWrap, close);
-
         const tabs = document.createElement("div");
         tabs.className = "SubbysPlushiesExtensionsTabs";
         Object.assign(tabs.style, {
@@ -10943,11 +10076,9 @@ function SubbysPlushiesPageMain() {
             button.dataset.tab = tab;
             tabs.appendChild(button);
         }
-
         const outfitTimeMachineButton = makeExtensionsButton("⏪ Outfit Time Machine", openOutfitTimeMachineFromExtensions);
         outfitTimeMachineButton.title = "Open outfit history, saved looks, compare and Echo-compatible batch restore";
         tabs.appendChild(outfitTimeMachineButton);
-
         const content = document.createElement("div");
         content.className = "SubbysPlushiesExtensionsContent";
         Object.assign(content.style, {
@@ -10957,7 +10088,6 @@ function SubbysPlushiesPageMain() {
             overscrollBehavior: "contain",
             flex: "1 1 auto",
         });
-
         root.append(header, tabs, content);
         document.body.appendChild(root);
         extensionsPanelElement = root;
@@ -10966,43 +10096,43 @@ function SubbysPlushiesPageMain() {
         renderExtensionsPanel();
         return true;
     }
-
     function nativeExtensionsEntryAlreadyRegistered() {
         const display = window.PreferenceExtensionsDisplay;
         if (!Array.isArray(display)) return false;
         return display.some(entry =>
             String(entry?.Identifier || "") === EXTENSIONS_IDENTIFIER ||
             String(entry?.Button || entry?.ButtonText || "").trim() === EXTENSIONS_BUTTON_TEXT ||
-            String(entry?.Button || entry?.ButtonText || "").trim() === `${EXTENSIONS_BUTTON_TEXT} Settings`
+            String(entry?.Button || entry?.ButtonText || "").trim() === `${EXTENSIONS_BUTTON_TEXT} Settings` ||
+            String(entry?.Button || entry?.ButtonText || "").trim() === "Subby's Plushies" ||
+            String(entry?.Button || entry?.ButtonText || "").trim() === "Subby's Plushies Settings"
         );
     }
-
     function patchNativeExtensionsEntryIcon() {
         const display = window.PreferenceExtensionsDisplay;
         if (!Array.isArray(display)) return false;
         const entry = display.find(candidate =>
             String(candidate?.Identifier || "") === EXTENSIONS_IDENTIFIER ||
             String(candidate?.Button || candidate?.ButtonText || "").trim() === EXTENSIONS_BUTTON_TEXT ||
-            String(candidate?.Button || candidate?.ButtonText || "").trim() === `${EXTENSIONS_BUTTON_TEXT} Settings`
+            String(candidate?.Button || candidate?.ButtonText || "").trim() === `${EXTENSIONS_BUTTON_TEXT} Settings` ||
+            String(candidate?.Button || candidate?.ButtonText || "").trim() === "Subby's Plushies" ||
+            String(candidate?.Button || candidate?.ButtonText || "").trim() === "Subby's Plushies Settings"
         );
         if (!entry) return false;
         entry.Image = EXTENSIONS_ICON_PATH;
         entry.Icon = EXTENSIONS_ICON_PATH;
         entry.ImagePath = EXTENSIONS_ICON_PATH;
+        try { entry.ButtonText = EXTENSIONS_BUTTON_TEXT; } catch (_) {}
         return true;
     }
-
     function installPreferencesExtensionsIntegration() {
         if (extensionsIntegrationInstalled || extensionsNativeRegistered) return true;
         if (typeof window.PreferenceRegisterExtensionSetting !== "function") return false;
-
         if (nativeExtensionsEntryAlreadyRegistered()) {
             patchNativeExtensionsEntryIcon();
             extensionsNativeRegistered = true;
             extensionsIntegrationInstalled = true;
             return true;
         }
-
         try {
             window.PreferenceRegisterExtensionSetting({
                 Identifier: EXTENSIONS_IDENTIFIER,
@@ -11027,19 +10157,17 @@ function SubbysPlushiesPageMain() {
             patchNativeExtensionsEntryIcon();
             extensionsNativeRegistered = true;
             extensionsIntegrationInstalled = true;
-            log("Registered Subby's Plushies in BC's native Preferences > Extensions list with mapped plushie icon.");
-
+            log("Registered Subby's Plushies & Essentials in BC's native Preferences > Extensions list with mapped plushie icon.");
             if (extensionsIntegrationTimer != null) {
                 window.clearTimeout(extensionsIntegrationTimer);
                 extensionsIntegrationTimer = null;
             }
             return true;
         } catch (e) {
-            warn("Could not register Subby's Plushies in the native Extensions list yet:", e);
+            warn("Could not register Subby's Plushies & Essentials in the native Extensions list yet:", e);
             return false;
         }
     }
-
     function startPreferencesExtensionsIntegration() {
         if (installPreferencesExtensionsIntegration()) return;
         if (extensionsIntegrationTimer != null) return;
@@ -11052,12 +10180,10 @@ function SubbysPlushiesPageMain() {
         };
         extensionsIntegrationTimer = window.setTimeout(retry, delay);
     }
-
     function clearChatInput() {
         const input = document.getElementById("InputChat");
         if (input) input.value = "";
     }
-
     function flattenPlushieCommands() {
         const entries = [];
         const seen = new Set();
@@ -11074,12 +10200,10 @@ function SubbysPlushiesPageMain() {
         }
         return entries;
     }
-
     function plushieAutocompleteCandidates(value) {
         const raw = String(value || "").trimStart();
         const lower = raw.toLowerCase();
         if (!lower.startsWith("/plu") && !lower.startsWith("/help p")) return [];
-
         const argumentGroups = [
             ["/plushieemote ", ["happy", "angry", "sleepy", "protective", "sulky"]],
             ["/plushieperformance ", ["normal", "low"]],
@@ -11094,21 +10218,17 @@ function SubbysPlushiesPageMain() {
                 return values.map(value => `${prefix}${value}`).filter(candidate => candidate.startsWith(lower));
             }
         }
-
         if (lower.startsWith("/plushiereactions ")) {
             return ["/plushiereactions on", "/plushiereactions off"].filter(candidate => candidate.startsWith(lower));
         }
-
         if (lower.startsWith("/help p")) {
             return ["/help plushie", "/help plushies"].filter(candidate => candidate.startsWith(lower));
         }
-
         if (!plushieCommandAutocompleteCache) {
             plushieCommandAutocompleteCache = flattenPlushieCommands().map(entry => entry.base).sort();
         }
         return plushieCommandAutocompleteCache.filter(candidate => candidate.startsWith(lower));
     }
-
     function handlePlushieChatAutocomplete(event, input) {
         if (event.key !== "Tab") {
             plushieCommandAutocompleteState = null;
@@ -11135,7 +10255,6 @@ function SubbysPlushiesPageMain() {
         event.stopImmediatePropagation();
         return true;
     }
-
     function showPlushieHelp({ detailed = false } = {}) {
         const groups = commandGroupsForDisplay();
         if (detailed) {
@@ -11150,40 +10269,35 @@ function SubbysPlushiesPageMain() {
                 }
                 if (commands.length) lines.push(`${group.title}:`, ...commands);
             }
-            appendLocalInfoBox("Subby's Plushies commands", lines, { compact: true });
+            appendLocalInfoBox("Subby's Plushies & Essentials commands", lines, { compact: true });
             return true;
         }
-
         const names = flattenPlushieCommands().map(entry => entry.base);
         const chunks = [];
         for (let i = 0; i < names.length; i += 8) chunks.push(names.slice(i, i + 8).join(" • "));
-        appendLocalInfoBox("Subby's Plushies — /help", [
+        appendLocalInfoBox("Subby's Plushies & Essentials — /help", [
             "Plushie commands are available in this room:",
             ...chunks,
             "Type /help plushie for descriptions. Press Tab while typing /plu… to autocomplete.",
         ], { compact: true });
         return true;
     }
-
     function requireReady(action) {
         if (ready) {
             action();
             return;
         }
-
         warn(
             failed
                 ? "Startup failed. Run /plushiedebug and check the console."
-                : "Subby's Plushies is still loading. Wait for the READY message."
+                : "Subby's Plushies & Essentials is still loading. Wait for the READY message."
         );
     }
-
     function normalizePlushieCommandInput(command) {
         let normalized = String(command || "").trim().toLowerCase();
         if (/^plushie(?:[a-z]|$)/.test(normalized)) normalized = `/${normalized}`;
         return normalized;
     }
-
     function consumeCommand(command) {
         command = normalizePlushieCommandInput(command);
         if (command === "/help plushie" || command === "/help plushies") {
@@ -11337,7 +10451,6 @@ function SubbysPlushiesPageMain() {
             requireReady(() => { void refreshGitDataFromGitHub({ force: true, silent: false, includeLore: true }); });
             return true;
         }
-
         if (command === "/plushieupdateopen") {
             requireReady(() => { void openLatestUpdatePage(); });
             return true;
@@ -11390,7 +10503,7 @@ function SubbysPlushiesPageMain() {
         }
         if (command === "/plushiewavechain") { requireReady(() => { const enabled = toggleFeatureSetting("sharedEmoteChains"); appendLocalInfoBox("Shared Emote Chains", [`Left-to-right Wave chains are now ${enabled ? "ON" : "off"}.`], { compact: true }); }); return true; }
         if (command === "/plushieversion") {
-            appendLocalInfoBox("Subby's Plushies Version", [
+            appendLocalInfoBox("Subby's Plushies & Essentials Version", [
                 `Running v${VERSION} (${BUILD_DATE}).`,
                 `Pose-changing emotes: ${getFeatureSettings().ignorePoseChangingEmotes ? "IGNORED" : "allowed"}.`
             ], { compact: true });
@@ -11420,7 +10533,7 @@ function SubbysPlushiesPageMain() {
         if (command === "/plushiefeatures") {
             requireReady(() => {
                 const settings = getFeatureSettings();
-                appendLocalInfoBox("Subby's Plushies features", [
+                appendLocalInfoBox("Subby's Plushies & Essentials features", [
                     `Protect Me: ${settings.protectMe ? "ON" : "off"}`,
                     `Jealous Plushie: ${settings.jealousPlushie ? "ON" : "off"}`,
                     `Easy Drag: ${dragModeEnabled ? "ON" : "off"}`,
@@ -11438,52 +10551,41 @@ function SubbysPlushiesPageMain() {
             });
             return true;
         }
-
         switch (command) {
             case "/plushie":
                 requireReady(equip);
                 return true;
-
             case "/plushieuse":
                 requireReady(useItem);
                 return true;
-
             case "/plushieaddon":
                 requireReady(equipAddon);
                 return true;
-
             case "/plushieposition":
             case "/plushiemove":
             case "/plushieresize":
                 requireReady(openNativeLayering);
                 return true;
-
             case "/plushiehands":
             case "/plushiecenter":
                 resetPosition();
                 return true;
-
             case "/plushieremove":
                 remove();
                 return true;
-
             case "/plushierecover":
                 recover();
                 return true;
-
             case "/plushiepurr":
                 void playPurrSfx(`manual:${Date.now()}`, "manual command");
                 return true;
-
             case "/plushiedebug":
                 debug();
                 return true;
-
             default:
                 return false;
         }
     }
-
     document.addEventListener(
         "keydown",
         event => {
@@ -11491,10 +10593,8 @@ function SubbysPlushiesPageMain() {
             if (!input || document.activeElement !== input) return;
             if (handlePlushieChatAutocomplete(event, input)) return;
             if (event.key !== "Enter") return;
-
             const command = normalizePlushieCommandInput(input.value);
             if (!consumeCommand(command)) return;
-
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
@@ -11502,14 +10602,12 @@ function SubbysPlushiesPageMain() {
         },
         true
     );
-
     function installNativeCommandFallbackHook() {
         if (installedHooks.has("ChatRoomSendChat")) {
             nativeCommandHookInstalled = true;
             return true;
         }
         if (typeof window.ChatRoomSendChat !== "function") return false;
-
         const installed = installHook("ChatRoomSendChat", 20000, (args, next) => {
             const input = document.getElementById("InputChat");
             const command = normalizePlushieCommandInput(input?.value);
@@ -11527,7 +10625,6 @@ function SubbysPlushiesPageMain() {
         if (installed) log("Installed native ChatRoomSendChat command fallback.");
         return installed;
     }
-
     function scheduleNativeCommandFallbackHook() {
         for (const delay of [0, 250, 1000, 3000, 8000]) {
             window.setTimeout(() => {
@@ -11535,18 +10632,15 @@ function SubbysPlushiesPageMain() {
             }, delay);
         }
     }
-
     function allocateHugTightlyActivityID(activities) {
         let activityID = HUG_TIGHTLY_ACTIVITY_ID_BASE;
         const usedIDs = new Set(activities.map(activity => activity?.ActivityID).filter(Number.isFinite));
         while (usedIDs.has(activityID)) activityID++;
         return activityID;
     }
-
     function makeHugTightlyActivity(activities) {
         const activityID = allocateHugTightlyActivityID(activities);
         hugTightlyActivityID = activityID;
-
         return {
             Name: HUG_TIGHTLY_ACTIVITY_NAME,
             ActivityID: activityID,
@@ -11559,19 +10653,16 @@ function SubbysPlushiesPageMain() {
             ],
         };
     }
-
     function allocateCustomActivityID(activities, offset = 0) {
         let activityID = CUSTOM_ACTIVITY_ID_BASE + offset;
         const usedIDs = new Set(activities.map(activity => activity?.ActivityID).filter(Number.isFinite));
         while (usedIDs.has(activityID)) activityID++;
         return activityID;
     }
-
     function customActivityPrerequisites(spec) {
         if (Array.isArray(spec?.prerequisites)) return [...spec.prerequisites];
         return spec?.handsFree ? [] : ["UseHands"];
     }
-
     function makeCustomActivity(spec, activities, offset) {
         return {
             Name: spec.name,
@@ -11585,11 +10676,9 @@ function SubbysPlushiesPageMain() {
             ],
         };
     }
-
     function ensureCustomActivitiesRegistered(reason = "availability check") {
         const activities = window.ActivityFemale3DCG;
         if (!Array.isArray(activities)) return false;
-
         for (let i = 0; i < CUSTOM_PLUSH_ACTIVITIES.length; i++) {
             const spec = CUSTOM_PLUSH_ACTIVITIES[i];
             let activity = activities.find(entry => entry?.Name === spec.name);
@@ -11604,15 +10693,12 @@ function SubbysPlushiesPageMain() {
             }
             customActivityObjects.set(spec.key, activity);
         }
-
         customActivitiesRegistration = `active (${reason})`;
         return true;
     }
-
     function removeCustomActivities(reason = "availability check") {
         const activities = window.ActivityFemale3DCG;
         if (!Array.isArray(activities)) return false;
-
         const names = new Set(CUSTOM_PLUSH_ACTIVITIES.map(spec => spec.name));
         let removed = 0;
         for (let i = activities.length - 1; i >= 0; i--) {
@@ -11621,20 +10707,17 @@ function SubbysPlushiesPageMain() {
                 removed++;
             }
         }
-
         customActivityObjects.clear();
         customActivitiesRegistration = `inactive (${reason})`;
         if (removed) log(`Disabled ${removed} extra plush activit${removed === 1 ? "y" : "ies"} (${reason}).`);
         return removed > 0;
     }
-
     function allocateExtraActionID(activities, offset = 0) {
         let activityID = EXTRA_ACTION_ID_BASE + offset;
         const usedIDs = new Set(activities.map(activity => activity?.ActivityID).filter(Number.isFinite));
         while (usedIDs.has(activityID)) activityID++;
         return activityID;
     }
-
     function makeExtraAction(spec, activities, offset) {
         return {
             Name: spec.name,
@@ -11648,11 +10731,9 @@ function SubbysPlushiesPageMain() {
             ],
         };
     }
-
     function ensureExtraActionsRegistered(reason = "availability check") {
         const activities = window.ActivityFemale3DCG;
         if (!Array.isArray(activities) || !getFeatureSettings().extraActions) return false;
-
         for (let i = 0; i < EXTRA_ACTIONS.length; i++) {
             const spec = EXTRA_ACTIONS[i];
             let activity = activities.find(entry => entry?.Name === spec.name);
@@ -11667,11 +10748,9 @@ function SubbysPlushiesPageMain() {
             }
             extraActionObjects.set(spec.key, activity);
         }
-
         extraActionsRegistration = `active (${reason})`;
         return true;
     }
-
     function removeExtraActions(reason = "availability check") {
         const activities = window.ActivityFemale3DCG;
         if (!Array.isArray(activities)) return false;
@@ -11688,7 +10767,6 @@ function SubbysPlushiesPageMain() {
         if (removed) log(`Disabled ${removed} Extra Action${removed === 1 ? "" : "s"} (${reason}).`);
         return removed > 0;
     }
-
     function syncExtraActionsAvailability(reason = "availability check") {
         if (getFeatureSettings().extraActions) return ensureExtraActionsRegistered(reason);
         const anyRegistered = window.ActivityFemale3DCG?.some?.(activity => EXTRA_ACTION_BY_NAME.has(activity?.Name));
@@ -11696,18 +10774,14 @@ function SubbysPlushiesPageMain() {
         else extraActionsRegistration = `inactive (${reason})`;
         return false;
     }
-
     function compactActivityName(value) {
         return String(value || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
     }
-
     function customActivityFromKnownString(value) {
         if (typeof value !== "string" || !value) return null;
-
         const direct = PLUGIN_ACTIVITY_BY_NAME.get(value);
         if (direct) return direct;
         const compactValue = compactActivityName(value);
-
         const lower = value.toLowerCase();
         const compact = compactActivityName(value);
         for (const token of CUSTOM_ACTIVITY_FAST_TOKENS) {
@@ -11719,12 +10793,10 @@ function SubbysPlushiesPageMain() {
         }
         return null;
     }
-
     function inspectActivityRunFast(args) {
         const values = Array.isArray(args) ? args : [args];
         let customSpec = null;
         let hugTightly = false;
-
         const inspectString = value => {
             if (typeof value !== "string" || !value) return;
             if (value === HUG_TIGHTLY_ACTIVITY_NAME) {
@@ -11733,7 +10805,6 @@ function SubbysPlushiesPageMain() {
             }
             if (!customSpec) customSpec = customActivityFromKnownString(value);
         };
-
         const inspectObject = value => {
             if (!value || typeof value !== "object") return;
             if (value === hugTightlyActivityObject) hugTightly = true;
@@ -11745,12 +10816,10 @@ function SubbysPlushiesPageMain() {
                     }
                 }
             }
-
             inspectString(value.Name);
             inspectString(value.ActivityName);
             inspectString(typeof value.Activity === "string" ? value.Activity : null);
             inspectString(value.Content);
-
             const nested = value.Activity;
             if (nested && typeof nested === "object") {
                 if (nested === hugTightlyActivityObject) hugTightly = true;
@@ -11759,19 +10828,15 @@ function SubbysPlushiesPageMain() {
                 inspectString(typeof nested.Activity === "string" ? nested.Activity : null);
             }
         };
-
         for (const value of values) {
             if (typeof value === "string") inspectString(value);
             else inspectObject(value);
             if (customSpec && hugTightly) break;
         }
-
         return { customSpec, hugTightly };
     }
-
     function identifyCustomActivity(value, depth = 0, seen = new Set()) {
         if (depth > 6 || value == null) return null;
-
         if (typeof value === "string") {
             const compact = compactActivityName(value);
             for (const spec of ALL_PLUGIN_ACTIVITIES) {
@@ -11782,11 +10847,9 @@ function SubbysPlushiesPageMain() {
             }
             return null;
         }
-
         if (typeof value !== "object") return null;
         if (seen.has(value)) return null;
         seen.add(value);
-
         if (Array.isArray(value)) {
             for (const entry of value) {
                 const spec = identifyCustomActivity(entry, depth + 1, seen);
@@ -11794,34 +10857,28 @@ function SubbysPlushiesPageMain() {
             }
             return null;
         }
-
         for (const [key, entry] of Object.entries(value)) {
             const keySpec = identifyCustomActivity(key, depth + 1, seen);
             if (keySpec) return keySpec;
             const entrySpec = identifyCustomActivity(entry, depth + 1, seen);
             if (entrySpec) return entrySpec;
         }
-
         return null;
     }
-
     function getCustomActivityFromAction(data) {
         const key = getDictionaryText(data, CUSTOM_ACTIVITY_MARKER_TAG);
         if (key && PLUGIN_ACTIVITY_BY_KEY.has(key)) return PLUGIN_ACTIVITY_BY_KEY.get(key);
         return identifyCustomActivity(data);
     }
-
     function normalizeHeightMultiplierCandidate(value) {
         let numeric = Number(value);
         if (!Number.isFinite(numeric) || numeric <= 0) return null;
         if (numeric > 10 && numeric <= 400) numeric /= 100;
         return numeric >= 0.25 && numeric <= 4 ? numeric : null;
     }
-
     function extractEchoHeightMultiplier(value, depth = 0, seen = new Set()) {
         if (!value || typeof value !== "object" || depth > 2 || seen.has(value)) return null;
         seen.add(value);
-
         for (const [key, entry] of Object.entries(value)) {
             const normalizedKey = String(key || "");
             const isHeightScaleKey = /height.*(?:mult(?:iplier)?|scale|ratio)|(?:mult(?:iplier)?|scale|ratio).*height/i.test(normalizedKey);
@@ -11830,7 +10887,6 @@ function SubbysPlushiesPageMain() {
                 if (candidate != null) return candidate;
             }
         }
-
         for (const [key, entry] of Object.entries(value)) {
             if (!entry || typeof entry !== "object") continue;
             if (!/echo|height|scale|size|character/i.test(String(key || ""))) continue;
@@ -11839,10 +10895,8 @@ function SubbysPlushiesPageMain() {
         }
         return null;
     }
-
     function echoHeightMultiplierForCharacter(C) {
         if (!C) return 1;
-
         const directKeys = [
             "EchoHeightMultiplier", "ECHOHeightMultiplier", "echoHeightMultiplier",
             "EchoHeightScale", "ECHOHeightScale", "echoHeightScale",
@@ -11852,7 +10906,6 @@ function SubbysPlushiesPageMain() {
             const candidate = normalizeHeightMultiplierCandidate(C?.[key]);
             if (candidate != null) return candidate;
         }
-
         try {
             for (const [key, value] of Object.entries(C)) {
                 if (!/echo/i.test(key)) continue;
@@ -11860,7 +10913,6 @@ function SubbysPlushiesPageMain() {
                 if (candidate != null) return candidate;
             }
         } catch (_) {}
-
         try {
             for (const item of Array.isArray(C.Appearance) ? C.Appearance : []) {
                 const marker = [
@@ -11874,7 +10926,6 @@ function SubbysPlushiesPageMain() {
                 if (candidate != null) return candidate;
             }
         } catch (_) {}
-
         const member = Number(C?.MemberNumber);
         const globalFunctionNames = [
             "EchoGetHeightMultiplier", "ECHOGetHeightMultiplier",
@@ -11889,7 +10940,6 @@ function SubbysPlushiesPageMain() {
                 if (candidate != null) return candidate;
             } catch (_) {}
         }
-
         try {
             let inspected = 0;
             for (const key of Object.keys(window)) {
@@ -11907,10 +10957,8 @@ function SubbysPlushiesPageMain() {
                 }
             }
         } catch (_) {}
-
         return 1;
     }
-
     function characterEffectiveHeightScale(C) {
         let bcHeightRatio = Number(C?.HeightRatio);
         if (!Number.isFinite(bcHeightRatio) || bcHeightRatio <= 0) bcHeightRatio = 1;
@@ -11922,7 +10970,6 @@ function SubbysPlushiesPageMain() {
             effective: Number.isFinite(effective) && effective > 0 ? effective : bcHeightRatio,
         };
     }
-
     function measureHeightActionText(sourceCharacter, targetCharacter, sourceName, targetName) {
         const source = characterEffectiveHeightScale(sourceCharacter);
         const target = characterEffectiveHeightScale(targetCharacter);
@@ -11931,11 +10978,9 @@ function SubbysPlushiesPageMain() {
         const average = Math.max(0.01, (source.effective + target.effective) / 2);
         const signedDifference = source.effective - target.effective;
         const percentDifference = Math.abs(signedDifference) / average * 100;
-
         if (percentDifference < 1.5) {
             return `${sourceLabel} measures height with ${targetLabel} and finds both are almost exactly the same height.`;
         }
-
         const sourceTaller = signedDifference > 0;
         const taller = sourceTaller ? sourceLabel : targetLabel;
         const shorter = sourceTaller ? targetLabel : sourceLabel;
@@ -11950,7 +10995,6 @@ function SubbysPlushiesPageMain() {
         }
         return `${sourceLabel} measures height with ${targetLabel} and finds ${taller} towers over ${shorter}.`;
     }
-
     function extraActionAvailableForTarget(spec, targetCharacter = window.DialogFocusCharacter) {
         if (!isExtraActionSpec(spec)) return true;
         if (!targetCharacter) return !spec?.requiresOccupiedGroup;
@@ -11959,38 +11003,31 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     const EXTRA_RAISE_ARM_DURATION_MS = 5000;
     const extraRaisedArmSessions = new Map();
-
     function extraActionCharacterKey(C) {
         const member = Number(C?.MemberNumber);
         if (Number.isFinite(member)) return `member:${member}`;
         if (C === window.Player) return "player";
         return `character:${String(C?.ID ?? C?.Name ?? "unknown")}`;
     }
-
     function activePoseSnapshot(C) {
         const value = C?.ActivePose;
         if (Array.isArray(value)) return value.map(entry => String(entry)).filter(Boolean);
         if (typeof value === "string" && value) return [value];
         return [];
     }
-
     function characterPoseSnapshot(C) {
         const value = C?.Pose;
         if (Array.isArray(value)) return value.map(entry => String(entry)).filter(Boolean);
         if (typeof value === "string" && value) return [value];
         return null;
     }
-
     function activePoseSignature(C) {
         return JSON.stringify(activePoseSnapshot(C));
     }
-
     function refreshExtraActionPose(C) {
         if (!C) return false;
-
         try {
             if (typeof window.CharacterRefresh === "function") {
                 window.CharacterRefresh(C, false);
@@ -11999,7 +11036,6 @@ function SubbysPlushiesPageMain() {
         } catch (e) {
             warn("CharacterRefresh failed for temporary arm pose:", e);
         }
-
         try {
             if (typeof window.CharacterLoadCanvas === "function") {
                 window.CharacterLoadCanvas(C);
@@ -12008,34 +11044,27 @@ function SubbysPlushiesPageMain() {
         } catch (e) {
             warn("CharacterLoadCanvas fallback failed for temporary arm pose:", e);
         }
-
         return false;
     }
-
     function activePosesExactlyMatch(actual, desired) {
         const left = [...new Set((Array.isArray(actual) ? actual : []).map(String).filter(Boolean))].sort();
         const right = [...new Set((Array.isArray(desired) ? desired : []).map(String).filter(Boolean))].sort();
         return left.length === right.length && left.every((pose, index) => pose === right[index]);
     }
-
     function setExtraActionActivePoses(C, poses) {
         if (!C) return false;
-
         const desired = [...new Set(
             (Array.isArray(poses) ? poses : [])
                 .map(value => String(value || "").trim())
                 .filter(Boolean)
         )];
-
         let applied = false;
-
         try {
             if (typeof window.CharacterSetActivePose === "function") {
                 window.CharacterSetActivePose(C, desired);
                 applied = activePosesExactlyMatch(activePoseSnapshot(C), desired);
             }
         } catch (_) {}
-
         if (!applied && desired.length === 1) {
             try {
                 if (typeof window.CharacterSetActivePose === "function") {
@@ -12044,34 +11073,26 @@ function SubbysPlushiesPageMain() {
                 }
             } catch (_) {}
         }
-
         if (!applied) {
             try {
                 C.ActivePose = [...desired];
                 applied = true;
             } catch (_) {}
         }
-
         if (!applied) return false;
-
         refreshExtraActionPose(C);
-
         if (activePosesExactlyMatch(activePoseSnapshot(C), desired)) return true;
-
         try {
             C.ActivePose = [...desired];
             refreshExtraActionPose(C);
         } catch (_) {}
-
         return activePosesExactlyMatch(activePoseSnapshot(C), desired);
     }
-
     function diagnoseExtraActionArmPose(C, source = "diagnostic") {
         if (!C) {
             warn("Arm diagnostic could not resolve a character.");
             return null;
         }
-
         let canChange = "unavailable";
         try {
             if (typeof window.CharacterCanChangeToPose === "function") {
@@ -12080,7 +11101,6 @@ function SubbysPlushiesPageMain() {
         } catch (e) {
             canChange = `threw: ${String(e)}`;
         }
-
         const report = {
             source,
             name: C?.Nickname || C?.Name || C?.AccountName || "Unknown",
@@ -12094,14 +11114,11 @@ function SubbysPlushiesPageMain() {
             CharacterRefresh: typeof window.CharacterRefresh,
             CharacterLoadCanvas: typeof window.CharacterLoadCanvas,
         };
-
         try { console.table(report); } catch (_) { log("Arm diagnostic:", report); }
         return report;
     }
-
     const EXTRA_ARM_RAISED_POSE = "OverTheHead";
     const EXTRA_ARM_BASE_POSE = "BaseUpper";
-
     function activePosesWithUpperBodyPose(poses, upperPose) {
         const result = (Array.isArray(poses) ? poses : [])
             .map(value => String(value || "").trim())
@@ -12113,7 +11130,6 @@ function SubbysPlushiesPageMain() {
         if (upperPose) result.push(upperPose);
         return [...new Set(result)];
     }
-
     function syncTemporaryArmPose(C) {
         if (
             C === window.Player &&
@@ -12123,52 +11139,41 @@ function SubbysPlushiesPageMain() {
             try { window.ChatRoomCharacterUpdate(C); } catch (_) {}
         }
     }
-
     function resetTemporaryArmsToBase(C, source = "temporary-arm-reset") {
         if (!C) return false;
-
         const desired = activePosesWithUpperBodyPose(
             activePoseSnapshot(C),
             EXTRA_ARM_BASE_POSE
         );
-
         const applied = setExtraActionActivePoses(C, desired);
         if (!applied) return false;
-
         window.setTimeout(() => {
             const key = extraActionCharacterKey(C);
             if (extraRaisedArmSessions.has(key)) return;
             setExtraActionActivePoses(C, desired);
             syncTemporaryArmPose(C);
         }, 120);
-
         log("Temporary raised arms reset.", {
             source,
             memberNumber: C?.MemberNumber ?? null,
             activePose: activePoseSnapshot(C),
             pose: characterPoseSnapshot(C),
         });
-
         return true;
     }
-
     function forceRestoreTemporaryArmPose(C, beforeState, source = "temporary-arm-restore") {
         if (!C) return false;
-
         const desired = Array.isArray(beforeState?.activePose)
             ? [...beforeState.activePose]
             : activePosesWithUpperBodyPose(activePoseSnapshot(C), EXTRA_ARM_BASE_POSE);
-
         const applied = setExtraActionActivePoses(C, desired);
         if (!applied) return false;
-
         window.setTimeout(() => {
             const key = extraActionCharacterKey(C);
             if (extraRaisedArmSessions.has(key)) return;
             setExtraActionActivePoses(C, desired);
             syncTemporaryArmPose(C);
         }, 120);
-
         log("Temporary raised-arm pose restored.", {
             source,
             memberNumber: C?.MemberNumber ?? null,
@@ -12176,13 +11181,10 @@ function SubbysPlushiesPageMain() {
             activePose: activePoseSnapshot(C),
             pose: characterPoseSnapshot(C),
         });
-
         return true;
     }
-
     function applyTemporaryRaisedArm(C, durationMs = EXTRA_RAISE_ARM_DURATION_MS, source = "extra-action") {
         if (!C) return false;
-
         if (getFeatureSettings().ignorePoseChangingEmotes) {
             log("Ignored pose-changing emote.", {
                 source,
@@ -12190,14 +11192,11 @@ function SubbysPlushiesPageMain() {
             });
             return false;
         }
-
         const key = extraActionCharacterKey(C);
         const existing = extraRaisedArmSessions.get(key);
-
         if (existing?.timer != null) {
             window.clearTimeout(existing.timer);
         }
-
         const beforeState = existing?.beforeState
             ? {
                 activePose: [...existing.beforeState.activePose],
@@ -12210,37 +11209,29 @@ function SubbysPlushiesPageMain() {
                     return Array.isArray(pose) ? [...pose] : null;
                 })(),
             };
-
         const raisedActivePoses = activePosesWithUpperBodyPose(
             activePoseSnapshot(C),
             EXTRA_ARM_RAISED_POSE
         );
-
         const applied = setExtraActionActivePoses(C, raisedActivePoses);
-
         if (!applied) {
             extraRaisedArmSessions.delete(key);
             diagnoseExtraActionArmPose(C, `${source}: pose rejected`);
             return false;
         }
-
         const session = {
             beforeState,
             source,
             character: C,
             timer: null,
         };
-
         session.timer = window.setTimeout(() => {
             const current = extraRaisedArmSessions.get(key);
             if (current !== session) return;
-
             extraRaisedArmSessions.delete(key);
             forceRestoreTemporaryArmPose(C, session.beforeState, source);
         }, Math.max(900, Number(durationMs) || EXTRA_RAISE_ARM_DURATION_MS));
-
         extraRaisedArmSessions.set(key, session);
-
         log("Temporary raised-arm pose applied.", {
             source,
             memberNumber: C?.MemberNumber ?? null,
@@ -12250,10 +11241,8 @@ function SubbysPlushiesPageMain() {
             pose: characterPoseSnapshot(C),
             durationMs: Math.max(900, Number(durationMs) || EXTRA_RAISE_ARM_DURATION_MS),
         });
-
         return true;
     }
-
     window.SubbysPlushiesArmDiag = (memberNumber = window.Player?.MemberNumber) => {
         const member = Number(memberNumber);
         const C = Number.isFinite(member)
@@ -12261,7 +11250,6 @@ function SubbysPlushiesPageMain() {
             : window.Player;
         return diagnoseExtraActionArmPose(C, "console diagnostic");
     };
-
     window.SubbysPlushiesArmTest = (memberNumber = window.Player?.MemberNumber) => {
         const member = Number(memberNumber);
         const C = Number.isFinite(member)
@@ -12274,7 +11262,6 @@ function SubbysPlushiesPageMain() {
         diagnoseExtraActionArmPose(C, "console test before");
         return applyTemporaryRaisedArm(C, EXTRA_RAISE_ARM_DURATION_MS, "console test");
     };
-
     window.SubbysPlushiesArmReset = (memberNumber = window.Player?.MemberNumber) => {
         const member = Number(memberNumber);
         const C = Number.isFinite(member)
@@ -12286,7 +11273,6 @@ function SubbysPlushiesPageMain() {
         }
         return resetTemporaryArmsToBase(C, "console reset");
     };
-
     function processExtraActionEffect(data, spec = getCustomActivityFromAction(data)) {
         if (!isExtraActionSpec(spec) || !spec?.effect) return false;
         if (spec.effect !== "raiseTargetArm") return false;
@@ -12302,15 +11288,12 @@ function SubbysPlushiesPageMain() {
         }
         return applyTemporaryRaisedArm(target, EXTRA_RAISE_ARM_DURATION_MS, "raise-their-arm-preview");
     }
-
     function activityTemplate(spec, self, sourceCharacter, targetCharacter, sourceName, targetName, plushName) {
         const canonicalSource = getCharacterDisplayName(sourceCharacter) || normalizeDialogueName(sourceName, "Someone");
         const canonicalTarget = getCharacterDisplayName(targetCharacter) || normalizeDialogueName(targetName, "someone");
-
         if (spec?.effect === "measureHeight" && !self && targetCharacter) {
             return measureHeightActionText(sourceCharacter, targetCharacter, canonicalSource, canonicalTarget);
         }
-
         const template = self ? spec.selfText : (spec.otherText || spec.selfText);
         return renderNicknameAwareDialogue(template, {
             self,
@@ -12321,10 +11304,8 @@ function SubbysPlushiesPageMain() {
             plushName,
         });
     }
-
     function getActionCharacterContext(data, fallbackTarget = null) {
         const dictionary = Array.isArray(data?.Dictionary) ? data.Dictionary : [];
-
         const numberFrom = (...values) => {
             for (const value of values) {
                 const n = Number(value);
@@ -12332,7 +11313,6 @@ function SubbysPlushiesPageMain() {
             }
             return null;
         };
-
         const memberFromDirectKeys = keys => {
             for (const entry of dictionary) {
                 if (!entry || typeof entry !== "object") continue;
@@ -12343,7 +11323,6 @@ function SubbysPlushiesPageMain() {
             }
             return null;
         };
-
         const textFromTags = tags => {
             for (const tag of tags) {
                 const entry = dictionary.find(item => item?.Tag === tag);
@@ -12351,7 +11330,6 @@ function SubbysPlushiesPageMain() {
             }
             return null;
         };
-
         const memberFromTags = tags => {
             for (const tag of tags) {
                 const entry = dictionary.find(item => item?.Tag === tag);
@@ -12360,7 +11338,6 @@ function SubbysPlushiesPageMain() {
             }
             return null;
         };
-
         const sourceMember = numberFrom(
             data?.Sender,
             data?.SourceMemberNumber,
@@ -12371,7 +11348,6 @@ function SubbysPlushiesPageMain() {
                 "SourceCharacterMemberNumber",
             ])
         );
-
         const targetMember = numberFrom(
             data?.Target,
             data?.TargetMemberNumber,
@@ -12391,35 +11367,29 @@ function SubbysPlushiesPageMain() {
             ]),
             fallbackTarget?.MemberNumber
         );
-
         const characterByMember = member => {
             if (!Number.isFinite(member)) return null;
             if (window.Player?.MemberNumber === member) return window.Player;
             if (!Array.isArray(window.ChatRoomCharacter)) return null;
             return window.ChatRoomCharacter.find(C => C?.MemberNumber === member) || null;
         };
-
         const sourceCharacter = characterByMember(sourceMember);
         const targetCharacter = characterByMember(targetMember);
-
         const sourceNameRaw =
             getCharacterDisplayName(sourceCharacter) ||
             getDictionaryText(data, CUSTOM_ACTIVITY_SOURCE_NAME_TAG) ||
             textFromTags(["SourceCharacterName", "SourceCharacter"]) ||
             null;
-
         const targetNameRaw =
             getCharacterDisplayName(targetCharacter) ||
             getDictionaryText(data, CUSTOM_ACTIVITY_TARGET_NAME_TAG) ||
             textFromTags(["DestinationCharacterName", "TargetCharacterName", "DestinationCharacter", "TargetCharacter"]) ||
             getCharacterDisplayName(fallbackTarget) ||
             null;
-
         const sourceName = sourceNameRaw ? normalizeDialogueName(sourceNameRaw, "Someone") : null;
         const targetName = targetNameRaw ? normalizeDialogueName(targetNameRaw, "someone") : null;
         return { sourceMember, targetMember, sourceName, targetName };
     }
-
     function getCharacterDisplayName(C) {
         if (!C) return null;
         const nickname = typeof C?.Nickname === "string" ? C.Nickname.trim() : "";
@@ -12429,7 +11399,6 @@ function SubbysPlushiesPageMain() {
         const accountName = typeof C?.AccountName === "string" ? C.AccountName.trim() : "";
         return accountName || null;
     }
-
     function normalizeDialogueName(value, fallback = "someone") {
         let text = String(value || "").replace(/[\u2018\u2019]/g, "'").trim();
         if (!text) return fallback;
@@ -12446,12 +11415,10 @@ function SubbysPlushiesPageMain() {
         }
         return text || fallback;
     }
-
     function dialoguePossessiveName(value) {
         const name = normalizeDialogueName(value, "someone");
         return /s$/i.test(name) ? `${name}'` : `${name}'s`;
     }
-
     function renderNicknameAwareDialogue(template, context = {}) {
         const sourceName = normalizeDialogueName(context.sourceName, "Someone");
         const targetName = normalizeDialogueName(context.targetName, "someone");
@@ -12459,11 +11426,9 @@ function SubbysPlushiesPageMain() {
         const targetPronouns = context.targetPronouns || characterPronouns(context.targetCharacter);
         const ownerPronouns = context.self ? sourcePronouns : targetPronouns;
         const plushName = String(context.plushName || currentPlushName() || "plushie").trim() || "plushie";
-
         const plushPhrase = /^plushie$/i.test(plushName)
             ? `${sourcePronouns.possessive} plushie`
             : `${sourcePronouns.possessive} ${plushName} plushie`;
-
         let text = String(template || "")
             .replaceAll("{SourceSubject}", sourcePronouns.subject)
             .replaceAll("{SourceObject}", sourcePronouns.object)
@@ -12477,7 +11442,6 @@ function SubbysPlushiesPageMain() {
             .replaceAll("{TargetPossessiveName}", dialoguePossessiveName(targetName))
             .replaceAll("{Plushie}", plushPhrase)
             .replaceAll("the plushie", plushPhrase);
-
         text = text
             .replace(/\btheir\b/gi, ownerPronouns.possessive)
             .replace(/\btheirs\b/gi, ownerPronouns.possessive === "his" ? "his" : `${ownerPronouns.possessive}s`)
@@ -12487,21 +11451,17 @@ function SubbysPlushiesPageMain() {
             .replace(/\bthemself\b/gi, ownerPronouns.reflexive)
             .replaceAll("{Source}", sourceName)
             .replaceAll("{Target}", targetName);
-
         text = text.replace(/([A-Za-z0-9_ -]+)'s's\b/g, "$1's");
         return text;
     }
-
     function characterPronouns(C) {
         const SHE = Object.freeze({ subject: "she", object: "her", possessive: "her", reflexive: "herself" });
         const HE = Object.freeze({ subject: "he", object: "him", possessive: "his", reflexive: "himself" });
-
         const appearanceFamilies = Array.isArray(C?.Appearance)
             ? C.Appearance
                 .map(item => item?.Asset?.Family || item?.Asset?.Group?.Family || "")
                 .filter(Boolean)
             : [];
-
         const raw = [
             C?.Gender,
             C?.gender,
@@ -12516,7 +11476,6 @@ function SubbysPlushiesPageMain() {
             .filter(value => value != null && String(value).trim())
             .map(value => String(value).trim().toLowerCase())
             .join(" ");
-
         if (
             raw.includes("female3dcg") ||
             /(^|[^a-z])(f|female|woman|feminine|she|her|sheher|she\/her)([^a-z]|$)/.test(raw)
@@ -12529,10 +11488,8 @@ function SubbysPlushiesPageMain() {
         ) {
             return HE;
         }
-
         return SHE;
     }
-
     window.SubbysPlushiesPronounDiag = (memberNumber = window.Player?.MemberNumber) => {
         const member = Number(memberNumber);
         const C = Number.isFinite(member) ? getRoomCharacterByMember(member) : window.Player;
@@ -12546,7 +11503,6 @@ function SubbysPlushiesPageMain() {
         console.table(result);
         return result;
     };
-
     function looksLikeCharacter(value) {
         return !!value &&
             typeof value === "object" &&
@@ -12558,7 +11514,6 @@ function SubbysPlushiesPageMain() {
                 typeof value.AssetFamily === "string"
             );
     }
-
     function findActivityTargetFast(args) {
         const playerMember = window.Player?.MemberNumber;
         const candidates = [];
@@ -12566,10 +11521,8 @@ function SubbysPlushiesPageMain() {
             if (!looksLikeCharacter(value) || candidates.includes(value)) return;
             candidates.push(value);
         };
-
         add(window.DialogFocusCharacter);
         add(window.CurrentCharacter);
-
         const values = Array.isArray(args) ? args : [args];
         const knownKeys = [
             "Target", "TargetCharacter", "DestinationCharacter", "Character",
@@ -12579,19 +11532,16 @@ function SubbysPlushiesPageMain() {
             add(value);
             if (!value || typeof value !== "object") continue;
             for (const key of knownKeys) add(value[key]);
-
             const activity = value.Activity;
             if (activity && typeof activity === "object") {
                 for (const key of knownKeys) add(activity[key]);
             }
         }
-
         const other = candidates.find(C =>
             Number.isFinite(C?.MemberNumber) &&
             (!Number.isFinite(playerMember) || C.MemberNumber !== playerMember)
         );
         if (other) return other;
-
         const self = candidates.find(C =>
             Number.isFinite(C?.MemberNumber) &&
             Number.isFinite(playerMember) &&
@@ -12599,19 +11549,15 @@ function SubbysPlushiesPageMain() {
         );
         return self || window.DialogFocusCharacter || window.CurrentCharacter || window.Player || null;
     }
-
     function findActivityTargetFromArgs(args) {
         const playerMember = window.Player?.MemberNumber;
         const candidates = [];
-
         const add = value => {
             if (!looksLikeCharacter(value)) return;
             if (!candidates.includes(value)) candidates.push(value);
         };
-
         add(window.DialogFocusCharacter);
         add(window.CurrentCharacter);
-
         const seen = new Set();
         const walk = (value, depth = 0) => {
             if (depth > 5 || value == null) return;
@@ -12621,22 +11567,18 @@ function SubbysPlushiesPageMain() {
             }
             if (typeof value !== "object" || seen.has(value)) return;
             seen.add(value);
-
             if (Array.isArray(value)) {
                 for (const entry of value) walk(entry, depth + 1);
                 return;
             }
             for (const entry of Object.values(value)) walk(entry, depth + 1);
         };
-
         walk(args);
-
         const other = candidates.find(C =>
             Number.isFinite(C?.MemberNumber) &&
             (!Number.isFinite(playerMember) || C.MemberNumber !== playerMember)
         );
         if (other) return other;
-
         const self = candidates.find(C =>
             Number.isFinite(C?.MemberNumber) &&
             Number.isFinite(playerMember) &&
@@ -12644,15 +11586,12 @@ function SubbysPlushiesPageMain() {
         );
         return self || window.Player || null;
     }
-
     function getRoomCharacterByRenderedName(value) {
         const raw = String(value || "").trim();
         if (!raw) return null;
-
         const variants = new Set([raw.toLocaleLowerCase()]);
         if (/[’']s$/i.test(raw)) variants.add(raw.slice(0, -2).trim().toLocaleLowerCase());
         if (/s[’']$/i.test(raw)) variants.add(raw.slice(0, -1).trim().toLocaleLowerCase());
-
         const characters = [window.Player, ...(Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [])]
             .filter(Boolean);
         for (const C of characters) {
@@ -12663,7 +11602,6 @@ function SubbysPlushiesPageMain() {
         }
         return null;
     }
-
     function pruneLocallyRenderedCustomActionTokens(now = Date.now()) {
         for (const [token, at] of locallyRenderedCustomActionTokens) {
             if (now - Number(at || 0) > 15000) locallyRenderedCustomActionTokens.delete(token);
@@ -12672,7 +11610,6 @@ function SubbysPlushiesPageMain() {
             if (now - Number(at || 0) > 15000) receivedCustomActionTokens.delete(token);
         }
     }
-
     function acceptIncomingCustomActionToken(token) {
         if (!token) return true;
         const now = Date.now();
@@ -12681,7 +11618,6 @@ function SubbysPlushiesPageMain() {
         receivedCustomActionTokens.set(token, now);
         return true;
     }
-
     function customActionChatRowExists(token) {
         if (!token || typeof document === "undefined") return false;
         try {
@@ -12692,14 +11628,12 @@ function SubbysPlushiesPageMain() {
         } catch (_) {}
         return false;
     }
-
     function customActionExpectedMessage(data) {
         return (
             getDictionaryText(data, "msg") ||
             (typeof data?.Content === "string" && data.Content !== "Beep" ? data.Content : "")
         );
     }
-
     function normalizeActionChatText(value) {
         let text = String(value || "").replace(/\s+/g, " ").trim();
         if (text.startsWith("(") && text.endsWith(")")) {
@@ -12707,7 +11641,6 @@ function SubbysPlushiesPageMain() {
         }
         return text;
     }
-
     function customActionChatRoot() {
         return (
             document.getElementById("TextAreaChatLog") ||
@@ -12715,7 +11648,6 @@ function SubbysPlushiesPageMain() {
             null
         );
     }
-
     function currentActionRows() {
         const root = customActionChatRoot();
         if (!root) return [];
@@ -12725,11 +11657,9 @@ function SubbysPlushiesPageMain() {
             return [];
         }
     }
-
     function findMatchingNativeActionRow(message, onlyRows = null) {
         const expected = normalizeActionChatText(message);
         if (!expected) return null;
-
         const rows = Array.isArray(onlyRows) ? onlyRows : currentActionRows();
         for (let i = rows.length - 1; i >= 0; i--) {
             const row = rows[i];
@@ -12738,7 +11668,6 @@ function SubbysPlushiesPageMain() {
         }
         return null;
     }
-
     function tagNativeCustomActionRow(row, token) {
         if (!row || !token) return false;
         try {
@@ -12749,52 +11678,40 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function adoptNativeCustomActionRow(data, rowsBefore = null) {
         const token = getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG);
         const message = customActionExpectedMessage(data);
         if (!token || !message) return false;
-
         const beforeSet = rowsBefore instanceof Set ? rowsBefore : null;
         const rows = currentActionRows();
         const candidates = beforeSet ? rows.filter(row => !beforeSet.has(row)) : rows;
         const row = findMatchingNativeActionRow(message, candidates);
-
         if (!row) return false;
         return tagNativeCustomActionRow(row, token);
     }
-
     function renderCustomActionLocally(data) {
         if (!data) return false;
-
         const token = getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG);
         const message = customActionExpectedMessage(data);
         if (!token || !message) return false;
-
         pruneLocallyRenderedCustomActionTokens();
-
         if (customActionChatRowExists(token)) {
             locallyRenderedCustomActionTokens.set(token, Date.now());
             return true;
         }
-
         if (adoptNativeCustomActionRow(data)) return true;
-
         try {
             if (typeof window.ChatRoomAppendChat === "function") {
                 const row = document.createElement("div");
-
                 row.className = "ChatMessage ChatMessageAction";
                 row.textContent = `(${message})`;
                 row.setAttribute("data-subbys-plushies-token", token);
-
                 const sourceMember =
                     Number(getDictionaryMemberNumber(data, CUSTOM_ACTIVITY_SOURCE_MEMBER_TAG)) ||
                     Number(data?.Sender);
                 const targetMember =
                     Number(getDictionaryMemberNumber(data, CUSTOM_ACTIVITY_TARGET_MEMBER_TAG)) ||
                     Number(data?.Target);
-
                 if (Number.isFinite(sourceMember) && sourceMember > 0) {
                     row.dataset.sender = String(sourceMember);
                 }
@@ -12806,9 +11723,7 @@ function SubbysPlushiesPageMain() {
                         row.dataset.time = String(window.ChatRoomCurrentTime());
                     }
                 } catch (_) {}
-
                 window.ChatRoomAppendChat(row);
-
                 if (row.isConnected || customActionChatRowExists(token)) {
                     locallyRenderedCustomActionTokens.set(token, Date.now());
                     return true;
@@ -12817,10 +11732,8 @@ function SubbysPlushiesPageMain() {
         } catch (e) {
             warn("Could not append native-style custom activity row:", e);
         }
-
         return false;
     }
-
     function makeCustomActivityNetworkAction(originalData, spec, fallbackTarget = null) {
         const playerName = getCharacterDisplayName(window.Player) || "Someone";
         const playerMember = Number.isFinite(window.Player?.MemberNumber) ? window.Player.MemberNumber : null;
@@ -12829,7 +11742,6 @@ function SubbysPlushiesPageMain() {
         let targetMember = Number.isFinite(context.targetMember)
             ? context.targetMember
             : (Number.isFinite(fallbackTarget?.MemberNumber) ? fallbackTarget.MemberNumber : null);
-
         const sourceCharacter = window.Player;
         let targetCharacter = Number.isFinite(targetMember) ? getRoomCharacterByMember(targetMember) : fallbackTarget;
         if (!targetCharacter && targetName) targetCharacter = getRoomCharacterByRenderedName(targetName);
@@ -12840,7 +11752,6 @@ function SubbysPlushiesPageMain() {
         } else if (targetName) {
             targetName = normalizeDialogueName(targetName, "someone");
         }
-
         if (spec?.effect === "measureHeight" && !targetCharacter) {
             targetCharacter = getRoomCharacterByRenderedName(targetName);
         }
@@ -12851,16 +11762,13 @@ function SubbysPlushiesPageMain() {
                 targetMember = Number(targetCharacter.MemberNumber);
             }
         }
-
         const isSelf =
             (Number.isFinite(playerMember) && Number.isFinite(targetMember) && playerMember === targetMember) ||
             (!!targetName && targetName === playerName) ||
             targetCharacter === window.Player ||
             fallbackTarget === window.Player;
-
         const token = `${playerMember ?? "local"}:${Date.now()}:${++customActivityEventSequence}:${spec.key}`;
         const message = activityTemplate(spec, isSelf, sourceCharacter, targetCharacter, playerName, targetName, currentPlushName());
-
         const preserved = Array.isArray(originalData?.Dictionary)
             ? originalData.Dictionary.filter(entry => {
                 const tag = String(entry?.Tag || "");
@@ -12876,7 +11784,6 @@ function SubbysPlushiesPageMain() {
                 ].includes(tag);
             })
             : [];
-
         const dictionary = [
             ...preserved,
             { Tag: "Beep", Text: "msg" },
@@ -12885,7 +11792,6 @@ function SubbysPlushiesPageMain() {
             { Tag: CUSTOM_ACTIVITY_TOKEN_TAG, Text: token },
             { Tag: CUSTOM_ACTIVITY_SOURCE_NAME_TAG, Text: playerName },
         ];
-
         if (Number.isFinite(playerMember)) {
             dictionary.push({ Tag: CUSTOM_ACTIVITY_SOURCE_MEMBER_TAG, Text: String(playerMember), MemberNumber: playerMember });
         }
@@ -12893,7 +11799,6 @@ function SubbysPlushiesPageMain() {
         if (Number.isFinite(targetMember)) {
             dictionary.push({ Tag: CUSTOM_ACTIVITY_TARGET_MEMBER_TAG, Text: String(targetMember), MemberNumber: targetMember });
         }
-
         return {
             data: {
                 ...originalData,
@@ -12908,13 +11813,11 @@ function SubbysPlushiesPageMain() {
             isSelf,
         };
     }
-
     function pruneOfferPromptTokens(now = Date.now()) {
         for (const [token, timestamp] of seenOfferPromptTokens) {
             if (now - timestamp > 60000) seenOfferPromptTokens.delete(token);
         }
     }
-
     function cloneTransferValue(value) {
         if (value == null) return value;
         try {
@@ -12926,12 +11829,10 @@ function SubbysPlushiesPageMain() {
             return value;
         }
     }
-
     function snapshotPlushItem(item) {
         if (!isOurs(item)) return null;
         const option = canonicalWirePlushOption(getItemPlushOption(item));
         if (!validPlushOption(option)) return null;
-
         return {
             assetName: ASSET_NAME,
             groupName: item?.Asset?.Group?.Name || GROUP,
@@ -12942,13 +11843,11 @@ function SubbysPlushiesPageMain() {
             craft: cloneTransferValue(item.Craft),
         };
     }
-
     function captureOfferedPlushSnapshot(sourceMember) {
         const sourceCharacter = getRoomCharacterByMember(sourceMember);
         if (!sourceCharacter) return null;
         return snapshotPlushItem(getHandheldItem(sourceCharacter));
     }
-
     function prunePendingOutgoingPlushOffers(now = Date.now()) {
         for (const [member, pending] of pendingOutgoingPlushOffers) {
             if (!pending || now - pending.createdAt > OFFER_TRANSFER_PENDING_MS) {
@@ -12956,7 +11855,6 @@ function SubbysPlushiesPageMain() {
             }
         }
     }
-
     function rememberOutgoingPlushOffer(targetMember, token) {
         if (!Number.isFinite(targetMember)) return false;
         const held = getHandheldItem(window.Player);
@@ -12966,7 +11864,6 @@ function SubbysPlushiesPageMain() {
         }
         const snapshot = snapshotPlushItem(held);
         if (!snapshot) return false;
-
         prunePendingOutgoingPlushOffers();
         pendingOutgoingPlushOffers.set(targetMember, {
             targetMember,
@@ -12976,11 +11873,9 @@ function SubbysPlushiesPageMain() {
         });
         return true;
     }
-
     function sendOfferDecisionSignal(sourceMember, actorMember, token, decision) {
         if (!Number.isFinite(sourceMember) || !Number.isFinite(actorMember)) return false;
         if (typeof window.ServerSend !== "function") return false;
-
         const normalizedDecision = decision === "accepts" ? "accepts" : "declines";
         const message = {
             IsSubbysPlushies: true,
@@ -12992,7 +11887,6 @@ function SubbysPlushiesPageMain() {
             token: String(token || ""),
             decision: normalizedDecision,
         };
-
         const send = () => {
             window.ServerSend("ChatRoomChat", {
                 Type: "Hidden",
@@ -13001,7 +11895,6 @@ function SubbysPlushiesPageMain() {
                 Dictionary: [{ message }],
             });
         };
-
         let sent = false;
         for (const delay of OFFER_TRANSFER_SYNC_RETRY_DELAYS_MS) {
             if (delay === 0) {
@@ -13019,14 +11912,12 @@ function SubbysPlushiesPageMain() {
         }
         return sent;
     }
-
     function parseOfferDecisionSignal(data) {
         if (!data || data.Type !== "Hidden" || data.Content !== OFFER_TRANSFER_SYNC_CONTENT) return null;
         const dictionary = Array.isArray(data.Dictionary) ? data.Dictionary : [];
         const entry = dictionary.find(part => part && typeof part === "object" && part.message && typeof part.message === "object");
         const message = entry?.message;
         if (!message || message.IsSubbysPlushies !== true || message.protocol !== OFFER_TRANSFER_SYNC_PROTOCOL || message.kind !== "offer-decision") return null;
-
         const sourceMember = Number(message.sourceMember);
         const actorMember = Number(message.actorMember);
         const senderMember = Number(data.Sender);
@@ -13034,7 +11925,6 @@ function SubbysPlushiesPageMain() {
         if (!Number.isFinite(sourceMember) || !Number.isFinite(actorMember)) return null;
         if (Number.isFinite(senderMember) && senderMember !== actorMember) return null;
         if (decision !== "accepts" && decision !== "declines") return null;
-
         return {
             actorName: getCharacterDisplayName(getRoomCharacterByMember(actorMember)) || null,
             actorMember,
@@ -13044,7 +11934,6 @@ function SubbysPlushiesPageMain() {
             token: String(message.token || ""),
         };
     }
-
     function processOfferDecisionSignal(data) {
         const parsed = parseOfferDecisionSignal(data);
         if (!parsed) return false;
@@ -13057,10 +11946,8 @@ function SubbysPlushiesPageMain() {
         handleOfferDecision(parsed, "", "Hidden offer sync", parsed.token);
         return true;
     }
-
     function receiveOfferedPlush(sourceMember, sourceName, cachedSnapshot = null) {
         offerTransferReceiveAttempts++;
-
         const fail = reason => {
             offerTransferReceiveFailures++;
             lastOfferTransferFailure = {
@@ -13072,13 +11959,10 @@ function SubbysPlushiesPageMain() {
             };
             return { ok: false, reason };
         };
-
         if (!Number.isFinite(sourceMember)) return fail("Could not identify the sender's member number.");
         if (getHandheldItem(window.Player)) return fail("Your hands are occupied. Free your ItemHandheld slot and press Accept again.");
-
         const sourceCharacter = getRoomCharacterByMember(sourceMember);
         if (!sourceCharacter) return fail("The sender is no longer available in the room.");
-
         const sourceItem = getHandheldItem(sourceCharacter);
         if (isOurs(sourceItem) && itemHasActiveLock(sourceItem)) return fail("The offered plushie is locked and cannot be transferred.");
         const liveSnapshot = snapshotPlushItem(sourceItem);
@@ -13086,14 +11970,12 @@ function SubbysPlushiesPageMain() {
         if (!liveSnapshot || !snapshot || snapshot.assetName !== ASSET_NAME || snapshot.groupName !== GROUP) {
             return fail("The offered plushie is no longer in the sender's hand.");
         }
-
         const originalProperty = cloneTransferValue(sourceItem?.Property || snapshot.property || {});
         const originalCraft = cloneTransferValue(sourceItem?.Craft ?? snapshot.craft);
         const originalColor = cloneTransferValue(sourceItem?.Color ?? snapshot.color);
         const originalDifficulty = Number.isFinite(sourceItem?.Difficulty)
             ? sourceItem.Difficulty
             : snapshot.difficulty;
-
         const publishTransfer = () => {
             try {
                 if (typeof window.ChatRoomCharacterUpdate === "function") {
@@ -13110,20 +11992,16 @@ function SubbysPlushiesPageMain() {
                 warn("Offer Plushie could not publish recipient CharacterUpdate:", e);
             }
         };
-
         try {
             InventoryRemove(sourceCharacter, GROUP, false);
-
             if (isOurs(getHandheldItem(sourceCharacter)) && Array.isArray(sourceCharacter.Appearance)) {
                 sourceCharacter.Appearance = sourceCharacter.Appearance.filter(item => !(
                     item?.Asset?.Group?.Name === GROUP && item?.Asset?.Name === ASSET_NAME
                 ));
             }
-
             if (isOurs(getHandheldItem(sourceCharacter))) {
                 throw new Error("BC did not remove the sender's ItemHandheld plushie on the accepting client.");
             }
-
             const received = InventoryWear(
                 window.Player,
                 ASSET_NAME,
@@ -13134,27 +12012,22 @@ function SubbysPlushiesPageMain() {
                 originalCraft,
                 false
             );
-
             if (!isOurs(received || getHandheldItem(window.Player))) {
                 throw new Error("BC did not equip Subby's Plushies into your ItemHandheld slot.");
             }
-
             const heldReceived = received || getHandheldItem(window.Player);
             heldReceived.Property = originalProperty;
             if (originalCraft != null) heldReceived.Craft = originalCraft;
             else if (Object.prototype.hasOwnProperty.call(heldReceived, "Craft")) delete heldReceived.Craft;
-
             setItemPlushState(heldReceived, snapshot.option);
             ensureNativeTransform(heldReceived);
             rememberCharacterPlushState(window.Player, heldReceived);
             refresh(window.Player, false);
             schedulePlushStabilization(snapshot.option, heldReceived);
             syncHugTightlyActivityAvailability("Offer Plushie received");
-
             window.setTimeout(publishTransfer, 0);
             window.setTimeout(publishTransfer, 250);
             window.setTimeout(publishTransfer, 900);
-
             offerTransfersReceived++;
             lastOfferTransferReceived = {
                 sourceMember,
@@ -13176,7 +12049,6 @@ function SubbysPlushiesPageMain() {
                     InventoryRemove(window.Player, GROUP, false);
                 }
             } catch (_) {}
-
             try {
                 if (!getHandheldItem(sourceCharacter)) {
                     const restored = InventoryWear(
@@ -13195,22 +12067,18 @@ function SubbysPlushiesPageMain() {
                     }
                 }
             } catch (_) {}
-
             try { publishTransfer(); } catch (_) {}
             return fail(`Could not transfer the offered plushie: ${String(e)}`);
         }
     }
-
     function parseRenderedOfferDecision(text) {
         const value = String(text || "")
             .replace(/[\u2018\u2019]/g, "'")
             .replace(/\s+/g, " ")
             .trim();
         if (!value || !/plushie offer/i.test(value)) return null;
-
         const match = value.match(/\((\d+)\)\s+(accepts|declines)\s+.*?\((\d+)\)'s\s+plushie\s+offer\.?/i);
         if (!match) return null;
-
         const actorMember = Number(match[1]);
         const sourceMember = Number(match[3]);
         return {
@@ -13221,7 +12089,6 @@ function SubbysPlushiesPageMain() {
             sourceMember,
         };
     }
-
     function pruneRecentOfferDecisionTokens(now = Date.now()) {
         for (const [token, seenAt] of recentOfferDecisionTokens) {
             if (!Number.isFinite(seenAt) || now - seenAt > OFFER_DECISION_DEDUPE_MS) {
@@ -13229,10 +12096,8 @@ function SubbysPlushiesPageMain() {
             }
         }
     }
-
     function handleOfferDecision(parsed, text = "", triggerSource = "unknown", syncToken = "") {
         if (!parsed || !Number.isFinite(parsed.actorMember) || !Number.isFinite(parsed.sourceMember)) return false;
-
         const playerMember = Number(window.Player?.MemberNumber);
         const now = Date.now();
         lastOfferDecisionSeen = {
@@ -13242,15 +12107,12 @@ function SubbysPlushiesPageMain() {
             at: new Date(now).toISOString(),
         };
         if (!Number.isFinite(playerMember) || parsed.sourceMember !== playerMember) return false;
-
         pruneRecentOfferDecisionTokens(now);
         const decisionToken = `${parsed.actorMember}:${parsed.sourceMember}:${parsed.decision}`;
         const previousDecisionAt = recentOfferDecisionTokens.get(decisionToken);
         if (Number.isFinite(previousDecisionAt) && now - previousDecisionAt <= OFFER_DECISION_DEDUPE_MS) return true;
-
         prunePendingOutgoingPlushOffers(now);
         let pending = pendingOutgoingPlushOffers.get(parsed.actorMember);
-
         if (!pending && lastRenderedOutgoingOfferCapture &&
             lastRenderedOutgoingOfferCapture.sourceMember === playerMember &&
             lastRenderedOutgoingOfferCapture.targetMember === parsed.actorMember) {
@@ -13268,7 +12130,6 @@ function SubbysPlushiesPageMain() {
                 }
             }
         }
-
         if (!pending) {
             lastOfferTransferFailure = {
                 side: "sender",
@@ -13279,7 +12140,6 @@ function SubbysPlushiesPageMain() {
             };
             return false;
         }
-
         const incomingToken = String(syncToken || "");
         const pendingToken = String(pending.token || "");
         if (incomingToken && pendingToken && incomingToken !== pendingToken) {
@@ -13295,11 +12155,9 @@ function SubbysPlushiesPageMain() {
                 return false;
             }
         }
-
         pendingOutgoingPlushOffers.delete(parsed.actorMember);
         recentOfferDecisionTokens.set(decisionToken, now);
         if (parsed.decision !== "accepts") return true;
-
         const held = getHandheldItem(window.Player);
         if (!isOurs(held)) {
             lastOfferSenderRemoval = {
@@ -13312,7 +12170,6 @@ function SubbysPlushiesPageMain() {
             log(`Transferred plushie away to #${parsed.actorMember}; sender copy was already removed by the recipient transfer (${triggerSource}).`);
             return true;
         }
-
         const currentOption = canonicalWirePlushOption(getItemPlushOption(held));
         if (validPlushOption(pending.option) && currentOption !== pending.option) {
             offerTransferSenderRemovalFailures++;
@@ -13327,7 +12184,6 @@ function SubbysPlushiesPageMain() {
             };
             return false;
         }
-
         try {
             cancelIdleAnimation(false);
             removeSpeechBubble();
@@ -13336,19 +12192,15 @@ function SubbysPlushiesPageMain() {
             if (activeBalanceHeadSession) restoreActiveBalanceHead("Offer Plushie transferred away");
             if (activeHideBehindSession) restoreActiveHideBehind("Offer Plushie transferred away");
             if (activeProtectSession) restoreActiveProtect("Offer Plushie transferred away");
-
             suppressLocalPlushRepair("Offer Plushie transferred away", 3500);
             clearRememberedLocalPlushState();
             InventoryRemove(window.Player, GROUP, false);
-
             if (isOurs(getHandheldItem(window.Player)) && Array.isArray(window.Player?.Appearance)) {
                 window.Player.Appearance = window.Player.Appearance.filter(item => !(
                     item?.Asset?.Group?.Name === GROUP && item?.Asset?.Name === ASSET_NAME
                 ));
             }
-
             if (isOurs(getHandheldItem(window.Player))) throw new Error("ItemHandheld still contained Subby's Plushies after removal.");
-
             refresh(window.Player, false);
             const publishRemoval = () => {
                 try {
@@ -13392,7 +12244,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function processOfferDecisionAction(data) {
         if (!isChatAction(data)) return false;
         const text = getDictionaryText(data, "msg") || "";
@@ -13400,19 +12251,16 @@ function SubbysPlushiesPageMain() {
         if (!parsed) return false;
         return handleOfferDecision(parsed, text, "ChatRoomMessage");
     }
-
     function inspectRenderedOfferDecisionRow(row) {
         if (!(row instanceof Element)) return false;
         if (row.classList?.contains("SubbysPlushiesOfferPrompt")) return false;
         if (processedOfferDecisionRows.has(row)) return false;
-
         const text = String(row.textContent || "").replace(/\s+/g, " ").trim();
         const parsed = parseRenderedOfferDecision(text);
         if (!parsed) return false;
         processedOfferDecisionRows.add(row);
         return handleOfferDecision(parsed, text, "rendered chat row");
     }
-
     function sendStandaloneActionMessage(message) {
         if (typeof ServerSend !== "function" || !message) return false;
         try {
@@ -13430,7 +12278,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function getOfferChatRoot() {
         return (
             document.getElementById("TextAreaChatLog") ||
@@ -13438,10 +12285,6 @@ function SubbysPlushiesPageMain() {
             document.querySelector('[id*="ChatLog"]')
         );
     }
-
-    // Quick Reactions: local UI + hidden chat packets, never visible chat messages.
-    // Reaction targets use the original unrendered message body and sender ID;
-    // arrival-age matching avoids reliance on localized timestamps or nicknames.
     const QUICK_REACTION_CONTENT = "SubbysPlushiesQuickReactionV1";
     const QUICK_REACTION_TAG = "SubbysPlushiesQuickReaction";
     const QUICK_REACTION_SET = Object.freeze(["❤️", "😂", "😮", "👏", "🥺", "👍", "💜", "🔥"]);
@@ -13455,9 +12298,7 @@ function SubbysPlushiesPageMain() {
     let quickReactionCloseTimer = null;
     let quickReactionLastSendAt = 0;
     let quickReactionNextId = 0;
-
     function quickReactionDigest(data) {
-        // FNV-1a over public message content; no private message text is sent.
         const input = `${data.Type}\u0000${data.Sender}\u0000${data.Content}`;
         let hash = 2166136261;
         for (let i = 0; i < input.length; i++) {
@@ -13466,7 +12307,6 @@ function SubbysPlushiesPageMain() {
         }
         return (hash >>> 0).toString(16).padStart(8, "0");
     }
-
     function quickReactionEligible(data) {
         return window.CurrentScreen === "ChatRoom" &&
             !!data && (data.Type === "Chat" || data.Type === "Emote") &&
@@ -13474,12 +12314,10 @@ function SubbysPlushiesPageMain() {
             typeof data.Content === "string" && data.Content.length > 0 && data.Content.length <= 8000 &&
             (data.Target == null || Number(data.Target) === 0);
     }
-
     function quickReactionRoomKey() {
         const room = window.ChatRoomData;
         return room ? `${String(room.Space || "")}/${String(room.Name || "")}` : "";
     }
-
     function quickReactionPurge() {
         const now = Date.now();
         while (quickReactionRecords.length &&
@@ -13499,10 +12337,6 @@ function SubbysPlushiesPageMain() {
             if (now - quickReactionPending[i].received > 5000) quickReactionPending.splice(i, 1);
         }
     }
-
-    // Resolve the sender ID against the actual BC room roster. Never trust a
-    // nickname sent by an unrelated client; cache resolved names for users
-    // who leave the room after reacting.
     function quickReactionActorName(member) {
         const memberNo = Number(member);
         const people = [window.Player, ...(Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [])];
@@ -13512,9 +12346,6 @@ function SubbysPlushiesPageMain() {
         const name = current || quickReactionActorNames.get(memberNo);
         return name ? `${String(name).slice(0, 70)} (#${memberNo})` : `Member #${memberNo}`;
     }
-
-    // The tooltip is immediately visible on hover, rather than waiting for
-    // the browser's delayed native title tooltip. Use textContent (never HTML).
     function quickReactionWhoTooltip(chip, emoji, names, action) {
         const label = `${emoji} by ${names.join(', ')}. ${action}`;
         chip.setAttribute("aria-label", label);
@@ -13544,23 +12375,19 @@ function SubbysPlushiesPageMain() {
         chip.addEventListener("focus", show);
         chip.addEventListener("blur", hide);
     }
-
     function quickReactionCancelClose() {
         if (quickReactionCloseTimer != null) window.clearTimeout(quickReactionCloseTimer);
         quickReactionCloseTimer = null;
     }
-
     function quickReactionClosePicker(onlyRecord = null) {
         if (onlyRecord && quickReactionOpenPicker?.record !== onlyRecord) return;
         quickReactionCancelClose();
         if (!quickReactionOpenPicker) return;
         quickReactionOpenPicker.panel.remove();
         quickReactionOpenPicker = null;
-        // Only listen for viewport changes while a picker is displayed.
         window.removeEventListener?.("resize", quickReactionPositionPicker);
         document.removeEventListener?.("scroll", quickReactionPositionPicker, true);
     }
-
     function quickReactionScheduleClose(record, relatedTarget = null) {
         if (quickReactionOpenPicker?.record !== record) return;
         const panel = quickReactionOpenPicker.panel;
@@ -13569,14 +12396,11 @@ function SubbysPlushiesPageMain() {
             return;
         }
         quickReactionCancelClose();
-        // Allows the pointer to cross the small gap between the chat row and
-        // the floating picker without losing the menu before reaching an emoji.
         quickReactionCloseTimer = window.setTimeout(() => {
             quickReactionCloseTimer = null;
             quickReactionClosePicker(record);
         }, 220);
     }
-
     function quickReactionPositionPicker() {
         const shown = quickReactionOpenPicker;
         if (!shown) return;
@@ -13599,8 +12423,6 @@ function SubbysPlushiesPageMain() {
         const above = rowRect.top - areaTop;
         const below = areaBottom - rowRect.bottom;
         const putAbove = above >= height - 2 || (above > below && below < height - 2);
-        // Overlap the message by 2px so the pointer enters the palette
-        // directly, without triggering the neighboring chat row.
         const proposedY = putAbove ? rowRect.top - height + 2 : rowRect.bottom - 2;
         const maxY = Math.max(areaTop, areaBottom - height);
         const top = Math.max(areaTop, Math.min(maxY, proposedY));
@@ -13610,7 +12432,6 @@ function SubbysPlushiesPageMain() {
         panel.style.top = `${Math.round(top)}px`;
         panel.style.left = `${Math.round(left)}px`;
     }
-
     function quickReactionButton(label, title, onClick) {
         const button = document.createElement("button");
         button.type = "button";
@@ -13629,7 +12450,6 @@ function SubbysPlushiesPageMain() {
         button.addEventListener("mousedown", event => event.stopPropagation());
         return button;
     }
-
     function quickReactionRender(record) {
         if (!record?.row?.isConnected || !record.active) return;
         if (!getFeatureSettings().quickReactions) {
@@ -13641,8 +12461,6 @@ function SubbysPlushiesPageMain() {
         for (const emoji of record.reactions.values()) {
             counts.set(emoji, (counts.get(emoji) || 0) + 1);
         }
-        // An untouched message has no visible reaction controls. The picker
-        // appears only when someone hovers/focuses the message itself.
         if (!counts.size) {
             record.bar?.remove(); record.bar = null;
             return;
@@ -13675,7 +12493,6 @@ function SubbysPlushiesPageMain() {
             record.bar.appendChild(chip);
         }
     }
-
     function quickReactionShowPicker(record) {
         if (!getFeatureSettings().quickReactions || !record?.active || !record.row?.isConnected ||
             window.CurrentScreen !== "ChatRoom") return;
@@ -13703,9 +12520,6 @@ function SubbysPlushiesPageMain() {
                 quickReactionClosePicker(record);
             }));
         }
-        // Attach to the document, not the ChatMessage: BC's chat log clips
-        // descendants that extend outside its scrollable area. Fixed placement
-        // also keeps this above the chat input and other messages.
         document.body.appendChild(panel);
         quickReactionOpenPicker = { record, panel };
         panel.addEventListener("mouseenter", quickReactionCancelClose);
@@ -13728,7 +12542,6 @@ function SubbysPlushiesPageMain() {
         window.addEventListener?.("resize", quickReactionPositionPicker);
         document.addEventListener?.("scroll", quickReactionPositionPicker, true);
     }
-
     function quickReactionMatch(packet) {
         const now = Date.now();
         let best = null, difference = Infinity, secondDifference = Infinity;
@@ -13746,20 +12559,12 @@ function SubbysPlushiesPageMain() {
                 secondDifference = candidate;
             }
         }
-        // Fail closed: another message with identical wording should not inherit
-        // a reaction unless its approximate received-time offset matches.
-        // When two identical messages are almost indistinguishable in time,
-        // ignore remote reactions rather than silently attaching to the wrong one.
         return difference <= 12000 && secondDifference - difference >= 1500 ? best : null;
     }
-
     function quickReactionApplyPacket(packet, actor) {
         if (!getFeatureSettings().quickReactions) return false;
         const record = quickReactionMatch(packet);
         if (!record) return false;
-        // BC follows new chat content when the reader is near the bottom, but
-        // leaves manually scrolled-up history alone. Capture BEFORE rendering:
-        // adding the first badge can increase the chat log's scrollHeight.
         const scroller = packet.emoji ? quickReactionChatScroller(record) : null;
         const follow = scroller && quickReactionIsNearBottom(scroller);
         if (packet.emoji) record.reactions.set(actor, packet.emoji);
@@ -13767,8 +12572,6 @@ function SubbysPlushiesPageMain() {
         quickReactionRender(record);
         if (follow) {
             quickReactionScrollToBottom(record, scroller);
-            // Account for BC's next layout pass. If the user scrolls away in
-            // the meantime, don't override their choice on the next frame.
             if (typeof window.requestAnimationFrame === "function") {
                 window.requestAnimationFrame(() => {
                     if (quickReactionIsNearBottom(scroller)) quickReactionScrollToBottom(record, scroller);
@@ -13777,7 +12580,6 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function quickReactionProcessPending() {
         if (!getFeatureSettings().quickReactions) return;
         for (let i = quickReactionPending.length - 1; i >= 0; i--) {
@@ -13785,10 +12587,8 @@ function SubbysPlushiesPageMain() {
             if (quickReactionApplyPacket(packet, actor)) quickReactionPending.splice(i, 1);
         }
     }
-
     function quickReactionReceive(data) {
         if (!data || data.Type !== "Hidden" || data.Content !== QUICK_REACTION_CONTENT) return false;
-        // Claim our hidden protocol; never run unrelated chat handlers on it.
         if (!getFeatureSettings().quickReactions) return true;
         const raw = Array.isArray(data.Dictionary)
             ? data.Dictionary.find(item => item?.Tag === QUICK_REACTION_TAG)?.Text : null;
@@ -13813,23 +12613,16 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
-    // Resolve the same chat scroller for both native-like remote follow and
-    // locally triggered scroll. Keep per-room/row guards to avoid stale frames.
     function quickReactionChatScroller(record) {
         if (!record?.active || !record.row?.isConnected ||
             window.CurrentScreen !== "ChatRoom" || record.room !== quickReactionRoomKey()) return null;
         const root = getOfferChatRoot();
         if (!root || !root.contains(record.row)) return null;
-        // TextAreaChatLog usually scrolls, but some themes use its parent.
         for (let node = root; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
             if (Number(node.scrollHeight) > Number(node.clientHeight) + 1) return node;
         }
         return root;
     }
-
-    // Match normal chat's auto-follow behavior without dragging someone away
-    // from older messages. Use a small tolerance for fractional CSS pixels.
     function quickReactionIsNearBottom(scroller) {
         if (!scroller?.isConnected) return false;
         const top = Number(scroller.scrollTop);
@@ -13838,14 +12631,12 @@ function SubbysPlushiesPageMain() {
         return Number.isFinite(top) && Number.isFinite(height) && Number.isFinite(viewport) &&
             height - viewport - top <= 48;
     }
-
     function quickReactionScrollToBottom(record, expectedScroller = null) {
         const target = quickReactionChatScroller(record);
         if (!target || (expectedScroller && target !== expectedScroller)) return false;
         target.scrollTop = target.scrollHeight;
         return true;
     }
-
     function quickReactionSend(record, emoji) {
         if (!getFeatureSettings().quickReactions || !record?.row?.isConnected ||
             window.CurrentScreen !== "ChatRoom" || typeof window.ServerSend !== "function" ||
@@ -13868,8 +12659,6 @@ function SubbysPlushiesPageMain() {
             quickReactionLastSendAt = now;
             quickReactionSeenPackets.set(packet.token, now);
             quickReactionActorName(me);
-            // The sending client knows the exact clicked row, even when two
-            // identical messages were posted too close together to distinguish.
             if (value) record.reactions.set(me, value);
             else record.reactions.delete(me);
             quickReactionRender(record);
@@ -13885,7 +12674,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function quickReactionAttachRow(row, context) {
         if (!(row instanceof Element) || !row.classList.contains("ChatMessage") ||
             row.classList.contains("ChatMessageLocalMessage") ||
@@ -13898,9 +12686,7 @@ function SubbysPlushiesPageMain() {
             signature: context.signature, created: context.created, reactions: new Map(), bar: null,
             active: true, priorPosition: row.style.position || "", priorTabIndex: row.tabIndex,
         };
-        // Avoid shifting the chat history when the picker opens.
         if (!row.style.position) row.style.position = "relative";
-        // Also allow keyboard users to focus the message and select an emoji.
         if (row.tabIndex < 0) row.tabIndex = 0;
         row.addEventListener("mouseenter", () => quickReactionShowPicker(record));
         row.addEventListener("mouseleave", event => quickReactionScheduleClose(record, event.relatedTarget));
@@ -13924,15 +12710,12 @@ function SubbysPlushiesPageMain() {
         quickReactionProcessPending();
         return true;
     }
-
     function quickReactionCaptureAppendedRow(node) {
         const context = quickReactionRendering;
         if (!context || !(node instanceof Element)) return;
         const row = node.classList.contains("ChatMessage") ? node : node.closest(".ChatMessage");
         if (row && !context.row) context.row = row;
-        // Rendering finishes in the outer ChatRoomMessage hook after append.
     }
-
     function quickReactionTrackIncoming(data, next) {
         const context = {
             sender: Number(data.Sender), kind: data.Type, signature: quickReactionDigest(data),
@@ -13959,13 +12742,11 @@ function SubbysPlushiesPageMain() {
         if (!attach()) window.setTimeout(attach, 80);
         return result;
     }
-
     function quickReactionUpdateVisibility() {
         quickReactionClosePicker();
         for (const record of quickReactionRecords) quickReactionRender(record);
         if (!getFeatureSettings().quickReactions) quickReactionPending.length = 0;
     }
-
     function quickReactionReset() {
         quickReactionClosePicker();
         for (const record of quickReactionRecords) {
@@ -13981,8 +12762,6 @@ function SubbysPlushiesPageMain() {
         quickReactionRendering = null;
         quickReactionLastSendAt = 0;
     }
-
-    // Read-only diagnostic entrypoint for verifying packet/DOM hooks in BC.
     Object.defineProperty(window, "SubbysQuickReactions", {
         configurable: true,
         value: Object.freeze({
@@ -13994,7 +12773,6 @@ function SubbysPlushiesPageMain() {
             toggle: () => toggleFeatureSetting("quickReactions"),
         }),
     });
-
     const MY_NAME_HIGHLIGHT_CLASS = "SubbysPlushiesMyNameHighlight";
     const MY_NAME_HIGHLIGHT_IGNORE_SELECTOR = [
         "a", "button", "input", "textarea", "select", "script", "style", "code",
@@ -14004,7 +12782,6 @@ function SubbysPlushiesPageMain() {
         ".SubbysPlushiesOfferPrompt", ".SubbysPlushiesQuickReactions", ".SubbysPlushiesReactionPicker", "." + MY_NAME_HIGHLIGHT_CLASS,
         "[contenteditable]"
     ].join(",");
-
     function myCharacterMentionName() {
         const player = window.Player;
         const nickname = typeof player?.Nickname === "string" ? player.Nickname.trim() : "";
@@ -14012,12 +12789,10 @@ function SubbysPlushiesPageMain() {
         const name = nickname || characterName;
         return name.length >= 2 && name.length <= 80 ? name : "";
     }
-
     function myNameMentionPattern(name) {
         const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         return new RegExp("(^|[^\\p{L}\\p{N}_])(" + escaped + ")(?=$|[^\\p{L}\\p{N}_])", "giu");
     }
-
     function clearMyNameHighlights() {
         const root = getOfferChatRoot();
         if (!root) return;
@@ -14029,13 +12804,11 @@ function SubbysPlushiesPageMain() {
             parent.normalize();
         }
     }
-
     function highlightMyNameInRow(row, name, matcher) {
         if (!(row instanceof Element) || !name || !matcher) return 0;
         if (!row.classList.contains("ChatMessage") ||
             row.classList.contains("ChatMessageLocalMessage") ||
             row.classList.contains("SubbysPlushiesOfferPrompt")) return 0;
-
         const nodes = [];
         const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
         while (walker.nextNode() && nodes.length < 120) {
@@ -14046,7 +12819,6 @@ function SubbysPlushiesPageMain() {
             if (content.length > 8192 || !content.toLocaleLowerCase().includes(name.toLocaleLowerCase())) continue;
             nodes.push(node);
         }
-
         let highlighted = 0;
         for (const node of nodes) {
             const original = node.nodeValue || "";
@@ -14080,7 +12852,6 @@ function SubbysPlushiesPageMain() {
         }
         return highlighted;
     }
-
     function highlightMyNameInAppendedChat(node) {
         if (!getFeatureSettings().highlightMyName || window.CurrentScreen !== "ChatRoom") return 0;
         const root = getOfferChatRoot();
@@ -14097,7 +12868,6 @@ function SubbysPlushiesPageMain() {
         for (const row of rows.slice(0, 20)) matches += highlightMyNameInRow(row, name, matcher);
         return matches;
     }
-
     function highlightMyNameInVisibleChat() {
         if (!getFeatureSettings().highlightMyName || window.CurrentScreen !== "ChatRoom") return 0;
         const root = getOfferChatRoot();
@@ -14112,7 +12882,6 @@ function SubbysPlushiesPageMain() {
         }
         return matches;
     }
-
     function normalizeOfferName(value) {
         return String(value || "")
             .replace(/[\u2018\u2019]/g, "'")
@@ -14120,7 +12889,6 @@ function SubbysPlushiesPageMain() {
             .toLocaleLowerCase()
             .replace(/\s+/g, " ");
     }
-
     function localOfferNameVariants() {
         const names = [
             getCharacterDisplayName(window.Player),
@@ -14128,7 +12896,6 @@ function SubbysPlushiesPageMain() {
             window.Player?.Name,
             window.Player?.AccountName,
         ].filter(Boolean);
-
         const result = new Set();
         for (const value of names) {
             const name = normalizeOfferName(value);
@@ -14139,31 +12906,25 @@ function SubbysPlushiesPageMain() {
         }
         return result;
     }
-
     function parseRenderedOfferAction(text) {
         let value = String(text || "").replace(/\s+/g, " ").trim();
         if (!value) return null;
-
         value = value.replace(/^\(+\s*/, "");
         const match = value.match(/(.+?)\s+offers?\s+(?:the|a)\s+plushie\s+to\s+(.+?)\.(?:\s|\)|$)/i);
         if (!match) return null;
-
         const sourceName = String(match[1] || "").replace(/^\(+\s*/, "").trim();
         const targetName = String(match[2] || "").trim();
         if (!sourceName || !targetName) return null;
         return { sourceName, targetName };
     }
-
     function offerTargetIsLocalPlayer(targetName) {
         const target = normalizeOfferName(targetName);
         if (!target) return false;
         return localOfferNameVariants().has(target);
     }
-
     function findOfferSourceMember(sourceName) {
         const wanted = normalizeOfferName(sourceName);
         if (!wanted || !Array.isArray(window.ChatRoomCharacter)) return null;
-
         for (const C of window.ChatRoomCharacter) {
             const names = [getCharacterDisplayName(C), C?.Nickname, C?.Name, C?.AccountName]
                 .filter(Boolean)
@@ -14172,20 +12933,16 @@ function SubbysPlushiesPageMain() {
         }
         return null;
     }
-
     function findOfferTargetMember(targetName) {
         const wanted = normalizeOfferName(targetName);
         if (!wanted) return null;
-
         const variants = new Set([wanted]);
         if (wanted.endsWith("'s")) variants.add(wanted.slice(0, -2));
         if (wanted.endsWith("s'")) variants.add(wanted.slice(0, -1));
-
         const characters = [
             window.Player,
             ...(Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : []),
         ].filter(Boolean);
-
         for (const C of characters) {
             if (!Number.isFinite(C?.MemberNumber)) continue;
             const names = [getCharacterDisplayName(C), C?.Nickname, C?.Name, C?.AccountName]
@@ -14195,14 +12952,12 @@ function SubbysPlushiesPageMain() {
         }
         return null;
     }
-
     function getRoomCharacterByMember(memberNumber) {
         if (!Number.isFinite(memberNumber)) return null;
         if (Number(window.Player?.MemberNumber) === memberNumber) return window.Player;
         if (!Array.isArray(window.ChatRoomCharacter)) return null;
         return window.ChatRoomCharacter.find(C => Number(C?.MemberNumber) === memberNumber) || null;
     }
-
     function formatOfferCharacterLabel(name, memberNumber) {
         const canonical = Number.isFinite(memberNumber)
             ? getCharacterDisplayName(getRoomCharacterByMember(Number(memberNumber)))
@@ -14212,25 +12967,20 @@ function SubbysPlushiesPageMain() {
             ? `${cleanName}(${memberNumber})`
             : cleanName;
     }
-
     function resolveRenderedOfferSource(row, renderedSource) {
         let sourceName = String(renderedSource || "").trim();
         let sourceMember = null;
-
         const rowSender = Number(row?.dataset?.sender ?? row?.getAttribute?.("data-sender"));
         if (Number.isFinite(rowSender)) sourceMember = rowSender;
-
         const decorated = sourceName.match(/(?:^|\D)(\d{3,})\s*\(\s*([^()]*)$/);
         if (decorated) {
             const parsedMember = Number(decorated[1]);
             if (!Number.isFinite(sourceMember) && Number.isFinite(parsedMember)) sourceMember = parsedMember;
             if (decorated[2]?.trim()) sourceName = decorated[2].trim();
         }
-
         const sourceCharacter = getRoomCharacterByMember(sourceMember);
         const memberName = getCharacterDisplayName(sourceCharacter);
         if (memberName) sourceName = memberName;
-
         if (Array.isArray(window.ChatRoomCharacter)) {
             const rendered = normalizeOfferName(sourceName);
             let best = null;
@@ -14252,35 +13002,28 @@ function SubbysPlushiesPageMain() {
                 sourceMember = best.member;
             }
         }
-
         return {
             sourceName: sourceName || "Someone",
             sourceMember: Number.isFinite(sourceMember) ? sourceMember : findOfferSourceMember(sourceName),
         };
     }
-
     function inspectRenderedOfferRow(row) {
         if (!(row instanceof Element)) return false;
         if (row.classList?.contains("SubbysPlushiesOfferPrompt")) return false;
         if (processedOfferChatRows.has(row)) return false;
-
         const text = String(row.textContent || "").replace(/\s+/g, " ").trim();
         if (!text) return false;
         offerChatRowsSeen++;
-
         const parsed = parseRenderedOfferAction(text);
         if (!parsed) return false;
-
         processedOfferChatRows.add(row);
         offerChatOfferCandidates++;
-
         const targetIsLocal = offerTargetIsLocalPlayer(parsed.targetName);
         const resolvedSource = resolveRenderedOfferSource(row, parsed.sourceName);
         const sourceMember = resolvedSource.sourceMember;
         const sourceName = resolvedSource.sourceName;
         const targetMember = findOfferTargetMember(parsed.targetName);
         const playerMember = Number(window.Player?.MemberNumber);
-
         if (Number.isFinite(playerMember) && sourceMember === playerMember &&
             Number.isFinite(targetMember) && targetMember !== playerMember) {
             const captureToken = `offer-rendered:${playerMember}:${targetMember}:${Date.now()}`;
@@ -14294,7 +13037,6 @@ function SubbysPlushiesPageMain() {
                 };
             }
         }
-
         lastOfferChatRow = {
             text,
             sourceName,
@@ -14305,61 +13047,47 @@ function SubbysPlushiesPageMain() {
             targetIsLocal,
             at: new Date().toISOString(),
         };
-
         if (!targetIsLocal) return false;
-
         const token = `offer-chat:${sourceMember ?? "unknown"}:${playerMember ?? "local"}:${Date.now()}`;
         const now = Date.now();
         pruneOfferPromptTokens(now);
         if (seenOfferPromptTokens.has(token)) return false;
         seenOfferPromptTokens.set(token, now);
-
         offerChatPromptsTriggered++;
         showOfferPromptInChat(sourceName, sourceMember, token);
         return true;
     }
-
     function parseRenderedBalanceHeadSelfAction(text) {
         let value = String(text || "").replace(/\s+/g, " ").trim();
         if (!value) return null;
-
         value = value.replace(/^\(+\s*/, "");
         const match = value.match(/(.+?)\s+(?:tries\s+to\s+balance|balances)\s+the\s+plushie\s+on\s+their\s+head\.(?:\s|\)|$)/i);
         if (!match) return null;
-
         const sourceName = String(match[1] || "").replace(/^\(+\s*/, "").trim();
         return sourceName ? { sourceName } : null;
     }
-
     function balanceRenderedSourceIsLocal(sourceName, sourceMember) {
         const playerMember = Number(window.Player?.MemberNumber);
         if (Number.isFinite(playerMember) && Number.isFinite(sourceMember)) {
             return playerMember === sourceMember;
         }
-
         const source = normalizeOfferName(sourceName);
         return !!source && localOfferNameVariants().has(source);
     }
-
     function inspectRenderedBalanceHeadRow(row) {
         if (!(row instanceof Element)) return false;
         if (row.classList?.contains("SubbysPlushiesOfferPrompt")) return false;
         if (processedBalanceHeadChatRows.has(row)) return false;
-
         const text = String(row.textContent || "").replace(/\s+/g, " ").trim();
         if (!text) return false;
-
         const parsed = parseRenderedBalanceHeadSelfAction(text);
         if (!parsed) return false;
-
         processedBalanceHeadChatRows.add(row);
         balanceHeadRenderedActionsSeen++;
-
         const resolvedSource = resolveRenderedOfferSource(row, parsed.sourceName);
         const sourceName = resolvedSource.sourceName;
         const sourceMember = resolvedSource.sourceMember;
         const isLocal = balanceRenderedSourceIsLocal(sourceName, sourceMember);
-
         lastBalanceHeadRenderedAction = {
             text,
             sourceName,
@@ -14367,11 +13095,8 @@ function SubbysPlushiesPageMain() {
             isLocal,
             at: new Date().toISOString(),
         };
-
         if (!isLocal || !isOurs(getHeld(window.Player))) return false;
-
         if (balanceHeadMinigameElement?.isConnected || Date.now() - balanceHeadMinigameStartedAt < 8000) return true;
-
         balanceHeadRenderedTriggerCount++;
         lastBalanceHeadTriggerSource = "rendered self-action";
         window.setTimeout(() => {
@@ -14380,38 +13105,29 @@ function SubbysPlushiesPageMain() {
         }, 30);
         return true;
     }
-
     function parseRenderedHideBehindSelfAction(text) {
         let value = String(text || "").replace(/\s+/g, " ").trim();
         if (!value) return null;
-
         value = value.replace(/^\(+\s*/, "");
         const match = value.match(/(.+?)\s+hides\s+their\s+face\s+behind\s+the\s+plushie\.(?:\s|\)|$)/i);
         if (!match) return null;
-
         const sourceName = String(match[1] || "").replace(/^\(+\s*/, "").trim();
         return sourceName ? { sourceName } : null;
     }
-
     function inspectRenderedHideBehindRow(row) {
         if (!(row instanceof Element)) return false;
         if (row.classList?.contains("SubbysPlushiesOfferPrompt")) return false;
         if (processedHideBehindChatRows.has(row)) return false;
-
         const text = String(row.textContent || "").replace(/\s+/g, " ").trim();
         if (!text) return false;
-
         const parsed = parseRenderedHideBehindSelfAction(text);
         if (!parsed) return false;
-
         processedHideBehindChatRows.add(row);
         hideBehindRenderedActionsSeen++;
-
         const resolvedSource = resolveRenderedOfferSource(row, parsed.sourceName);
         const sourceName = resolvedSource.sourceName;
         const sourceMember = resolvedSource.sourceMember;
         const isLocal = balanceRenderedSourceIsLocal(sourceName, sourceMember);
-
         lastHideBehindRenderedAction = {
             text,
             sourceName,
@@ -14419,12 +13135,9 @@ function SubbysPlushiesPageMain() {
             isLocal,
             at: new Date().toISOString(),
         };
-
         if (!isLocal || !isOurs(getHeld(window.Player))) return false;
-
         const now = Date.now();
         if (activeHideBehindSession && now - activeHideBehindSession.startedAt < 1000) return true;
-
         hideBehindRenderedTriggerCount++;
         lastHideBehindTriggerSource = "rendered self-action";
         window.setTimeout(() => {
@@ -14433,15 +13146,12 @@ function SubbysPlushiesPageMain() {
         }, 30);
         return true;
     }
-
     function inspectOfferMutationNode(node, root) {
         if (!node) return;
-
         let element = null;
         if (node.nodeType === Node.ELEMENT_NODE) element = node;
         else if (node.parentElement) element = node.parentElement;
         if (!element) return;
-
         let row = element.closest?.(".ChatMessage") || null;
         if (!row && root) {
             let current = element;
@@ -14451,12 +13161,10 @@ function SubbysPlushiesPageMain() {
             if (current?.parentElement === root) row = current;
         }
         if (!row) row = element;
-
         const text = String(row.textContent || "");
         const normalPlushRow = /plushie|balances|accepts|declines|hides/i.test(text);
         const protectRow = getFeatureSettings().protectMe && isOurs(getHeld(window.Player)) && PROTECT_RENDER_VERB_RE.test(text);
         if (!normalPlushRow && !protectRow) return;
-
         if (/plushie\s+battle/i.test(text) || /battle\s+result/i.test(text)) {
             row.classList?.add("SubbysPlushiesBattleMessage");
             Object.assign(row.style, {
@@ -14466,22 +13174,18 @@ function SubbysPlushiesPageMain() {
                 paddingBottom: "1px",
             });
         }
-
         inspectRenderedOfferRow(row);
         inspectRenderedOfferDecisionRow(row);
         inspectRenderedBalanceHeadRow(row);
         inspectRenderedHideBehindRow(row);
         if (protectRow) inspectRenderedProtectRow(row);
     }
-
     function ensureOfferChatObserver(reason = "monitor") {
         if (offerChatObserver && offerChatObservedRoot?.isConnected) return true;
         const root = getOfferChatRoot();
         if (!root) return false;
         if (offerChatObserver && offerChatObservedRoot === root) return true;
-
         try { offerChatObserver?.disconnect?.(); } catch (_) {}
-
         const observer = new MutationObserver(mutations => {
             for (const mutation of mutations) {
                 if (mutation.type === "childList") {
@@ -14492,7 +13196,6 @@ function SubbysPlushiesPageMain() {
                 }
             }
         });
-
         observer.observe(root, { childList: true, subtree: true });
         offerChatObserver = observer;
         offerChatObservedRoot = root;
@@ -14500,7 +13203,6 @@ function SubbysPlushiesPageMain() {
         log(`Watching BC chat for Offer Plushie, Balance-on-Head, and Hide-Behind actions (${reason}).`);
         return true;
     }
-
     function stopOfferChatObserver() {
         try { offerChatObserver?.disconnect?.(); } catch (_) {}
         offerChatObserver = null;
@@ -14508,7 +13210,6 @@ function SubbysPlushiesPageMain() {
         if (offerChatObserverMonitor != null) window.clearTimeout(offerChatObserverMonitor);
         offerChatObserverMonitor = null;
     }
-
     function startOfferChatObserverMonitor() {
         if (installedHooks.has("ChatRoomAppendChat")) {
             stopOfferChatObserver();
@@ -14516,36 +13217,28 @@ function SubbysPlushiesPageMain() {
         }
         return ensureOfferChatObserver("fallback");
     }
-
     function closeOfferPrompt() {
         if (!offerPromptElement) return;
-
         try {
             const controls = offerPromptElement.querySelector?.(".SubbysPlushiesOfferControls");
             if (controls) {
                 for (const button of controls.querySelectorAll("button")) button.disabled = true;
             }
         } catch (_) {}
-
         offerPromptElement = null;
     }
-
     function appendOfferPromptToNativeChat(sourceName, sourceMember, token) {
         if (typeof window.ChatRoomAppendChat !== "function") {
             warn("ChatRoomAppendChat is unavailable; cannot display the Offer Plushie prompt safely.");
             return false;
         }
-
         closeOfferPrompt();
-
         const row = document.createElement("div");
         row.className = "ChatMessage SubbysPlushiesOfferPrompt";
         row.setAttribute("data-subbys-plushies-offer", token);
-
         if (Number.isFinite(window.Player?.MemberNumber)) {
             row.dataset.target = String(window.Player.MemberNumber);
         }
-
         Object.assign(row.style, {
             boxSizing: "border-box",
             width: "calc(100% - 8px)",
@@ -14556,20 +13249,16 @@ function SubbysPlushiesPageMain() {
             lineHeight: "1.35",
             fontSize: "13px",
         });
-
         const sourceLabel = formatOfferCharacterLabel(sourceName, sourceMember);
         let offeredSnapshot = captureOfferedPlushSnapshot(sourceMember);
-
         const message = document.createElement("div");
         message.className = "SubbysPlushiesOfferMessage";
         const sourcePronouns = characterPronouns(getRoomCharacterByMember(sourceMember));
         message.textContent = `(${sourceLabel} is offering you ${sourcePronouns.possessive} plushie.)`;
-
         const question = document.createElement("div");
         question.className = "SubbysPlushiesOfferQuestion";
         question.textContent = "Do you want to accept it?";
         question.style.marginTop = "3px";
-
         const controls = document.createElement("div");
         controls.className = "SubbysPlushiesOfferControls";
         Object.assign(controls.style, {
@@ -14579,7 +13268,6 @@ function SubbysPlushiesPageMain() {
             alignItems: "center",
             flexWrap: "wrap",
         });
-
         const makeButton = (label, className) => {
             const button = document.createElement("button");
             button.type = "button";
@@ -14593,20 +13281,16 @@ function SubbysPlushiesPageMain() {
             });
             return button;
         };
-
         const accept = makeButton("Accept", "SubbysPlushiesOfferAccept");
         const decline = makeButton("Decline", "SubbysPlushiesOfferDecline");
-
         const decide = accepted => {
             if (!row.isConnected || row.getAttribute("data-subbys-plushies-decided") === "true") return;
-
             const playerName = getCharacterDisplayName(window.Player) || "Someone";
             const playerMember = Number.isFinite(window.Player?.MemberNumber) ? window.Player.MemberNumber : null;
             if (!Number.isFinite(playerMember) || !Number.isFinite(sourceMember)) {
                 question.textContent = "Could not synchronize this plushie transfer because a member number is missing.";
                 return;
             }
-
             if (accepted) {
                 const transfer = receiveOfferedPlush(sourceMember, sourceName, offeredSnapshot);
                 if (!transfer.ok) {
@@ -14615,14 +13299,12 @@ function SubbysPlushiesPageMain() {
                 }
                 offeredSnapshot = transfer.snapshot;
             }
-
             const signalSent = sendOfferDecisionSignal(
                 sourceMember,
                 playerMember,
                 token,
                 accepted ? "accepts" : "declines"
             );
-
             if (!signalSent && accepted) {
                 try {
                     suppressLocalPlushRepair("Offer Plushie sync failure rollback", 1200);
@@ -14635,41 +13317,33 @@ function SubbysPlushiesPageMain() {
                 question.textContent = "Could not notify the sender. The transfer was cancelled; press Accept to try again.";
                 return;
             }
-
             row.setAttribute("data-subbys-plushies-decided", "true");
             accept.disabled = true;
             decline.disabled = true;
-
             const playerLabel = formatOfferCharacterLabel(playerName, playerMember);
             question.textContent = accepted ? "Accepted — plushie transferred." : "Declined.";
             controls.remove();
-
             sendStandaloneActionMessage(
                 accepted
                     ? `${playerLabel} accepts ${sourceLabel}'s plushie offer.`
                     : `${playerLabel} declines ${sourceLabel}'s plushie offer.`
             );
-
             if (offerPromptElement === row) offerPromptElement = null;
         };
-
         accept.addEventListener("click", event => {
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
             decide(true);
         });
-
         decline.addEventListener("click", event => {
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
             decide(false);
         });
-
         controls.append(accept, decline);
         row.append(message, question, controls);
-
         try {
             window.ChatRoomAppendChat(row);
             row.removeAttribute("data-time");
@@ -14682,7 +13356,6 @@ function SubbysPlushiesPageMain() {
             warn("BC could not append the Offer Plushie prompt to chat:", e);
             return false;
         }
-
         offerPromptElement = row;
         offerPromptsDisplayed++;
         lastOfferPromptDisplayed = {
@@ -14694,10 +13367,8 @@ function SubbysPlushiesPageMain() {
         log(`Displayed Offer Plushie prompt in BC chat from ${sourceName}.`);
         return true;
     }
-
     function showOfferPromptInChat(sourceName, sourceMember, token) {
         const delays = [0, 80, 250, 600];
-
         for (const delay of delays) {
             window.setTimeout(() => {
                 if (
@@ -14706,26 +13377,20 @@ function SubbysPlushiesPageMain() {
                 ) {
                     return;
                 }
-
                 appendOfferPromptToNativeChat(sourceName, sourceMember, token);
             }, delay);
         }
     }
-
     function maybePromptOfferRecipient(data) {
         const spec = getCustomActivityFromAction(data);
         const readableMessage = getDictionaryText(data, "msg");
-
         const isOffer =
             spec?.key === "offer" ||
             (typeof readableMessage === "string" && /offers? (?:the|a) plushie to /i.test(readableMessage));
-
         if (!isOffer) return false;
-
         const context = getActionCharacterContext(data);
         const playerMember = window.Player?.MemberNumber;
         if (!Number.isFinite(playerMember)) return false;
-
         offerVisibleActionsSeen++;
         lastOfferActionSeen = {
             sender: Number.isFinite(Number(data?.Sender)) ? Number(data.Sender) : null,
@@ -14742,14 +13407,11 @@ function SubbysPlushiesPageMain() {
                 : null,
             at: new Date().toISOString(),
         };
-
         if (context.sourceMember === playerMember || Number(data?.Sender) === playerMember) {
             return false;
         }
-
         const normalizeName = value =>
             String(value || "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
-
         const playerNames = [
             getCharacterDisplayName(window.Player),
             window.Player?.Nickname,
@@ -14758,14 +13420,11 @@ function SubbysPlushiesPageMain() {
         ]
             .filter(Boolean)
             .map(normalizeName);
-
         const memberMatches =
             Number.isFinite(context.targetMember) &&
             context.targetMember === playerMember;
-
         const normalizedTarget = normalizeName(context.targetName);
         const nameMatches = !!normalizedTarget && playerNames.includes(normalizedTarget);
-
         let readableMatches = false;
         if (typeof readableMessage === "string") {
             const readable = normalizeName(readableMessage);
@@ -14774,35 +13433,28 @@ function SubbysPlushiesPageMain() {
                 readable.includes(`offers a plushie to ${name}`)
             );
         }
-
         if (!memberMatches && !nameMatches && !readableMatches) return false;
-
         const token =
             getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG) ||
             `offer-action:${context.sourceMember ?? data?.Sender ?? "unknown"}:${context.targetMember ?? playerMember}:${Date.now()}`;
-
         const now = Date.now();
         pruneOfferPromptTokens(now);
         if (seenOfferPromptTokens.has(token)) return false;
         seenOfferPromptTokens.set(token, now);
-
         let sourceName = context.sourceName;
         if (!sourceName && Number.isFinite(context.sourceMember) && Array.isArray(window.ChatRoomCharacter)) {
             const sourceCharacter = window.ChatRoomCharacter.find(C => C?.MemberNumber === context.sourceMember);
             sourceName = getCharacterDisplayName(sourceCharacter);
         }
         sourceName ||= "Someone";
-
         offerVisiblePromptsTriggered++;
         showOfferPromptInChat(sourceName, context.sourceMember, token);
         return true;
     }
-
     function getActivePlushLayerName(item) {
         const option = getItemPlushOption(item);
         return validPlushOption(option) ? `Plush${option + 1}` : null;
     }
-
     function snapshotLayerTransform(property, layerName) {
         const snapshot = {};
         for (const propName of ["TranslationX", "TranslationY", "Rotation"]) {
@@ -14817,11 +13469,9 @@ function SubbysPlushiesPageMain() {
         }
         return snapshot;
     }
-
     function setPlushLayerTransform(item, layerName, values) {
         const property = getProperty(item);
         if (!property || !layerName) return false;
-
         let changed = false;
         for (const [propName, value] of Object.entries(values)) {
             if (!Number.isFinite(value)) continue;
@@ -14841,16 +13491,13 @@ function SubbysPlushiesPageMain() {
         }
         return changed;
     }
-
     function restorePlushLayerTransform(item, layerName, snapshot) {
         const property = getProperty(item);
         if (!property || !layerName || !snapshot) return false;
-
         for (const propName of ["TranslationX", "TranslationY", "Rotation"]) {
             const key = `Layer${propName}`;
             const saved = snapshot[propName];
             if (!saved) continue;
-
             if (saved.hadValue) {
                 if (!property[key] || typeof property[key] !== "object" || Array.isArray(property[key])) {
                     property[key] = {};
@@ -14858,7 +13505,6 @@ function SubbysPlushiesPageMain() {
                 property[key][layerName] = saved.value;
                 continue;
             }
-
             const record = property[key];
             if (record && typeof record === "object" && !Array.isArray(record)) {
                 delete record[layerName];
@@ -14868,7 +13514,6 @@ function SubbysPlushiesPageMain() {
         if (item === getHeld(window.Player)) scheduleLocalOverlayReposition();
         return true;
     }
-
     function redrawAndPublishBalanceHead(reason) {
         const redrawn = rebuildCharacterCanvas(window.Player, reason);
         if (!redrawn) {
@@ -14878,7 +13523,6 @@ function SubbysPlushiesPageMain() {
                 warn(`Balance Plushie redraw failed (${reason}):`, e);
             }
         }
-
         try {
             if (typeof ChatRoomCharacterUpdate === "function") {
                 ChatRoomCharacterUpdate(window.Player);
@@ -14887,13 +13531,10 @@ function SubbysPlushiesPageMain() {
             warn(`Balance Plushie publish failed (${reason}):`, e);
         }
     }
-
     function restoreActiveBalanceHead(reason = "timer") {
         const session = activeBalanceHeadSession;
         if (!session) return false;
-
         activeBalanceHeadSession = null;
-
         const current = getHeld(window.Player);
         if (!isOurs(current)) {
             lastBalanceHeadEffect = {
@@ -14905,10 +13546,8 @@ function SubbysPlushiesPageMain() {
             };
             return false;
         }
-
         restorePlushLayerTransform(current, session.layerName, session.originalLayerTransform);
         redrawAndPublishBalanceHead("Balance Plushie on Head restore");
-
         lastBalanceHeadEffect = {
             active: false,
             restoredAt: new Date().toISOString(),
@@ -14918,7 +13557,6 @@ function SubbysPlushiesPageMain() {
         };
         return true;
     }
-
     function closeBalanceHeadMinigame() {
         if (balanceHeadMinigameAnimationFrame != null) cancelAnimationFrame(balanceHeadMinigameAnimationFrame);
         balanceHeadMinigameAnimationFrame = null;
@@ -14930,13 +13568,11 @@ function SubbysPlushiesPageMain() {
         balanceHeadMinigameElement = null;
         return true;
     }
-
     function startBalanceHeadMinigame() {
         if (window.CurrentScreen !== "ChatRoom" || !isOurs(getHeld(window.Player))) return false;
         if (balanceHeadMinigameElement?.isConnected) return true;
         if (Date.now() - balanceHeadMinigameStartedAt < 700) return true;
         balanceHeadMinigameStartedAt = Date.now();
-
         const root = document.createElement("div");
         root.className = "SubbysPlushiesBalanceMinigame";
         Object.assign(root.style, {
@@ -14978,7 +13614,6 @@ function SubbysPlushiesPageMain() {
         controls.append(balance, stop, cancel);
         panel.append(title, instruction, progress, track, controls);
         root.appendChild(panel); document.body.appendChild(root); balanceHeadMinigameElement = root;
-
         let stage = 1;
         let earnedSeconds = 0;
         let targetStart = 0;
@@ -14987,7 +13622,6 @@ function SubbysPlushiesPageMain() {
         let stageStartedAt = performance.now();
         let markerPosition = 0;
         let finished = false;
-
         const configureStage = () => {
             targetWidth = Math.max(0.07, 0.20 - (stage - 1) * 0.022);
             targetStart = 0.04 + Math.random() * Math.max(0.01, 0.92 - targetWidth);
@@ -15003,7 +13637,6 @@ function SubbysPlushiesPageMain() {
             stop.disabled = earnedSeconds <= 0;
             stageStartedAt = performance.now();
         };
-
         const cleanup = () => closeBalanceHeadMinigame();
         const award = (reason = "completed") => {
             if (earnedSeconds <= 0) return false;
@@ -15070,25 +13703,19 @@ function SubbysPlushiesPageMain() {
         }, 30000);
         return true;
     }
-
     function movePlushToHeadTemporarily(durationMs = BALANCE_HEAD_DURATION_MS) {
         if (activeIdleAnimationSession) cancelIdleAnimation();
         if (activeHideBehindSession) restoreActiveHideBehind("replaced by Balance Plushie on Head");
         if (activeProtectSession) restoreActiveProtect("replaced by Balance Plushie on Head");
         if (activeBalanceHeadSession) restoreActiveBalanceHead("restarted");
-
         const item = getHeld(window.Player);
         if (!isOurs(item)) return false;
-
         ensureNativeTransform(item);
         const property = getProperty(item);
         const layerName = getActivePlushLayerName(item);
         if (!property || !layerName) return false;
-
         const originalLayerTransform = snapshotLayerTransform(property, layerName);
-
         const headLayerTransform = { ...BALANCE_HEAD_TRANSFORM };
-
         const generation = ++balanceHeadGeneration;
         activeBalanceHeadSession = {
             generation,
@@ -15097,14 +13724,11 @@ function SubbysPlushiesPageMain() {
             headLayerTransform,
             startedAt: Date.now(),
         };
-
         if (!setPlushLayerTransform(item, layerName, headLayerTransform)) {
             activeBalanceHeadSession = null;
             return false;
         }
-
         redrawAndPublishBalanceHead("Balance Plushie on Head start");
-
         lastBalanceHeadEffect = {
             active: true,
             startedAt: new Date().toISOString(),
@@ -15113,16 +13737,13 @@ function SubbysPlushiesPageMain() {
             headLayerTransform,
             originalLayerTransform,
         };
-
         const restoreAfterMs = Math.max(BALANCE_HEAD_BASE_DURATION_MS, Math.min(BALANCE_HEAD_MAX_DURATION_MS, Number(durationMs) || BALANCE_HEAD_DURATION_MS));
         window.setTimeout(() => {
             if (!activeBalanceHeadSession || activeBalanceHeadSession.generation !== generation) return;
             restoreActiveBalanceHead(`${Math.round(restoreAfterMs / 1000)}-second timer`);
         }, restoreAfterMs);
-
         return true;
     }
-
     function redrawAndPublishHideBehind(reason) {
         const redrawn = rebuildCharacterCanvas(window.Player, reason);
         if (!redrawn) {
@@ -15132,20 +13753,16 @@ function SubbysPlushiesPageMain() {
                 warn(`Hide Behind Plushie redraw failed (${reason}):`, e);
             }
         }
-
         try {
             if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(window.Player);
         } catch (e) {
             warn(`Hide Behind Plushie publish failed (${reason}):`, e);
         }
     }
-
     function restoreActiveHideBehind(reason = "timer") {
         const session = activeHideBehindSession;
         if (!session) return false;
-
         activeHideBehindSession = null;
-
         const current = getHeld(window.Player);
         if (!isOurs(current)) {
             lastHideBehindEffect = {
@@ -15157,10 +13774,8 @@ function SubbysPlushiesPageMain() {
             };
             return false;
         }
-
         restorePlushLayerTransform(current, session.layerName, session.originalLayerTransform);
         redrawAndPublishHideBehind("Hide Behind Plushie restore");
-
         lastHideBehindEffect = {
             active: false,
             restoredAt: new Date().toISOString(),
@@ -15170,25 +13785,20 @@ function SubbysPlushiesPageMain() {
         };
         return true;
     }
-
     function movePlushInFrontOfFaceTemporarily() {
         if (activeIdleAnimationSession) cancelIdleAnimation();
         if (activeBalanceHeadSession) restoreActiveBalanceHead("replaced by Hide Behind Plushie");
         if (activeProtectSession) restoreActiveProtect("replaced by Hide Behind Plushie");
         if (activeHideBehindSession) restoreActiveHideBehind("restarted");
-
         const item = getHeld(window.Player);
         if (!isOurs(item)) return false;
-
         ensureNativeTransform(item);
         const property = getProperty(item);
         const layerName = getActivePlushLayerName(item);
         if (!property || !layerName) return false;
-
         const originalLayerTransform = snapshotLayerTransform(property, layerName);
         const faceLayerTransform = { ...HIDE_BEHIND_FACE_TRANSFORM };
         const generation = ++hideBehindGeneration;
-
         activeHideBehindSession = {
             generation,
             layerName,
@@ -15196,12 +13806,10 @@ function SubbysPlushiesPageMain() {
             faceLayerTransform,
             startedAt: Date.now(),
         };
-
         if (!setPlushLayerTransform(item, layerName, faceLayerTransform)) {
             activeHideBehindSession = null;
             return false;
         }
-
         redrawAndPublishHideBehind("Hide Behind Plushie start");
         lastHideBehindEffect = {
             active: true,
@@ -15211,15 +13819,12 @@ function SubbysPlushiesPageMain() {
             faceLayerTransform,
             originalLayerTransform,
         };
-
         window.setTimeout(() => {
             if (!activeHideBehindSession || activeHideBehindSession.generation !== generation) return;
             restoreActiveHideBehind("8-second timer");
         }, HIDE_BEHIND_DURATION_MS);
-
         return true;
     }
-
     function redrawAndPublishProtect(reason) {
         const redrawn = rebuildCharacterCanvas(window.Player, reason);
         if (!redrawn) {
@@ -15227,7 +13832,6 @@ function SubbysPlushiesPageMain() {
         }
         try { if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(window.Player); } catch (_) {}
     }
-
     function restoreActiveProtect(reason = "timer") {
         const session = activeProtectSession;
         if (!session) return false;
@@ -15240,20 +13844,17 @@ function SubbysPlushiesPageMain() {
         refreshPlushStatusIcon();
         return true;
     }
-
     function movePlushToProtectTemporarily() {
         if (activeIdleAnimationSession) cancelIdleAnimation();
         if (activeBalanceHeadSession) restoreActiveBalanceHead("replaced by Protect Me");
         if (activeHideBehindSession) restoreActiveHideBehind("replaced by Protect Me");
         if (activeProtectSession) restoreActiveProtect("restarted");
-
         const item = getHeld(window.Player);
         if (!isOurs(item)) return false;
         ensureNativeTransform(item);
         const property = getProperty(item);
         const layerName = getActivePlushLayerName(item);
         if (!property || !layerName) return false;
-
         const originalLayerTransform = snapshotLayerTransform(property, layerName);
         const protectLayerTransform = { ...PROTECT_TRANSFORM };
         const generation = ++protectGeneration;
@@ -15271,11 +13872,9 @@ function SubbysPlushiesPageMain() {
         }, PROTECT_DURATION_MS);
         return true;
     }
-
     function ensureHugTightlyActivityRegistered(reason = "availability check") {
         const activities = window.ActivityFemale3DCG;
         if (!Array.isArray(activities)) return false;
-
         const existing = activities.find(activity => activity?.Name === HUG_TIGHTLY_ACTIVITY_NAME);
         if (existing) {
             hugTightlyActivityObject = existing;
@@ -15284,7 +13883,6 @@ function SubbysPlushiesPageMain() {
             hugTightlyActivityRegistration = `active (${reason})`;
             return true;
         }
-
         const activity = makeHugTightlyActivity(activities);
         activities.push(activity);
         hugTightlyActivityObject = activity;
@@ -15293,11 +13891,9 @@ function SubbysPlushiesPageMain() {
         log(`Enabled ${HUG_TIGHTLY_ACTIVITY_LABEL} activity (ID ${activity.ActivityID}).`);
         return true;
     }
-
     function removeHugTightlyActivity(reason = "availability check") {
         const activities = window.ActivityFemale3DCG;
         if (!Array.isArray(activities)) return false;
-
         let removed = false;
         for (let i = activities.length - 1; i >= 0; i--) {
             const entry = activities[i];
@@ -15306,14 +13902,12 @@ function SubbysPlushiesPageMain() {
                 removed = true;
             }
         }
-
         if (removed) log(`Disabled ${HUG_TIGHTLY_ACTIVITY_LABEL} activity (${reason}).`);
         hugTightlyActivityObject = null;
         hugTightlyActivityEnabled = false;
         hugTightlyActivityRegistration = `inactive (${reason})`;
         return removed;
     }
-
     function syncHugTightlyActivityAvailability(reason = "availability check") {
         const shouldBeActive = isOurs(getHeld(window.Player));
         if (shouldBeActive) {
@@ -15321,13 +13915,11 @@ function SubbysPlushiesPageMain() {
             const extrasReady = ensureCustomActivitiesRegistered(reason);
             return hugReady && extrasReady;
         }
-
         if (hugTightlyActivityEnabled || window.ActivityFemale3DCG?.some?.(a => a?.Name === HUG_TIGHTLY_ACTIVITY_NAME)) {
             removeHugTightlyActivity(reason);
         } else {
             hugTightlyActivityRegistration = `inactive (${reason})`;
         }
-
         const anyExtraRegistered = window.ActivityFemale3DCG?.some?.(
             activity => CUSTOM_ACTIVITY_BY_NAME.has(activity?.Name)
         );
@@ -15336,10 +13928,8 @@ function SubbysPlushiesPageMain() {
         } else {
             customActivitiesRegistration = `inactive (${reason})`;
         }
-
         return false;
     }
-
     function scheduleActivityIntegrityCheck(delay = ACTIVITY_INTEGRITY_INTERVAL_MS) {
         if (hugTightlyActivityMonitor != null) window.clearTimeout(hugTightlyActivityMonitor);
         hugTightlyActivityMonitor = window.setTimeout(() => {
@@ -15354,7 +13944,6 @@ function SubbysPlushiesPageMain() {
         }, Math.max(1000, Number(delay) || ACTIVITY_INTEGRITY_INTERVAL_MS));
         return true;
     }
-
     function startHugTightlyActivityMonitor() {
         if (hugTightlyActivityMonitor != null) return;
         syncHugTightlyActivityAvailability("startup");
@@ -15363,14 +13952,12 @@ function SubbysPlushiesPageMain() {
         lastActivityMonitorFullCheckAt = Date.now();
         scheduleActivityIntegrityCheck();
     }
-
     function getDictionaryText(data, tag) {
         const dictionary = data?.Dictionary;
         if (!Array.isArray(dictionary)) return null;
         const entry = dictionary.find(item => item?.Tag === tag);
         return typeof entry?.Text === "string" ? entry.Text : null;
     }
-
     function getDictionaryMemberNumber(data, tag) {
         const dictionary = data?.Dictionary;
         if (!Array.isArray(dictionary)) return null;
@@ -15385,11 +13972,9 @@ function SubbysPlushiesPageMain() {
         }
         return null;
     }
-
     function getHugTightlyToken(data) {
         return getDictionaryText(data, HUG_TIGHTLY_MARKER_TAG);
     }
-
     function containsHugTightlyMarker(value, depth = 0, seen = new Set()) {
         if (depth > 5 || value == null) return false;
         if (typeof value === "string") {
@@ -15399,11 +13984,9 @@ function SubbysPlushiesPageMain() {
         if (typeof value !== "object") return false;
         if (seen.has(value)) return false;
         seen.add(value);
-
         if (Array.isArray(value)) {
             return value.some(entry => containsHugTightlyMarker(entry, depth + 1, seen));
         }
-
         for (const [key, entry] of Object.entries(value)) {
             const compactKey = String(key).replace(/[^a-z]/gi, "").toLowerCase();
             if (compactKey.includes("hugtightly") || key === HUG_TIGHTLY_MARKER_TAG) return true;
@@ -15411,24 +13994,20 @@ function SubbysPlushiesPageMain() {
         }
         return false;
     }
-
     function isHugTightlyAction(data) {
         if (!isChatAction(data)) return false;
         if (getHugTightlyToken(data)) return true;
         return containsHugTightlyMarker(data);
     }
-
     function prunePurrTokens(now = Date.now()) {
         for (const [token, timestamp] of recentPurrTokens) {
             if (now - timestamp > 15000) recentPurrTokens.delete(token);
         }
     }
-
     async function playHostedPurrSfx() {
         const candidates = purrSfxWorkingUrl
             ? [purrSfxWorkingUrl, ...PURR_SFX_URLS.filter(url => url !== purrSfxWorkingUrl)]
             : [...PURR_SFX_URLS];
-
         for (const url of candidates) {
             try {
                 const audio = new Audio(url);
@@ -15444,11 +14023,9 @@ function SubbysPlushiesPageMain() {
         }
         return false;
     }
-
     async function playGeneratedPurrFallback() {
         const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
         if (typeof AudioContextCtor !== "function") return false;
-
         try {
             if (!purrAudioContext || purrAudioContext.state === "closed") {
                 purrAudioContext = new AudioContextCtor();
@@ -15456,14 +14033,12 @@ function SubbysPlushiesPageMain() {
             if (purrAudioContext.state === "suspended") {
                 await purrAudioContext.resume();
             }
-
             const ctx = purrAudioContext;
             const duration = 1.65;
             const sampleRate = ctx.sampleRate;
             const frameCount = Math.max(1, Math.floor(duration * sampleRate));
             const buffer = ctx.createBuffer(1, frameCount, sampleRate);
             const samples = buffer.getChannelData(0);
-
             let smoothedNoise = 0;
             for (let i = 0; i < frameCount; i++) {
                 const t = i / sampleRate;
@@ -15473,16 +14048,13 @@ function SubbysPlushiesPageMain() {
                 const pulse = 0.78 + 0.22 * Math.sin(2 * Math.PI * 4.3 * t);
                 const rawNoise = Math.random() * 2 - 1;
                 smoothedNoise += 0.055 * (rawNoise - smoothedNoise);
-
                 const tone =
                     0.28 * Math.sin(2 * Math.PI * 26 * t) +
                     0.24 * Math.sin(2 * Math.PI * 52 * t + 0.35) +
                     0.17 * Math.sin(2 * Math.PI * 104 * t + 0.7) +
                     0.08 * Math.sin(2 * Math.PI * 156 * t + 1.1);
-
                 samples[i] = envelope * pulse * (tone + 0.10 * smoothedNoise);
             }
-
             const source = ctx.createBufferSource();
             const gain = ctx.createGain();
             source.buffer = buffer;
@@ -15495,17 +14067,14 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     async function playPurrSfx(token = null, reason = "hug tightly") {
         const now = Date.now();
         prunePurrTokens(now);
-
         if (now < purrAttemptInFlightUntil) return false;
         if (now - lastPurrStartedAt < 350) return false;
         if (token && recentPurrTokens.has(token)) return false;
         if (token) recentPurrTokens.set(token, now);
         purrAttemptInFlightUntil = now + 2500;
-
         try {
             const played = await playHostedPurrSfx() || await playGeneratedPurrFallback();
             if (!played) {
@@ -15513,7 +14082,6 @@ function SubbysPlushiesPageMain() {
                 warn("Could not play the plush purr SFX from assets/sfx or the local fallback.");
                 return false;
             }
-
             lastPurrStartedAt = Date.now();
             purrAttemptInFlightUntil = lastPurrStartedAt + 1800;
             purrPlayCount++;
@@ -15530,7 +14098,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function makeHugTightlyNetworkAction(originalData) {
         const sourceName = getCharacterDisplayName(window.Player) || "Someone";
         const member = Number.isFinite(window.Player?.MemberNumber) ? window.Player.MemberNumber : "local";
@@ -15546,7 +14113,6 @@ function SubbysPlushiesPageMain() {
                 plushName: currentPlushName(),
             }
         );
-
         return {
             data: {
                 ...originalData,
@@ -15561,21 +14127,17 @@ function SubbysPlushiesPageMain() {
             token,
         };
     }
-
     function getInventoryItem(C, groupName) {
         if (!C || typeof InventoryGet !== "function") return null;
         try { return InventoryGet(C, groupName); } catch (_) { return null; }
     }
-
     function getHandheldItem(C = window.Player) {
         return getInventoryItem(C, GROUP);
     }
-
     function getAddonPlushItem(C = window.Player) {
         const item = getInventoryItem(C, ADDON_GROUP);
         return isOurs(item) ? item : null;
     }
-
     function getEquippedPlushItems(C = window.Player) {
         const items = [];
         for (const groupName of PLUSH_GROUPS) {
@@ -15584,7 +14146,6 @@ function SubbysPlushiesPageMain() {
         }
         return items;
     }
-
     function getHeld(C = window.Player) {
         const hand = getHandheldItem(C);
         if (isOurs(hand)) return hand;
@@ -15592,24 +14153,19 @@ function SubbysPlushiesPageMain() {
         if (addon) return addon;
         return hand;
     }
-
     function isOurs(item) {
         return (
             PLUSH_GROUPS.includes(item?.Asset?.Group?.Name) &&
             item?.Asset?.Name === ASSET_NAME
         );
     }
-
     function getProperty(item) {
         if (!item) return null;
-
         if (!item.Property || typeof item.Property !== "object" || Array.isArray(item.Property)) {
             item.Property = {};
         }
-
         return item.Property;
     }
-
     function itemHasActiveLock(item) {
         const property = item?.Property;
         if (!property || typeof property !== "object") return false;
@@ -15621,24 +14177,19 @@ function SubbysPlushiesPageMain() {
         if (typeof property.LockedBy === "string" && property.LockedBy.trim()) return true;
         return false;
     }
-
     function blockLockedPlushMutation(item, action = "change this plushie") {
         if (!itemHasActiveLock(item)) return false;
         appendLocalInfoBox("Plushie locked", [`Unlock the plushie before you ${action}.`], { compact: true });
         return true;
     }
-
     function refresh(C, publish = true) {
         if (!C) return;
-
         try {
             if (typeof CharacterRefresh === "function") CharacterRefresh(C);
         } catch (e) {
             warn("CharacterRefresh failed:", e);
         }
-
         if (!publish || C !== window.Player) return;
-
         try {
             if (typeof ChatRoomCharacterUpdate === "function") {
                 ChatRoomCharacterUpdate(C);
@@ -15647,69 +14198,53 @@ function SubbysPlushiesPageMain() {
             warn("ChatRoomCharacterUpdate failed:", e);
         }
     }
-
     function ensureNativeTransform(item, force = false) {
         if (!isOurs(item)) return false;
-
         const property = getProperty(item);
         if (!property) return false;
-
         for (const [key, value] of Object.entries(DEFAULT_TRANSFORM)) {
             if (force || !Number.isFinite(property[key])) property[key] = value;
         }
-
         return true;
     }
-
     function getItemPlushOption(item) {
         const recordValue = item?.Property?.TypeRecord?.[MODULE_KEY];
         if (Number.isInteger(recordValue) && recordValue >= 0 && recordValue < PLUSHES.length) {
             return recordValue;
         }
-
         const type = item?.Property?.Type;
         if (typeof type !== "string") return -1;
-
         const match = type.match(/^p(\d+)$/);
         if (!match) return -1;
-
         const value = Number(match[1]);
         return Number.isInteger(value) && value >= 0 && value < PLUSHES.length
             ? value
             : -1;
     }
-
     function validPlushOption(optionIndex) {
         return Number.isInteger(optionIndex) && optionIndex >= 0 && optionIndex < PLUSHES.length;
     }
-
     function validPublicPlushOption(optionIndex) {
         return Number.isInteger(optionIndex) && optionIndex >= 0 && optionIndex < PUBLIC_PLUSH_COUNT;
     }
-
     function canonicalWirePlushOption(optionIndex) {
         return optionIndex === 0 ? SUBBYCAT_WIRE_OPTION : optionIndex;
     }
-
     function publicToWirePlushOption(optionIndex) {
         if (optionIndex === 0) return SUBBYCAT_WIRE_OPTION;
         if (optionIndex >= SUBBYCAT_WIRE_OPTION) return optionIndex + 1;
         return optionIndex;
     }
-
     function wireToPublicPlushOption(optionIndex) {
         if (optionIndex === SUBBYCAT_WIRE_OPTION) return 0;
         if (optionIndex > SUBBYCAT_WIRE_OPTION) return optionIndex - 1;
         return optionIndex;
     }
-
     function setItemPlushState(item, optionIndex) {
         optionIndex = canonicalWirePlushOption(optionIndex);
         if (!validPlushOption(optionIndex)) return false;
-
         const property = getProperty(item);
         if (!property) return false;
-
         property.Type = `${MODULE_KEY}${optionIndex}`;
         property.TypeRecord = {
             ...(property.TypeRecord &&
@@ -15719,18 +14254,15 @@ function SubbysPlushiesPageMain() {
                 : {}),
             [MODULE_KEY]: optionIndex,
         };
-
         lastPlushOption = optionIndex;
         return true;
     }
-
     function isLocalPlayerCharacter(C) {
         if (!C || !window.Player) return false;
         if (C === window.Player) return true;
         const playerMember = Number(window.Player?.MemberNumber);
         return Number.isFinite(playerMember) && Number(C?.MemberNumber) === playerMember;
     }
-
     function suppressLocalPlushRepair(reason = "intentional change", durationMs = 1800) {
         const now = Date.now();
         localPlushRepairSuppressedUntil = Math.max(
@@ -15746,11 +14278,9 @@ function SubbysPlushiesPageMain() {
         };
         return localPlushRepairSuppressedUntil;
     }
-
     function localPlushRepairSuppressed(C = window.Player) {
         return isLocalPlayerCharacter(C) && Date.now() < localPlushRepairSuppressedUntil;
     }
-
     function clearRememberedLocalPlushState() {
         const baseKey = getCharacterStateKey(window.Player);
         if (!baseKey) return true;
@@ -15759,14 +14289,12 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function getCharacterStateKey(C) {
         if (!C) return null;
         if (Number.isFinite(C.MemberNumber)) return `member:${C.MemberNumber}`;
         if (C === window.Player) return "player";
         return null;
     }
-
     function getPlushStateKey(C, itemOrGroup = null) {
         const baseKey = getCharacterStateKey(C);
         if (!baseKey) return null;
@@ -15775,29 +14303,23 @@ function SubbysPlushiesPageMain() {
             : itemOrGroup?.Asset?.Group?.Name;
         return `${baseKey}|${PLUSH_GROUPS.includes(groupName) ? groupName : GROUP}`;
     }
-
     function rememberCharacterPlushState(C, item = getHeld(C)) {
         if (!C || !isOurs(item)) return null;
-
         const key = getPlushStateKey(C, item);
         if (!key) return null;
-
         const previous = plushStateByCharacter.get(key) || {
             option: C === window.Player && validPlushOption(lastPlushOption) ? lastPlushOption : 0,
             transform: {},
             layerTransform: {},
         };
         if (!previous.layerTransform || typeof previous.layerTransform !== "object") previous.layerTransform = {};
-
         const option = canonicalWirePlushOption(getItemPlushOption(item));
         if (validPlushOption(option)) previous.option = option;
-
         const property = item.Property;
         if (property && typeof property === "object" && !Array.isArray(property)) {
             for (const transformKey of Object.keys(DEFAULT_TRANSFORM)) {
                 if (Number.isFinite(property[transformKey])) previous.transform[transformKey] = property[transformKey];
             }
-
             const temporaryPoseActive = C === window.Player && (activeBalanceHeadSession || activeHideBehindSession || activeProtectSession || activeIdleAnimationSession);
             if (!temporaryPoseActive) {
                 const activeLayer = getActivePlushLayerName(item);
@@ -15810,34 +14332,27 @@ function SubbysPlushiesPageMain() {
                 }
             }
         }
-
         plushStateByCharacter.set(key, previous);
-
         if (C === window.Player && validPlushOption(previous.option)) {
             lastPlushOption = previous.option;
         }
-
         return previous;
     }
-
     function pruneRememberedPlushStates(includeRoomCharacters = true) {
         const keepBases = new Set();
         const playerKey = getCharacterStateKey(window.Player);
         if (playerKey) keepBases.add(playerKey);
-
         if (includeRoomCharacters && Array.isArray(window.ChatRoomCharacter)) {
             for (const C of window.ChatRoomCharacter) {
                 const key = getCharacterStateKey(C);
                 if (key) keepBases.add(key);
             }
         }
-
         for (const key of [...plushStateByCharacter.keys()]) {
             const baseKey = String(key).split("|")[0];
             if (!keepBases.has(baseKey)) plushStateByCharacter.delete(key);
         }
     }
-
     function rememberedPlushOption(C, fallback = 0, item = getHeld(C)) {
         const key = getPlushStateKey(C, item);
         const remembered = key ? plushStateByCharacter.get(key) : null;
@@ -15845,7 +14360,6 @@ function SubbysPlushiesPageMain() {
         if (C === window.Player && validPlushOption(lastPlushOption)) return canonicalWirePlushOption(lastPlushOption);
         return validPlushOption(fallback) ? fallback : 0;
     }
-
     function repairPlushState(item, preferredOption = lastPlushOption, reason = "refresh", C = window.Player) {
         if (!isLocalPlayerCharacter(C)) return false;
         if (localPlushRepairSuppressed(C)) return false;
@@ -15854,38 +14368,30 @@ function SubbysPlushiesPageMain() {
             rememberCharacterPlushState(C, item);
             return false;
         }
-
         const property = getProperty(item);
         if (!property) return false;
-
         const key = getPlushStateKey(C, item);
         const remembered = key ? plushStateByCharacter.get(key) : null;
-
         let option = canonicalWirePlushOption(getItemPlushOption(item));
         if (!validPlushOption(option)) {
             option = validPlushOption(remembered?.option)
                 ? remembered.option
                 : (validPlushOption(preferredOption) ? preferredOption : 0);
         }
-
         const expectedType = `${MODULE_KEY}${option}`;
         let changed = false;
-
         if (property.Type !== expectedType) {
             property.Type = expectedType;
             changed = true;
         }
-
         if (!property.TypeRecord || typeof property.TypeRecord !== "object" || Array.isArray(property.TypeRecord)) {
             property.TypeRecord = {};
             changed = true;
         }
-
         if (property.TypeRecord[MODULE_KEY] !== option) {
             property.TypeRecord[MODULE_KEY] = option;
             changed = true;
         }
-
         for (const [transformKey, defaultValue] of Object.entries(DEFAULT_TRANSFORM)) {
             if (!Number.isFinite(property[transformKey])) {
                 const rememberedValue = remembered?.transform?.[transformKey];
@@ -15893,14 +14399,12 @@ function SubbysPlushiesPageMain() {
                 changed = true;
             }
         }
-
         if (!(C === window.Player && (activeBalanceHeadSession || activeHideBehindSession || activeProtectSession || activeIdleAnimationSession))) {
             const compacted = compactPlushLayerTransformsToActive(
                 item,
                 remembered?.layerTransform || null
             );
             if (compacted) changed = true;
-
             if (hasPlushLayerTransform(item)) {
                 for (const [transformKey, defaultValue] of Object.entries(DEFAULT_TRANSFORM)) {
                     if (property[transformKey] !== defaultValue) {
@@ -15910,7 +14414,6 @@ function SubbysPlushiesPageMain() {
                 }
             }
         }
-
         if (changed) {
             rememberCharacterPlushState(C, item);
             plushStateRepairCount++;
@@ -15922,10 +14425,8 @@ function SubbysPlushiesPageMain() {
             };
             log(`Repaired plush state after ${reason}: ${expectedType}${Number.isFinite(C?.MemberNumber) ? ` for #${C.MemberNumber}` : ""}.`);
         }
-
         return changed;
     }
-
     function normalizePlushState(item) {
         const current = canonicalWirePlushOption(getItemPlushOption(item));
         const option = validPlushOption(current)
@@ -15935,39 +14436,31 @@ function SubbysPlushiesPageMain() {
         ensureNativeTransform(item);
         return option;
     }
-
     function schedulePlushStabilization(optionIndex, itemOrGroup = getHeld(window.Player)) {
         if (!validPlushOption(optionIndex)) return;
         const groupName = typeof itemOrGroup === "string"
             ? itemOrGroup
             : itemOrGroup?.Asset?.Group?.Name;
         if (!PLUSH_GROUPS.includes(groupName)) return;
-
         const generation = ++stabilizerGeneration;
         const delays = [80, 350, 1200];
-
         for (const delay of delays) {
             setTimeout(() => {
                 if (generation !== stabilizerGeneration) return;
-
                 const item = getInventoryItem(window.Player, groupName);
                 if (!isOurs(item)) return;
-
                 const changed = repairPlushState(item, optionIndex, `stabilizer ${delay}ms`, window.Player);
                 if (changed) refresh(window.Player, true);
             }, delay);
         }
     }
-
     function captureVisiblePlushStates() {
         const player = window.Player;
         if (!player || localPlushRepairSuppressed(player)) return;
         for (const item of getEquippedPlushItems(player)) rememberCharacterPlushState(player, item);
     }
-
     function rebuildCharacterCanvas(C, reason = "plush repair") {
         if (!C) return false;
-
         if (typeof CharacterLoadCanvas === "function") {
             try {
                 CharacterLoadCanvas(C);
@@ -15981,41 +14474,32 @@ function SubbysPlushiesPageMain() {
                 warn(`CharacterLoadCanvas failed after ${reason}:`, e);
             }
         }
-
         return false;
     }
-
     function repairVisiblePlushStates(reason) {
         const affected = [];
         const player = window.Player;
         if (!player || localPlushRepairSuppressed(player)) return affected;
-
         for (const item of getEquippedPlushItems(player)) {
             const preferred = rememberedPlushOption(player, lastPlushOption, item);
             affected.push({ C: player, item, changed: repairPlushState(item, preferred, reason, player) });
         }
         return affected;
     }
-
     function schedulePlushRecovery(reason) {
         const generation = ++actionRecoveryGeneration;
         const delay = 80;
-
         setTimeout(() => {
             if (generation !== actionRecoveryGeneration) return;
-
             const affected = repairVisiblePlushStates(`${reason} ${delay}ms`);
             if (!affected.length) return;
-
             const repaired = affected.filter(entry => entry.changed);
             const redrawn = [];
-
             for (const { C } of repaired) {
                 if (rebuildCharacterCanvas(C, `${reason} ${delay}ms`)) {
                     redrawn.push(Number.isFinite(C?.MemberNumber) ? C.MemberNumber : null);
                 }
             }
-
             actionRecoveryCount++;
             lastActionRecovery = {
                 reason,
@@ -16027,42 +14511,34 @@ function SubbysPlushiesPageMain() {
             };
         }, delay);
     }
-
     const scheduleActionRecovery = schedulePlushRecovery;
-
     function currentRoomRosterSignature() {
         if (typeof window.CurrentScreen !== "string" || window.CurrentScreen !== "ChatRoom") {
             return null;
         }
-
         const characters = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
         const members = characters.map((C, index) => {
             if (Number.isFinite(C?.MemberNumber)) return `member:${C.MemberNumber}`;
             const fallbackName = typeof C?.Name === "string" ? C.Name : "unknown";
             return `anon:${index}:${fallbackName}`;
         });
-
         members.sort();
         return `${members.length}|${members.join("|")}`;
     }
-
     function protectEquippedPlushMoodDecayClocks() {
         for (const item of getEquippedPlushItems(window.Player)) {
             getPlushMoodRecord(plushNameForItem(item));
         }
         return true;
     }
-
     function checkRoomRosterChange(reason = "watchdog") {
         protectEquippedPlushMoodDecayClocks();
         trackCommittedAchievement();
         const signature = currentRoomRosterSignature();
-
         if (signature == null) {
             roomRosterSignature = null;
             return;
         }
-
         if (roomRosterSignature == null) {
             roomRosterSignature = signature;
             if (idleAnimationTimer == null && getFeatureSettings().idleAnimations && !isLowCpuMode())
@@ -16074,19 +14550,15 @@ function SubbysPlushiesPageMain() {
             window.setTimeout(() => sendAddonPresence(false), 250);
             return;
         }
-
         if (signature === roomRosterSignature) return;
-
         const previousSignature = roomRosterSignature;
         roomRosterSignature = signature;
-
         trackRoomAchievements();
         captureVisiblePlushStates();
         pruneRememberedPlushStates(true);
         pruneAddonPresence();
         scheduleAchievementCheck(true);
         window.setTimeout(() => sendAddonPresence(false), 250);
-
         roomRosterRecoveryCount++;
         lastRoomRosterRecovery = {
             previousSignature,
@@ -16094,16 +14566,13 @@ function SubbysPlushiesPageMain() {
             reason,
             at: new Date().toISOString(),
         };
-
         log("Chat room roster changed; scheduling plush redraw recovery.", {
             previousSignature,
             signature,
             reason,
         });
-
         schedulePlushRecovery(`ChatRoom roster change (${reason})`);
     }
-
     function scheduleRoomRosterEventCheck(reason, delay = 0) {
         const generation = ++roomRosterEventCheckGeneration;
         window.setTimeout(() => {
@@ -16112,10 +14581,8 @@ function SubbysPlushiesPageMain() {
             pruneRemotePlushEmotes();
         }, delay);
     }
-
     function installRoomRosterEventHooks() {
         let hooked = 0;
-
         for (const functionName of ["ChatRoomSyncMemberJoin", "ChatRoomSyncMemberLeave"]) {
             if (installHook(functionName, 10000, (args, next) => {
                 const result = next(args);
@@ -16123,7 +14590,6 @@ function SubbysPlushiesPageMain() {
                 return result;
             })) hooked++;
         }
-
         if (installHook("ChatRoomLeave", 10000, (args, next) => {
             cacheRoomMascotState(roomMascotState);
             const result = next(args);
@@ -16145,7 +14611,6 @@ function SubbysPlushiesPageMain() {
             pruneRememberedPlushStates(false);
             return result;
         })) hooked++;
-
         if (installHook("ChatRoomSync", 10000, (args, next) => {
             quickReactionReset();
             roomMascotState = null;
@@ -16175,7 +14640,6 @@ function SubbysPlushiesPageMain() {
             }
             return result;
         })) hooked++;
-
         if (installHook("ChatRoomSyncRoomProperties", 10000, (args, next) => {
             const result = next(args);
             window.setTimeout(() => {
@@ -16185,7 +14649,6 @@ function SubbysPlushiesPageMain() {
             }, 0);
             return result;
         })) hooked++;
-
         if (typeof window.ChatRoomMapViewSyncMapData === "function") {
             if (installHook("ChatRoomMapViewSyncMapData", 10000, (args, next) => {
                 const result = next(args);
@@ -16195,11 +14658,9 @@ function SubbysPlushiesPageMain() {
                 return result;
             })) hooked++;
         }
-
         roomRosterEventHookCount = hooked;
         return hooked;
     }
-
     function pruneRemotePlushEmotes() {
         const present = new Set((Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [])
             .map(C => Number(C?.MemberNumber))
@@ -16210,12 +14671,9 @@ function SubbysPlushiesPageMain() {
         pruneAddonPresence();
         prunePetSuitPlushOverlays();
     }
-
     function startRoomRosterMonitor() {
         if (roomRosterWatchdog != null) return;
-
         installNativeAddonPresenceOverlayHook();
-
         roomRosterSignature = currentRoomRosterSignature();
         achievementSession.protectCountInRoom = 0;
         achievementSession.roomKey = roomAchievementKey();
@@ -16224,21 +14682,17 @@ function SubbysPlushiesPageMain() {
         const hooked = installRoomRosterEventHooks();
         window.setTimeout(() => recoverRoomMascotState({ allowCache: true }), 250);
         window.setTimeout(() => sendAddonPresence(true), 700);
-
         roomRosterWatchdog = window.setInterval(
             () => checkRoomRosterChange(isLowCpuMode() ? "10-minute watchdog" : "5-minute watchdog"),
             performanceInterval(ROOM_ROSTER_WATCHDOG_INTERVAL_MS, ROOM_ROSTER_WATCHDOG_INTERVAL_MS * 2)
         );
         log(`Started event-driven room roster recovery (${hooked} hook(s), ${isLowCpuMode() ? "20m" : "10m"} watchdog).`);
     }
-
     function isChatAction(data) {
         return !!data && typeof data === "object" && data.Type === "Action";
     }
-
     function isPotentialPlushAction(data) {
         if (!isChatAction(data)) return false;
-
         const content = data?.Content;
         if (typeof content === "string" && (
             content.includes("SubbysPlushies") ||
@@ -16246,19 +14700,16 @@ function SubbysPlushiesPageMain() {
             content.includes("Plushie") ||
             content.includes("plushie")
         )) return true;
-
         const dictionary = data?.Dictionary;
         if (!Array.isArray(dictionary)) return false;
         for (const entry of dictionary) {
             const tag = entry?.Tag;
             if (typeof tag === "string" && tag.startsWith("SubbysPlushies")) return true;
-
             const text = entry?.Text;
             if (typeof text === "string" && (text.includes("plushie") || text.includes("Plushie"))) return true;
         }
         return false;
     }
-
     function activityEntryName(entry) {
         if (!entry) return null;
         if (typeof entry.Name === "string") return entry.Name;
@@ -16267,18 +14718,15 @@ function SubbysPlushiesPageMain() {
         const nestedName = activity && typeof activity === "object" ? activity.Name : activity;
         return typeof nestedName === "string" ? nestedName : null;
     }
-
     function isPlushMenuActivity(entry) {
         const name = activityEntryName(entry);
         return typeof name === "string" &&
             (name === HUG_TIGHTLY_ACTIVITY_NAME || CUSTOM_ACTIVITY_BY_NAME.has(name));
     }
-
     function isExtraMenuActivity(entry) {
         const name = activityEntryName(entry);
         return typeof name === "string" && EXTRA_ACTION_BY_NAME.has(name);
     }
-
     function activitySearchEntryText(entry) {
         const name = activityEntryName(entry) || "";
         const spec = PLUGIN_ACTIVITY_BY_NAME.get(name);
@@ -16286,14 +14734,12 @@ function SubbysPlushiesPageMain() {
         const targets = Array.isArray(entry?.Target) ? entry.Target : (Array.isArray(entry?.Activity?.Target) ? entry.Activity.Target : []);
         return [name, label, ...targets].join(" ").toLowerCase();
     }
-
     function activitySearchMatches(entry) {
         const terms = String(activitySearchQuery || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
         if (!terms.length) return true;
         const text = activitySearchEntryText(entry);
         return terms.every(term => text.includes(term));
     }
-
     function positionActivitySearchInput() {
         if (!activitySearchInput?.isConnected) return false;
         const canvas = window.MainCanvas || document.querySelector("canvas");
@@ -16310,7 +14756,6 @@ function SubbysPlushiesPageMain() {
         });
         return true;
     }
-
     function reloadCurrentActivityMenu() {
         try {
             const mode = window.DialogMenuMode;
@@ -16323,14 +14768,12 @@ function SubbysPlushiesPageMain() {
         } catch (_) {}
         return false;
     }
-
     function removeActivitySearchInput(clearQuery = true) {
         if (activitySearchInput?.isConnected) activitySearchInput.remove();
         activitySearchInput = null;
         activitySearchLastGroup = null;
         if (clearQuery) activitySearchQuery = "";
     }
-
     function ensureActivitySearchInput(group = null) {
         if (window.CurrentScreen !== "ChatRoom" || !window.DialogFocusCharacter) { removeActivitySearchInput(true); return false; }
         activitySearchLastGroup = typeof group === "string" ? group : (group?.Name || activitySearchLastGroup);
@@ -16377,23 +14820,19 @@ function SubbysPlushiesPageMain() {
         positionActivitySearchInput();
         return true;
     }
-
     function installActivityMenuOrderingHook() {
         if (installedHooks.has("ActivityAllowedForGroup")) {
             activityMenuOrderHookInstalled = true;
             return true;
         }
-
         const installed = installHook("ActivityAllowedForGroup", 10000, (args, next) => {
             const result = next(args);
             if (!Array.isArray(result)) return result;
-
             const playerMember = Number(window.Player?.MemberNumber);
             const focused = window.DialogFocusCharacter;
             const selfTarget = focused === window.Player || (Number.isFinite(playerMember) && Number(focused?.MemberNumber) === playerMember);
             const group = args?.[1];
             ensureActivitySearchInput(group);
-
             const working = result.filter(entry => {
                 const name = entry?.Name || entry?.ActivityName || entry?.Activity?.Name || entry?.Activity;
                 if (selfTarget && name === CUSTOM_ACTIVITY_BY_KEY.get("offer")?.name) return false;
@@ -16401,12 +14840,9 @@ function SubbysPlushiesPageMain() {
                 if (extraSpec && !extraActionAvailableForTarget(extraSpec, focused)) return false;
                 return true;
             });
-
             const finish = entries => activitySearchQuery ? entries.filter(activitySearchMatches) : entries;
             if (working.length < 2) return finish(working);
-
             if (!hugTightlyActivityEnabled && customActivityObjects.size === 0 && extraActionObjects.size === 0) return finish(working);
-
             const normal = [];
             const plush = [];
             const extra = [];
@@ -16416,11 +14852,9 @@ function SubbysPlushiesPageMain() {
                 else normal.push(entry);
             }
             if (!plush.length && !extra.length) return finish(working);
-
             const reordered = normal.concat(plush, extra);
             const unchanged = reordered.length === working.length && reordered.every((entry, index) => entry === working[index]);
             if (unchanged) return finish(working);
-
             activityMenuOrderPassCount++;
             lastActivityMenuOrder = {
                 group: typeof args?.[1] === "string" ? args[1] : args?.[1]?.Name || null,
@@ -16432,7 +14866,6 @@ function SubbysPlushiesPageMain() {
             };
             return finish(reordered);
         });
-
         activityMenuOrderHookInstalled = installed;
         if (installed) {
             installHook("DialogLeave", 10000, (args, next) => {
@@ -16444,22 +14877,17 @@ function SubbysPlushiesPageMain() {
         } else warn("ActivityAllowedForGroup was unavailable; plush activity ordering/search was not installed.");
         return installed;
     }
-
     function installPlushStateHooks() {
         const activityOrderHooked = installActivityMenuOrderingHook();
-
         const drawCharacterHooked = installNativeAddonPresenceOverlayHook();
         const characterOverlayHooked = false;
-
         const activityRunHooked = installHook("ActivityRun", 10000, (args, next) => {
             if (!hugTightlyActivityEnabled && customActivityObjects.size === 0 && extraActionObjects.size === 0) return next(args);
-
             const activityRunInfo = inspectActivityRunFast(args);
             if (activityRunInfo.hugTightly) {
                 pendingLocalHugTightlyUntil = Date.now() + 1500;
                 void playPurrSfx(`local-hug:${Date.now()}:${++hugTightlyEventSequence}`, "local Hug Tightly activity");
             }
-
             const customSpec = activityRunInfo.customSpec;
             const jealousEnabled = getFeatureSettings().jealousPlushie;
             const focusedTarget = (customSpec || jealousEnabled) ? findActivityTargetFast(args) : null;
@@ -16481,32 +14909,26 @@ function SubbysPlushiesPageMain() {
                     rememberOutgoingPlushOffer(Number(focusedTarget.MemberNumber), "");
                 }
             }
-
             let jealousReaction = null;
             if (jealousEnabled && !customSpec && !activityRunInfo.hugTightly && focusedTarget && focusedTarget !== window.Player) {
                 const activityName = activityNameFromRunArgsFast(args);
                 if (isAffectionateActivityName(activityName)) jealousReaction = { target: focusedTarget, activityName };
             }
-
             const runBalanceEffect = customSpec?.effect === "balanceHead";
             if (runBalanceEffect) {
                 lastBalanceHeadActivityRunAt = Date.now();
                 balanceHeadActivityTriggerCount++;
                 lastBalanceHeadTriggerSource = "ActivityRun";
             }
-
             if (customSpec?.key === "offer" && focusedTarget && Number(focusedTarget.MemberNumber) === Number(window.Player?.MemberNumber)) {
                 pendingLocalCustomActivity = null;
                 return;
             }
-
             const result = next(args);
-
             if (customSpec && !isExtraActionSpec(customSpec) && focusedTarget && focusedTarget !== window.Player) trackSocialPlayer(focusedTarget.MemberNumber);
             if (runBalanceEffect) {
                 window.setTimeout(startBalanceHeadMinigame, 120);
             }
-
             if (customSpec?.effect === "raiseTargetArm" && focusedTarget) {
                 window.setTimeout(
                     () => applyTemporaryRaisedArm(
@@ -16517,31 +14939,23 @@ function SubbysPlushiesPageMain() {
                     0
                 );
             }
-
             if (customSpec?.key === "wave") {
                 window.setTimeout(() => maybeStartSharedWaveChain(null, true), 0);
             }
-
             if (customSpec && !isExtraActionSpec(customSpec) && customSpec.effect !== "balanceHead") handleLocalPlushInteraction(customSpec.key);
             if (jealousReaction) window.setTimeout(() => triggerJealousReaction(jealousReaction.target, jealousReaction.activityName), 80);
-
             return result;
         });
-
         const refreshHooked = installHook("CharacterRefresh", 10000, (args, next) => {
             const C = args?.[0];
             if (!C || !isLocalPlayerCharacter(C) || localPlushRepairSuppressed(C)) return next(args);
-
             const beforeItems = getEquippedPlushItems(C);
             if (!beforeItems.length) return next(args);
-
             for (const plushItem of beforeItems) {
                 const preferred = rememberedPlushOption(C, lastPlushOption, plushItem);
                 repairPlushState(plushItem, preferred, "CharacterRefresh pre", C);
             }
-
             const result = next(args);
-
             if (window.CurrentScreen === "ChatRoom") syncPetSuitPlushOverlay(C);
             const afterItems = getEquippedPlushItems(C);
             let item = getHeld(C);
@@ -16552,7 +14966,6 @@ function SubbysPlushiesPageMain() {
                     if (repairPlushState(plushItem, preferred, "CharacterRefresh post", C)) changedAfter = true;
                 }
                 let balanceReapplied = false;
-
                 if (C === window.Player && activeBalanceHeadSession) {
                     const session = activeBalanceHeadSession;
                     if (getActivePlushLayerName(item) === session.layerName) {
@@ -16563,7 +14976,6 @@ function SubbysPlushiesPageMain() {
                         );
                     }
                 }
-
                 let hideBehindReapplied = false;
                 if (C === window.Player && activeHideBehindSession) {
                     const session = activeHideBehindSession;
@@ -16575,7 +14987,6 @@ function SubbysPlushiesPageMain() {
                         );
                     }
                 }
-
                 let protectReapplied = false;
                 if (C === window.Player && activeProtectSession) {
                     const session = activeProtectSession;
@@ -16583,7 +14994,6 @@ function SubbysPlushiesPageMain() {
                         protectReapplied = setPlushLayerTransform(item, session.layerName, session.protectLayerTransform);
                     }
                 }
-
                 if (changedAfter || balanceReapplied || hideBehindReapplied || protectReapplied) {
                     rebuildCharacterCanvas(
                         C,
@@ -16595,7 +15005,6 @@ function SubbysPlushiesPageMain() {
                     );
                 }
             }
-
             const heldNow = isOurs(getHeld(window.Player));
             if (heldNow !== lastActivityMonitorHeldState) {
                 lastActivityMonitorHeldState = heldNow;
@@ -16605,7 +15014,6 @@ function SubbysPlushiesPageMain() {
             }
             return result;
         });
-
         const updateHooked = installHook("ChatRoomCharacterUpdate", 10000, (args, next) => {
             const C = args?.[0] || window.Player;
             if (!isLocalPlayerCharacter(C) || localPlushRepairSuppressed(C)) return next(args);
@@ -16622,14 +15030,12 @@ function SubbysPlushiesPageMain() {
                         setPlushLayerTransform(item, session.layerName, session.headLayerTransform);
                     }
                 }
-
                 if (C === window.Player && activeHideBehindSession) {
                     const session = activeHideBehindSession;
                     if (getActivePlushLayerName(item) === session.layerName) {
                         setPlushLayerTransform(item, session.layerName, session.faceLayerTransform);
                     }
                 }
-
                 if (C === window.Player && activeProtectSession) {
                     const session = activeProtectSession;
                     if (getActivePlushLayerName(item) === session.layerName) {
@@ -16647,7 +15053,6 @@ function SubbysPlushiesPageMain() {
             }
             return result;
         });
-
         const chatAppendHooked = installHook("ChatRoomAppendChat", 10000, (args, next) => {
             const node = args?.[0];
             const active = activeCustomActionRender;
@@ -16670,7 +15075,6 @@ function SubbysPlushiesPageMain() {
         });
         if (chatAppendHooked) stopOfferChatObserver();
         else startOfferChatObserverMonitor();
-
         const actionMessageHooked = installHook("ChatRoomMessage", 10000, (args, next) => {
             const data = args?.[0];
             if (processAddonPresencePacket(data)) return next(args);
@@ -16678,21 +15082,17 @@ function SubbysPlushiesPageMain() {
             if (processOfferDecisionSignal(data)) return next(args);
             if (quickReactionReceive(data)) return next(args);
             if (quickReactionEligible(data)) return quickReactionTrackIncoming(data, () => next(args));
-
             const hiddenBattleData = data?.Type === "Hidden" ? battleDataFromAction(data) : null;
             if (hiddenBattleData) {
                 showBattleRoundSummary(hiddenBattleData);
                 return next(args);
             }
-
             const syncedEmote = isSyncedPlushEmotePacket(data);
-
             if (syncedEmote) {
                 processSyncedPlushEmote(data);
                 return next(args);
             }
             if (!isChatAction(data)) return next(args);
-
             const incomingCustomToken = getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG);
             if (incomingCustomToken) {
                 if (!acceptIncomingCustomActionToken(incomingCustomToken)) return;
@@ -16701,15 +15101,12 @@ function SubbysPlushiesPageMain() {
                     customActionChatRowExists(incomingCustomToken)
                 ) return;
             }
-
             maybeTrackBaseCuddleAchievement(data);
             const pluginActionSpec = getCustomActivityFromAction(data);
-
             const nativeActionRowsBefore =
                 pluginActionSpec && incomingCustomToken
                     ? new Set(currentActionRows())
                     : null;
-
             if (pluginActionSpec) processExpressionReaction(data, pluginActionSpec);
             else if (isHugTightlyAction(data)) processExpressionReaction(data, { key: "hugTightly", category: "plushie" });
             if (isExtraActionSpec(pluginActionSpec) && pluginActionSpec?.effect) {
@@ -16719,9 +15116,7 @@ function SubbysPlushiesPageMain() {
             const protectCandidate = getFeatureSettings().protectMe && actionLooksProtectable(data);
             const plushRelated = offerDecisionHandled || (!isExtraActionSpec(pluginActionSpec) && isPotentialPlushAction(data));
             if (!plushRelated && !protectCandidate && !(pluginActionSpec && incomingCustomToken)) return next(args);
-
             const hugTightly = plushRelated && isHugTightlyAction(data);
-
             if (protectCandidate) maybeTriggerProtect(data, true);
             if (plushRelated) {
                 processRoomMascotAction(data);
@@ -16729,7 +15124,6 @@ function SubbysPlushiesPageMain() {
                 maybePromptOfferRecipient(data);
                 captureVisiblePlushStates();
             }
-
             const previousActionRender = activeCustomActionRender;
             if (pluginActionSpec && incomingCustomToken) {
                 activeCustomActionRender = {
@@ -16743,7 +15137,6 @@ function SubbysPlushiesPageMain() {
             } finally {
                 activeCustomActionRender = previousActionRender;
             }
-
             if (pluginActionSpec && incomingCustomToken) {
                 const adopted = adoptNativeCustomActionRow(data, nativeActionRowsBefore);
                 if (!adopted) {
@@ -16754,11 +15147,9 @@ function SubbysPlushiesPageMain() {
                     }, 300);
                 }
             }
-
             if (plushRelated) scheduleActionRecovery("ChatRoomMessage plush Action");
             return result;
         });
-
         const serverSendHooked = installHook("ServerSend", 10000, (args, next) => {
             const messageType = args?.[0];
             const originalData = args?.[1];
@@ -16811,13 +15202,10 @@ function SubbysPlushiesPageMain() {
             const pendingSpec = pendingCustom
                 ? PLUGIN_ACTIVITY_BY_KEY.get(pendingLocalCustomActivity.key)
                 : null;
-
             const outgoingAction =
                 messageType === "ChatRoomChat" &&
                 (isChatAction(originalData) || pendingHugTightly || !!pendingSpec);
-
             if (!outgoingAction) return next(args);
-
             const nativeWaveCandidate =
                 getFeatureSettings().sharedEmoteChains &&
                 (pendingSpec?.key === "wave" || actionLooksLikeWave(originalData));
@@ -16826,7 +15214,6 @@ function SubbysPlushiesPageMain() {
                 if (nativeWaveCandidate) window.setTimeout(() => maybeStartSharedWaveChain(originalData), 0);
                 return result;
             }
-
             let nextArgs = args;
             let outgoingCustomActionData = null;
             const packetLooksPlush = isPotentialPlushAction(originalData);
@@ -16843,7 +15230,6 @@ function SubbysPlushiesPageMain() {
             } else {
                 const directSpec = getCustomActivityFromAction(originalData);
                 const customSpec = directSpec || pendingSpec;
-
                 if (customSpec) {
                     const fallbackTarget =
                         pendingLocalCustomActivity?.target ||
@@ -16851,7 +15237,6 @@ function SubbysPlushiesPageMain() {
                         window.DialogFocusCharacter ||
                         null;
                     pendingLocalCustomActivity = null;
-
                     const normalized = makeCustomActivityNetworkAction(originalData, customSpec, fallbackTarget);
                     if (normalized.isSelf) {
                         const fingerprint = `${customSpec.key}:${Number(window.Player?.MemberNumber)}:${normalized.targetMember ?? "self"}`;
@@ -16866,31 +15251,26 @@ function SubbysPlushiesPageMain() {
                     nextArgs = args.slice();
                     nextArgs[1] = normalized.data;
                     outgoingCustomActionData = normalized.isSelf ? null : normalized.data;
-
                     if (!isExtraActionSpec(customSpec) && Number.isFinite(normalized.targetMember) && !normalized.isSelf) trackSocialPlayer(normalized.targetMember);
                     if (customSpec.key === "offer" && Number.isFinite(normalized.targetMember) && !normalized.isSelf) {
                         rememberOutgoingPlushOffer(normalized.targetMember, normalized.token);
                         recordStat("offer", 1, { plushName: currentPlushName() });
                     }
-
                     if (customSpec.effect === "balanceHead" && Date.now() - lastBalanceHeadActivityRunAt > 750) {
                         lastBalanceHeadTriggerSource = "ServerSend fallback";
                         window.setTimeout(startBalanceHeadMinigame, 120);
                     }
                 }
             }
-
             if (nextArgs === args && !outgoingHugTightly) {
                 const result = next(args);
                 if (nativeWaveCandidate) window.setTimeout(() => maybeStartSharedWaveChain(originalData), 0);
                 return result;
             }
-
             const sentActionData = nextArgs?.[1] || originalData;
             const startWaveChain = getFeatureSettings().sharedEmoteChains && actionLooksLikeWave(sentActionData);
             captureVisiblePlushStates();
             const result = next(nextArgs);
-
             if (outgoingCustomActionData) {
                 const outgoingToken = getDictionaryText(
                     outgoingCustomActionData,
@@ -16906,16 +15286,13 @@ function SubbysPlushiesPageMain() {
                     }
                 }, 350);
             }
-
             if (startWaveChain) window.setTimeout(() => maybeStartSharedWaveChain(sentActionData), 0);
             scheduleActionRecovery("outgoing plush Action");
             return result;
         });
-
         captureVisiblePlushStates();
         startRoomRosterMonitor();
         startPetSuitOverlaySweep();
-
         log(
             `Installed plush-state persistence hooks: ActivityAllowedForGroup=${activityOrderHooked}, ` +
             `DrawCharacter=disabled, CharacterOverlay(ModSDK)=${characterOverlayHooked}, ActivityRun=${activityRunHooked}, CharacterRefresh=${refreshHooked}, ChatAppend=${chatAppendHooked}, ` +
@@ -16924,19 +15301,16 @@ function SubbysPlushiesPageMain() {
             `RoomRosterEvents=${roomRosterEventHookCount}, watchdog=60s (no forced Action refresh).`
         );
     }
-
     function getFocusedPlushItem() {
         const C = window.DialogFocusCharacter || window.Player;
         const focusItem = window.DialogFocusItem;
         const item = isOurs(focusItem) ? focusItem : getHeld(C);
         return { C, item };
     }
-
     function isWardrobeManagedItem(item) {
         const asset = item?.Asset;
         return !!asset && asset.Group && WARDROBE_ITEM_NAME_SET.has(asset.Name) && WARDROBE_ITEMS.some(entry => entry.name === asset.Name && entry.group === asset.Group.Name);
     }
-
     function getFocusedManagedLayeringItem() {
         const C = window.DialogFocusCharacter || window.Player;
         const focusItem = window.DialogFocusItem;
@@ -16945,7 +15319,6 @@ function SubbysPlushiesPageMain() {
         if (isOurs(held)) return { C, item: held };
         return { C, item: null };
     }
-
     function managedLayerNames(item) {
         if (!item?.Asset) return [];
         if (isOurs(item)) {
@@ -16956,7 +15329,6 @@ function SubbysPlushiesPageMain() {
         }
         return [];
     }
-
     function hasManagedLayerSpecificTransform(item) {
         const property = getProperty(item);
         if (!property) return false;
@@ -16968,13 +15340,11 @@ function SubbysPlushiesPageMain() {
             return Object.entries(record).some(([layerName, value]) => layerNames.has(layerName) && Number.isFinite(value));
         });
     }
-
     function nativeTransformIsDefault(item) {
         const transform = readNativeItemTransform(item);
         if (!transform) return true;
         return NATIVE_LAYER_TRANSFORM_KEYS.every(key => transform[key] === DEFAULT_TRANSFORM[key]);
     }
-
     function canonicalizeWardrobeLayerTransforms(C, item, reason = "Move / Resize canonicalize", publish = true) {
         if (!C || !isWardrobeManagedItem(item)) return false;
         const property = getProperty(item);
@@ -16990,38 +15360,30 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-
     function currentPlushOption() {
         const wireOption = getItemPlushOption(getFocusedPlushItem().item);
         return wireToPublicPlushOption(wireOption);
     }
-
     function getLayeringAPI() {
         try {
             if (typeof Layering !== "undefined" && Layering) return Layering;
         } catch (_) {}
-
         return window.Layering || null;
     }
-
     function nativeLayeringRoot() {
         const api = getLayeringAPI();
         const rootID = api?.ID?.root || "layering";
         return document.getElementById(rootID);
     }
-
     function nativeLayeringVisible() {
         return !!nativeLayeringRoot();
     }
-
     function isPlushLayerName(value) {
         return typeof value === "string" && /^Plush\d+$/.test(value);
     }
-
     function readNativeItemTransform(item) {
         const property = getProperty(item);
         if (!property) return null;
-
         const transform = {};
         for (const key of NATIVE_LAYER_TRANSFORM_KEYS) {
             const fallback = DEFAULT_TRANSFORM[key];
@@ -17029,26 +15391,21 @@ function SubbysPlushiesPageMain() {
         }
         return transform;
     }
-
     function nativeItemTransformSignature(item) {
         const transform = readNativeItemTransform(item);
         return transform ? JSON.stringify(transform) : null;
     }
-
     function resetGenericNativeTransform(item) {
         const property = getProperty(item);
         if (!property) return false;
         for (const [key, value] of Object.entries(DEFAULT_TRANSFORM)) property[key] = value;
         return true;
     }
-
     function compactPlushLayerTransformsToActive(item, fallbackTransform = null) {
         const property = getProperty(item);
         const activeLayer = getActivePlushLayerName(item);
         if (!property || !activeLayer) return false;
-
         let changed = false;
-
         for (const [transformKey, layerProperty] of Object.entries(NATIVE_LAYER_PROPERTY_BY_TRANSFORM)) {
             let record = property[layerProperty];
             if (!record || typeof record !== "object" || Array.isArray(record)) {
@@ -17058,14 +15415,11 @@ function SubbysPlushiesPageMain() {
                 }
                 record = null;
             }
-
             let activeValue = record?.[activeLayer];
-
             if (!Number.isFinite(activeValue)) {
                 const rememberedValue = fallbackTransform?.[transformKey];
                 if (Number.isFinite(rememberedValue)) activeValue = rememberedValue;
             }
-
             if (Number.isFinite(activeValue)) {
                 if (!record) {
                     record = {};
@@ -17077,25 +15431,20 @@ function SubbysPlushiesPageMain() {
                     changed = true;
                 }
             }
-
             if (!record) continue;
-
             for (const layerName of Object.keys(record)) {
                 if (layerName !== activeLayer && isPlushLayerName(layerName)) {
                     delete record[layerName];
                     changed = true;
                 }
             }
-
             if (Object.keys(record).length === 0) {
                 delete property[layerProperty];
                 changed = true;
             }
         }
-
         return changed;
     }
-
     function hasPlushLayerTransform(item) {
         const property = getProperty(item);
         const layerName = getActivePlushLayerName(item);
@@ -17105,12 +15454,10 @@ function SubbysPlushiesPageMain() {
             return !!record && typeof record === "object" && !Array.isArray(record) && Number.isFinite(record[layerName]);
         });
     }
-
     function readActivePlushLayerTransform(item) {
         const property = getProperty(item);
         const activeLayer = getActivePlushLayerName(item);
         if (!property || !activeLayer) return null;
-
         const transform = {};
         for (const [transformKey, layerProperty] of Object.entries(NATIVE_LAYER_PROPERTY_BY_TRANSFORM)) {
             const record = property[layerProperty];
@@ -17121,21 +15468,17 @@ function SubbysPlushiesPageMain() {
         }
         return transform;
     }
-
     function mergeNativeTransformWithActiveLayer(item, changedFields = null) {
         const nativeTransform = readNativeItemTransform(item);
         const activeTransform = readActivePlushLayerTransform(item);
         if (!nativeTransform || !activeTransform) return null;
-
         const explicitFields = Array.isArray(changedFields)
             ? new Set(changedFields.filter(field => NATIVE_LAYER_TRANSFORM_KEYS.includes(field)))
             : null;
-
         if (explicitFields?.size) {
             for (const field of explicitFields) activeTransform[field] = nativeTransform[field];
             return activeTransform;
         }
-
         for (const field of NATIVE_LAYER_TRANSFORM_KEYS) {
             if (nativeTransform[field] !== DEFAULT_TRANSFORM[field]) {
                 activeTransform[field] = nativeTransform[field];
@@ -17143,16 +15486,13 @@ function SubbysPlushiesPageMain() {
         }
         return activeTransform;
     }
-
     function mirrorNativeTransformToActivePlushLayer(C, item, reason = "native Layering", publish = true, changedFields = null) {
         if (!C || !isOurs(item)) return false;
         ensureNativeTransform(item);
-
         const property = getProperty(item);
         const transform = mergeNativeTransformWithActiveLayer(item, changedFields);
         const activeLayer = getActivePlushLayerName(item);
         if (!property || !transform || !activeLayer) return false;
-
         for (const [transformKey, layerProperty] of Object.entries(NATIVE_LAYER_PROPERTY_BY_TRANSFORM)) {
             if (!property[layerProperty] || typeof property[layerProperty] !== "object" || Array.isArray(property[layerProperty])) {
                 property[layerProperty] = {};
@@ -17162,10 +15502,8 @@ function SubbysPlushiesPageMain() {
         compactPlushLayerTransformsToActive(item, transform);
         resetGenericNativeTransform(item);
         rememberCharacterPlushState(C, item);
-
         rebuildCharacterCanvas(C, reason);
         if (C === window.Player) scheduleLocalOverlayReposition();
-
         if (publish && C === window.Player) {
             try {
                 if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(C);
@@ -17173,7 +15511,6 @@ function SubbysPlushiesPageMain() {
                 warn(`Could not publish Move / Resize values (${reason}):`, e);
             }
         }
-
         nativeLayeringLastSignature = nativeItemTransformSignature(item);
         nativeLayeringSyncCount++;
         lastNativeLayeringSync = {
@@ -17187,25 +15524,20 @@ function SubbysPlushiesPageMain() {
         };
         return true;
     }
-
     function canonicalizeExistingMoveResize(C, item, reason = "Move / Resize canonicalize") {
         if (!C || !isOurs(item)) return false;
         ensureNativeTransform(item);
-
         const remembered = rememberCharacterPlushState(C, item);
         compactPlushLayerTransformsToActive(item, remembered?.layerTransform || null);
-
         if (!hasPlushLayerTransform(item)) {
             return mirrorNativeTransformToActivePlushLayer(C, item, reason, false);
         }
-
         resetGenericNativeTransform(item);
         rememberCharacterPlushState(C, item);
         rebuildCharacterCanvas(C, reason);
         if (C === window.Player) scheduleLocalOverlayReposition();
         return true;
     }
-
     function flattenLayeringIDs(value, prefix = "", output = []) {
         if (!value || typeof value !== "object") return output;
         for (const [key, entry] of Object.entries(value)) {
@@ -17215,7 +15547,6 @@ function SubbysPlushiesPageMain() {
         }
         return output;
     }
-
     function nativeLayeringInputDescription(input, api) {
         const parts = [
             input?.id,
@@ -17224,27 +15555,22 @@ function SubbysPlushiesPageMain() {
             input?.getAttribute?.("aria-label"),
             input?.getAttribute?.("title"),
         ];
-
         try {
             if (input?.labels) {
                 for (const label of input.labels) parts.push(label?.textContent);
             }
         } catch (_) {}
-
         if (input?.id && api?.ID) {
             for (const [path, id] of flattenLayeringIDs(api.ID)) {
                 if (id === input.id) parts.push(path);
             }
         }
-
         try {
             const parentText = input?.parentElement?.textContent;
             if (parentText && parentText.length < 180) parts.push(parentText);
         } catch (_) {}
-
         return parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim().toLowerCase();
     }
-
     function visibleNativeLayeringInputs(root) {
         if (!root) return [];
         return [...root.querySelectorAll("input")].filter(input => {
@@ -17259,14 +15585,11 @@ function SubbysPlushiesPageMain() {
             return true;
         });
     }
-
     function inferNativeLayeringInputField(input, root, api) {
         const description = nativeLayeringInputDescription(input, api);
         const tab = String(api?.activeTab || "").toLowerCase();
-
         const hasX = /(?:^|[^a-z])x(?:[^a-z]|$)|horizontal|left/.test(description);
         const hasY = /(?:^|[^a-z])y(?:[^a-z]|$)|vertical|top/.test(description);
-
         if (/rotation|rotate|angle/.test(description) || /rotation|rotate/.test(tab)) {
             return { field: "Rotation", description };
         }
@@ -17282,7 +15605,6 @@ function SubbysPlushiesPageMain() {
         if (/translationy|translate y|move y|offset y|position y/.test(description)) {
             return { field: "TranslationY", description };
         }
-
         if (/scale|resize|size/.test(tab)) {
             if (hasX) return { field: "ScaleX", description };
             if (hasY) return { field: "ScaleY", description };
@@ -17291,7 +15613,6 @@ function SubbysPlushiesPageMain() {
             if (hasX) return { field: "TranslationX", description };
             if (hasY) return { field: "TranslationY", description };
         }
-
         const inputs = visibleNativeLayeringInputs(root);
         const index = inputs.indexOf(input);
         if (index >= 0) {
@@ -17303,23 +15624,18 @@ function SubbysPlushiesPageMain() {
                 return { field: index === 0 ? "TranslationX" : index === 1 ? "TranslationY" : null, description };
             }
         }
-
         return { field: null, description };
     }
-
     function convertNativeLayeringInputValue(field, rawValue, description) {
         const value = Number(rawValue);
         if (!Number.isFinite(value)) return null;
-
         if (field === "ScaleX" || field === "ScaleY") {
             const baseSize = field === "ScaleX" ? PLUSH_RENDER.Width : PLUSH_RENDER.Height;
             if (/percent|%/.test(description)) return value / 100;
             if (/width|height|pixel|px/.test(description)) return value / baseSize;
-
             if (Math.abs(value) > 8) return value / baseSize;
             return value;
         }
-
         if (field === "TranslationX") {
             if (/absolute|position x|left/.test(description) && Math.abs(value) > 128) {
                 return value - PLUSH_RENDER.Left;
@@ -17332,26 +15648,19 @@ function SubbysPlushiesPageMain() {
             }
             return value;
         }
-
         return value;
     }
-
     function applyNativeLayeringInputFallback(input, root, api, item, signatureBefore) {
         if (!isOurs(item)) return false;
-
         const signatureAfterNative = nativeItemTransformSignature(item);
         if (signatureBefore && signatureAfterNative && signatureAfterNative !== signatureBefore) return false;
-
         const { field, description } = inferNativeLayeringInputField(input, root, api);
         if (!field) return false;
-
         const value = convertNativeLayeringInputValue(field, input.value, description);
         if (!Number.isFinite(value)) return false;
-
         const property = getProperty(item);
         if (!property) return false;
         property[field] = value;
-
         nativeLayeringFallbackWrites++;
         lastNativeLayeringInput = {
             field,
@@ -17364,32 +15673,26 @@ function SubbysPlushiesPageMain() {
         };
         return true;
     }
-
     function attachNativeLayeringInputBridge(root, api) {
         if (!root || root === nativeLayeringBridgeRoot) return;
-
         if (nativeLayeringBridgeRoot && nativeLayeringBridgeInputHandler) {
             try {
                 nativeLayeringBridgeRoot.removeEventListener("input", nativeLayeringBridgeInputHandler, true);
                 nativeLayeringBridgeRoot.removeEventListener("change", nativeLayeringBridgeInputHandler, true);
             } catch (_) {}
         }
-
         nativeLayeringBridgeRoot = root;
         nativeLayeringBridgeInputHandler = event => {
             const input = event?.target;
             if (!(input instanceof HTMLInputElement)) return;
-
             const inputType = String(input.type || "text").toLowerCase();
             if (event.type === "input" && inputType !== "range") return;
-
             nativeLayeringInputEvents++;
             const focused = getFocusedManagedLayeringItem();
             if (!focused.C || !(isOurs(focused.item) || isWardrobeManagedItem(focused.item))) return;
             const signatureBefore = focused.item ? nativeItemTransformSignature(focused.item) : null;
             const eventType = event.type;
             const inferredField = inferNativeLayeringInputField(input, root, api).field;
-
             window.setTimeout(() => {
                 const current = getFocusedManagedLayeringItem();
                 if (!current.C || !(isOurs(current.item) || isWardrobeManagedItem(current.item))) return;
@@ -17412,31 +15715,25 @@ function SubbysPlushiesPageMain() {
                 }
             }, 0);
         };
-
         root.addEventListener("input", nativeLayeringBridgeInputHandler, true);
         root.addEventListener("change", nativeLayeringBridgeInputHandler, true);
     }
-
     function installNativeLayeringResizeBridge(api) {
         if (!api || typeof api.Resize !== "function") return false;
         if (api.Resize[NATIVE_LAYERING_RESIZE_MARK]) return true;
-
         const original = api.Resize;
         const wrapped = function (...args) {
             const beforeFocused = getFocusedManagedLayeringItem();
             const managedBefore = beforeFocused.C && (isOurs(beforeFocused.item) || isWardrobeManagedItem(beforeFocused.item));
             const beforeTransform = managedBefore ? readNativeItemTransform(beforeFocused.item) : null;
-
             const result = original.apply(this, args);
             window.setTimeout(() => {
                 const { C, item } = getFocusedManagedLayeringItem();
                 if (!C || !(isOurs(item) || isWardrobeManagedItem(item))) return;
-
                 const afterTransform = readNativeItemTransform(item);
                 const changedFields = beforeTransform && afterTransform
                     ? NATIVE_LAYER_TRANSFORM_KEYS.filter(field => beforeTransform[field] !== afterTransform[field])
                     : [];
-
                 if (isOurs(item)) {
                     if (changedFields.length) {
                         mirrorNativeTransformToActivePlushLayer(C, item, "Layering.Resize", true, changedFields);
@@ -17449,7 +15746,6 @@ function SubbysPlushiesPageMain() {
             }, 0);
             return result;
         };
-
         try {
             Object.defineProperty(wrapped, NATIVE_LAYERING_RESIZE_MARK, { value: true });
             api.Resize = wrapped;
@@ -17460,7 +15756,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function stopNativeLayeringBridge() {
         if (nativeLayeringBridgeTimer != null) {
             window.clearInterval(nativeLayeringBridgeTimer);
@@ -17476,55 +15771,45 @@ function SubbysPlushiesPageMain() {
         nativeLayeringBridgeInputHandler = null;
         nativeLayeringLastSignature = null;
     }
-
     function startNativeLayeringBridge(api) {
         stopNativeLayeringBridge();
         installNativeLayeringResizeBridge(api);
         nativeLayeringBridgeStartedAt = Date.now();
-
         nativeLayeringBridgeTimer = window.setInterval(() => {
             const root = nativeLayeringRoot();
             if (root) attachNativeLayeringInputBridge(root, api);
-
             if (!root && Date.now() - nativeLayeringBridgeStartedAt > 1500) {
                 stopNativeLayeringBridge();
             }
         }, LAYERING_BRIDGE_MONITOR_INTERVAL_MS);
     }
-
     async function openNativeLayering() {
         if (!ready) {
             warn("Not ready yet.");
             return;
         }
-
         const { C, item } = getFocusedPlushItem();
         if (!C || !isOurs(item)) {
             warn("Equip Subby's Plushies first with /plushie.");
             return;
         }
-
         const api = getLayeringAPI();
         if (!api || typeof api.Init !== "function") {
             error("R132 Layering.Init is unavailable. Run /plushiedebug.");
             return;
         }
-
         removeRoomMascotOverlay();
         setDragMode(false);
         if (activeIdleAnimationSession) cancelIdleAnimation();
         if (C === window.Player && activeBalanceHeadSession) restoreActiveBalanceHead("opened Move / Resize");
         if (C === window.Player && activeHideBehindSession) restoreActiveHideBehind("opened Move / Resize");
         if (C === window.Player && activeProtectSession) restoreActiveProtect("opened Move / Resize");
-
         ensureNativeTransform(item);
         canonicalizeExistingMoveResize(C, item, "Move / Resize open canonicalize");
         installNativeLayeringResizeBridge(api);
-
         try {
             api.activeTab = "translation";
         } catch (_) {}
-
         try {
             await api.Init(item, C);
             startNativeLayeringBridge(api);
@@ -17532,20 +15817,17 @@ function SubbysPlushiesPageMain() {
             error("Opening BC's native Layering editor failed:", e);
         }
     }
-
     function resetPosition() {
         const item = getHeld(window.Player);
         if (!isOurs(item)) {
             warn("Equip Subby's Plushies first with /plushie.");
             return;
         }
-
         setDragMode(false);
         if (activeIdleAnimationSession) cancelIdleAnimation();
         if (activeBalanceHeadSession) restoreActiveBalanceHead("position reset");
         if (activeHideBehindSession) restoreActiveHideBehind("position reset");
         if (activeProtectSession) restoreActiveProtect("position reset");
-
         ensureNativeTransform(item, true);
         const property = getProperty(item);
         if (property) {
@@ -17553,7 +15835,6 @@ function SubbysPlushiesPageMain() {
                 delete property[layerProperty];
             }
         }
-
         rebuildCharacterCanvas(window.Player, "Move / Resize reset");
         try {
             if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(window.Player);
@@ -17562,19 +15843,16 @@ function SubbysPlushiesPageMain() {
         }
         log("Reset plush position.", { ...PLUSH_RENDER, ...DEFAULT_TRANSFORM });
     }
-
     function loadImage(url, label) {
         return new Promise((resolve, reject) => {
             const image = new Image();
             if (/^https?:/i.test(url)) image.crossOrigin = "anonymous";
-
             const timeout = window.setTimeout(() => {
                 image.onload = null;
                 image.onerror = null;
                 try { image.src = ""; } catch (_) {}
                 reject(new Error(`Timed out loading ${label}.`));
             }, 5000);
-
             image.onload = () => {
                 window.clearTimeout(timeout);
                 if (image.naturalWidth > 0 && image.naturalHeight > 0) {
@@ -17583,7 +15861,6 @@ function SubbysPlushiesPageMain() {
                     reject(new Error(`${label} decoded as a broken image.`));
                 }
             };
-
             image.onerror = () => {
                 window.clearTimeout(timeout);
                 reject(new Error(`Could not load ${label}.`));
@@ -17591,19 +15868,15 @@ function SubbysPlushiesPageMain() {
             image.src = url;
         });
     }
-
     async function renderSmallPlush(url, label) {
         const image = await loadImage(url, label);
         const canvas = document.createElement("canvas");
         canvas.width = PLUSH_RENDER.Width;
         canvas.height = PLUSH_RENDER.Height;
-
         const ctx = canvas.getContext("2d");
         if (!ctx) throw new Error(`Could not create a canvas context for ${label}.`);
-
         ctx.imageSmoothingEnabled = true;
         if ("imageSmoothingQuality" in ctx) ctx.imageSmoothingQuality = "high";
-
         const scale = Math.min(
             canvas.width / image.naturalWidth,
             canvas.height / image.naturalHeight
@@ -17612,38 +15885,29 @@ function SubbysPlushiesPageMain() {
         const height = Math.max(1, Math.round(image.naturalHeight * scale));
         const x = Math.round((canvas.width - width) / 2);
         const y = Math.round((canvas.height - height) / 2);
-
         ctx.drawImage(image, x, y, width, height);
-
         let dataUrl;
         try {
             dataUrl = canvas.toDataURL("image/png");
         } catch (e) {
             throw new Error(`Could not resize ${label}: ${String(e)}`);
         }
-
         if (!dataUrl.startsWith("data:image/png")) {
             throw new Error(`Could not encode resized image for ${label}.`);
         }
-
         return dataUrl;
     }
-
     function makeTransparentRenderFallback() {
         const canvas = document.createElement("canvas");
         canvas.width = PLUSH_RENDER.Width;
         canvas.height = PLUSH_RENDER.Height;
         return canvas.toDataURL("image/png");
     }
-
     function renderIndexesForSource(source) {
         const indexes = [];
         for (let i = 0; i < PLUSH_IMAGES.length; i++) if (PLUSH_IMAGES[i] === source) indexes.push(i);
         return indexes;
     }
-
-    // A single redraw per affected character per browser frame, never an
-    // unconditional frame loop. Keep dirty characters until the canvas is visible.
     const dirtyPlushCharacters = new Set();
     let dirtyPlushRenderFrame = 0;
     function flushDirtyPlushCharacters() {
@@ -17677,16 +15941,13 @@ function SubbysPlushiesPageMain() {
             }
         }
     }
-
     function ensureRenderImage(optionIndex, { refreshConsumers = true } = {}) {
         const option = canonicalWirePlushOption(Number(optionIndex));
         if (!validPlushOption(option)) return Promise.resolve(renderFallbackImage || renderImages[0] || null);
         if (renderImages[option] && renderImages[option] !== renderFallbackImage) return Promise.resolve(renderImages[option]);
-
         const source = PLUSH_IMAGES[option];
         if (source === PLUSH_IMAGES[0]) return Promise.resolve(renderFallbackImage || renderImages[0] || null);
         if (renderImagePromises.has(source)) return renderImagePromises.get(source);
-
         const promise = (async () => {
             let image = null;
             try {
@@ -17700,11 +15961,9 @@ function SubbysPlushiesPageMain() {
             if (refreshConsumers && image) refreshLazyRenderConsumers(source);
             return resolved;
         })().finally(() => renderImagePromises.delete(source));
-
         renderImagePromises.set(source, promise);
         return promise;
     }
-
     async function prepareRenderImages() {
         let firstGoodRender = null;
         try {
@@ -17715,25 +15974,18 @@ function SubbysPlushiesPageMain() {
         renderFallbackImage = firstGoodRender || makeTransparentRenderFallback();
         for (let i = 0; i < renderImages.length; i++) renderImages[i] = renderFallbackImage;
         for (const index of renderIndexesForSource(PLUSH_IMAGES[0])) renderImages[index] = renderFallbackImage;
-
-        // Action icons are resolved only if an action actually needs that icon.
-        // This avoids three image fetches, decodes and canvas encodes at startup.
         hairActionIconImage = null;
         faceActionIconImage = null;
         pointingActionIconImage = null;
-
         imageMappings = buildImageMappings();
         log(`Prepared startup artwork only; ${PLUSHES.length - renderIndexesForSource(PLUSH_IMAGES[0]).length} plush option(s) will load lazily on first use.`);
     }
-
     function resolveModularArchetype() {
         if (modularArchetype != null) return modularArchetype;
-
         const donors = [
             ["ItemMouth", "ModularGag"],
             ["ItemPelvis", "ModularChastityBelt"],
         ];
-
         for (const [group, name] of donors) {
             try {
                 const asset = AssetGet(FAMILY, group, name);
@@ -17743,16 +15995,13 @@ function SubbysPlushiesPageMain() {
                 }
             } catch (_) {}
         }
-
         try {
             if (typeof ExtendedArchetype !== "undefined" && ExtendedArchetype?.MODULAR != null) {
                 modularArchetype = ExtendedArchetype.MODULAR;
             }
         } catch (_) {}
-
         return modularArchetype;
     }
-
     function makeLayers() {
         return PLUSHES.map((_, index) => ({
             Name: `Plush${index + 1}`,
@@ -17760,13 +16009,11 @@ function SubbysPlushiesPageMain() {
             AllowTypes: { [MODULE_KEY]: [index] },
         }));
     }
-
     function makeExtendedConfig() {
         const archetype = resolveModularArchetype();
         if (archetype == null) {
             throw new Error("Could not resolve BC's MODULAR ExtendedItem archetype.");
         }
-
         return {
             Archetype: archetype,
             DrawImages: false,
@@ -17779,44 +16026,35 @@ function SubbysPlushiesPageMain() {
             ],
         };
     }
-
     function makeAssetStrings() {
         const EN = {
             SelectBase: "Choose a plushie",
             ModulePlushie: "Plushie",
         };
-
         PLUSH_NAMES.forEach((label, index) => {
             EN[`Option${MODULE_KEY}${index}`] = label;
             EN[`Set${MODULE_KEY}${index}`] =
                 `SourceCharacter selects ${label} for DestinationCharacter.`;
         });
-
         return { EN };
     }
-
     function buildImageMappings() {
         const mappings = {};
-
         for (const groupName of PLUSH_GROUPS) {
             const base = assetBaseForGroup(groupName);
             mappings[`${base}.png`] = renderImages[0];
             mappings[`${base.replace(`/${ASSET_NAME}`, `/Preview/${ASSET_NAME}`)}.png`] = renderImages[0];
-
             for (const size of SIZE_TOKENS) {
                 mappings[`${base}_${size}.png`] = renderImages[0];
             }
-
             PLUSHES.forEach((_, index) => {
                 const layerName = `Plush${index + 1}`;
                 const typeToken = `${MODULE_KEY}${index}`;
                 const image = renderImages[index];
-
                 mappings[`${base}_${layerName}.png`] = image;
                 mappings[`${base}_${typeToken}.png`] = image;
                 mappings[`${base}_${typeToken}_${layerName}.png`] = image;
                 mappings[`${base}_${layerName}_${typeToken}.png`] = image;
-
                 for (const size of SIZE_TOKENS) {
                     mappings[`${base}_${size}_${layerName}.png`] = image;
                     mappings[`${base}_${layerName}_${size}.png`] = image;
@@ -17828,14 +16066,11 @@ function SubbysPlushiesPageMain() {
                 }
             });
         }
-
         return mappings;
     }
-
     function buildNativeAssetTextMap() {
         const strings = makeAssetStrings().EN;
         const textMap = new Map();
-
         for (const groupName of PLUSH_GROUPS) {
             const prefix = `${groupName}${ASSET_NAME}`;
             textMap.set(prefix, DISPLAY_NAME);
@@ -17843,13 +16078,11 @@ function SubbysPlushiesPageMain() {
             textMap.set(`${groupName.toLowerCase()}:${ASSET_NAME.toLowerCase()}`, DISPLAY_NAME);
             for (const [key, value] of Object.entries(strings)) textMap.set(`${prefix}${key}`, value);
         }
-
         for (const entry of WARDROBE_ITEMS) {
             textMap.set(`${entry.group}${entry.name}`, entry.title);
             textMap.set(`${entry.group}:${entry.name}`, entry.title);
             textMap.set(`${entry.group}-${entry.name}`, entry.title);
             textMap.set(`${entry.group.toLowerCase()}:${entry.name.toLowerCase()}`, entry.title);
-            // Appearance extensions and some BC text paths use this hyphenated key.
             if (entry.group === "HairAccessory2") {
                 textMap.set(`HairAccessory1-${entry.name}`, entry.title);
                 textMap.set(`HairAccessory1:${entry.name}`, entry.title);
@@ -17859,12 +16092,8 @@ function SubbysPlushiesPageMain() {
                 textMap.set(`${entry.group}${entry.name}${zone}`, zone.replace(/([a-z])([A-Z])/g, "$1 $2"));
             }
         }
-
         return textMap;
     }
-
-    // LayerNames.csv labels are looked up separately from asset descriptions.
-    // Only our six curated layers are translated; all other keys pass through.
     function wardrobeLayerTextMap() {
         const labels = new Map();
         for (const entry of WARDROBE_ITEMS) {
@@ -17872,22 +16101,16 @@ function SubbysPlushiesPageMain() {
                 const display = zone.replace(/([a-z])([A-Z])/g, "$1 $2");
                 labels.set(`${entry.group}${entry.name}${zone}`, display);
                 if (entry.group === "HairAccessory2") {
-                    // Some BC appearance paths use the first hair-accessory group.
                     labels.set(`HairAccessory1${entry.name}${zone}`, display);
                 }
             }
         }
         return labels;
     }
-
-    // These are the exact additions contained in the companion CSV files.
-    // Runtime registration is needed because a CSV committed to GitHub does not
-    // become part of BC's own LayerNames.csv or Female3DCG.csv automatically.
     const WARDROBE_LAYER_TEXT_RETRY_DELAYS_MS = Object.freeze([250, 750, 1500, 3000, 6000, 10000]);
     let wardrobeLayerTextHookInstalled = false;
     let wardrobeLayerTextHookRetries = 0;
     let wardrobeLayerTextHookRetryTimer = null;
-
     function wardrobeInjectLayerRows(table, labels) {
         if (!table) return false;
         if (table instanceof Map) {
@@ -17895,8 +16118,6 @@ function SubbysPlushiesPageMain() {
             return true;
         }
         if (Array.isArray(table)) {
-            // Existing parsed CSVs can be 2-column arrays or Tag/Value objects.
-            // Do not alter unrecognized array layouts.
             const first = table.find(row => row != null);
             if (Array.isArray(first)) {
                 if (first.length < 2 || typeof first[0] !== "string") return false;
@@ -17928,7 +16149,6 @@ function SubbysPlushiesPageMain() {
         }
         return false;
     }
-
     function wardrobeRepairLayerNamesCache() {
         const labels = wardrobeLayerTextMap();
         const paths = [
@@ -17943,17 +16163,14 @@ function SubbysPlushiesPageMain() {
                 try { if (wardrobeInjectLayerRows(table, labels)) repaired++; } catch (_) {}
             }
         }
-        // Some editors read the active parsed CSV directly instead of TextGet.
         for (const key of ["TextLayerNames", "LayerNames", "Text_LayerNames"]) {
             try { if (wardrobeInjectLayerRows(window[key], labels)) repaired++; } catch (_) {}
         }
         return repaired;
     }
-
     function installWardrobeLayerTextHook() {
         wardrobeRepairLayerNamesCache();
         if (wardrobeLayerTextHookInstalled) return true;
-        // Use ModSDK only. A direct TextGet reassignment triggers BCX warnings.
         if (!modApi || typeof modApi.hookFunction !== "function" || typeof window.TextGet !== "function") {
             if (wardrobeLayerTextHookRetries < WARDROBE_LAYER_TEXT_RETRY_DELAYS_MS.length &&
                 wardrobeLayerTextHookRetryTimer == null && typeof window.setTimeout === "function") {
@@ -17968,14 +16185,10 @@ function SubbysPlushiesPageMain() {
         const labels = wardrobeLayerTextMap();
         try {
             modApi.hookFunction("TextGet", 100000, (args, next) => {
-                // Different BC versions/editors pass key and text table in
-                // different argument positions. Match only our exact keys.
                 const exact = Array.isArray(args) ? args.find(value =>
                     typeof value === "string" && labels.has(value)) : null;
                 if (exact) return labels.get(exact);
                 const result = next(args);
-                // Also handle a missing-translation diagnostic returned by BC.
-                // Never modify unrelated translations or other mods' strings.
                 if (typeof result === "string" && /MISSING TEXT IN|Unknown translation key/i.test(result)) {
                     for (const [key, value] of labels) {
                         if (result.trimEnd().replace(/["']/g, "").endsWith(key)) return value;
@@ -17990,11 +16203,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
-    // The third-party Appearance renderer can capture an unhooked TextGet reference
-    // or a missing message before the main-world TextGet hook installs. The normal
-    // console TextGet may be correct while that editor still draws stale fallback
-    // strings. Repair only our exact on-screen missing labels, at render time.
     const WARDROBE_DRAW_LABEL_HOOK_TARGETS = Object.freeze([
         "DrawText", "DrawTextFit", "DrawTextWrap", "DrawButton", "DrawBackNextButton",
     ]);
@@ -18004,7 +16212,6 @@ function SubbysPlushiesPageMain() {
     let wardrobeDisplayHookRetryTimer = null;
     let wardrobeDisplayHookRetryIndex = 0;
     const WARDROBE_DISPLAY_HOOK_RETRIES_MS = Object.freeze([650, 1700, 4000]);
-
     function wardrobeResolveMissingVisibleLabel(value) {
         if (typeof value !== "string" || value.length > 1024 ||
             !/MISSING TEXT IN|UNKNOWN TRANSLATION KEY|MISSING ASSET DESCRIPTION/i.test(value)) return value;
@@ -18031,21 +16238,15 @@ function SubbysPlushiesPageMain() {
         }
         return value;
     }
-
     function installWardrobeDrawLabelHooks() {
         if (!modApi || typeof modApi.hookFunction !== "function") return false;
         for (const name of WARDROBE_DRAW_LABEL_HOOK_TARGETS) {
             if (wardrobeDrawLabelHooksInstalled.has(name) || typeof window[name] !== "function") continue;
             try {
                 modApi.hookFunction(name, 100000, (args, next) => {
-                    // DrawButton's text is usually argument 5; Text routines
-                    // commonly use argument 1. Check strings only and leave
-                    // all unrelated game/other-mod labels untouched.
                     let translated = null;
                     if (Array.isArray(args)) for (let i = 0; i < args.length; i++) {
                         const value = args[i];
-                        // Draw calls are frequent. Do not allocate an args copy,
-                        // or even use the translator, for ordinary labels.
                         if (typeof value !== "string" ||
                             !(value.includes("MISSING") || value.includes("Unknown translation key"))) continue;
                         const replacement = wardrobeResolveMissingVisibleLabel(value);
@@ -18063,7 +16264,6 @@ function SubbysPlushiesPageMain() {
         }
         return wardrobeDrawLabelHooksInstalled.size > 0;
     }
-
     function wardrobeRepairVisibleTextNode(node) {
         if (!node || node.nodeType !== 3 || typeof node.nodeValue !== "string") return;
         const before = node.nodeValue;
@@ -18073,13 +16273,10 @@ function SubbysPlushiesPageMain() {
             wardrobeDrawLabelCounts.dom++;
         }
     }
-
     function wardrobeRepairInsertedText(root) {
         if (!root) return;
         if (root.nodeType === 3) { wardrobeRepairVisibleTextNode(root); return; }
         if (root.nodeType !== 1 && root.nodeType !== 11) return;
-        // A bounded traversal occurs only for newly added HTML nodes. Never
-        // scan or rewrite the entire BC document on animation frames.
         const pending = [root];
         let visited = 0;
         while (pending.length && visited++ < 350) {
@@ -18091,7 +16288,6 @@ function SubbysPlushiesPageMain() {
             }
         }
     }
-
     function installWardrobeDomLabelFallback() {
         if (wardrobeDomLabelObserver || !document.body || typeof window.MutationObserver !== "function") return false;
         try {
@@ -18111,7 +16307,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function installWardrobeVisibleLabelFix() {
         installWardrobeDrawLabelHooks();
         installWardrobeDomLabelFallback();
@@ -18124,7 +16319,6 @@ function SubbysPlushiesPageMain() {
             }, WARDROBE_DISPLAY_HOOK_RETRIES_MS[wardrobeDisplayHookRetryIndex]);
         }
     }
-
     function installAssetTextHook() {
         const textMap = buildNativeAssetTextMap();
         if (!installHook("AssetTextGet", 1000, (args, next) => {
@@ -18141,7 +16335,6 @@ function SubbysPlushiesPageMain() {
             throw new Error("AssetTextGet is unavailable; cannot install custom asset text.");
         }
     }
-
     function installHugTightlyTextHook() {
         const compactHugName = compactActivityName(HUG_TIGHTLY_ACTIVITY_NAME);
         const activityTextTokens = ALL_PLUGIN_ACTIVITIES.map(spec => ({
@@ -18149,21 +16342,18 @@ function SubbysPlushiesPageMain() {
             name: compactActivityName(spec.name),
             label: compactActivityName(spec.label),
         }));
-
         function specFromTextKey(key, compactKey = compactActivityName(key)) {
             for (const token of activityTextTokens) {
                 if (compactKey.includes(token.name) || compactKey.includes(token.label)) return token.spec;
             }
             return null;
         }
-
         function bcActivityTemplate(spec, self) {
             const template = self ? spec.selfText : (spec.otherText || spec.selfText);
             const plushName = String(currentPlushName() || "plushie").trim() || "plushie";
             const plushPhrase = /^plushie$/i.test(plushName)
                 ? "SourceCharacter's plushie"
                 : `SourceCharacter's ${plushName} plushie`;
-
             return template
                 .replaceAll("{Source}", "SourceCharacter")
                 .replaceAll("{Target}", "DestinationCharacter")
@@ -18172,7 +16362,6 @@ function SubbysPlushiesPageMain() {
                 .replaceAll("{Plushie}", plushPhrase)
                 .replaceAll("the plushie", plushPhrase);
         }
-
         const activityHooked = installHook("ActivityDictionaryText", 1000, (args, next) => {
             const key = args?.[0];
             if (typeof key !== "string") return next(args);
@@ -18185,7 +16374,6 @@ function SubbysPlushiesPageMain() {
                 !key.includes("Cuddle to Chest") &&
                 !key.includes("Nuzzle")
             ) return next(args);
-
             const compactKey = compactActivityName(key);
             const isHug = compactKey.includes(compactHugName) || compactKey.includes("hugtightlyitem");
             if (isHug) {
@@ -18195,27 +16383,22 @@ function SubbysPlushiesPageMain() {
                 }
                 return HUG_TIGHTLY_ACTIVITY_LABEL;
             }
-
             const spec = specFromTextKey(key, compactKey);
             if (!spec) return next(args);
-
             if (/^label-/i.test(key)) return spec.label;
             if (/^chatself-/i.test(key)) return bcActivityTemplate(spec, true);
             if (/^chatother-/i.test(key)) return bcActivityTemplate(spec, false);
             return spec.label;
         });
-
         if (!activityHooked) {
             throw new Error("ActivityDictionaryText is unavailable; cannot register plush activity text safely.");
         }
         return true;
     }
-
     const IMAGE_COMPACT_HUG_NAME = compactActivityName(HUG_TIGHTLY_ACTIVITY_NAME);
     const IMAGE_CUSTOM_ACTIVITY_TOKENS = Object.freeze(
         ALL_PLUGIN_ACTIVITIES.map(spec => Object.freeze({ spec, name: compactActivityName(spec.name) }))
     );
-
     const actionIconLoads = new Map();
     const actionIconFailureUntil = new Map();
     function lazyActionIcon(slot) {
@@ -18254,28 +16437,20 @@ function SubbysPlushiesPageMain() {
                 return renderFallbackImage || PLUSH_FALLBACK_IMAGE;
         }
     }
-
     function normalizeAssetImagePath(source) {
         if (typeof source !== "string") return null;
-
         let value = source.trim();
         if (!value || value.startsWith("data:") || value.startsWith("blob:")) return value;
-
         value = value.split("#", 1)[0].split("?", 1)[0];
-
         try {
             value = decodeURIComponent(value);
         } catch (_) {}
-
         const assetsIndex = value.indexOf("Assets/");
         if (assetsIndex >= 0) value = value.slice(assetsIndex);
-
         while (value.startsWith("./")) value = value.slice(2);
         while (value.startsWith("../")) value = value.slice(3);
-
         return value;
     }
-
     function plushOptionFromNativeImagePath(source) {
         const normalized = normalizeAssetImagePath(source);
         if (typeof normalized !== "string" || !normalized.includes(ASSET_NAME)) return -1;
@@ -18291,14 +16466,12 @@ function SubbysPlushiesPageMain() {
         }
         return -1;
     }
-
     function trackLazyNativeImageElement(image, requestedSource) {
         if (!image || typeof requestedSource !== "string") return -1;
         const option = plushOptionFromNativeImagePath(requestedSource);
         if (!validPlushOption(option)) return -1;
         const source = PLUSH_IMAGES[option];
         if (!source || source === PLUSH_IMAGES[0]) return option;
-
         lazyNativeImageSourceByElement.set(image, source);
         let images = lazyNativeImageElementsBySource.get(source);
         if (!images) {
@@ -18308,7 +16481,6 @@ function SubbysPlushiesPageMain() {
         images.add(image);
         return option;
     }
-
     function refreshTrackedNativeImageElements(source, resolvedImage) {
         const images = lazyNativeImageElementsBySource.get(source);
         if (!images?.size || typeof resolvedImage !== "string" || !resolvedImage) return false;
@@ -18327,22 +16499,18 @@ function SubbysPlushiesPageMain() {
         if (!images.size) lazyNativeImageElementsBySource.delete(source);
         return changed;
     }
-
     function mapImageSource(source) {
         if (typeof source !== "string") return source;
         const wardrobeSprite = wardrobeSpriteForPath(source);
         if (wardrobeSprite) return wardrobeSprite;
         if (!imageMappings) return source;
-
         if (
             !source.includes(ASSET_NAME) &&
             !source.includes("SubbysPlushies") &&
             !source.includes("subbysplushies")
         ) return source;
-
         const normalized = normalizeAssetImagePath(source);
         if (typeof normalized !== "string") return source;
-
         const direct = imageMappings[normalized];
         if (direct) {
             const metaType = normalized.match(/(?:^|[_/])p(\d+)(?:[_./]|$)/i);
@@ -18353,7 +16521,6 @@ function SubbysPlushiesPageMain() {
             }
             return direct;
         }
-
         const compactNormalized = normalized.replace(/[^a-z0-9]/gi, "").toLowerCase();
         let extraActivitySpec = null;
         for (const token of IMAGE_CUSTOM_ACTIVITY_TOKENS) {
@@ -18362,7 +16529,6 @@ function SubbysPlushiesPageMain() {
                 break;
             }
         }
-
         if (
             compactNormalized.includes(IMAGE_COMPACT_HUG_NAME) ||
             compactNormalized.includes("hugtightlyitem") ||
@@ -18370,13 +16536,10 @@ function SubbysPlushiesPageMain() {
         ) {
             return renderFallbackImage || PLUSH_FALLBACK_IMAGE || source;
         }
-
         if (extraActivitySpec) {
             return resolvedCustomActionImage(extraActivitySpec) || source;
         }
-
         if (!normalized.includes(ASSET_NAME)) return source;
-
         const typeMatch = normalized.match(/(?:^|[_/])p(\d+)(?:[_./]|$)/i);
         if (typeMatch) {
             const index = Number(typeMatch[1]);
@@ -18385,7 +16548,6 @@ function SubbysPlushiesPageMain() {
                 return renderImages[index] || renderFallbackImage;
             }
         }
-
         const layerMatch = normalized.match(/(?:^|[_/])Plush(\d+)(?:[_./]|$)/i);
         if (layerMatch) {
             const index = Number(layerMatch[1]) - 1;
@@ -18394,7 +16556,6 @@ function SubbysPlushiesPageMain() {
                 return renderImages[index] || renderFallbackImage;
             }
         }
-
         if (
             normalized.endsWith(`/${ASSET_NAME}.png`) ||
             normalized.includes(`/Preview/${ASSET_NAME}.png`) ||
@@ -18402,21 +16563,16 @@ function SubbysPlushiesPageMain() {
         ) {
             return renderImages[0];
         }
-
         if (!unmappedImageSources.has(normalized)) {
             unmappedImageSources.add(normalized);
             warn("Saw an unrecognized Subby's Plushies image path:", source);
         }
-
         return source;
     }
-
     function installNativeImageElementHook() {
         const proto = window.HTMLImageElement?.prototype;
         if (!proto) return false;
-
         let installed = false;
-
         const srcDescriptor = Object.getOwnPropertyDescriptor(proto, "src");
         if (
             srcDescriptor?.get &&
@@ -18427,8 +16583,6 @@ function SubbysPlushiesPageMain() {
             const originalSet = srcDescriptor.set;
             const wrappedSet = function (value) {
                 if (typeof value !== "string") return originalSet.call(this, value);
-                // Fixed Wardrobe paths piggyback on the already installed Plushies
-                // image redirect; no extra native drawing hooks are necessary.
                 const wardrobeSprite = wardrobeSpriteForPath(value);
                 if (wardrobeSprite) return originalSet.call(this, wardrobeSprite);
                 if (!value.includes("SubbysPlushies") && !value.includes("subbysplushies")) {
@@ -18441,7 +16595,6 @@ function SubbysPlushiesPageMain() {
                 }
                 return originalSet.call(this, mapImageSource(value));
             };
-
             try {
                 Object.defineProperty(wrappedSet, CUSTOM_HOOK_MARK, { value: true });
                 Object.defineProperty(proto, "src", {
@@ -18457,7 +16610,6 @@ function SubbysPlushiesPageMain() {
             imageElementSrcHookInstalled = true;
             installed = true;
         }
-
         const originalSetAttribute = proto.setAttribute;
         if (
             typeof originalSetAttribute === "function" &&
@@ -18481,7 +16633,6 @@ function SubbysPlushiesPageMain() {
                 }
                 return originalSetAttribute.call(this, name, value);
             };
-
             try {
                 Object.defineProperty(wrappedSetAttribute, CUSTOM_HOOK_MARK, { value: true });
                 proto.setAttribute = wrappedSetAttribute;
@@ -18494,13 +16645,10 @@ function SubbysPlushiesPageMain() {
             imageElementSetAttributeHookInstalled = true;
             installed = true;
         }
-
         return installed;
     }
-
     function installImageMappingHooks() {
         const nativeImageHook = installNativeImageElementHook();
-
         let fallbackHook = null;
         if (!nativeImageHook && modApi && typeof modApi.hookFunction === "function") {
             const candidates = [
@@ -18511,7 +16659,6 @@ function SubbysPlushiesPageMain() {
                 "DrawImageCanvas",
                 "DrawImageZoomCanvas",
             ];
-
             for (const functionName of candidates) {
                 const installed = installHook(functionName, 1000, (args, next) => {
                     const source = args?.[0];
@@ -18532,18 +16679,15 @@ function SubbysPlushiesPageMain() {
                 }
             }
         }
-
         if (!nativeImageHook && !fallbackHook) {
             throw new Error("No browser or BC image-loading hook was available for the plush image mapper.");
         }
-
         log(
             `Installed proven image mapper: HTMLImageElement.src=${imageElementSrcHookInstalled ? "yes" : "no"}, ` +
             `setAttribute=${imageElementSetAttributeHookInstalled ? "yes" : "no"}, ` +
             `BC fallback=${fallbackHook || "none"}.`
         );
     }
-
     function getExtendedRoot(groupName = GROUP) {
         const root = window.AssetFemale3DCGExtended;
         if (!root || typeof root !== "object") {
@@ -18552,42 +16696,34 @@ function SubbysPlushiesPageMain() {
         if (!root[groupName] || typeof root[groupName] !== "object") root[groupName] = {};
         return root[groupName];
     }
-
     function installExtendedConfig() {
         for (const groupName of PLUSH_GROUPS) getExtendedRoot(groupName)[ASSET_NAME] = makeExtendedConfig();
     }
-
     function registerNativeModularData(asset, groupName = asset?.Group?.Name || GROUP) {
         if (!asset) throw new Error("Cannot register modular data without the runtime asset.");
-
         const createModularData = window.ModularItemCreateModularData;
         if (typeof createModularData !== "function") {
             throw new Error(
                 "R132 ModularItemCreateModularData is unavailable; cannot register SubbysPlushies in the modular lookup."
             );
         }
-
         const config = makeExtendedConfig();
         let data;
-
         try {
             data = createModularData(asset, config);
         } catch (e) {
             throw new Error(`Could not register native modular data: ${String(e)}`);
         }
-
         const expectedKey = `${groupName}${ASSET_NAME}`;
         if (!data || typeof data !== "object" || data.key !== expectedKey) {
             throw new Error(
                 `ModularItemCreateModularData returned an invalid registration for ${expectedKey}.`
             );
         }
-
         modularRegistrationStrategy = "ModularItemCreateModularData(asset, config)";
         log(`Registered native modular lookup entry: ${expectedKey}.`);
         return data;
     }
-
     function makeNativeAssetDefinition() {
         return {
             Name: ASSET_NAME,
@@ -18598,17 +16734,14 @@ function SubbysPlushiesPageMain() {
             Extended: true,
             AllowActivity: [HUG_TIGHTLY_ACTIVITY_NAME, ...CUSTOM_PLUSH_ACTIVITIES.map(spec => spec.name)],
             ActivityAudio: [],
-
             ParentGroup: {},
             CreateLayerTypes: [MODULE_KEY],
-
             Top: PLUSH_RENDER.Top,
             Left: PLUSH_RENDER.Left,
             Priority: PLUSH_DRAW_PRIORITY,
             Layer: makeLayers(),
         };
     }
-
     function findRuntimeAssetGroup(groupName = GROUP) {
         return Array.isArray(window.AssetGroup)
             ? window.AssetGroup.find(group =>
@@ -18616,20 +16749,17 @@ function SubbysPlushiesPageMain() {
             ) || null
             : null;
     }
-
     function findSourceAssetGroup(groupName = GROUP) {
         return Array.isArray(window.AssetFemale3DCG)
             ? window.AssetFemale3DCG.find(group => group?.Group === groupName) || null
             : null;
     }
-
     function rememberNativeDefinition(definition, groupName = GROUP) {
         const sourceGroup = findSourceAssetGroup(groupName);
         if (!sourceGroup || !Array.isArray(sourceGroup.Asset)) return;
         if (sourceGroup.Asset.some(asset => asset?.Name === ASSET_NAME)) return;
         sourceGroup.Asset.push(definition);
     }
-
     function getParameterNames(fn) {
         try {
             const source = Function.prototype.toString.call(fn);
@@ -18643,11 +16773,9 @@ function SubbysPlushiesPageMain() {
             return [];
         }
     }
-
     function getAssetAddSignatureFunction() {
         const add = window.AssetAdd;
         if (typeof add !== "function") return null;
-
         try {
             const sdk = window.bcModSdk || window.bcModSDK;
             const patchingInfo = typeof sdk?.getPatchingInfo === "function" ? sdk.getPatchingInfo() : null;
@@ -18656,10 +16784,8 @@ function SubbysPlushiesPageMain() {
                 : null;
             if (typeof entry?.original === "function") return entry.original;
         } catch (_) {}
-
         return add;
     }
-
     function callAssetAdd(definition, runtimeGroup, groupName = runtimeGroup?.Name || GROUP, optionalExtendedConfig) {
         const add = window.AssetAdd;
         if (typeof add !== "function") throw new Error("AssetAdd is unavailable.");
@@ -18669,34 +16795,26 @@ function SubbysPlushiesPageMain() {
         if (!definition || typeof definition !== "object" || !definition.Name) {
             throw new Error("AssetAdd received an invalid plushie asset definition.");
         }
-
         const previousCurrentGroup = window.AssetCurrentGroup;
         const signatureFunction = getAssetAddSignatureFunction() || add;
         const params = getParameterNames(signatureFunction);
         const arity = Math.max(Number(signatureFunction.length) || 0, params.length);
-        // undefined keeps the original Plushies modular configuration;
-        // null is passed for ordinary Wardrobe appearance assets.
         const extendedConfig = optionalExtendedConfig === undefined ? makeExtendedConfig() : optionalExtendedConfig;
         const sourceGroup = findSourceAssetGroup(groupName);
-
         try {
             window.AssetCurrentGroup = runtimeGroup;
-
             if (arity === 3 && (!params.length || params.every(name => name.length <= 2))) {
                 assetAddStrategy = "AssetAdd(runtimeGroup, definition, extendedConfig) [R132 compatibility]";
                 add(runtimeGroup, definition, extendedConfig);
                 return;
             }
-
             if (!params.length && arity >= 2 && arity <= 3) {
                 assetAddStrategy = "AssetAdd(runtimeGroup, definition, extendedConfig) [arity fallback]";
                 add(runtimeGroup, definition, ...(arity >= 3 ? [extendedConfig] : []));
                 return;
             }
-
             const args = params.map((parameter, index) => {
                 const name = parameter.toLowerCase().replace(/[^a-z0-9]/g, "");
-
                 if (name.includes("extendedconfig") || name === "config" || name === "extendeditemconfig") return extendedConfig;
                 if (name.includes("groupdef") || name === "sourcegroup") return sourceGroup;
                 if (name === "group" || name === "g" || name === "assetgroup" || name === "runtimegroup") return runtimeGroup;
@@ -18706,61 +16824,49 @@ function SubbysPlushiesPageMain() {
                     return definition;
                 }
                 if (name === "extended" || name === "extend") return true;
-
                 if (arity === 3) {
                     if (index === 0) return runtimeGroup;
                     if (index === 1) return definition;
                     if (index === 2) return extendedConfig;
                 }
-
                 return undefined;
             });
-
             const requiredCount = arity || params.length;
             const recognizedRequired = args.slice(0, requiredCount).every(value => value !== undefined);
-
             if (!recognizedRequired) {
                 if (requiredCount >= 2 && requiredCount <= 3) {
                     assetAddStrategy = "AssetAdd(runtimeGroup, definition, extendedConfig) [compat fallback]";
                     add(runtimeGroup, definition, extendedConfig);
                     return;
                 }
-
                 throw new Error(
                     `Unsupported AssetAdd signature: (${params.join(", ") || `${arity} parameter(s)`})`
                 );
             }
-
             assetAddStrategy = `AssetAdd(${params.join(", ") || `${arity} args`})`;
             add(...args.slice(0, requiredCount));
         } finally {
             try { window.AssetCurrentGroup = previousCurrentGroup; } catch (_) {}
         }
     }
-
     function setupNativeAsset() {
         if (!imageMappings) throw new Error("Render image mappings were not prepared.");
-
         installExtendedConfig();
         installAssetTextHook();
         installHugTightlyTextHook();
         installImageMappingHooks();
-
         let primaryAsset = null;
         for (const groupName of PLUSH_GROUPS) {
             const definition = makeNativeAssetDefinition();
             const runtimeGroup = findRuntimeAssetGroup(groupName);
             if (!runtimeGroup) throw new Error(`Could not find BC runtime asset group ${groupName}.`);
-
             callAssetAdd(definition, runtimeGroup, groupName);
-
             const asset = AssetGet(FAMILY, groupName, ASSET_NAME);
             if (!asset) {
                 throw new Error(
                     `Native AssetAdd completed but AssetGet(${FAMILY}, ${groupName}, ${ASSET_NAME}) returned null.`
                 );
             }
-
             rememberNativeDefinition(definition, groupName);
             asset.Extended = true;
             if (asset.Archetype == null) asset.Archetype = resolveModularArchetype();
@@ -18768,12 +16874,8 @@ function SubbysPlushiesPageMain() {
             registerNativeModularData(asset, groupName);
             if (groupName === GROUP) primaryAsset = asset;
         }
-
         return primaryAsset || AssetGet(FAMILY, GROUP, ASSET_NAME);
     }
-
-    // The Appearance picker consults more than AssetGet. Previous mocked tests
-    // checked lookup only, so an item could report success but remain invisible.
     function wardrobeCatalogStatus(entry) {
         const group = findRuntimeAssetGroup(entry.group);
         const asset = typeof window.AssetGet === "function" ? window.AssetGet(FAMILY, entry.group, entry.name) : null;
@@ -18797,11 +16899,8 @@ function SubbysPlushiesPageMain() {
             overrideHeight: asset?.OverrideHeight ?? null,
         };
     }
-
     function ensureWardrobePickerCatalog(asset, group, entry) {
         if (!asset || !group) throw new Error("Missing created asset or runtime group");
-        // Do not replace native asset objects: preserve BC's prototype, internal
-        // properties, and any references in AssetGet's internal lookups.
         asset.Group = group;
         asset.Description = entry.title;
         wardrobeRepairAssetText(entry);
@@ -18817,19 +16916,11 @@ function SubbysPlushiesPageMain() {
         if (Array.isArray(group.Asset) && !status.inGroupCatalog) throw new Error("Asset missing from group Appearance item catalog");
         return status;
     }
-
-    // Native Wardrobe / Appearance catalog support. BC and some UI mods cache
-    // appearance choices when opening the item picker; adding an asset to
-    // AssetGet after that point does not necessarily update an existing screen.
-    // This adapter only touches our two names, without replacing game draw code.
     const wardrobeNativePickerHooks = new Set();
     const wardrobeNativePickerState = { addedToCachedLists: 0, lastSync: null };
     let wardrobePickerSyncActive = false;
-
     function wardrobeCachedAppearanceLists() {
         const candidates = [];
-        // Older appearance screens store this as a top-level lexical variable,
-        // while some integrations expose their own copy on window.
         try {
             if (typeof AppearanceAssets !== "undefined" && Array.isArray(AppearanceAssets)) {
                 candidates.push(AppearanceAssets);
@@ -18842,7 +16933,6 @@ function SubbysPlushiesPageMain() {
         } catch (_) {}
         return candidates;
     }
-
     function wardrobeSyncNativePicker() {
         if (wardrobePickerSyncActive || !wardrobeState.attempted) return false;
         wardrobePickerSyncActive = true;
@@ -18854,20 +16944,17 @@ function SubbysPlushiesPageMain() {
                 const group = findRuntimeAssetGroup(entry.group);
                 const asset = window.AssetGet?.(FAMILY, entry.group, entry.name);
                 if (!group || !asset) continue;
-                // These are clothing groups; they must be user-customizable to
-                // be offered in the built-in Appearance editor. Never change
-                // the category or unrelated groups.
                 if (group.Category === "Appearance" && group.AllowCustomize !== true) {
                     group.AllowCustomize = true;
                     changed = true;
                 }
                 if (group.Category === "Appearance" && group.Clothing !== true) {
-                    group.Clothing = true; // Allows saving/access in outfit Wardrobe slots.
+                    group.Clothing = true;   
                     changed = true;
                 }
                 asset.Group = group;
                 asset.Description = entry.title;
-                asset.Value = 0; // Available in the native clothing menu without a shop purchase.
+                asset.Value = 0;   
                 const same = item => item?.Name === entry.name && item?.Group?.Name === entry.group;
                 if (assetTable) {
                     const index = assetTable.findIndex(same);
@@ -18879,8 +16966,6 @@ function SubbysPlushiesPageMain() {
                     if (index < 0) { group.Asset.push(asset); changed = true; }
                     else if (group.Asset[index] !== asset) { group.Asset[index] = asset; changed = true; }
                 }
-                // Refresh an already opened classic Appearance selector. All
-                // items within this group retain their original order.
                 for (const groups of cachedLists) {
                     const view = groups.find(current => current?.Group?.Name === entry.group);
                     if (view && Array.isArray(view.Assets)) {
@@ -18902,7 +16987,6 @@ function SubbysPlushiesPageMain() {
         }
         return changed;
     }
-
     function wardrobeNativePickerDiagnostics() {
         const groups = wardrobeCachedAppearanceLists();
         return {
@@ -18928,10 +17012,7 @@ function SubbysPlushiesPageMain() {
             }),
         };
     }
-
     function installWardrobeNativePickerHooks() {
-        // Hook list-building, not its draw functions, to remain compatible with BCX.
-        // Different BC versions expose different entry points; hook what's present.
         for (const name of ["AppearanceBuildAssets", "CharacterAppearanceLoadCharacter", "AppearanceLoad", "AppearanceItemLoad"]) {
             if (wardrobeNativePickerHooks.has(name) || typeof window[name] !== "function") continue;
             try {
@@ -18947,14 +17028,10 @@ function SubbysPlushiesPageMain() {
         wardrobeSyncNativePicker();
         return wardrobeNativePickerHooks.size > 0;
     }
-
     function wardrobeEntryByName(name) {
         const wanted = String(name || "").trim().toLowerCase();
         return WARDROBE_ITEMS.find(entry => entry.name.toLowerCase() === wanted || entry.title.toLowerCase() === wanted) || null;
     }
-
-    // Native BC appearance colors are an ordered array: one entry per named layer.
-    // We change only the selected equipped accessory; other outfits are not touched.
     function wardrobeNormalizeColors(entry, value) {
         const input = Array.isArray(value) ? value : [];
         return entry.defaultColors.map((fallback, i) => {
@@ -18963,28 +17040,23 @@ function SubbysPlushiesPageMain() {
                 ? color.toUpperCase() : fallback;
         });
     }
-
     function wardrobeEquippedItem(entry) {
         const player = window.Player;
-        // The catalog is registered while BC is still starting; InventoryGet
-        // requires a fully initialized character with an Appearance array.
         if (!entry || !player || !Array.isArray(player.Appearance)) return null;
         let item = null;
         if (typeof window.InventoryGet === "function") {
             try { item = window.InventoryGet(player, entry.group); }
-            catch (_) { /* BC/BCX can be rebuilding Appearance here. */ }
+            catch (_) {    }
         }
         item ||= player.Appearance.find(candidate => candidate?.Asset?.Group?.Name === entry.group);
         return item?.Asset?.Name === entry.name ? item : null;
     }
-
     function wardrobeGetColors(name) {
         const entry = wardrobeEntryByName(name);
         if (!entry) return null;
         const item = wardrobeEquippedItem(entry);
         return wardrobeNormalizeColors(entry, item?.Color);
     }
-
     function wardrobeSetColors(name, changes) {
         const entry = wardrobeEntryByName(name);
         const item = wardrobeEquippedItem(entry);
@@ -19001,7 +17073,7 @@ function SubbysPlushiesPageMain() {
                 if (typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)) next[i] = color.toUpperCase();
             }
         } else return false;
-        item.Color = next; // Native Item.Color, serialized with outfits and appearance updates.
+        item.Color = next;   
         try { window.CharacterRefresh?.(window.Player, false, false); } catch (_) {}
         try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
         try {
@@ -19010,10 +17082,6 @@ function SubbysPlushiesPageMain() {
         if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return [...next];
     }
-
-    // Clear old BC/Echo Move / Resize overrides ONLY when the user requests it.
-    // New v3.4.8 PNG/asset dimensions already bake in the requested 0.90 fit;
-    // preserving a prior 0.90 scale would make the outfit 0.81 of the v3.4.7 size.
     function wardrobeResetMoveResize(name) {
         const entry = wardrobeEntryByName(name);
         const item = entry && wardrobeEquippedItem(entry);
@@ -19036,8 +17104,6 @@ function SubbysPlushiesPageMain() {
         if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return true;
     }
-
-    // Explicit on-demand actions; never auto-wear or modify a user's outfits.
     function wardrobeWearByName(name) {
         const entry = wardrobeEntryByName(name);
         if (!entry || !window.Player || typeof window.InventoryWear !== "function") return false;
@@ -19047,7 +17113,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
         try {
-            // Repair text even if localization loaded later than registration.
             ensureWardrobePickerCatalog(asset, findRuntimeAssetGroup(entry.group), entry);
             window.InventoryWear(window.Player, entry.name, entry.group, [...entry.defaultColors]);
             const equipped = wardrobeEquippedItem(entry);
@@ -19068,13 +17133,12 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function wardrobeRemoveByName(name) {
         const entry = wardrobeEntryByName(name);
         if (!entry || !window.Player || typeof window.InventoryRemove !== "function") return false;
         const equipped = window.InventoryGet?.(window.Player, entry.group) ||
             window.Player?.Appearance?.find?.(item => item?.Asset?.Group?.Name === entry.group);
-        if (equipped?.Asset?.Name !== entry.name) return false; // Never remove someone else's accessory.
+        if (equipped?.Asset?.Name !== entry.name) return false;   
         try {
             window.InventoryRemove(window.Player, entry.group);
             try { if (typeof window.CharacterRefresh === "function") window.CharacterRefresh(window.Player, false, false); } catch (_) {}
@@ -19087,9 +17151,6 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
-    // Individual native BC layers can draw at their own priorities. Keep the
-    // Fabric zone/color slot intact: only its Z-order differs from the suit.
     function wardrobeNativeLayerDefinition(entry, zone) {
         const layer = { Name: zone, AllowColorize: true };
         if (entry.poses?.size) layer.PoseMapping = { ...WARDROBE_NATIVE_POSE };
@@ -19097,7 +17158,6 @@ function SubbysPlushiesPageMain() {
         if (Number.isInteger(priority)) layer.Priority = priority;
         return layer;
     }
-
     function wardrobeRepairLayerPriorities(entry, asset) {
         if (!Array.isArray(asset?.Layer)) return false;
         let changed = false;
@@ -19105,8 +17165,6 @@ function SubbysPlushiesPageMain() {
             const layer = asset.Layer[i];
             if (!layer || layer.Name !== entry.colorZones[i]) continue;
             const priority = entry.layerPriorities?.[layer.Name];
-            // Only override targeted layers; leave all other zones' native
-            // priority and all BC/other-mod drawing groups alone.
             if (Number.isInteger(priority) && layer.Priority !== priority) {
                 layer.Priority = priority;
                 changed = true;
@@ -19114,7 +17172,6 @@ function SubbysPlushiesPageMain() {
         }
         return changed;
     }
-
     function setupWardrobeAssets() {
         wardrobeState.attempted = true;
         wardrobeState.status = "registering";
@@ -19139,7 +17196,6 @@ function SubbysPlushiesPageMain() {
                         Left: placement.left,
                         Width: entry.width,
                         Height: entry.height,
-                        // Never raise/lower the PLAYER to fit clothing artwork.
                         HeightModifier: 0,
                         Priority: entry.priority,
                         ...(entry.poses?.size ? { PoseMapping: { ...WARDROBE_NATIVE_POSE } } : {}),
@@ -19155,17 +17211,12 @@ function SubbysPlushiesPageMain() {
                 } else {
                     wardrobeState.methods.push(`${entry.name}: already registered + picker catalogs`);
                 }
-                // Also repair an already registered asset without changing its group or item ID.
                 asset.DefaultColor = [...entry.defaultColors];
                 if (asset.ColorableLayerCount !== entry.colorZones.length) asset.ColorableLayerCount = entry.colorZones.length;
-                // AssetAdd may enrich the native layer objects; do not replace them
-                // unless this was the legacy single-layer beta asset.
                 if (!Array.isArray(asset.Layer) || asset.Layer.length !== entry.colorZones.length ||
                     entry.colorZones.some((zone, i) => asset.Layer[i]?.Name !== zone)) {
                     asset.Layer = entry.colorZones.map(zone => wardrobeNativeLayerDefinition(entry, zone));
                 }
-                // Also repair the native BC AssetAdd-normalized layers when the
-                // asset was already registered in this page session.
                 wardrobeRepairLayerPriorities(entry, asset);
                 if (entry.poses?.size) {
                     asset.PoseMapping = { ...WARDROBE_NATIVE_POSE };
@@ -19188,7 +17239,6 @@ function SubbysPlushiesPageMain() {
         log(`Wardrobe ${wardrobeState.status}: ${wardrobeState.registered.join(", ") || "none"}.`);
         return wardrobeState.status === "registered-native";
     }
-
     function ensureExtendedCallbacks() {
         const load = () => {
             plushMenuPage = "characters";
@@ -19210,7 +17260,6 @@ function SubbysPlushiesPageMain() {
             window[`${prefix}Click`] = click;
         }
     }
-
     function searchResults() {
         const q = String(plushSearchQuery || "").trim().toLowerCase();
         if (!q) return [];
@@ -19222,12 +17271,10 @@ function SubbysPlushiesPageMain() {
         }
         return results;
     }
-
     function removePlushSearchInput() {
         try { plushSearchInput?.remove?.(); } catch (_) {}
         plushSearchInput = null;
     }
-
     function refreshPlushSearchInput() {
         const item = window.DialogFocusItem;
         const shouldShow = isOurs(item) && plushMenuPage === "characters" && !nativeLayeringVisible();
@@ -19272,7 +17319,6 @@ function SubbysPlushiesPageMain() {
             caretColor: useStyle.accent,
             boxShadow: `2px 3px 0 ${useStyle.shadow}`,
         });
-
         const logicalWidth = Number(canvas.width) || 2000;
         const logicalHeight = Number(canvas.height) || 1000;
         const left = rect.left + (1040 / logicalWidth) * rect.width;
@@ -19284,7 +17330,6 @@ function SubbysPlushiesPageMain() {
         plushSearchInput.style.fontSize = getLayoutSettings().useMenuDensity === "compact" ? "10px" : "11px";
         return true;
     }
-
     function menuGridRect(index) {
         const metrics = useMenuLayoutMetrics();
         const column = index % 2;
@@ -19296,11 +17341,9 @@ function SubbysPlushiesPageMain() {
             h: metrics.buttonH,
         };
     }
-
     function searchMenuRect(index) {
         return menuGridRect(index);
     }
-
     function menuRect(entryType, index) {
         const metrics = useMenuLayoutMetrics();
         if (entryType === "subbycat") {
@@ -19315,11 +17358,9 @@ function SubbysPlushiesPageMain() {
         }
         return menuGridRect(index);
     }
-
     function mouseInRect({ x, y, w, h }) {
         return typeof MouseIn === "function" && MouseIn(x, y, w, h);
     }
-
     function drawLofiBorder(rect, color = getUseMenuStyle().border, thickness = 2) {
         if (typeof DrawRect !== "function") return;
         DrawRect(rect.x, rect.y, rect.w, thickness, color);
@@ -19327,7 +17368,6 @@ function SubbysPlushiesPageMain() {
         DrawRect(rect.x, rect.y, thickness, rect.h, color);
         DrawRect(rect.x + rect.w - thickness, rect.y, thickness, rect.h, color);
     }
-
     function drawLofiTextFit(text, x, y, width, color = getUseMenuStyle().text, size = 24) {
         const canvas = window.MainCanvas;
         let saved = false;
@@ -19345,11 +17385,9 @@ function SubbysPlushiesPageMain() {
             }
         }
     }
-
     function favoriteStarRect(rect) {
         return { x: rect.x + rect.w - 48, y: rect.y, w: 48, h: rect.h };
     }
-
     function drawButton(rect, label, selected = false, options = null) {
         const favoriteOption = Number(options?.favoriteOption);
         const showFavoriteStar = Number.isInteger(favoriteOption) && validPublicPlushOption(favoriteOption);
@@ -19375,7 +17413,6 @@ function SubbysPlushiesPageMain() {
             drawLofiTextFit(starred ? "★" : "☆", star.x + star.w / 2, rect.y + rect.h / 2 + 5, star.w - 8, starred ? getUseMenuStyle().accent : getUseMenuStyle().muted, compact ? 18 : 20);
         }
     }
-
     function pagedMenuEntries(entries) {
         const source = Array.isArray(entries) ? entries : [];
         const pageCount = Math.max(1, Math.ceil(source.length / USE_MENU_PAGE_SIZE));
@@ -19389,7 +17426,6 @@ function SubbysPlushiesPageMain() {
             hasNext: plushMenuListPage < pageCount - 1,
         };
     }
-
     function currentCharacterMenuEntries() {
         if (plushSearchQuery.trim()) return searchResults();
         return [
@@ -19397,14 +17433,12 @@ function SubbysPlushiesPageMain() {
             ...CHARACTER_MENU,
         ];
     }
-
     function menuPageNavigation(entries = currentCharacterMenuEntries()) {
         const page = pagedMenuEntries(entries);
         if (page.pageCount <= 1) return { ...page, label: null, direction: 0 };
         if (page.hasNext) return { ...page, label: "Next Page →", direction: 1 };
         return { ...page, label: "← Previous Page", direction: -1 };
     }
-
     function hoveredPlushMenuEntry() {
         if (["settings", "emotes", "presets"].includes(plushMenuPage)) return null;
         if (plushMenuPage === "subbycat") {
@@ -19429,7 +17463,6 @@ function SubbysPlushiesPageMain() {
         }
         return null;
     }
-
     function drawPlushMenuHoverPreview() {
         if (["settings", "emotes", "presets"].includes(plushMenuPage) || !getLayoutSettings().showHoverPreview) return;
         const hovered = hoveredPlushMenuEntry();
@@ -19453,28 +17486,23 @@ function SubbysPlushiesPageMain() {
         drawLofiTextFit(name, rect.x + 285, rect.y + 34, 350, getUseMenuStyle().text, 23);
         drawLofiTextFit(`${relationship.level} • ${moodLabel(mood.score)} ${mood.score}/100${isPlushSleepy(name) ? " • zZ" : ""}`, rect.x + 690, rect.y + 34, 360, getUseMenuStyle().muted, 17);
     }
-
     function drawCustomPlushMenu() {
         if (nativeLayeringVisible()) { removePlushSearchInput(); return; }
         refreshPlushSearchInput();
-
         if (typeof DrawRect === "function") {
             DrawRect(MENU.PanelX, MENU.PanelY, MENU.PanelW, MENU.PanelH, getUseMenuStyle().background);
             DrawRect(MENU.PanelX, MENU.PanelY, MENU.PanelW, 148, getUseMenuStyle().header);
             DrawRect(MENU.PanelX, 148, MENU.PanelW, 2, getUseMenuStyle().border);
             DrawRect(MENU.PanelX + 24, 22, 7, 72, getUseMenuStyle().accent);
         }
-
         drawButton({ x: MENU.CloseX, y: MENU.CloseY, w: MENU.CloseW, h: MENU.CloseH }, "×");
         drawButton({ x: MENU.MoveX, y: MENU.MoveY, w: MENU.MoveW, h: MENU.MoveH }, "Move / Resize");
-
         const selected = currentPlushOption();
         const submenu = plushMenuPage === "subbycat";
         const favoritesPage = plushMenuPage === "favorites";
         const settingsPage = plushMenuPage === "settings";
         const emotesPage = plushMenuPage === "emotes";
         const presetsPage = plushMenuPage === "presets";
-
         drawLofiTextFit(
             settingsPage
                 ? "PLUSHIE SETTINGS"
@@ -19482,14 +17510,13 @@ function SubbysPlushiesPageMain() {
                     ? "PLUSHIE EMOTES"
                     : (presetsPage
                         ? "POSE PRESETS"
-                        : (favoritesPage ? "★ FAVORITES" : (submenu ? "SUBBYCAT COLLECTION" : "SUBBY'S PLUSHIES")))),
+                        : (favoritesPage ? "★ FAVORITES" : (submenu ? "SUBBYCAT COLLECTION" : "SUBBY'S PLUSHIES & ESSENTIALS")))),
             1238,
             57,
             360,
             getUseMenuStyle().text,
             28
         );
-
         if (settingsPage) {
             drawLofiTextFit("soft controls • local preferences", 1295, 112, 430, getUseMenuStyle().muted, 17);
         } else if (emotesPage) {
@@ -19507,7 +17534,6 @@ function SubbysPlushiesPageMain() {
             const mood = getPlushMoodRecord(PLUSH_NAMES[publicToWirePlushOption(selected)] || currentPlushName());
             drawLofiTextFit(`Mood: ${moodLabel(mood.score)} • ${mood.score}/100`, 1715, 119, 390, getUseMenuStyle().muted, 15);
         }
-
         if (!settingsPage && !emotesPage && !presetsPage) {
             drawButton(FEATURE_MENU.Emotes, "Emotes");
             drawButton(FEATURE_MENU.Mascot, roomMascotState?.name ? `Mascot: ${roomMascotState.name}` : "Set Room Mascot");
@@ -19536,13 +17562,11 @@ function SubbysPlushiesPageMain() {
             drawButton(FEATURE_MENU.Update, "Check Update Now");
             return;
         }
-
         if (emotesPage) {
             for (const emote of USE_MENU_EMOTES) drawButton(emote.rect, emote.label);
             drawButton({ x: MENU.BackX, y: MENU.BackY, w: MENU.BackW, h: MENU.BackH }, plushMenuReturnPage === "settings" ? "Back to settings" : "Back to plushies");
             return;
         }
-
         if (presetsPage) {
             const slots = SAVED_POSE_SLOTS;
             for (let i = 0; i < slots.length; i++) {
@@ -19553,7 +17577,6 @@ function SubbysPlushiesPageMain() {
             drawButton({ x: MENU.BackX, y: MENU.BackY, w: MENU.BackW, h: MENU.BackH }, "Back to plushies");
             return;
         }
-
         if (submenu) {
             SUBBYCAT_MENU.forEach((entry, index) => drawButton(menuRect("subbycat", index), entry.label, selected === entry.option, { favoriteOption: entry.option }));
             drawButton(USE_MENU_BACK_RECT, "Back to characters");
@@ -19561,7 +17584,6 @@ function SubbysPlushiesPageMain() {
             drawButton(FEATURE_MENU.TimeMachine, "Outfit Time Machine");
             return;
         }
-
         if (favoritesPage) {
             const favorites = favoriteMenuEntries();
             const page = menuPageNavigation(favorites);
@@ -19576,7 +17598,6 @@ function SubbysPlushiesPageMain() {
             drawButton(FEATURE_MENU.TimeMachine, "Outfit Time Machine");
             return;
         }
-
         const entries = currentCharacterMenuEntries();
         const page = menuPageNavigation(entries);
         page.items.forEach((entry, index) => {
@@ -19594,7 +17615,6 @@ function SubbysPlushiesPageMain() {
         if (page.label) drawButton(USE_MENU_NAV_RECT, page.label);
         drawButton(FEATURE_MENU.TimeMachine, "Outfit Time Machine");
     }
-
     function closeCustomPlushMenu() {
         plushMenuPage = "characters";
         plushMenuReturnPage = "characters";
@@ -19604,20 +17624,16 @@ function SubbysPlushiesPageMain() {
         if (typeof DialogLeave === "function") DialogLeave();
         window.setTimeout(refreshDragToggleButton, 0);
     }
-
     function clickCustomPlushMenu() {
         if (nativeLayeringVisible()) return true;
-
         if (mouseInRect({ x: MENU.CloseX, y: MENU.CloseY, w: MENU.CloseW, h: MENU.CloseH })) {
             closeCustomPlushMenu();
             return true;
         }
-
         if (mouseInRect({ x: MENU.MoveX, y: MENU.MoveY, w: MENU.MoveW, h: MENU.MoveH })) {
             void openNativeLayering();
             return true;
         }
-
         if (plushMenuPage === "settings") {
             if (mouseInRect(FEATURE_MENU.Idle)) { toggleFeatureSetting("idleAnimations"); return true; }
             if (mouseInRect(FEATURE_MENU.Speech)) { toggleFeatureSetting("speechBubbles"); return true; }
@@ -19646,7 +17662,6 @@ function SubbysPlushiesPageMain() {
             }
             return mouseInRect({ x: MENU.PanelX, y: MENU.PanelY, w: MENU.PanelW, h: MENU.PanelH });
         }
-
         if (plushMenuPage === "emotes") {
             for (const emote of USE_MENU_EMOTES) {
                 if (mouseInRect(emote.rect)) {
@@ -19662,7 +17677,6 @@ function SubbysPlushiesPageMain() {
             }
             return mouseInRect({ x: MENU.PanelX, y: MENU.PanelY, w: MENU.PanelW, h: MENU.PanelH });
         }
-
         if (plushMenuPage === "presets") {
             const applyRects = [FEATURE_MENU.Emotes, FEATURE_MENU.Mascot, FEATURE_MENU.Settings];
             const saveRects = [FEATURE_MENU.Presets, FEATURE_MENU.Extensions, FEATURE_MENU.Battle];
@@ -19679,7 +17693,6 @@ function SubbysPlushiesPageMain() {
             }
             return mouseInRect({ x: MENU.PanelX, y: MENU.PanelY, w: MENU.PanelW, h: MENU.PanelH });
         }
-
         if (mouseInRect(FEATURE_MENU.TimeMachine)) {
             openOutfitTimeMachineFromUseMenu();
             return true;
@@ -19701,7 +17714,6 @@ function SubbysPlushiesPageMain() {
             window.setTimeout(() => openExtensionsPanel("status"), 0);
             return true;
         }
-
         if (mouseInRect(FEATURE_MENU.Battle)) {
             closeCustomPlushMenu();
             window.setTimeout(showBattleTargetPrompt, 0);
@@ -19718,7 +17730,6 @@ function SubbysPlushiesPageMain() {
             removePlushSearchInput();
             return true;
         }
-
         if (plushMenuPage === "favorites") {
             if (mouseInRect(USE_MENU_BACK_RECT)) {
                 plushMenuPage = "characters";
@@ -19746,7 +17757,6 @@ function SubbysPlushiesPageMain() {
             }
             return mouseInRect({ x: MENU.PanelX, y: MENU.PanelY, w: MENU.PanelW, h: MENU.PanelH });
         }
-
         if (plushMenuPage === "subbycat") {
             if (mouseInRect(USE_MENU_BACK_RECT)) {
                 plushMenuPage = "characters";
@@ -19767,7 +17777,6 @@ function SubbysPlushiesPageMain() {
             }
             return mouseInRect({ x: MENU.PanelX, y: MENU.PanelY, w: MENU.PanelW, h: MENU.PanelH });
         }
-
         const entries = currentCharacterMenuEntries();
         const page = menuPageNavigation(entries);
         if (page.hasPrevious && page.hasNext && mouseInRect(USE_MENU_PREVIOUS_RECT)) {
@@ -19804,17 +17813,14 @@ function SubbysPlushiesPageMain() {
             }
             return true;
         }
-
         return mouseInRect({ x: MENU.PanelX, y: MENU.PanelY, w: MENU.PanelW, h: MENU.PanelH });
     }
-
     function installCustomMenu() {
         if (customMenuWrapped) return;
         ensureExtendedCallbacks();
         customMenuWrapped = true;
         log("Installed standalone nested plush menu callbacks.");
     }
-
     function publishPlushSwapAction(C, plushName) {
         try {
             if (
@@ -19824,11 +17830,8 @@ function SubbysPlushiesPageMain() {
             ) {
                 return;
             }
-
             const sourceName = getCharacterDisplayName(C) || "Character";
-
             const message = `${sourceName} has swapped her plushie to ${plushName}.`;
-
             ServerSend("ChatRoomChat", {
                 Content: "Beep",
                 Type: "Action",
@@ -19841,48 +17844,38 @@ function SubbysPlushiesPageMain() {
             warn("Could not publish plush swap Action:", e);
         }
     }
-
     function setPlushOption(optionIndex) {
         if (!validPublicPlushOption(optionIndex)) {
             warn("Invalid plush option index:", optionIndex);
             return false;
         }
-
         const { C, item } = getFocusedPlushItem();
         if (!C || !isOurs(item)) {
             warn("Subby's Plushies is not the focused/equipped item.");
             return false;
         }
         if (blockLockedPlushMutation(item, "change its character")) return false;
-
         const wireOption = publicToWirePlushOption(optionIndex);
         void ensureRenderImage(wireOption);
         const previousWireOption = getItemPlushOption(item);
         const previousOption = wireToPublicPlushOption(previousWireOption);
-
         const previousState = rememberCharacterPlushState(C, item);
-
         if (!setItemPlushState(item, wireOption)) return false;
-
         ensureNativeTransform(item);
         compactPlushLayerTransformsToActive(item, previousState?.layerTransform || null);
         rememberCharacterPlushState(C, item);
         refresh(C, true);
         schedulePlushStabilization(wireOption, item);
-
         if (previousOption !== optionIndex) {
             publishPlushSwapAction(C, PLUSH_NAMES[wireOption]);
             recordPlushSelection(PLUSH_NAMES[wireOption], item?.Asset?.Group?.Name || null);
             touchPlushRelationship(PLUSH_NAMES[wireOption], { increment: 0, wake: true });
         }
-
         return true;
     }
-
     function validate() {
         const problems = [];
         const asset = AssetGet(FAMILY, GROUP, ASSET_NAME);
-
         if (!asset) {
             problems.push("AssetGet returned null.");
         } else {
@@ -19901,12 +17894,10 @@ function SubbysPlushiesPageMain() {
                     `Asset is missing ${missingCustomActivities.length} custom plush activit${missingCustomActivities.length === 1 ? "y" : "ies"}.`
                 );
             }
-
             const expectedArchetype = resolveModularArchetype();
             if (expectedArchetype != null && asset.Archetype !== expectedArchetype) {
                 problems.push(`Unexpected Archetype: ${String(asset.Archetype)}.`);
             }
-
             if (typeof ExtendedItemGetData === "function") {
                 try {
                     const extendedData = ExtendedItemGetData(asset, asset.Archetype);
@@ -19918,7 +17909,6 @@ function SubbysPlushiesPageMain() {
                 }
             }
         }
-
         const addonAsset = AssetGet(FAMILY, ADDON_GROUP, ASSET_NAME);
         if (!addonAsset) {
             problems.push(`AssetGet returned null for ${ADDON_GROUP}.`);
@@ -19936,7 +17926,6 @@ function SubbysPlushiesPageMain() {
                 }
             }
         }
-
         const hugTightlyShouldBeActive = isOurs(getHeld(window.Player));
         if (hugTightlyShouldBeActive &&
             (!Array.isArray(window.ActivityFemale3DCG) ||
@@ -19952,7 +17941,6 @@ function SubbysPlushiesPageMain() {
                 );
             }
         }
-
         if (getFeatureSettings().extraActions && Array.isArray(window.ActivityFemale3DCG)) {
             const registeredNames = new Set(window.ActivityFemale3DCG.map(activity => activity?.Name));
             const missingExtras = EXTRA_ACTIONS.filter(spec => !registeredNames.has(spec.name));
@@ -19960,7 +17948,6 @@ function SubbysPlushiesPageMain() {
                 problems.push(`Missing enabled Extra Actions: ${missingExtras.map(spec => spec.label).join(", ")}.`);
             }
         }
-
         const renderProbe = `${ASSET_BASE}_XLarge_Plush1.png`;
         try {
             const mapped = mapImageSource(renderProbe);
@@ -19970,7 +17957,6 @@ function SubbysPlushiesPageMain() {
         } catch (e) {
             problems.push(`Image-mapping self-test threw: ${String(e)}`);
         }
-
         try {
             if (typeof AssetTextGet !== "function") {
                 problems.push("AssetTextGet is unavailable.");
@@ -19982,10 +17968,8 @@ function SubbysPlushiesPageMain() {
         } catch (e) {
             problems.push(`Custom-text self-test threw: ${String(e)}`);
         }
-
         ensureExtendedCallbacks();
         installCustomMenu();
-
         for (const groupName of PLUSH_GROUPS) {
             const prefix = extendedPrefixForGroup(groupName);
             for (const suffix of ["Init", "Load", "Draw", "Click"]) {
@@ -19994,7 +17978,6 @@ function SubbysPlushiesPageMain() {
                 }
             }
         }
-
         if (problems.length) {
             failed = true;
             ready = false;
@@ -20002,38 +17985,32 @@ function SubbysPlushiesPageMain() {
             console.table(problems);
             return false;
         }
-
         ready = true;
         failed = false;
-        log(`Subby's Plushies v${VERSION} is READY (standalone asset layer).`);
+        log(`Subby's Plushies & Essentials v${VERSION} is READY (standalone asset layer).`);
         return true;
     }
-
     function equip() {
         if (!ready) {
             warn("Not ready yet.");
             return false;
         }
-
         const currentHeld = getHandheldItem(window.Player);
         if (currentHeld && itemHasActiveLock(currentHeld)) {
             appendLocalInfoBox("Handheld item locked", ["Unlock your current handheld item before equipping a plushie."], { compact: true });
             return false;
         }
-
         try {
             InventoryWear(window.Player, ASSET_NAME, GROUP);
         } catch (e) {
             error("InventoryWear failed:", e);
             return;
         }
-
         const held = getHeld(window.Player);
         if (!isOurs(held)) {
             error("BC did not equip Subby's Plushies.", held);
             return;
         }
-
         const option = normalizePlushState(held);
         ensureNativeTransform(held);
         refresh(window.Player, true);
@@ -20045,32 +18022,27 @@ function SubbysPlushiesPageMain() {
         refreshPlushStatusIcon();
         scheduleNextIdleAnimation(2500);
     }
-
     function equipAddon() {
         if (!ready) {
             warn("Not ready yet.");
             return false;
         }
-
         const currentAddon = getInventoryItem(window.Player, ADDON_GROUP);
         if (currentAddon && itemHasActiveLock(currentAddon)) {
             appendLocalInfoBox("Body slot item locked", ["Unlock your current ItemAddon item before wearing a plushie there."], { compact: true });
             return false;
         }
-
         try {
             InventoryWear(window.Player, ASSET_NAME, ADDON_GROUP);
         } catch (e) {
             error("InventoryWear ItemAddon plushie failed:", e);
             return false;
         }
-
         const item = getInventoryItem(window.Player, ADDON_GROUP);
         if (!isOurs(item)) {
             error("BC did not equip Subby's Plushies in ItemAddon.", item);
             return false;
         }
-
         const option = normalizePlushState(item);
         ensureNativeTransform(item);
         refresh(window.Player, true);
@@ -20083,14 +18055,12 @@ function SubbysPlushiesPageMain() {
         scheduleNextIdleAnimation(2500);
         return true;
     }
-
     function useItem() {
         const item = getHeld(window.Player);
         if (!isOurs(item)) {
             warn("Equip Subby's Plushies first with /plushie.");
             return;
         }
-
         removeRoomMascotOverlay();
         removeSpeechBubble();
         removeDragToggleButton();
@@ -20098,21 +18068,18 @@ function SubbysPlushiesPageMain() {
         window.DialogFocusItem = item;
         ensureNativeTransform(item);
         installCustomMenu();
-
         const focusedGroup = item?.Asset?.Group?.Name || GROUP;
         const loadFn = window[`${extendedPrefixForGroup(focusedGroup)}Load`];
         if (typeof loadFn !== "function") {
             error("Standalone plush menu Load callback is unavailable.");
             return;
         }
-
         try {
             loadFn();
         } catch (e) {
             error("Opening the ExtendedItem screen failed:", e);
         }
     }
-
     function remove() {
         closeBalanceHeadMinigame();
         if (activeBalanceHeadSession) restoreActiveBalanceHead("plush removed");
@@ -20131,7 +18098,6 @@ function SubbysPlushiesPageMain() {
             return;
         }
         if (blockLockedPlushMutation(held, "remove it")) return false;
-
         try {
             suppressLocalPlushRepair("explicit remove", 1800);
             clearRememberedLocalPlushState();
@@ -20142,7 +18108,6 @@ function SubbysPlushiesPageMain() {
             error("Remove failed:", e);
         }
     }
-
     function recover() {
         closeBalanceHeadMinigame();
         if (activeBalanceHeadSession) restoreActiveBalanceHead("plush recovery");
@@ -20163,13 +18128,10 @@ function SubbysPlushiesPageMain() {
             const appearance = Array.isArray(window.Player?.Appearance)
                 ? window.Player.Appearance
                 : [];
-
             window.Player.Appearance = appearance.filter(item => !isOurs(item));
-
             for (const groupName of PLUSH_GROUPS) {
                 try { InventoryRemove(window.Player, groupName); } catch (_) {}
             }
-
             refresh(window.Player, true);
             syncHugTightlyActivityAvailability("explicit recover");
             log("Recovery finished.");
@@ -20177,20 +18139,17 @@ function SubbysPlushiesPageMain() {
             error("Recovery failed:", e);
         }
     }
-
     function debug() {
         let asset = null;
         try {
             asset = AssetGet(FAMILY, GROUP, ASSET_NAME);
         } catch (_) {}
-
         const held = getHeld(window.Player);
         const renderProbe = `${ASSET_BASE}_XLarge_Plush1.png`;
         const selectedOption = getItemPlushOption(held);
         const selectedTypeProbe = selectedOption >= 0
             ? `${ASSET_BASE}_XLarge_${MODULE_KEY}${selectedOption}.png`
             : null;
-
         let extendedData = null;
         try {
             if (asset && typeof ExtendedItemGetData === "function") {
@@ -20199,7 +18158,6 @@ function SubbysPlushiesPageMain() {
         } catch (e) {
             extendedData = { error: String(e) };
         }
-
         console.log(TAG, "DEBUG", {
             version: VERSION,
             gameVersion: window.GameVersion,
@@ -20472,7 +18430,6 @@ function SubbysPlushiesPageMain() {
             plushes: PLUSHES.map((plush, index) => ({ index, ...plush })),
         });
     }
-
     function pluginApiHeldSnapshot() {
         const item = getHeld(window.Player);
         if (!isOurs(item)) return null;
@@ -20488,7 +18445,6 @@ function SubbysPlushiesPageMain() {
             relationship: Object.freeze({ ...relationshipStatus(name) }),
         });
     }
-
     window.SubbysPlushies = {
         version: VERSION,
         apiVersion: 2,
@@ -20560,10 +18516,8 @@ function SubbysPlushiesPageMain() {
         reloadData: () => refreshGitDataFromGitHub({ force: true, silent: false, includeLore: true }),
         debug,
     };
-
     async function waitForBC() {
         let lastStatus = "";
-
         for (let attempt = 0; attempt < 1200; attempt++) {
             const status = {
                 AssetGet: typeof window.AssetGet === "function",
@@ -20581,7 +18535,6 @@ function SubbysPlushiesPageMain() {
                 AssetSource: Array.isArray(window.AssetFemale3DCG),
                 ExtendedSource: !!window.AssetFemale3DCGExtended,
             };
-
             const baseReady =
                 status.AssetGet &&
                 status.AssetAdd &&
@@ -20597,14 +18550,11 @@ function SubbysPlushiesPageMain() {
                 status.AssetGroupCount > 20 &&
                 status.AssetSource &&
                 status.ExtendedSource;
-
             if (baseReady && resolveModularArchetype() != null) return;
-
             const serialized = JSON.stringify({
                 ...status,
                 ModularArchetype: modularArchetype,
             });
-
             if (attempt === 0 || (attempt % 50 === 0 && serialized !== lastStatus)) {
                 log("Waiting for Bondage Club native asset APIs...", {
                     ...status,
@@ -20612,43 +18562,46 @@ function SubbysPlushiesPageMain() {
                 });
                 lastStatus = serialized;
             }
-
             await sleep(100);
         }
-
         throw new Error(`Timed out waiting for Bondage Club. Last readiness state: ${lastStatus}`);
     }
-
     function checkDuplicateAsset() {
         const existing = typeof AssetGet === "function"
             ? AssetGet(FAMILY, GROUP, ASSET_NAME)
             : null;
-
         if (existing) {
             throw new Error(
                 "SubbysPlushies already exists. Disable every other Subby's Plushies script and hard-refresh."
             );
         }
     }
-
-    // Outfit Time Machine v0.1.2, embedded without a second Tampermonkey script.
-    // Its saved-data key and BC/Echo batch restore algorithm are intentionally unchanged.
     function installSubbysOutfitTimeMachine() {
       'use strict';
       const NAME = "Subby's Outfit Time Machine";
-      const VERSION = '0.1.2';
+      const VERSION = '0.1.9';
       const KEY_PREFIX = 'BCOutfitTimeMachine:v1:';
-      const MAX_HISTORY = 50; // Automatic timeline only; starred favorites and saved looks never expire.
+      const MAX_HISTORY = 50;   
       const POLL_MS = 1400;
       const SETTLE_MS = 950;
       const MAX_PROPERTY_BYTES = 24000;
       const PAGE_ID = 'bc-otm-overlay';
+      const PANEL_DIMENSIONS_KEY = 'BCOutfitTimeMachine:panelSize:v1';
+      const PANEL_POSITION_KEY = 'BCOutfitTimeMachine:panelPosition:v1';
+      const VIEWPORT_MARGIN = 8;
+      const MIN_PANEL_WIDTH = 360;
+      const MIN_PANEL_HEIGHT = 320;
+      const HOVER_DELAY_MS = 220;
+      const MAX_PREVIEW_CACHE = 2;
+      const hoverPreviewCache = new Map();
+      let hoverTimer = null;
+      let hoverPopup = null;
+      let activeWearButton = null;
       if (window.__BCOutfitTimeMachine) return;
       const state = { history: [], cursor: -1, saved: [], favorites: [], baseline: null, watchSignature: null,
         watchPending: null, account: null, show: false, compare: [], body: true,
         record: true, panel: null, message: '', storageOK: true, loaded: false,
         restoring: false, lastCaptureAt: 0, initializedAt: Date.now() };
-
       const clone = (value, fallback = null) => {
         try { return value === undefined ? fallback : JSON.parse(JSON.stringify(value)); }
         catch (_) { return fallback; }
@@ -20679,7 +18632,6 @@ function SubbysPlushiesPageMain() {
         if (!property || typeof property !== 'object') return null;
         const copy = clone(property);
         if (!copy || typeof copy !== 'object' || Array.isArray(copy)) return null;
-        // Never carry lock metadata to a different outfit or bypass restraint semantics.
         for (const k of ['LockedBy', 'LockMemberNumber', 'LockTimer', 'LockPickSeed', 'CombinationNumber', 'Password', 'MemberNumber', 'RemoveItem']) delete copy[k];
         try { if (JSON.stringify(copy).length > MAX_PROPERTY_BYTES) return null; } catch (_) { return null; }
         return copy;
@@ -20699,7 +18651,6 @@ function SubbysPlushiesPageMain() {
             property: cleanProperty(a.Property), difficulty: Number(a.Difficulty) || 0 });
         }
         items.sort((a,b) => a.group.localeCompare(b.group));
-        // Scope retains every existing Appearance group; useful when Echo registers extra slots later.
         return { items, scope: Array.from(groups.keys()).sort(), family: String(C.AssetFamily || 'Female3DCG') };
       }
       function fingerprint(s) { return JSON.stringify(s?.items || []) + '|' + JSON.stringify(s?.scope || []); }
@@ -20709,29 +18660,117 @@ function SubbysPlushiesPageMain() {
       }
       function timeLabel(t) { return new Date(t).toLocaleString(); }
       function imageCanvas(C = player()) {
-        const candidates = [C?.Canvas, C?.DrawCanvas, C?.CanvasCharacter, C?.CanvasFull];
+        const candidates = [C?.CanvasResize, C?.CanvasBlink, C?.Canvas, C?.DrawCanvas, C?.CanvasCharacter,
+          C?.CanvasFull, C?.RenderCanvas, C?.AppearanceCanvas, C?.DrawContext];
         for (const entry of candidates) {
           const possibilities = Array.isArray(entry) ? entry : [entry];
           for (const v of possibilities) {
             if (v && typeof v.toDataURL === 'function' && Number(v.width) >= 120 && Number(v.height) >= 250) return v;
-            if (v?.canvas && typeof v.canvas.toDataURL === 'function') return v.canvas;
+            if (v?.canvas && typeof v.canvas.toDataURL === 'function' && v.canvas.width >= 120) return v.canvas;
+            if (v?.Canvas && typeof v.Canvas.toDataURL === 'function' && v.Canvas.width >= 120) return v.Canvas;
           }
         }
         return null;
       }
-      function thumbnail(C = player()) {
-        const canvas = imageCanvas(C);
-        if (!canvas) return null;
+      function compactPortrait(canvas) {
+        if (!canvas || !canvas.width || !canvas.height) return null;
         try {
           const mini = document.createElement('canvas');
-          mini.width = 120; mini.height = 240;
+          mini.width = 168; mini.height = 336;
           const ctx = mini.getContext('2d');
           if (!ctx) return null;
-          ctx.clearRect(0,0,120,240);
-          ctx.drawImage(canvas,0,0,canvas.width,canvas.height,0,0,120,240);
-          const data = mini.toDataURL('image/jpeg',0.5);
-          return data.length < 70000 ? data : null;
+          ctx.clearRect(0,0,168,336);
+          const sourceY = canvas.height >= 1600 ? 600 : 0;
+          const sourceH = canvas.height >= 1600 ? Math.min(1000,canvas.height-sourceY) : canvas.height;
+          const sourceRatio = canvas.width / sourceH;
+          const destRatio = 0.5;
+          let dw = 168, dh = 336, dx = 0, dy = 0;
+          if(sourceRatio > destRatio) { dh = dw / sourceRatio; dy = (336 - dh)/2; }
+          else { dw = dh*sourceRatio; dx = (168 - dw)/2; }
+          ctx.drawImage(canvas,0,sourceY,canvas.width,sourceH,dx,dy,dw,dh);
+          const rgba=ctx.getImageData(0,0,168,336).data;
+          let visible=0;
+          for(let i=3;i<rgba.length;i+=4) if(rgba[i]>18)visible++;
+          if(visible<140) return null;
+          const data = mini.toDataURL('image/webp', 0.7);
+          const fallback = data.startsWith('data:image/webp;') ? data : mini.toDataURL('image/jpeg',0.66);
+          return fallback.length < 105000 ? fallback : null;
         } catch (_) { return null; }
+      }
+      function thumbnail(C = player()) {
+        return compactPortrait(imageCanvas(C));
+      }
+      function offscreenCharacter(snapshot) {
+        const source = player();
+        if (!source || !snapshot || snapshot.family !== source.AssetFamily) return null;
+        const shadow = Object.assign(Object.create(Object.getPrototypeOf(source)), source);
+        shadow.Appearance = source.Appearance.slice();
+        const groups = registryGroups(source);
+        const selected = new Map((snapshot.items || []).map(item => [item.group,item]));
+        const scope = new Set(snapshot.scope || []);
+        const base = shadow.Appearance.filter(item => !scope.has(groupName(item)));
+        for (const groupNameValue of scope) {
+          if (!groups.has(groupNameValue)) continue;
+          const spec = selected.get(groupNameValue);
+          if (!spec) continue;
+          const asset = restoredAsset(source,spec);
+          if (!asset || asset.Group?.Name !== groupNameValue) continue;
+          const color = clone(spec.color,'Default');
+          const difficulty = Number(spec.difficulty) || 0;
+          let item;
+          try {
+            item = typeof window.AppearanceItem?.fromAsset === 'function'
+              ? window.AppearanceItem.fromAsset(asset,{color,difficulty})
+              : {Asset:asset,Color:color,Difficulty:difficulty};
+          } catch (_) { item = {Asset:asset,Color:color,Difficulty:difficulty}; }
+          if (!item) continue;
+          item.Color = color; item.Difficulty = difficulty;
+          const property = cleanProperty(spec.property);
+          if (property) item.Property = property;
+          base.push(item);
+        }
+        shadow.Appearance = base;
+        for (const key of ['CanvasResize','Canvas','CanvasBlink','DrawCanvas','CanvasCharacter',
+          'CanvasFull','RenderCanvas','AppearanceCanvas','DrawContext']) {
+          if (Object.prototype.hasOwnProperty.call(shadow,key)) shadow[key]=null;
+        }
+        return shadow;
+      }
+      function renderPortraitOffscreen(snapshot) {
+        const shadow = offscreenCharacter(snapshot);
+        if (!shadow) return null;
+        try { window.CharacterLoadCanvas?.(shadow); } catch (_) {}
+        let image=thumbnail(shadow);
+        if (image) return image;
+        if (typeof window.DrawCharacter !== 'function' ||
+            !window.MainCanvas || typeof window.MainCanvas.drawImage !== 'function') return null;
+        const prev = window.MainCanvas;
+        const canvas = document.createElement('canvas');
+        canvas.width=500;canvas.height=1000;
+        const ctx=canvas.getContext('2d');
+        if(!ctx) return null;
+        try {
+          window.MainCanvas=ctx;
+          window.DrawCharacter(shadow,0,0,1,false);
+          image=compactPortrait(canvas);
+        } catch (_) { image=null; }
+        finally { window.MainCanvas=prev; }
+        return image;
+      }
+      function putPreviewCache(key,value) {
+        if(hoverPreviewCache.has(key)) hoverPreviewCache.delete(key);
+        hoverPreviewCache.set(key,value);   
+        while(hoverPreviewCache.size>MAX_PREVIEW_CACHE)
+          hoverPreviewCache.delete(hoverPreviewCache.keys().next().value);
+      }
+      function cachedHoverImage(entry) {
+        if (hoverPreviewCache.has(entry.id)) {
+          const image=hoverPreviewCache.get(entry.id);
+          putPreviewCache(entry.id,image);return image;
+        }
+        const image=renderPortraitOffscreen(entry.snapshot);
+        putPreviewCache(entry.id,image);
+        return image;
       }
       function memberKey() {
         const C = player();
@@ -20740,18 +18779,21 @@ function SubbysPlushiesPageMain() {
       }
       function storageKey() { return KEY_PREFIX + state.account; }
       const validEntry = e => !!(e && e.snapshot?.family && Array.isArray(e.snapshot?.items) && Array.isArray(e.snapshot?.scope));
+      const withoutPortrait = e => {
+        if (!e || !Object.prototype.hasOwnProperty.call(e,'image')) return e;
+        const {image, ...rest}=e;return rest;
+      };
+      const cleanEntries = items => (Array.isArray(items)?items:[]).filter(validEntry).map(withoutPortrait);
       function flush() {
         if (!state.account) return;
-        const payload = { version: 1, saved: state.saved, favorites: state.favorites,
-          history: state.history, cursor: state.cursor,
+        const payload = { version: 1, saved: state.saved.map(withoutPortrait), favorites: state.favorites.map(withoutPortrait),
+          history: state.history.map(withoutPortrait), cursor: state.cursor,
           options: { body: state.body, record: state.record } };
         const write = () => { localStorage.setItem(storageKey(), JSON.stringify(payload)); state.storageOK = true; };
         try { write(); return; } catch (err) {
           state.storageOK = false;
           if (err?.name !== 'QuotaExceededError') return;
         }
-        // Fallback order: discard previews, then oldest UNSTARRED timeline entries.
-        // Never silently discard an outfit the user favorited or explicitly saved.
         for (const entry of state.history) entry.image = null;
         try { write(); return; } catch (_) {}
         for (const entry of state.saved) entry.image = null;
@@ -20775,10 +18817,9 @@ function SubbysPlushiesPageMain() {
         try {
           const doc = JSON.parse(localStorage.getItem(storageKey()) || 'null');
           if (doc?.version === 1) {
-            // v1 storage key/format intentionally retained: existing saves migrate in place.
-            state.saved = (Array.isArray(doc.saved) ? doc.saved : []).filter(validEntry);
-            state.favorites = (Array.isArray(doc.favorites) ? doc.favorites : []).filter(validEntry);
-            const history = (Array.isArray(doc.history) ? doc.history : []).filter(validEntry);
+            state.saved = cleanEntries(doc.saved);
+            state.favorites = cleanEntries(doc.favorites);
+            const history = cleanEntries(doc.history);
             const removed = Math.max(0, history.length - MAX_HISTORY);
             state.history = history.slice(-MAX_HISTORY);
             state.cursor = state.history.length ? Math.max(0, Math.min(Number(doc.cursor ?? history.length - 1) - removed, state.history.length - 1)) : -1;
@@ -20788,8 +18829,7 @@ function SubbysPlushiesPageMain() {
         } catch (_) {}
         state.loaded = true;
         state.watchSignature = null; state.watchPending = null;
-        // Persist the 50-item migration without losing the user's separate collections.
-        if (state.history.length) flush();
+        if (state.history.length || state.saved.length || state.favorites.length) flush();
         return true;
       }
       function recordSnapshot(label = 'Outfit change', explicit = false) {
@@ -20798,10 +18838,9 @@ function SubbysPlushiesPageMain() {
         const sig = fingerprint(snap);
         const current = state.history[state.cursor];
         if (current && fingerprint(current.snapshot) === sig) return false;
-        // Manual edit after undo creates a new history branch.
         if (state.cursor < state.history.length - 1) state.history.length = state.cursor + 1;
         state.history.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
-          at: Date.now(), label, snapshot: snap, image: thumbnail() });
+          at: Date.now(), label, snapshot: snap });
         if (state.history.length > MAX_HISTORY) state.history.splice(0,state.history.length - MAX_HISTORY);
         state.cursor = state.history.length - 1;
         state.watchSignature = sig; state.watchPending = null;
@@ -20813,7 +18852,6 @@ function SubbysPlushiesPageMain() {
         const snap = collect(); if (!snap) return;
         const sig = fingerprint(snap);
         if (!state.history.length) { recordSnapshot('First outfit', true); return; }
-        // A snapshot must be recorded at the final stable state, not each temporary intermediate change.
         if (sig === fingerprint(state.history[state.cursor]?.snapshot)) { state.watchPending = null; state.watchSignature = sig; return; }
         if (!state.watchPending || state.watchPending.sig !== sig) state.watchPending = { sig, at: Date.now() };
         if (state.record && Date.now() - state.watchPending.at >= SETTLE_MS) recordSnapshot('Outfit change');
@@ -20830,7 +18868,6 @@ function SubbysPlushiesPageMain() {
       }
       function currentItem(C, group) { return C.Appearance.find(a => groupName(a) === group) || null; }
       function hasAccessToAsset(C, asset, record) {
-        // BC's normal inventory availability check is respected; this is not an unlocker.
         if (asset.Value == null || Number(asset.Value) <= 0) return true;
         if (currentItem(C,record.group)?.Asset?.Name === record.name) return true;
         try { return typeof window.InventoryAvailable === 'function'
@@ -20840,7 +18877,6 @@ function SubbysPlushiesPageMain() {
       }
       function canEditGroup(C, group) {
         if (!group || !isEligible(group)) return false;
-        // Never remove or change a locked appearance item. Equipment/Item categories are excluded entirely.
         const item = currentItem(C,group.Name);
         if (item?.Property?.LockedBy || item?.Property?.LockMemberNumber) return false;
         return true;
@@ -20853,7 +18889,6 @@ function SubbysPlushiesPageMain() {
         const now = collect(C); const actual = new Map(now.items.map(x=>[x.group,x]));
         const changes = [], skips = [];
         const scope = Array.isArray(target.scope) ? target.scope : [];
-        // Only touch slots recorded in this snapshot. Newly installed Echo groups stay intact.
         const groupSet = new Set(scope);
         for (const g of groupSet) {
           const group = registry.get(g);
@@ -20861,7 +18896,6 @@ function SubbysPlushiesPageMain() {
           if (!canEditGroup(C,group)) { skips.push(`${g}: locked or restricted`); continue; }
           const from = actual.get(g); const to = desired.get(g);
           if (JSON.stringify(from || null) === JSON.stringify(to || null)) continue;
-          // Absence means remove, but never remove required body groups.
           if (!to && group.AllowNone === false) { skips.push(`${g}: required slot`); continue; }
           if (to) {
             const asset = restoredAsset(C,to);
@@ -20872,10 +18906,6 @@ function SubbysPlushiesPageMain() {
         }
         return { changes, skips };
       }
-      // A wardrobe restore must be one atomic appearance replacement, not N calls to
-      // InventoryWear/InventoryRemove. Each InventoryWear may render or synchronize the
-      // character on its own; doing that for an entire outfit can flood the server.
-      // Build everything off-character, preserving every non-Appearance item unchanged.
       function buildAppearanceBatch(C, plan) {
         const replacements = new Map();
         const skipped = [...plan.skips];
@@ -20892,9 +18922,6 @@ function SubbysPlushiesPageMain() {
             const color = clone(move.to.color, 'Default');
             const difficulty = Number(move.to.difficulty) || 0;
             const prop = cleanProperty(move.to.property);
-            // AppearanceItem.fromAsset exists on current BC builds, but is not
-            // guaranteed in older clients. The plain Item fallback matches the
-            // wardrobe code's item shape and avoids all item-level game hooks.
             const fromAsset = window.AppearanceItem?.fromAsset;
             let item;
             if (typeof fromAsset === 'function') {
@@ -20923,8 +18950,6 @@ function SubbysPlushiesPageMain() {
             applied.add(group);
           }
         }
-        // Fill empty groups (including new Echo slots) after existing entries;
-        // leave everything else, particularly restraints, exactly where it was.
         for (const [group, item] of replacements) {
           if (!applied.has(group) && item) next.push(item);
         }
@@ -20941,21 +18966,17 @@ function SubbysPlushiesPageMain() {
           `Restore “${entry.label || 'outfit'}” on your own character?\n\n`+
           `${plan.changes.length} appearance slots will change. ${plan.skips.length} groups will be skipped.\n`+
           `Only BC Appearance slots will be touched; restraints and locks won't be removed.`)) return {ok:false, changed:0, skipped:['Cancelled']};
-        // Preflight every replacement before changing Player.Appearance.
         const batch = buildAppearanceBatch(C, plan);
         let changed = 0;
         const skipped = [...batch.skipped];
         if (batch.changed) {
           const current = collect(C);
-          // Capture the outfit we're leaving before the atomic swap.
           if (opts.addHistory !== false && fingerprint(current) !== fingerprint(state.history[state.cursor]?.snapshot))
             recordSnapshot('Before restore',true);
           const previousAppearance = C.Appearance;
           state.restoring = true;
           try {
-            C.Appearance = batch.next; // One complete wardrobe-style change, never per-item updates.
-            // WardrobeFastLoad uses CharacterLoadCanvas once and then sends one
-            // complete appearance sync. CharacterRefresh/InventoryWear are avoided.
+            C.Appearance = batch.next;   
             if (typeof window.CharacterLoadCanvas === 'function') window.CharacterLoadCanvas(C);
             changed = batch.changed;
           } catch (err) {
@@ -20966,8 +18987,6 @@ function SubbysPlushiesPageMain() {
             state.restoring = false;
           }
           if (changed) {
-            // These are the same full-outfit update paths used by BC's wardrobe:
-            // one account synchronization and one room broadcast (when connected).
             try { window.ServerPlayerAppearanceSync?.(); }
             catch (err) { skipped.push(`Account sync: ${String(err?.message || err)}`); }
             if (window.CurrentScreen === 'ChatRoom' && C.OnlineID != null) {
@@ -21009,10 +19028,9 @@ function SubbysPlushiesPageMain() {
           if (askBeforeRemoving && !window.confirm(`Remove “${previous.label}” from permanent favorites?`)) return false;
           state.favorites = state.favorites.filter(f => f !== previous);
         } else {
-          // Copy snapshot/thumbnail: pruning history and editing saved looks cannot alter a favorite.
           state.favorites.unshift({id:`fav-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
             at:entry.at || Date.now(), label:String(entry.label || 'Favorite outfit').slice(0,70),
-            snapshot:clone(entry.snapshot), image:entry.image || null});
+            snapshot:clone(entry.snapshot)});
         }
         flush(); render(); return !previous;
       }
@@ -21020,8 +19038,8 @@ function SubbysPlushiesPageMain() {
         if (!loadAccount()) return false;
         const snap=collect(); if (!snap) return false;
         const id=`saved-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
-        const entry={ id,at:Date.now(),label:String(label||'Saved look').slice(0,70),snapshot:snap,image:thumbnail() };
-        state.saved.unshift(entry); // Saved looks are permanent too: no automatic count limit.
+        const entry={ id,at:Date.now(),label:String(label||'Saved look').slice(0,70),snapshot:snap };
+        state.saved.unshift(entry);   
         flush(); render(); return true;
       }
       function downloadJSON() {
@@ -21036,8 +19054,8 @@ function SubbysPlushiesPageMain() {
         file.text().then(s=>{
           const data=JSON.parse(s);
           if (data?.format !== 'BCOutfitTimeMachine' || data.version!==1 || !Array.isArray(data.saved)) throw Error('Invalid Time Machine export');
-          const saved=data.saved.filter(validEntry);
-          const favorites=(Array.isArray(data.favorites) ? data.favorites : []).filter(validEntry);
+          const saved=cleanEntries(data.saved);
+          const favorites=cleanEntries(data.favorites);
           if (!window.confirm(`Import ${saved.length} saved looks and ${favorites.length} favorites? (No items will be equipped.)`)) return;
           const ids=new Set(state.saved.map(e=>e.id));
           for (const entry of saved) if (!ids.has(entry.id)) { state.saved.push(entry); ids.add(entry.id); }
@@ -21062,7 +19080,6 @@ function SubbysPlushiesPageMain() {
         }
         return out.sort((x,y)=>x.group.localeCompare(y.group));
       }
-      // --- Self-contained DOM UI, intentionally avoiding BC canvas / drawing hooks ---
       let sheet=null, sheetMounted=false;
       function el(tag, className='',content=null) {
         const n=document.createElement(tag);if(className)n.className='otm-'+className;
@@ -21085,26 +19102,80 @@ function SubbysPlushiesPageMain() {
         if(!colors.length)strip.append(el('span','muted','No custom colors'));
         node.append(strip);
       }
-      function preview(parent,entry) {
-        const box=el('div','portrait');
-        if(entry?.image && /^data:image\/(png|jpeg|webp);base64,/.test(entry.image)) {
-          const img=el('img','portrait-image');img.src=entry.image;img.alt='Captured outfit preview';box.append(img);
-        } else { box.append(el('span','portrait-placeholder','👗'));colorPreview(box,entry?.snapshot); }
-        parent.append(box);
+      function clearWearPreview() {
+        if (hoverTimer!==null) {clearTimeout(hoverTimer);hoverTimer=null;}
+        if (hoverPopup) {hoverPopup.remove();hoverPopup=null;}
+        activeWearButton=null;
+      }
+      function showWearPreview(buttonNode, entry) {
+        if (!state.show || !buttonNode.isConnected || activeWearButton!==buttonNode)return;
+        if (hoverPopup) {hoverPopup.remove();hoverPopup=null;}
+        const popup=el('div','wear-popup');popup.setAttribute('role','tooltip');
+        popup.append(el('strong','wear-popup-title',entry.label||'Saved outfit'));
+        popup.append(el('div','muted',compactLabel(entry.snapshot)));
+        const portrait=el('div','wear-popup-portrait');popup.append(portrait);
+        hoverPopup=popup;document.body.append(popup);
+        const rect=buttonNode.getBoundingClientRect();
+        const popupWidth=Math.min(216,Math.max(150,window.innerWidth-16));
+        popup.style.width=popupWidth+'px';
+        const boxW=popup.offsetWidth||popupWidth;
+        const boxH=popup.offsetHeight||365;
+        const x=rect.left>=boxW+12 ? rect.left-boxW-8 :
+          rect.right+boxW+8 <= window.innerWidth ? rect.right+8 :
+          Math.max(8,Math.min(rect.left,window.innerWidth-boxW-8));
+        const y=Math.max(8,Math.min(rect.top-40,window.innerHeight-boxH-8));
+        popup.style.left=x+'px';popup.style.top=y+'px';
+        let image=null;
+        try {image=cachedHoverImage(entry);} catch(err){
+          console.warn(`[${NAME}] Hover preview unavailable`,err);putPreviewCache(entry.id,null);
+        }
+        if(activeWearButton!==buttonNode || !buttonNode.isConnected || !state.show){clearWearPreview();return;}
+        if(image && /^data:image\/(png|jpeg|webp);base64,/.test(image)) {
+          const img=el('img','wear-popup-image');img.src=image;
+          img.alt=`Saved outfit: ${entry.label||'Outfit'}`;portrait.append(img);
+        } else {
+          portrait.append(el('div','wear-popup-fallback','Full outfit preview unavailable with this BC renderer.'));
+          colorPreview(portrait,entry.snapshot);
+        }
+      }
+      function bindWearPreview(wearButton,entry) {
+        const start=()=>{
+          clearWearPreview();activeWearButton=wearButton;
+          hoverTimer=setTimeout(()=>{hoverTimer=null;showWearPreview(wearButton,entry);},HOVER_DELAY_MS);
+        };
+        const stop=()=>{if(activeWearButton===wearButton)clearWearPreview();};
+        wearButton.addEventListener('pointerenter',start);
+        wearButton.addEventListener('pointerleave',stop);
+        wearButton.addEventListener('focus',start);
+        wearButton.addEventListener('blur',stop);
+        wearButton.title='Hover to preview this saved outfit';
       }
       function historyCard(entry,idx,kind = 'history') {
         const c=el('div','entry');
-        preview(c,entry);
+        const preview=el('div','entry-preview');
+        const previewTile=el('div','entry-preview-frame');
+        previewTile.tabIndex=0;
+        previewTile.setAttribute('role','button');
+        previewTile.setAttribute('aria-label',`Preview saved outfit: ${entry.label||'Outfit'}`);
+        previewTile.append(el('div','entry-preview-icon','👗'));
+        bindWearPreview(previewTile,entry);
+        preview.append(previewTile);
+        colorPreview(preview,entry.snapshot);
+        c.append(preview);
         const content=el('div','entry-body');c.append(content);
         content.append(el('strong','entry-title',entry.label));
         content.append(el('div','muted',timeLabel(entry.at)));
         content.append(el('div','muted',compactLabel(entry.snapshot)));
         const buttons=el('div','entry-actions');content.append(buttons);
-        buttons.append(button('Restore',()=>applyRestore(entry)));
-        buttons.append(button('Compare',()=>{
-          if(state.compare.find(x=>x.id===entry.id))state.compare=state.compare.filter(x=>x.id!==entry.id);
-          else state.compare=[...state.compare.slice(-1),entry];render();
-        }));
+        const wear=button('Restore',()=>{clearWearPreview();applyRestore(entry);});
+        wear.title='Apply this saved outfit in one batch';
+        buttons.append(wear);
+        const comparing=state.compare.some(x=>x.id===entry.id);
+        if(comparing)c.classList.add('comparing');
+        const compareButton=button(comparing ? '✓ Comparing' : 'Compare',()=>chooseCompare(entry));
+        compareButton.title=comparing ? 'Remove this outfit from comparison' : 'Compare this outfit against your current look, or another selected look';
+        compareButton.setAttribute('aria-pressed',String(comparing));
+        buttons.append(compareButton);
         const starred = kind === 'favorite' || !!findFavorite(entry);
         buttons.append(button(starred ? '★ Favorited' : '☆ Favorite',()=>toggleFavoriteOutfit(entry)));
         if(kind==='saved') buttons.append(button('Delete saved look',()=>{
@@ -21114,30 +19185,90 @@ function SubbysPlushiesPageMain() {
         else if(kind==='history' && idx===state.cursor)c.classList.add('current');
         return c;
       }
+      function chooseCompare(entry) {
+        if(state.compare.some(x=>x.id===entry.id)) {
+          state.compare=state.compare.filter(x=>x.id!==entry.id);
+        } else {
+          state.compare=[...state.compare.slice(-1),entry];
+        }
+        render();
+        const content=sheet?.querySelector('.otm-content');
+        if(content)content.scrollTop=0;
+      }
       function renderCompare(container) {
         if(state.compare.length===0)return;
-        const s=section(container,'Compare');
+        const two=state.compare.length===2;
+        const s=section(container, 'Compare outfits');
+        s.classList.add('otm-comparison');
+        s.setAttribute('aria-label','Outfit comparison results');
+        s.append(el('p','muted',two
+          ? 'Comparing two selected outfits. Click Compare on a different outfit to replace the second selection.'
+          : 'Comparing the selected outfit with what you are wearing now. Click Compare on another outfit to compare those two instead.'));
         const pair=el('div','compare-pair');s.append(pair);
-        for (const e of state.compare) { const half=el('div','compare-half');pair.append(half);preview(half,e);half.append(el('strong','',e.label)); }
-        if(state.compare.length===1){const current={label:'Current outfit',snapshot:collect(),image:thumbnail()};const half=el('div','compare-half');pair.append(half);preview(half,current);half.append(el('strong','',current.label));}
-        const a=state.compare[0]?.snapshot;
-        const b=state.compare[1]?.snapshot||collect();
-        const changes=itemDiff(a,b);
-        s.append(el('p','muted',`${changes.length} differing slot(s)`));
-        for(const change of changes.slice(0,80)) {
-          const row=el('div','diff-row');
-          row.append(el('strong','',change.group),el('span','',`${change.before} → ${change.after}${change.colorChanged?' · color':''}${change.propertyChanged?' · settings':''}`));s.append(row);
+        const first=state.compare[0];
+        const second=state.compare[1]||{label:'Current outfit',snapshot:collect(),at:null};
+        for(const entry of [first,second]) {
+          const half=el('div','compare-half');pair.append(half);
+          half.append(el('strong','',entry.label||'Outfit'));
+          if(entry.at)half.append(el('span','muted',timeLabel(entry.at)));
+          const portrait=el('div','compare-portrait');
+          half.append(portrait);
+          let image=null;
+          try {
+            const cacheKey=`compare:${entry.id||entry.label||'current'}:${fingerprint(entry.snapshot)}`;
+            if (hoverPreviewCache.has(cacheKey)) {
+              image=hoverPreviewCache.get(cacheKey);
+              putPreviewCache(cacheKey,image);
+            } else {
+              image=renderPortraitOffscreen(entry.snapshot);
+              putPreviewCache(cacheKey,image);
+            }
+          } catch (_) { image=null; }
+          if(image && /^data:image\/(png|jpeg|webp);base64,/.test(image)) {
+            const img=el('img','compare-image');
+            img.src=image;
+            img.alt=`Compared outfit preview: ${entry.label||'Outfit'}`;
+            portrait.append(img);
+          } else {
+            portrait.append(el('div','compare-fallback','Preview unavailable'));
+          }
+          half.append(el('div','muted',compactLabel(entry.snapshot)));
+          colorPreview(half,entry.snapshot);
+        }
+        const changes=itemDiff(first.snapshot,second.snapshot);
+        const diffCounts={added:0,removed:0,changed:0,colors:0,settings:0};
+        for(const d of changes){
+          if(d.before==='Empty')diffCounts.added++;
+          else if(d.after==='Empty')diffCounts.removed++;
+          else diffCounts.changed++;
+          if(d.colorChanged)diffCounts.colors++;
+          if(d.propertyChanged)diffCounts.settings++;
+        }
+        s.append(el('strong','compare-summary',`${changes.length} differing appearance slot${changes.length===1?'':'s'}`));
+        if(changes.length) {
+          s.append(el('p','muted',`${diffCounts.added} added · ${diffCounts.removed} removed · ${diffCounts.changed} changed · ${diffCounts.colors} color differences · ${diffCounts.settings} setting differences`));
+          const changeList=el('div','compare-differences');s.append(changeList);
+          for(const change of changes.slice(0,80)) {
+            const row=el('div','diff-row');
+            row.append(el('strong','',change.group),el('span','',`${change.before} → ${change.after}${change.colorChanged?' · color':''}${change.propertyChanged?' · settings':''}`));
+            changeList.append(row);
+          }
+          if(changes.length>80)s.append(el('p','muted',`${changes.length-80} more differences not shown.`));
+        } else {
+          s.append(el('p','muted','No differences in saved items, colors, or settings. Different snapshot scopes may still affect restoration.'));
         }
         s.append(button('Clear comparison',()=>{state.compare=[];render();}));
       }
       function render() {
         if(!sheetMounted || !sheet || !state.show)return;
-        const body=sheet.querySelector('.otm-content');if(!body)return;body.replaceChildren();
+        const body=sheet.querySelector('.otm-content');if(!body)return;
+        clearWearPreview();body.replaceChildren();
         const p=player();
         if(!p){body.append(el('p','muted','Waiting for Bondage Club to load your character…'));return;}
         const current=collect(p);const echoExtra=current?.scope.filter(n=>!/^(Body|Eyes|Eyebrows|Mouth|Nose|Hair|Cloth|ClothLower|Bra|Panties|Socks|Shoes|Suit|HairAccessory|Gloves|Hat|Necklace|Bracelet|Wings|Tail|Mask|Corset)/i.test(n))||[];
         const status=el('p','muted',`${current?.scope.length||0} Appearance groups available (including dynamically registered Echo slots). ${state.storageOK?'Stored locally':'Storage unavailable: session only'}.`);
         body.append(status);
+        renderCompare(body);
         const knownBase = new Set(['BodyUpper','BodyLower','BodyLegs','BodyArms','BodyHands','BodySkin','Height','Eyes','Eyes2','Eyebrows','Mouth','Mouth2','Nose','HairFront','HairBack','HairAccessory1','HairAccessory2','HairAccessory3','Cloth','ClothLower','ClothAccessory','Bra','Panties','Socks','SocksLeft','SocksRight','Shoes','Suit','Gloves','Hat','Mask','Necklace','Bracelet','Corset','Wings','Tail','TailStraps','Garters','Jewelry','LeftHand','RightHand']);
         const extraGroups = (current?.scope || []).filter(name => !knownBase.has(name));
         if (extraGroups.length) {
@@ -21146,6 +19277,10 @@ function SubbysPlushiesPageMain() {
           details.append(summary,el('p','muted',extraGroups.join(', ')));
           body.append(details);
         }
+        const favorites=section(body,`★ Favorite outfits (${state.favorites.length}) · permanent`);
+        const pinned=el('div','history-list');favorites.append(pinned);
+        for(const e of state.favorites)pinned.append(historyCard(e,-1,'favorite'));
+        if(!state.favorites.length)favorites.append(el('p','muted','Star an outfit in your timeline to preserve it even after the oldest 50 history entries are cleared.'));
         const controls=section(body,`Timeline (last ${MAX_HISTORY} outfits · ${state.history.length}/${MAX_HISTORY})`);
         const bar=el('div','toolbar');controls.append(bar);
         bar.append(button('↶ Undo',()=>navigate(-1),{disabled:state.cursor<=0}));
@@ -21156,14 +19291,10 @@ function SubbysPlushiesPageMain() {
         const toggle=(text,key)=>{const label=el('label','option');const input=el('input');input.type='checkbox';input.checked=state[key];
           input.addEventListener('change',()=>{state[key]=input.checked;flush();state.watchSignature=null;state.watchPending=null;if(key==='body')recordSnapshot('Scope changed',true);render();});label.append(input,document.createTextNode(' '+text));options.append(label);};
         toggle('Auto history','record');toggle('Include body / face / non-clothing Appearance groups','body');
-        controls.append(el('p','muted','The oldest automatic outfits drop off after 50. Click ☆ Favorite on any history entry to keep it permanently, separately from the timeline. Saved looks also never expire. Echo groups are included; restraint groups are never modified.'));
+        controls.append(el('p','muted','Hover the dress tile to preview the saved outfit (rendered on demand). Restore still applies the outfit in one batch. The oldest automatic outfits drop off after 50; starred favorites and saved looks stay permanent. Echo groups are included; restraints remain untouched.'));
         const list=el('div','history-list');controls.append(list);
         for(const [i,e] of [...state.history].reverse().entries())list.append(historyCard(e,state.history.length-1-i,'history'));
         if(!state.history.length)list.append(el('p','muted','No history yet.'));
-        const favorites=section(body,`★ Favorite outfits (${state.favorites.length}) · permanent`);
-        const pinned=el('div','history-list');favorites.append(pinned);
-        for(const e of state.favorites)pinned.append(historyCard(e,-1,'favorite'));
-        if(!state.favorites.length)favorites.append(el('p','muted','Star an outfit in your timeline to preserve it even after the oldest 50 history entries are cleared.'));
         const saved=section(body,`Saved looks (${state.saved.length}) · permanent`);
         const io=el('div','toolbar');saved.append(io);
         io.append(button('Export favorites + saved looks',downloadJSON));
@@ -21172,19 +19303,123 @@ function SubbysPlushiesPageMain() {
         const grid=el('div','history-list');saved.append(grid);
         for(const e of state.saved)grid.append(historyCard(e,-1,'saved'));
         if(!state.saved.length)grid.append(el('p','muted','Save an outfit to keep it permanently.'));
-        renderCompare(body);
         if(state.message)body.append(el('p','notice',state.message));
+      }
+      function viewportBounds() {
+        const w=Math.max(200,window.innerWidth||document.documentElement?.clientWidth||800);
+        const h=Math.max(200,window.innerHeight||document.documentElement?.clientHeight||600);
+        return {w,h,maxW:Math.max(180,w-VIEWPORT_MARGIN*2),maxH:Math.max(180,h-VIEWPORT_MARGIN*2)};
+      }
+      function restorePanelSize() {
+        if(!sheet)return;
+        try {
+          const data=JSON.parse(localStorage.getItem(PANEL_DIMENSIONS_KEY)||'null');
+          if(!data||window.innerWidth<=600)return;
+          const bounds=viewportBounds();
+          const width=Math.max(Math.min(MIN_PANEL_WIDTH,bounds.maxW),Math.min(bounds.maxW,Number(data.width)||490));
+          const height=Math.max(Math.min(MIN_PANEL_HEIGHT,bounds.maxH),Math.min(bounds.maxH,Number(data.height)||650));
+          sheet.style.width=Math.round(width)+'px';sheet.style.height=Math.round(height)+'px';
+        } catch (_) {}
+      }
+      function restorePanelPosition() {
+        if(!sheet||window.innerWidth<=600)return;
+        try {
+          const data=JSON.parse(localStorage.getItem(PANEL_POSITION_KEY)||'null');
+          if(!data||!Number.isFinite(Number(data.left))||!Number.isFinite(Number(data.top)))return;
+          sheet.style.right='auto';
+          sheet.style.left=Math.round(Number(data.left))+'px';
+          sheet.style.top=Math.round(Number(data.top))+'px';
+        } catch (_) {}
+      }
+      function clampPanelToViewport() {
+        if(!sheet||!state.show)return;
+        const b=viewportBounds();
+        if(window.innerWidth<=600) {
+          sheet.style.left='6px';sheet.style.right='6px';
+          sheet.style.top='3vh';sheet.style.width='calc(100vw - 12px)';
+          sheet.style.height='94vh';return;
+        }
+        let r=sheet.getBoundingClientRect();
+        if(!r.width||!r.height)return;
+        const width=Math.min(Math.max(r.width,Math.min(MIN_PANEL_WIDTH,b.maxW)),b.maxW);
+        const height=Math.min(Math.max(r.height,Math.min(MIN_PANEL_HEIGHT,b.maxH)),b.maxH);
+        if(Math.abs(width-r.width)>1)sheet.style.width=Math.round(width)+'px';
+        if(Math.abs(height-r.height)>1)sheet.style.height=Math.round(height)+'px';
+        const left=Math.max(VIEWPORT_MARGIN,Math.min(r.left,b.w-width-VIEWPORT_MARGIN));
+        const top=Math.max(VIEWPORT_MARGIN,Math.min(r.top,b.h-height-VIEWPORT_MARGIN));
+        sheet.style.right='auto';sheet.style.left=Math.round(left)+'px';sheet.style.top=Math.round(top)+'px';
+      }
+      function savePanelGeometry() {
+        if(!sheet||!state.show||window.innerWidth<=600)return;
+        const r=sheet.getBoundingClientRect();
+        if(!Number.isFinite(r.width)||r.width<100||!Number.isFinite(r.height)||r.height<100)return;
+        try {
+          localStorage.setItem(PANEL_DIMENSIONS_KEY,JSON.stringify({width:Math.round(r.width),height:Math.round(r.height)}));
+          localStorage.setItem(PANEL_POSITION_KEY,JSON.stringify({left:Math.round(r.left),top:Math.round(r.top)}));
+        } catch (_) {}
+      }
+      function resetPanelGeometry() {
+        if(!sheet)return;
+        clearWearPreview();
+        const b=viewportBounds();
+        const width=Math.min(490,b.maxW);
+        const height=Math.min(Math.round(b.h*0.78),b.maxH);
+        const left=Math.max(VIEWPORT_MARGIN,b.w-width-12);
+        const top=Math.max(VIEWPORT_MARGIN,Math.min(Math.round(b.h*0.07),b.h-height-VIEWPORT_MARGIN));
+        sheet.style.right='auto';sheet.style.left=left+'px';sheet.style.top=top+'px';
+        sheet.style.width=width+'px';sheet.style.height=height+'px';
+        if(window.innerWidth<=600)clampPanelToViewport();
+        savePanelGeometry();
+      }
+      function installPanelDragging(header) {
+        header.addEventListener('pointerdown',event=>{
+          if(!state.show||window.innerWidth<=600||event.button!==0||event.isPrimary===false)return;
+          if(event.target?.closest?.('button, input, a, select, textarea, [data-no-drag]'))return;
+          clearWearPreview();
+          clampPanelToViewport();
+          const r=sheet.getBoundingClientRect();
+          const pointerId=event.pointerId;
+          const offsetX=event.clientX-r.left,offsetY=event.clientY-r.top;
+          const panelWidth=r.width,panelHeight=r.height;
+          sheet.style.right='auto';sheet.style.left=Math.round(r.left)+'px';sheet.style.top=Math.round(r.top)+'px';
+          header.classList.add('dragging');
+          event.preventDefault?.();
+          try {header.setPointerCapture?.(pointerId);} catch (_) {}
+          const move=e=>{
+            if(e.pointerId!==pointerId)return;
+            const b=viewportBounds();
+            const left=Math.max(VIEWPORT_MARGIN,Math.min(e.clientX-offsetX,b.w-panelWidth-VIEWPORT_MARGIN));
+            const top=Math.max(VIEWPORT_MARGIN,Math.min(e.clientY-offsetY,b.h-panelHeight-VIEWPORT_MARGIN));
+            sheet.style.left=Math.round(left)+'px';sheet.style.top=Math.round(top)+'px';
+            e.preventDefault?.();
+          };
+          const end=e=>{
+            if(e.pointerId!==pointerId)return;
+            window.removeEventListener('pointermove',move);
+            window.removeEventListener('pointerup',end);
+            window.removeEventListener('pointercancel',end);
+            header.classList.remove('dragging');
+            try {if(header.hasPointerCapture?.(pointerId))header.releasePointerCapture(pointerId);}catch(_){}
+            clampPanelToViewport();savePanelGeometry();
+          };
+          window.addEventListener('pointermove',move);
+          window.addEventListener('pointerup',end);
+          window.addEventListener('pointercancel',end);
+        });
       }
       function mount() {
         if(sheetMounted||!document.body)return;
         const css=el('style');css.textContent=`
           #${PAGE_ID} {font-family:system-ui,-apple-system,Segoe UI,sans-serif;box-sizing:border-box;line-height:1.35}
           #${PAGE_ID} *{box-sizing:border-box}
-          #${PAGE_ID}{display:none;position:fixed;right:12px;top:7vh;bottom:7vh;width:min(490px,calc(100vw - 24px));z-index:2147483400;background:#201a2b;color:#f4efff;border:1px solid #ac8acc;box-shadow:0 15px 50px #000b;border-radius:12px;overflow:hidden;font-size:13px}
+          #${PAGE_ID}{display:none;position:fixed;right:12px;top:7vh;height:86vh;width:min(490px,calc(100vw - 24px));min-width:360px;min-height:320px;max-width:calc(100vw - 20px);max-height:calc(100vh - 20px);resize:both;z-index:2147483400;background:#201a2b;color:#f4efff;border:1px solid #ac8acc;box-shadow:0 15px 50px #000b;border-radius:12px;overflow:hidden;font-size:13px}
           #${PAGE_ID}.open{display:flex;flex-direction:column}
-          #${PAGE_ID} .otm-head{padding:13px 15px;display:flex;align-items:center;justify-content:space-between;background:#322640;border-bottom:1px solid #58426d}
-          #${PAGE_ID} .otm-head strong{font-size:16px}
-          #${PAGE_ID} .otm-content{padding:12px;overflow-y:auto;flex:1;overscroll-behavior:contain}
+          #${PAGE_ID} .otm-head{cursor:grab;touch-action:none;user-select:none;flex-shrink:0;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:#322640;border-bottom:1px solid #58426d}
+          #${PAGE_ID} .otm-head.dragging{cursor:grabbing}
+          #${PAGE_ID} .otm-head strong{font-size:16px;min-width:0;flex:1}
+          #${PAGE_ID} .otm-head-actions{display:flex;flex-shrink:0;gap:6px}
+          #${PAGE_ID} .otm-head-actions .otm-button{white-space:nowrap}
+          #${PAGE_ID} .otm-content{padding:12px;overflow-y:auto;flex:1;min-height:0;overscroll-behavior:contain}
           #${PAGE_ID} .otm-button{background:#433254;color:#f8eafa;border:1px solid #8b6bad;border-radius:7px;padding:6px 9px;cursor:pointer;font:inherit}
           #${PAGE_ID} .otm-button.primary{background:#654678}
           #${PAGE_ID} .otm-button:disabled{opacity:.4;cursor:not-allowed}
@@ -21194,32 +19429,81 @@ function SubbysPlushiesPageMain() {
           #${PAGE_ID} .otm-toolbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
           #${PAGE_ID} .otm-option{display:flex;align-items:center;gap:4px;color:#d4c0e2;font-size:12px}
           #${PAGE_ID} .otm-muted{color:#b8a8c8;font-size:12px;margin:4px 0 7px}
-          #${PAGE_ID} .otm-history-list{max-height:380px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:2px}
-          #${PAGE_ID} .otm-entry{display:flex;gap:11px;border:1px solid #544267;border-radius:9px;padding:8px;background:#2c2337;min-height:110px}
+          /* The list is a scroll container, NOT a flexbox that should compress its cards.
+             Otherwise 20+ history entries get flex-shrunk to tiny heights while
+             their Restore / Compare / Favorite controls overflow the cards. */
+          #${PAGE_ID} .otm-history-list{max-height:380px;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:8px;padding:2px;scrollbar-gutter:stable}
+          #${PAGE_ID} .otm-history-list > .otm-entry{flex:0 0 auto;min-width:0;height:auto}
+          #${PAGE_ID} .otm-entry{display:flex;flex-shrink:0;gap:10px;align-items:flex-start;border:1px solid #544267;border-radius:9px;padding:8px;background:#2c2337;min-height:116px;height:auto}
           #${PAGE_ID} .otm-entry.current{border-color:#d8a9f7}
-          #${PAGE_ID} .otm-entry-body{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}
-          #${PAGE_ID} .otm-entry-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
-          #${PAGE_ID} .otm-portrait{position:relative;width:72px;height:107px;background:#1b1622;border:1px solid #534361;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;flex:none}
-          #${PAGE_ID} .otm-portrait-image{height:100%;max-width:100%;object-fit:contain}
-          #${PAGE_ID} .otm-portrait-placeholder{font-size:33px}
+          #${PAGE_ID} .otm-entry.comparing{border-color:#c49af3;background:#352641;box-shadow:inset 3px 0 #b58adf}
+          #${PAGE_ID} .otm-entry.comparing .otm-entry-actions .otm-button[aria-pressed="true"]{background:#775392;border-color:#ce9df6}
+          #${PAGE_ID} .otm-entry-preview{flex:0 0 74px;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:74px}
+          #${PAGE_ID} .otm-entry-preview-frame{width:64px;height:64px;border-radius:8px;border:1px solid #726085;background:#22192f;display:flex;align-items:center;justify-content:center;cursor:help;box-shadow:inset 0 0 0 1px #0004;outline:none}
+          #${PAGE_ID} .otm-entry-preview-frame:hover,
+          #${PAGE_ID} .otm-entry-preview-frame:focus{background:#342748;border-color:#d8a9f7;box-shadow:0 0 0 2px #a47fd133,inset 0 0 0 1px #0004}
+          #${PAGE_ID} .otm-entry-preview-icon{font-size:34px;line-height:1;filter:drop-shadow(0 1px 1px #0008)}
+          #${PAGE_ID} .otm-entry-preview .otm-swatches{margin-top:0}
+          #${PAGE_ID} .otm-entry-preview .otm-muted{font-size:11px;text-align:center}
+          #${PAGE_ID} .otm-entry-body{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 0%;align-self:stretch}
+          #${PAGE_ID} .otm-entry-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px;padding-bottom:2px;min-width:0}
+          #${PAGE_ID} .otm-entry-actions .otm-button{flex:0 0 auto;max-width:100%;white-space:normal}
           #${PAGE_ID} .otm-swatches{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-top:5px}
           #${PAGE_ID} .otm-swatch{width:11px;height:11px;border-radius:50%;border:1px solid #fff5}
-          #${PAGE_ID} .otm-compare-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+          #${PAGE_ID} .otm-comparison{border:1px solid #ab81d0;border-radius:9px;padding:12px;background:#30233e;margin:10px 0 14px}
+          #${PAGE_ID} .otm-comparison .otm-section-title{margin-top:0}
+          #${PAGE_ID} .otm-compare-summary{display:block;padding:8px 0}
+          #${PAGE_ID} .otm-compare-differences{max-height:240px;overflow:auto;border:1px solid #59466d;border-radius:6px;margin-bottom:10px}
+          #${PAGE_ID} .otm-compare-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
           #${PAGE_ID} .otm-compare-half{display:flex;align-items:center;flex-direction:column;gap:6px;border:1px solid #544267;border-radius:8px;padding:10px}
-          #${PAGE_ID} .otm-compare-half .otm-portrait{width:105px;height:150px}
+          #${PAGE_ID} .otm-compare-portrait{width:min(100%,180px);height:220px;border-radius:7px;border:1px solid #5b466e;background:#171320;display:flex;align-items:center;justify-content:center;overflow:hidden}
+          #${PAGE_ID} .otm-compare-image{width:100%;height:100%;object-fit:contain}
+          #${PAGE_ID} .otm-compare-fallback{padding:12px;text-align:center;font-size:12px;color:#dac1eb}
+          .otm-wear-popup{position:fixed;z-index:2147483540;pointer-events:none;box-sizing:border-box;padding:10px;
+            border-radius:9px;border:1px solid #ac8acc;background:#251b34;color:#f4efff;
+            font:13px/1.35 system-ui,-apple-system,Segoe UI,sans-serif;box-shadow:0 12px 32px #000b;
+            max-height:calc(100vh - 16px);overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:5px}
+          .otm-wear-popup-title{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+          .otm-wear-popup-portrait{width:100%;height:min(320px,calc(100vh - 125px));min-height:110px;
+            background:#171320;border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+          .otm-wear-popup-image{width:100%;height:100%;object-fit:contain}
+          .otm-wear-popup-fallback{padding:12px;text-align:center;font-size:12px;color:#dac1eb}
+          .otm-wear-popup .otm-muted{font-size:11px;color:#cab6d6;text-align:center}
+          .otm-wear-popup .otm-swatches{margin-top:8px}
           #${PAGE_ID} .otm-diff-row{display:flex;align-items:start;justify-content:space-between;gap:6px;padding:6px;border-bottom:1px solid #3e3448;font-size:12px}
           #${PAGE_ID} .otm-diff-row span{text-align:right;overflow-wrap:anywhere}
           #${PAGE_ID} .otm-notice{padding:7px;background:#493957;border-radius:7px}
-          @media(max-width:600px){#${PAGE_ID}{top:3vh;bottom:3vh;right:6px;width:calc(100vw - 12px)}}
+          @media(max-width:600px){#${PAGE_ID}{top:3vh;right:6px;width:calc(100vw - 12px);height:94vh;min-width:0;max-height:94vh;resize:none}#${PAGE_ID} .otm-compare-pair{grid-template-columns:1fr}}
         `;document.head.append(css);
         sheet=el('aside');sheet.id=PAGE_ID;sheet.setAttribute('role','dialog');sheet.setAttribute('aria-label','BC Outfit Time Machine');
-        const header=el('div','head');header.append(el('strong','',`⏪ Outfit Time Machine ${VERSION}`));
-        header.append(button('× Close',togglePanel));sheet.append(header);
+        const header=el('div','head');header.title='Drag to move the Time Machine window';
+        header.append(el('strong','',`⏪ Outfit Time Machine ${VERSION}`));
+        const headActions=el('div','head-actions');
+        const reset=button('↺ Reset Window',resetPanelGeometry);
+        reset.title='Restore a visible, usable window size and position';
+        headActions.append(reset,button('× Close',togglePanel));
+        header.append(headActions);sheet.append(header);
+        installPanelDragging(header);
         sheet.append(el('div','content'));
         const input=el('input','import');input.type='file';input.accept='.json,application/json';input.hidden=true;input.addEventListener('change',e=>uploadJSON(e.target.files?.[0]));sheet.append(input);
         document.body.append(sheet);sheetMounted=true;
+        sheet.querySelector('.otm-content')?.addEventListener('scroll',clearWearPreview,{passive:true});
+        window.addEventListener('resize',clearWearPreview,{passive:true});
+        restorePanelSize();restorePanelPosition();
+        sheet.addEventListener('pointerup',()=>{clampPanelToViewport();savePanelGeometry();});
+        if(typeof ResizeObserver==='function') {
+          let initial=true;
+          const ro=new ResizeObserver(()=>{
+            if(initial){initial=false;return;}
+            if(!state.show)return;
+            clampPanelToViewport();savePanelGeometry();
+          });
+          ro.observe(sheet);
+        }
+        window.addEventListener('resize',()=>{if(state.show)clampPanelToViewport();},{passive:true});
       }
-      function togglePanel() { if(!sheetMounted)mount();loadAccount();state.show=!state.show;sheet?.classList.toggle('open',state.show);if(state.show)render(); }
+      function togglePanel() { if(!sheetMounted)mount();loadAccount();state.show=!state.show;sheet?.classList.toggle('open',state.show);
+        if(state.show){clampPanelToViewport();render();}else {clearWearPreview();} }
       function init() { if(window.__BCOutfitTimeMachine)return;window.__BCOutfitTimeMachine=Object.freeze({
         version:VERSION,open:()=>{if(!state.show)togglePanel();},close:()=>{if(state.show)togglePanel();},
         capture:(label='Manual checkpoint')=>recordSnapshot(label,true),save:makeSaved,
@@ -21242,58 +19526,38 @@ function SubbysPlushiesPageMain() {
     }
     init();
     }
-
     function openOutfitTimeMachine() {
-        // If the old standalone addon is still present, open the existing UI,
-        // instead of running two competing history recorders.
         if (!window.__BCOutfitTimeMachine) installSubbysOutfitTimeMachine();
         const api = window.__BCOutfitTimeMachine;
         if (typeof api?.open === "function") api.open();
         else warn("Outfit Time Machine could not be opened; check browser console.");
     }
-
     function openOutfitTimeMachineFromUseMenu() {
         closeCustomPlushMenu();
         window.setTimeout(openOutfitTimeMachine, 0);
     }
-
     function openOutfitTimeMachineFromExtensions() {
-        // Native Preferences > Extensions also hosts this panel. Closing it
-        // avoids an overlay being buried underneath the existing dialog.
         closeExtensionsPanel(false);
         window.setTimeout(openOutfitTimeMachine, 0);
     }
-
     async function main() {
         log(`Starting standalone v${VERSION}...`);
-
         window.addEventListener("pagehide", flushDeferredProgressStores, { capture: true });
         loadCachedGitData();
         void refreshGitDataFromGitHub({ force: false, silent: true });
-
         await waitForBC();
         checkDuplicateAsset();
-
         initHookBackend();
         installDogsCompatibilityBridge();
         scheduleNativeCommandFallbackHook();
-
-        // Appearance assets are available early, independently of external
-        // plushie PNG loading. The same image mapper is reused by both modules.
         installNativeImageElementHook();
         installAssetTextHook();
         installWardrobeLayerTextHook();
         installWardrobeVisibleLabelFix();
-        // Register in BC's native Appearance catalog BEFORE waiting for network
-        // color data. Otherwise BC can cache the clothing picker without us.
-        // The source PNG previews are served from GitHub, while individual
-        // recolorable layers are populated asynchronously after registration.
         setupWardrobeAssets();
         try { installSubbysOutfitTimeMachine(); }
         catch (e) { warn("Outfit Time Machine initialization failed:", e); }
         installWardrobeNativePickerHooks();
-        // Some BC builds load their Appearance editor later than the asset table.
-        // Bounded one-shot retries, no permanent frame loop or polling observer.
         for (const delay of [1000, 4000, 12000]) {
             window.setTimeout(() => installWardrobeNativePickerHooks(), delay);
         }
@@ -21302,12 +19566,9 @@ function SubbysPlushiesPageMain() {
             wardrobeSyncNativePicker();
             try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
         } else {
-            // Keep the items selectable for when GitHub responds, but report
-            // that the color layers (and therefore their render) are unavailable.
             wardrobeState.errors.push(`Color layers unavailable: ${wardrobeLayersError || "remote request failed"}`);
             warn("Wardrobe items registered, but remote color artwork is not ready:", wardrobeLayersError);
         }
-
         await prepareRenderImages();
         setupNativeAsset();
         installPlushStateHooks();
@@ -21321,35 +19582,28 @@ function SubbysPlushiesPageMain() {
         startHugTightlyActivityMonitor();
         scheduleNextIdleAnimation(3500);
         startPlushStatusIconMonitor();
-
         if (!validate()) {
             throw new Error("Standalone validation failed. Run /plushiedebug and check the console.");
         }
         checkAchievements(true);
         scheduleAutomaticUpdateCheck();
     }
-
     main().catch(e => {
         startupError = e;
         failed = true;
         ready = false;
-
         try {
             if (window[ACTIVE_GUARD] === VERSION) delete window[ACTIVE_GUARD];
         } catch (_) {}
-
         error("STARTUP FAILED:", e);
     });
 }
-
 (() => {
     "use strict";
-
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.14";
+    const VERSION = "3.5.21";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
-
     function pageGlobalsVisible() {
         try {
             return typeof window.AssetGet === "function" &&
@@ -21359,13 +19613,11 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-
     function exposeBootstrapDiag(state = "starting") {
         try {
             document.documentElement?.setAttribute(RUNTIME_ATTR, "main-world");
             document.documentElement?.setAttribute(VERSION_ATTR, VERSION);
         } catch (_) {}
-
         window.SubbysPlushiesBootstrapDiag = () => {
             const info = {
                 version: VERSION,
@@ -21383,10 +19635,8 @@ function SubbysPlushiesPageMain() {
             return info;
         };
     }
-
     async function bootstrap() {
         exposeBootstrapDiag("waiting-for-bc");
-
         for (let attempt = 0; attempt < 240; attempt++) {
             if (pageGlobalsVisible()) {
                 exposeBootstrapDiag("starting-main");
@@ -21402,14 +19652,12 @@ function SubbysPlushiesPageMain() {
             }
             await new Promise(resolve => setTimeout(resolve, 50));
         }
-
         exposeBootstrapDiag("bc-globals-timeout");
         console.error(
             BOOT_TAG,
             "Bondage Club globals did not become available in the page context."
         );
     }
-
     exposeBootstrapDiag("bootstrap-loaded");
     void bootstrap();
 })();

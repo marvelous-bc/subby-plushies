@@ -1,5 +1,5 @@
 {
-  "version": "3.5.14",
+  "version": "3.5.26",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Outfit Time Machine: automatic outfit history is now limited to the 50 most recent looks. New star buttons permanently save favorite outfits separately from history; favorites and named saved looks never expire automatically. Includes favorites in export/import, retains existing saves and history storage, Echo extra-slot compatibility, and atomic batch restore. All plushie, wardrobe, and chat reaction functionality remains unchanged."
+  "notes": "Corrected Mod SDK registered mod list entry from 'SubbysPlushies' to 'Subbycat's essentials'. Tampermonkey display name, wardrobe, reactions, Echo-compatible outfit history, user data, and existing commands remain unchanged. Reload BC after updating."
 }
