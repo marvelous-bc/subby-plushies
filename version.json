@@ -1,5 +1,37 @@
 {
-  "version": "3.5.32",
+  "version": "3.5.47",
+  "releaseDate": "2026-10-16",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Removed Collaborative Stylist (outfitting buddy) entirely: no editor, invitations, proposal messaging, buttons, or /plushiestylist command. Retained Outfit Time Machine, plushies, Quick Reactions, favorites, and existing save data."
+  "notes": "Color Studio: saved palettes, color harmonies, batch recoloring and undo. Chat Emoticons: 22 built-in 64x64 plushie PNG icons plus 12 SVG reactions; SVG codes shortened to :happy:, :love:, etc. (filenames unchanged). Loona plushie selection and lore placeholder fixed, along with Rey, Margot, Mara and Eva selection mapping. Universal Search removed.",
+  "changes": [
+    {
+      "category": "Added",
+      "items": [
+        "Color Studio with saved color palettes, matching color harmonies, batch recoloring and undo.",
+        "Chat Emoticons picker with 22 embedded 64x64 plushie PNG icons and the 12 original SVG reaction emoticons.",
+        "Filename-based chat codes for plushie PNG icons, using :hari: for hari'.png."
+      ]
+    },
+    {
+      "category": "Improved",
+      "items": [
+        "Original SVG emoticon chat codes no longer require the subby prefix (for example, :happy:, :love:, :blush: and :hug:). SVG asset filenames remain unchanged.",
+        "Older :subby...: SVG chat codes remain supported for backward compatibility."
+      ]
+    },
+    {
+      "category": "Fixed",
+      "items": [
+        "Loona plushie selection now maps to the correct item and loona.png.",
+        "Loona lore displays \"Loona's lore is to come soon.\"",
+        "Corrected plushie selection mappings for Rey, Margot, Mara and Eva."
+      ]
+    },
+    {
+      "category": "Removed",
+      "items": [
+        "Universal Search and its keyboard shortcuts."
+      ]
+    }
+  ]
 }
