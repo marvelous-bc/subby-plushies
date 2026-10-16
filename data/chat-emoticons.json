@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "description": "Subbycat Essentials chat emoticons. Add SVG files to assets/emoticons and catalog to data/chat-emoticons.json.",
+  "emoticons": [
+    {
+      "id": "happy",
+      "name": "Happy",
+      "emoji": "😺",
+      "file": "happy.svg"
+    },
+    {
+      "id": "love",
+      "name": "Love",
+      "emoji": "😻",
+      "file": "love.svg"
+    },
+    {
+      "id": "blush",
+      "name": "Blush",
+      "emoji": "😊",
+      "file": "blush.svg"
+    },
+    {
+      "id": "wink",
+      "name": "Wink",
+      "emoji": "😉",
+      "file": "wink.svg"
+    },
+    {
+      "id": "purr",
+      "name": "Purr",
+      "emoji": "🐱",
+      "file": "purr.svg"
+    },
+    {
+      "id": "sleep",
+      "name": "Sleep",
+      "emoji": "😴",
+      "file": "sleep.svg"
+    },
+    {
+      "id": "cry",
+      "name": "Cry",
+      "emoji": "😿",
+      "file": "cry.svg"
+    },
+    {
+      "id": "angry",
+      "name": "Angry",
+      "emoji": "😾",
+      "file": "angry.svg"
+    },
+    {
+      "id": "surprise",
+      "name": "Surprised",
+      "emoji": "🙀",
+      "file": "surprise.svg"
+    },
+    {
+      "id": "sparkle",
+      "name": "Sparkle",
+      "emoji": "✨",
+      "file": "sparkle.svg"
+    },
+    {
+      "id": "heart",
+      "name": "Heart",
+      "emoji": "💗",
+      "file": "heart.svg"
+    },
+    {
+      "id": "hug",
+      "name": "Hug",
+      "emoji": "🤗",
+      "file": "hug.svg"
+    }
+  ]
+}
