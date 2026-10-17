@@ -2,9 +2,9 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.49
-// @description  Plushies, wardrobe, Color Studio, chat emoticons, native Pet Bed padlocks, and mobile essentials
-// @released     2026-10-16
+// @version      3.5.54
+// @description  Plushies, wardrobe harmonizer, Color Studio, optional chat emoticon button, Pet Bed locking, and mobile essentials
+// @released     2026-10-17
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.49";
+    const VERSION = "3.5.54";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -32,7 +32,7 @@ function SubbysPlushiesPageMain() {
             document.documentElement?.setAttribute("data-subbys-plushies-load-source", "direct");
         }
     } catch (_) {}
-    const BUILD_DATE = "2026-10-16";
+    const BUILD_DATE = "2026-10-17";
     const TAG = "[Subby's Plushies & Essentials]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -559,6 +559,7 @@ function SubbysPlushiesPageMain() {
         idleAnimations: true,
         speechBubbles: true,
         showDragButton: true,
+        showEmoticonButton: true,
         extraActions: false,
         sharedEmoteChains: true,
         quickReactions: true,
@@ -1966,11 +1967,13 @@ function SubbysPlushiesPageMain() {
             idleAnimations: storedBoolean("idleAnimations"),
             speechBubbles: storedBoolean("speechBubbles"),
             showDragButton: storedBoolean("showDragButton"),
+            showEmoticonButton: storedBoolean("showEmoticonButton"),
             extraActions: storedBoolean("extraActions"),
             sharedEmoteChains: storedBoolean("sharedEmoteChains"),
             quickReactions: storedBoolean("quickReactions"),
             expressionReactions: storedBoolean("expressionReactions"),
             ignorePoseChangingEmotes: storedBoolean("ignorePoseChangingEmotes"),
+            petBedAutoRestore: Object.prototype.hasOwnProperty.call(stored, "petBedAutoRestore") ? !!stored.petBedAutoRestore : true,
             highlightMyName: Object.prototype.hasOwnProperty.call(stored, "highlightMyName") ? !!stored.highlightMyName : false,
             performanceMode: String(stored.performanceMode || "normal").toLowerCase() === "low" ? "low" : "normal",
         };
@@ -1994,6 +1997,11 @@ function SubbysPlushiesPageMain() {
         if (key === "showDragButton") {
             if (settings[key]) refreshDragToggleButton();
             else removeDragToggleButton();
+        }
+        if (key === "showEmoticonButton") {
+            // Reconcile immediately; hiding only affects the floating shortcut,
+            // never the emoji picker or rendering inside chat.
+            try { window.SubbysEssentialsExtras?.refreshChatButton?.(); } catch (_) {}
         }
         if (key === "extraActions") {
             syncExtraActionsAvailability("setting toggle");
@@ -9113,6 +9121,17 @@ function SubbysPlushiesPageMain() {
         intro.textContent = "The Headband, Heart Charm and Draped Wrap Dress appear in BC's normal Appearance picker (Hair Accessory 2, Necklace, and Upper Clothing). Each uses one GitHub PNG with independent color zones. Positioning moves the clothing, not the character. Other viewers need the matching plugin and assets.";
         Object.assign(intro.style, { color: getExtensionsStyle().muted, marginBottom: "12px", lineHeight: "1.45" });
         section.appendChild(intro);
+        const harmonizerRow = document.createElement("div");
+        Object.assign(harmonizerRow.style,{display:"flex",flexWrap:"wrap",gap:"9px",alignItems:"center",margin:"8px 0 14px"});
+        harmonizerRow.appendChild(makeExtensionsButton("🎨 Smart Outfit Color Harmonizer", () => {
+            try { (window.SubbysOutfitHarmonizer || installSmartOutfitColorHarmonizer())?.open(); }
+            catch (e) { warn("Could not open Outfit Harmonizer:", e); }
+        }));
+        const harmonizerHint=document.createElement("span");
+        harmonizerHint.textContent="Choose two outfit colors: a primary and an accent — also in BC's Appearance picker.";
+        Object.assign(harmonizerHint.style,{fontSize:"12px",color:getExtensionsStyle().muted});
+        harmonizerRow.appendChild(harmonizerHint);
+        section.appendChild(harmonizerRow);
         section.appendChild(makeExtensionsButton("⏪ Open Outfit Time Machine", openOutfitTimeMachineFromExtensions));
         for (const entry of WARDROBE_ITEMS) {
             const itemSection = document.createElement("div");
@@ -9281,12 +9300,36 @@ function SubbysPlushiesPageMain() {
             ? "Enabled: place the normal Pet Bed (ItemDevices), then apply a padlock through BC's regular item controls. BC permissions, keys, and unlock rules are unchanged. Players without Essentials may not recognize this client-side compatibility change."
             : "Waiting for BC's Pet Bed asset; use the diagnostic button to check support.";
         Object.assign(petBedNote.style, { color: getExtensionsStyle().muted, fontSize: "12px", lineHeight: "1.45", marginBottom: "8px" });
-        petBed.append(petBedNote, makeExtensionsButton("Check Pet Bed Locking", () => {
+        petBed.append(extensionsSettingRow(
+            "Auto-Restore My Locked Pet Bed",
+            "When another player removes your locked Pet Bed, attempt BC-synced restoration automatically. Turn off to use the manual restore button instead. Your own unlocks and removals remain allowed.",
+            settings.petBedAutoRestore,
+            () => setFeatureSetting("petBedAutoRestore", !getFeatureSettings().petBedAutoRestore)
+        ));
+        const manualStatus = petBedGuardManualAvailability();
+        const manualButton = makeExtensionsButton("Restore My Locked Pet Bed Now", () => {
+            const outcome = petBedGuardRestoreManually();
+            appendLocalInfoBox(outcome.ok ? "Pet Bed restoration requested" : "Pet Bed restoration unavailable", [
+                outcome.message,
+                "Restoration must be accepted by BC and may be overwritten by another player. It is not a server-enforced lock."
+            ], { compact: true });
+            if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+        });
+        manualButton.disabled = !manualStatus.ok;
+        manualButton.title = manualStatus.reason;
+        if (!manualStatus.ok) Object.assign(manualButton.style, { opacity: "0.55", cursor: "not-allowed" });
+        const manualHint = document.createElement("div");
+        manualHint.textContent = manualStatus.reason;
+        Object.assign(manualHint.style, { color: getExtensionsStyle().muted, fontSize: "12px", margin: "5px 0 9px", lineHeight: "1.4" });
+        petBed.append(petBedNote, manualButton, manualHint, makeExtensionsButton("Check Pet Bed Locking", () => {
             const result = petBedLockingDiagnostics();
             appendLocalInfoBox("Native Pet Bed Locking", [
                 result.allowLock ? "Pet Bed can receive normal BC padlocks on this client." : `Unavailable: ${result.result}`,
                 "Use the game's standard padlock menu on an equipped Pet Bed. No locks are applied automatically.",
-                "Other clients may require the addon; this does not change the BC server."
+                `Auto-restore my bed: ${result.autoRestoreEnabled ? "ON" : "OFF"} · Hook: ${result.removeHookInstalled ? "ready" : "unavailable"} · Restores: ${result.restorationAttempts} attempted.`,
+                `Manual restore: ${result.manualRestore.reason}`,
+                `Last result: ${result.lastRestoration || "none"}`,
+                "Other clients may remove a locked bed; Essentials attempts to restore on the wearer's client, but BC server enforcement is not guaranteed."
             ], { compact: true });
         }));
         container.appendChild(petBed);
@@ -9296,6 +9339,7 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow("Jealous Plushie", "Playful jealous reactions when you show affection to someone else.", settings.jealousPlushie, () => toggleFeatureSetting("jealousPlushie")),
             extensionsSettingRow("Easy Drag", "Drag anywhere on the character side to reposition the held plushie.", dragModeEnabled, () => toggleDragMode()),
             extensionsSettingRow("Hide Plushie Drag Button", "Hide the movable mouse button without disabling Easy Drag itself.", !settings.showDragButton, () => setFeatureSetting("showDragButton", !getFeatureSettings().showDragButton)),
+            extensionsSettingRow("Hide Emoticon Button", "Hide the movable 😺 chat shortcut without disabling Chat Emoticons. Open them anytime from Essentials → Chat Emoticons.", !settings.showEmoticonButton, () => setFeatureSetting("showEmoticonButton", !getFeatureSettings().showEmoticonButton)),
             extensionsSettingRow("Room Mascot Picture", "Show the room mascot picture locally in the chat area.", settings.showRoomMascot, () => setRoomMascotOverlayVisible(!getFeatureSettings().showRoomMascot)),
             extensionsSettingRow("Idle Animation", "Occasional lightweight local plush wiggles.", settings.idleAnimations, () => toggleFeatureSetting("idleAnimations")),
             extensionsSettingRow("Speech Bubbles", "Allow local mood-based plush speech bubbles.", settings.speechBubbles, () => toggleFeatureSetting("speechBubbles")),
@@ -20291,6 +20335,301 @@ function SubbysPlushiesPageMain() {
         if(mobileEssentialMode())window.setInterval(()=>{if(!document.hidden)mobileRefreshDock();},2000);
         window.SubbysPlushiesMobileDiag=()=>({version:VERSION,mobile:mobileEssentialMode(),visible:mobileDockButtons.size,editing:mobileDockEditing,canvas:(mobileCanvasRect()?.toJSON?.()||null)});
     }
+    // Smart Outfit Color Harmonizer: two colors -> coordinated main and accent tones for your clothing.
+    // The native Appearance picker is canvas-based, so this lightweight dock is DOM-based.
+    // Character body colors, restraints, locks and worn items belonging to other members stay untouched.
+    function installSmartOutfitColorHarmonizer() {
+        if (window.SubbysOutfitHarmonizer?.version === VERSION) return window.SubbysOutfitHarmonizer;
+        const PREFIX = "SubbysPlushies:OutfitColorHarmonizer:v1:";
+        const ID = "subbys-outfit-harmonizer-dock";
+        const DIALOG_ID = "subbys-outfit-harmonizer-dialog";
+        const safeHex = value => typeof value === "string" && /^#[0-9A-F]{6}$/i.test(value.trim())
+            ? value.trim().toUpperCase() : null;
+        const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+        const account = () => String(window.Player?.MemberNumber ?? "guest");
+        const settingsKey = () => `${PREFIX}${account()}`;
+        const readColor = () => {
+            try { return safeHex(window.localStorage?.getItem(settingsKey())) || "#D8A8C9"; }
+            catch (_) { return "#D8A8C9"; }
+        };
+        const writeColor = hex => {
+            try { window.localStorage?.setItem(settingsKey(), hex); } catch (_) {}
+        };
+        // Keep the existing primary-color key so people upgrading from 3.5.53
+        // retain their chosen color. The accent has its own per-account key.
+        const readAccent = () => {
+            try { return safeHex(window.localStorage?.getItem(`${settingsKey()}:accent`)) || '#705874'; }
+            catch (_) { return '#705874'; }
+        };
+        const writeAccent = hex => {
+            try { window.localStorage?.setItem(`${settingsKey()}:accent`, hex); } catch (_) {}
+        };
+        let chosen = readColor(), accent = readAccent(), activeAccount = account(), previous = null, dock = null;
+        let dialog = null, details = "", movedDock = false;
+        const countColorZones = item => {
+            const custom = WARDROBE_ITEMS.find(entry => entry.name === item.Asset?.Name);
+            const customCount = custom?.colorZones?.length || 0;
+            const nativeCount = Number(item.Asset?.ColorableLayerCount) || 0;
+            const existingCount = Array.isArray(item.Color) ? item.Color.length : 0;
+            return clamp(Math.max(customCount, nativeCount, existingCount, 1), 1, 12);
+        };
+        function canRecolor(item) {
+            const asset = item?.Asset, group = asset?.Group;
+            if (!asset || group?.Category !== "Appearance" ||
+                !(group.Clothing || WARDROBE_ITEM_NAME_SET.has(asset.Name))) return false;
+            if (item.Property?.LockedBy || item.Property?.LockMemberNumber != null ||
+                item.Property?.Effect?.includes?.("Lock") ||
+                item.Property?.Effect?.includes?.("Enclose") ||
+                item.Property?.Effect?.includes?.("Block") ||
+                item.Property?.Effect?.includes?.("Freeze")) return false;
+            return true;
+        }
+        function eligibleItems() {
+            return (Array.isArray(window.Player?.Appearance) ? window.Player.Appearance : []).filter(canRecolor);
+        }
+        function hexToHsl(hex) {
+            let r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255;
+            const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max-min;
+            let h = 0, s = 0, l = (max+min)/2;
+            if (d) {
+                s = d/(1-Math.abs(2*l-1));
+                switch (max) {
+                    case r: h = ((g-b)/d)%6; break;
+                    case g: h = (b-r)/d+2; break;
+                    default: h = (r-g)/d+4;
+                }
+                h = ((h*60)%360+360)%360;
+            }
+            return [h,s,l];
+        }
+        function hslToHex(h,s,l) {
+            const channel = n => {
+                const k = (n+h/30)%12, a = s*Math.min(l,1-l);
+                return l-a*Math.max(-1, Math.min(k-3,9-k,1));
+            };
+            return `#${[channel(0),channel(8),channel(4)].map(n=>Math.round(clamp(n,0,1)*255).toString(16).padStart(2,'0')).join('')}`.toUpperCase();
+        }
+        // The first tone fills tops and other primary pieces, the second fills
+        // bottoms, footwear, and accents. Multiple color zones alternate between
+        // the two chosen hues; subtle lightness variation preserves garment details.
+        // The per-group occurrence fallback makes two one-zone tops use different colors, too.
+        function outfitColors(primary, secondary, item, itemIndex=0) {
+            const group = String(item?.Asset?.Group?.Name || '').toLowerCase();
+            const zones = countColorZones(item);
+            let useAccent = /shoe|boot|sock|stocking|glove|lower|pant|skirt|neck|accessor|hat|ribbon|glasses|bracelet|belt/.test(group);
+            if (!/shoe|boot|sock|stocking|glove|lower|pant|skirt|neck|accessor|hat|ribbon|glasses|bracelet|belt|cloth|suit|dress|bra|underwear/.test(group))
+                useAccent = itemIndex % 2 === 1;
+            const baseColor = useAccent ? secondary : primary;
+            const trimColor = useAccent ? primary : secondary;
+            // A second same-type single-zone item can still use the alternate hue.
+            if (zones === 1 && itemIndex % 2 === 1 && /cloth|suit|dress|bra|underwear/.test(group))
+                return [shade(secondary, group, 0)];
+            const result = [];
+            for (let i=0;i<zones;i++) {
+                const hex = i % 2 === 0 ? baseColor : trimColor;
+                result.push(shade(hex, group, i, false));
+            }
+            return result;
+        }
+        function shade(hex, group, zone) {
+            const [h,s,l] = hexToHsl(hex);
+            let base = l, saturation = s;
+            if (/shoe|boot/.test(group)) base = l*.75;
+            else if (/sock|stocking|glove/.test(group)) base = l*.86;
+            else if (/lower|pant|skirt/.test(group)) base = l*.90;
+            else if (/bra|panties|underwear/.test(group)) base = l + (1-l)*.12;
+            else if (/neck|accessor|hat|ribbon|glasses|bracelet|belt/.test(group)) {
+                base = l + (1-l)*.16;
+                saturation = Math.max(.15,s*.86);
+            }
+            // Different zones retain contrast without introducing extra hues.
+            const tone = [0,.13,-.19,.24,-.29,.07,-.1,.19][zone % 8];
+            const offsetL = tone > 0 ? base + (1-base)*tone : base*(1+tone);
+            const offsetS = zone === 1 ? saturation*.90 : zone === 2 ? saturation*.96 : saturation;
+            return hslToHex(h,clamp(offsetS,0,1),clamp(offsetL,.07,.97));
+        }
+        function ownsCurrentAppearance() {
+            const player = window.Player;
+            if (!player || !Array.isArray(player.Appearance)) return false;
+            const selected = window.AppearanceCharacter;
+            return !selected || selected === player ||
+                (Number.isFinite(selected.MemberNumber) && selected.MemberNumber === player.MemberNumber);
+        }
+        function allowedToChange() {
+            if (!ownsCurrentAppearance()) return "Switch to your own outfit before harmonizing.";
+            if (typeof window.Player.CanChange === "function" && !window.Player.CanChange())
+                return "BC currently restricts changing your appearance.";
+            return "";
+        }
+        function synchronize() {
+            const player = window.Player;
+            window.CharacterRefresh?.(player, false, false);
+            window.CharacterLoadCanvas?.(player);
+            if (window.CurrentScreen === "ChatRoom" && typeof window.ChatRoomCharacterUpdate === "function") {
+                window.ChatRoomCharacterUpdate(player);
+            } else if (typeof window.ServerPlayerAppearanceSync === "function") {
+                window.ServerPlayerAppearanceSync();
+            }
+        }
+        const copyColor = color => Array.isArray(color) ? [...color] : color;
+        function rememberWardrobe(item) {
+            if (!WARDROBE_ITEM_NAME_SET.has(item.Asset?.Name)) return;
+            try { wardrobeRememberColors(item.Asset.Name, Array.isArray(item.Color) ? item.Color : [item.Color]); }
+            catch (_) {}
+        }
+        function setStatus(message) {
+            details = message;
+            const status = dialog?.querySelector('[data-harmonizer-status]');
+            if (status) status.textContent = message;
+        }
+        function applyColor(color = chosen, accentColor = accent) {
+            const hex = safeHex(color), secondHex = safeHex(accentColor);
+            if (!hex || !secondHex) { setStatus("Enter two valid six-digit hex colors, e.g. #D8A8C9 and #705874."); return {ok:false,count:0}; }
+            const forbidden = allowedToChange();
+            if (forbidden) { setStatus(forbidden); return {ok:false,count:0}; }
+            const items = eligibleItems();
+            if (!items.length) { setStatus("No unlocked, recolorable clothing is currently equipped."); return {ok:false,count:0}; }
+            const member = window.Player.MemberNumber;
+            const saved = items.map(item => ({item,asset:item.Asset,original:copyColor(item.Color)}));
+            try {
+                const garmentOccurrences = new Map();
+                for (const item of items) {
+                    const group = String(item.Asset?.Group?.Name || '').toLowerCase();
+                    const occurrence = garmentOccurrences.get(group) || 0;
+                    garmentOccurrences.set(group, occurrence + 1);
+                    const colors = outfitColors(hex,secondHex,item,occurrence);
+                    // BC accepts a string for single-layer clothing and an array for multi-zone assets.
+                    item.Color = countColorZones(item)>1 || Array.isArray(item.Color) ? colors : colors[0];
+                }
+                synchronize();
+                for (const item of items) rememberWardrobe(item);
+                previous = {member,changes:saved};
+                chosen = hex; accent = secondHex; writeColor(hex); writeAccent(secondHex);
+                setStatus(`Harmonized ${items.length} clothing item${items.length===1?'':'s'} with ${hex} + ${secondHex}. One-step Undo is ready.`);
+                return {ok:true,count:items.length};
+            } catch (e) {
+                for (const save of saved) save.item.Color=save.original;
+                try { window.CharacterRefresh?.(window.Player,false,false); window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
+                setStatus(`Recoloring failed; local colors restored: ${String(e?.message||e)}`);
+                return {ok:false,count:0};
+            }
+        }
+        function undoColor() {
+            if (!previous || previous.member !== window.Player?.MemberNumber) {
+                setStatus("Nothing to undo for this outfit."); return false;
+            }
+            const forbidden = allowedToChange();
+            if (forbidden) { setStatus(forbidden); return false; }
+            const entries = previous.changes.filter(e => canRecolor(e.item) &&
+                e.item.Asset === e.asset && window.Player.Appearance.includes(e.item));
+            if (!entries.length) { previous = null; setStatus("Outfit changed since recoloring; nothing safe to undo."); return false; }
+            const backup = entries.map(e => ({item:e.item,color:copyColor(e.item.Color)}));
+            try {
+                for (const entry of entries) entry.item.Color = copyColor(entry.original);
+                synchronize();
+                for (const entry of entries) rememberWardrobe(entry.item);
+                previous = null;
+                setStatus(`Restored original colors for ${entries.length} item${entries.length===1?'':'s'}.`);
+                return true;
+            } catch (e) {
+                for (const entry of backup) entry.item.Color = entry.color;
+                setStatus(`Undo failed: ${String(e?.message||e)}`);
+                return false;
+            }
+        }
+        const elt=(tag,text)=>{const node=document.createElement(tag);if(text!=null)node.textContent=text;return node;};
+        function closeDialog(){ dialog?.remove(); dialog=null; }
+        function openDialog() {
+            if (dialog?.isConnected) return dialog;
+            chosen = safeHex(chosen) || readColor();
+            accent = safeHex(accent) || readAccent();
+            const shell = elt("div"); shell.id=DIALOG_ID;
+            Object.assign(shell.style,{position:"fixed",inset:"0",zIndex:"2147483500",background:"rgba(18,11,22,.65)",display:"flex",alignItems:"center",justifyContent:"center",padding:"14px",boxSizing:"border-box"});
+            const panel=elt("section"); panel.setAttribute("role","dialog");panel.setAttribute("aria-modal","true");
+            panel.setAttribute("aria-label","Smart Outfit Color Harmonizer");
+            Object.assign(panel.style,{font:"14px Arial,sans-serif",color:"#F7EEF5",width:"min(400px,95vw)",maxHeight:"90vh",overflowY:"auto",background:"#302638",border:"1px solid #AC81C3",borderRadius:"14px",padding:"20px",boxShadow:"0 10px 34px #0009",boxSizing:"border-box"});
+            const header=elt("div");Object.assign(header.style,{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"6px"});
+            const heading=elt("strong","🎨 Smart Outfit Color Harmonizer");heading.style.fontSize="17px";
+            const close=elt("button","✕");close.type="button";close.title="Close";
+            close.addEventListener("click",closeDialog);header.append(heading,close);
+            const summary=elt("p","Choose a primary and an accent color. Tops, bottoms, shoes and multi-zone items will use coordinated shades of both. Body colors, restraints, and locked items stay unchanged.");
+            Object.assign(summary.style,{lineHeight:"1.5",color:"#D6C8DD"});
+            const controls=elt("div");Object.assign(controls.style,{display:"flex",flexDirection:"column",gap:"10px"});
+            // Both hex fields and native color pickers stay in sync.
+            function makeColorRow(label,value,onSelect) {
+                const row=elt("label");Object.assign(row.style,{display:"flex",flexWrap:"wrap",alignItems:"center",gap:"9px"});
+                const text=elt("span",label);Object.assign(text.style,{minWidth:"107px",fontSize:"13px",fontWeight:"bold"});
+                const picker=elt("input");picker.type="color";picker.value=value;
+                picker.title=`${label} picker`;picker.setAttribute("aria-label",`${label} picker`);
+                Object.assign(picker.style,{width:"65px",height:"44px",cursor:"pointer"});
+                const hexInput=elt("input");hexInput.type="text";hexInput.value=value;hexInput.maxLength=7;
+                hexInput.setAttribute("aria-label",`${label} hex color`);
+                Object.assign(hexInput.style,{width:"112px",padding:"10px",boxSizing:"border-box",background:"#463650",border:"1px solid #9878AB",borderRadius:"7px",color:"white",font:"inherit"});
+                const swatch=hex=>{onSelect(hex);picker.value=hex;hexInput.value=hex;};
+                picker.addEventListener("input",()=>swatch(picker.value.toUpperCase()));
+                hexInput.addEventListener("change",()=>{const h=safeHex(hexInput.value);if(h)swatch(h);else hexInput.value=picker.value.toUpperCase();});
+                row.append(text,picker,hexInput);
+                return {row,hexInput,swatch};
+            }
+            const primaryRow=makeColorRow("Primary color",chosen,hex=>{chosen=hex;writeColor(hex);});
+            const accentRow=makeColorRow("Accent color",accent,hex=>{accent=hex;writeAccent(hex);});
+            controls.append(primaryRow.row,accentRow.row);
+            const buttons=elt("div");Object.assign(buttons.style,{display:"flex",flexWrap:"wrap",gap:"9px",marginTop:"15px"});
+            const makeButton=(text,handler)=>{const b=elt("button",text);b.type="button";Object.assign(b.style,{font:"inherit",color:"white",border:"1px solid #9878AB",borderRadius:"7px",background:"#624671",padding:"10px 12px",cursor:"pointer",minHeight:"38px"});b.addEventListener("click",handler);return b;};
+            const run=makeButton("Apply Both Colors",()=>{
+                const h=safeHex(primaryRow.hexInput.value),s=safeHex(accentRow.hexInput.value);
+                if(!h||!s){setStatus("Enter two valid hex colors like #F0EC0F and #A46BEF.");return;}
+                primaryRow.swatch(h);accentRow.swatch(s);applyColor(h,s);
+            });
+            const swap=makeButton("⇄ Swap Colors",()=>{
+                const h=safeHex(primaryRow.hexInput.value),s=safeHex(accentRow.hexInput.value);
+                if(!h||!s){setStatus("Enter two valid hex colors to swap.");return;}
+                primaryRow.swatch(s);accentRow.swatch(h);
+            });
+            const undo=makeButton("↶ Undo Last",()=>undoColor());
+            buttons.append(run,swap,undo);
+            const message=elt("div",details || `${eligibleItems().length} equipped clothing item(s) are eligible.`);
+            message.dataset.harmonizerStatus="true";
+            Object.assign(message.style,{marginTop:"13px",padding:"9px",borderRadius:"7px",background:"#473750",fontSize:"12px",lineHeight:"1.5"});
+            panel.append(header,summary,controls,buttons,message);shell.append(panel);
+            shell.addEventListener("mousedown",e=>{if(e.target===shell)closeDialog();});
+            document.body.append(shell);dialog=shell;
+            return shell;
+        }
+        function isAppearancePicker() {return window.CurrentScreen==="Appearance" || window.CurrentScreen==="Wardrobe";}
+        function refreshDock() {
+            if (account()!==activeAccount) {activeAccount=account();chosen=readColor();accent=readAccent();previous=null;}
+            if (!isAppearancePicker()) {dock?.remove();dock=null;closeDialog();return;}
+            if (dock?.isConnected) return;
+            dock=elt("button","🎨 Harmonize Outfit"); dock.id=ID;dock.type="button";
+            dock.title="Choose two colors for your outfit • drag to move";
+            Object.assign(dock.style,{position:"fixed",zIndex:"2147482500",bottom:"18px",right:"20px",background:"#4D365A",color:"white",border:"2px solid #CB9BDC",borderRadius:"12px",padding:"11px 14px",font:"bold 13px Arial,sans-serif",boxShadow:"0 4px 15px #0008",cursor:"grab",touchAction:"none",maxWidth:"calc(100vw - 30px)"});
+            let drag=null,dragged=false;
+            dock.addEventListener("pointerdown",e=>{if(e.button!==0)return; const r=dock.getBoundingClientRect();drag={x:e.clientX,y:e.clientY,left:r.left,top:r.top};dragged=false;try{dock.setPointerCapture(e.pointerId);}catch(_){} });
+            dock.addEventListener("pointermove",e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+                if(!dragged&&Math.abs(dx)+Math.abs(dy)<8)return;
+                dragged=true;Object.assign(dock.style,{left:`${clamp(drag.left+dx,0,Math.max(0,innerWidth-dock.offsetWidth))}px`,top:`${clamp(drag.top+dy,0,Math.max(0,innerHeight-dock.offsetHeight))}px`,right:"auto",bottom:"auto"});
+            });
+            dock.addEventListener("pointerup",()=>{drag=null;if(dragged){movedDock=true;setTimeout(()=>{movedDock=false;},130);}});
+            dock.addEventListener("pointercancel",()=>{drag=null;});
+            dock.addEventListener("click",()=>{if(!dragged&&!movedDock)openDialog();dragged=false;});
+            if (!document.body) return;
+            document.body.append(dock);
+        }
+        const safeRefreshDock = () => { try { refreshDock(); }
+            catch (e) { console.warn("[Subby] Optional Outfit Harmonizer dock:", e); }
+        };
+        const watcher=window.setInterval(safeRefreshDock,1500);safeRefreshDock();
+        const api=Object.freeze({version:VERSION,open:openDialog,apply:applyColor,undo:undoColor,
+            status:()=>({version:VERSION,chosen,accent,eligible:eligibleItems().length,canUndo:!!previous,screen:window.CurrentScreen,message:details}),
+            destroy:()=>{window.clearInterval(watcher);dock?.remove();closeDialog();if(window.SubbysOutfitHarmonizer===api)delete window.SubbysOutfitHarmonizer;},
+            _test:{safeHex,hexToHsl,hslToHex,outfitColors,eligibleItems,canRecolor,refreshDock,safeRefreshDock}
+        });
+        window.SubbysOutfitHarmonizer=api;
+        return api;
+    }
+    // === END SMART OUTFIT COLOR HARMONIZER ===
+
     // === MAINLINE COLOR STUDIO / CHAT EMOTICONS ===
     // Integrated into this build: shares its native wardrobe APIs, Extensions menu,
     // command catalog and update version. No second userscript or ModSDK hook needed.
@@ -20629,6 +20968,10 @@ function SubbysPlushiesPageMain() {
     root.append(row(search,btn('Reload GitHub list',async()=>{await loadCatalog();renderEmotes();})));
     root.append(note(`${Object.keys(PLUSH_ICON_PNGS).length} built-in 64×64 plushie icons · ${state.catalogSource==='github'?'GitHub reactions loaded':'Built-in reactions'}`));
     root.append(note('Click an emoticon to insert its code into chat. Players with Essentials see these images in chat; everyone else sees the text code.'));
+    root.append(btn(getFeatureSettings().showEmoticonButton ? 'Hide floating 😺 button' : 'Show floating 😺 button', () => {
+      setFeatureSetting('showEmoticonButton', !getFeatureSettings().showEmoticonButton);
+      renderEmotes();
+    }));
     root.append(gallery,$('div','sxe-message',state.message));draw();
   }
   // Text-only chat transmission; users of this expansion decorate known tokens locally.
@@ -20676,7 +21019,8 @@ function SubbysPlushiesPageMain() {
     });observer.observe(log,{childList:true,subtree:true});state.logObserver=observer;
   }
   function setupChatButton(){
-    const canChat=window.CurrentScreen==='ChatRoom'&&!!document.getElementById('InputChat');
+    const canChat=getFeatureSettings().showEmoticonButton &&
+      window.CurrentScreen==='ChatRoom' && !!document.getElementById('InputChat');
     if(!canChat){state.chatButton?.remove();state.chatButton=null;return;}
     if(state.chatButton?.isConnected)return;
     const element=btn('😺',()=>{if(!element.dataset.dragged)openModal('emotes');});
@@ -20700,8 +21044,10 @@ function SubbysPlushiesPageMain() {
     colorStudio:()=>openModal('colors'),
     emoticons:()=>openModal('emotes'),
     reloadEmoticons:loadCatalog,
+    refreshChatButton:setupChatButton,
+    chatButtonVisible:()=>!!getFeatureSettings().showEmoticonButton,
     catalog:()=>({source:state.catalogSource,count:state.emotes.length,error:state.catalogError}),
-    status:()=>({version:VERSION,baseAddon:VERSION,chatLog:!!state.chatLog,accountKey:activeStorageKey,storedPalettes:data.palettes.length}),
+    status:()=>({version:VERSION,baseAddon:VERSION,chatLog:!!state.chatLog,accountKey:activeStorageKey,storedPalettes:data.palettes.length,floatingEmoticonButton:getFeatureSettings().showEmoticonButton}),
     destroy:()=>{clearInterval(watcher);state.logObserver?.disconnect();state.chatButton?.remove();clearModal();style.remove();delete window.SubbysEssentialsExtras;},
     _test:{safeHex,cleanEmotes,harmony}
   });
@@ -20764,10 +21110,185 @@ function SubbysPlushiesPageMain() {
             equippedByYou: Boolean(equipped),
             currentlyLockedByYou: Boolean(equipped?.Property?.LockedBy),
             result: petBedLockingLastResult,
-            compatibility: "Client-side BC asset capability; game lock and unlock rules unchanged. Other unmodded clients may not recognize this change.",
+            compatibility: "Client-side BC asset capability and best-effort wearer-only restoration. No server-side guarantee.",
+            autoRestoreEnabled: !!getFeatureSettings().petBedAutoRestore,
+            manualRestore: petBedGuardManualAvailability(),
+            removeHookInstalled: installedHooks.has("ChatRoomSyncItem"),
+            restorationAttempts: petBedGuardAttempts,
+            lastRestoration: petBedGuardLastResult,
         };
     }
     window.SubbysPetBedLockingDiag = petBedLockingDiagnostics;
+
+    // Best-effort restoration of the local player's LOCKED Pet Bed on REMOTE removal packets.
+    // This does not replace the server's validation and deliberately never hooks outgoing removals.
+    const PET_BED_GUARD_COOLDOWN_MS = 15000;
+    const PET_BED_GUARD_WINDOW_MS = 90000;
+    const PET_BED_GUARD_MAX_ATTEMPTS = 2;
+    const PET_BED_MANUAL_EXPIRY_MS = 120000; // Do not keep stale lock credentials.
+    let petBedGuardPendingManual = null;
+    let petBedGuardWindowStart = 0;
+    let petBedGuardAttemptsInWindow = 0;
+    let petBedGuardLastAttemptAt = 0;
+    let petBedGuardAttempts = 0;
+    let petBedGuardLastResult = "Not triggered";
+    let petBedGuardRestoring = false;
+    function getPetBedForGuard(C) {
+        if (!Array.isArray(C?.Appearance)) return null;
+        return C.Appearance.find(item => item?.Asset?.Group?.Name === PET_BED_LOCK_GROUP &&
+            item?.Asset?.Name === PET_BED_LOCK_ASSET) || null;
+    }
+    function petBedRoomLocalPlayer() {
+        const C = window.Player;
+        // Only the wearer may reapply their bed: never dress another player's character.
+        if (!C || !Number.isFinite(C.MemberNumber) || !Array.isArray(C.Appearance) ||
+            window.CurrentScreen !== "ChatRoom" || !window.ChatRoomData) return null;
+        return C;
+    }
+    function makePetBedGuardSnapshot(item) {
+        if (!item || typeof item.Property?.LockedBy !== "string" || !item.Property.LockedBy) return null;
+        try {
+            const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
+            return {
+                Asset: item.Asset, Color: clone(item.Color),
+                Difficulty: item.Difficulty,
+                Property: clone(item.Property),
+                Craft: clone(item.Craft),
+            };
+        } catch (e) {
+            petBedGuardLastResult = `Could not snapshot the lock: ${String(e)}`;
+            return null;
+        }
+    }
+    function petBedGuardRestoreAppearance(C, snapshot) {
+        if (!Array.isArray(C?.Appearance) || C.Appearance.some(item => item?.Asset?.Group?.Name === PET_BED_LOCK_GROUP))
+            return false; // Never overwrite another device that was placed in the same slot.
+        const restore = { Asset: snapshot.Asset, Color: snapshot.Color, Difficulty: snapshot.Difficulty,
+            Property: snapshot.Property };
+        if (snapshot.Craft != null) restore.Craft = snapshot.Craft;
+        C.Appearance.push(restore);
+        return true;
+    }
+    function petBedGuardRecover(snapshot, actorNumber, manual = false) {
+        const C = petBedRoomLocalPlayer();
+        if (!C || (!manual && !getFeatureSettings().petBedAutoRestore) || petBedGuardRestoring) return false;
+        if (getPetBedForGuard(C) || C.Appearance.some(i => i?.Asset?.Group?.Name === PET_BED_LOCK_GROUP)) return false;
+        if (typeof window.ChatRoomCharacterUpdate !== "function" || typeof window.ServerSend !== "function") {
+            petBedGuardLastResult = "BC character synchronization is unavailable";
+            return false;
+        }
+        const now = Date.now();
+        if (now - petBedGuardWindowStart > PET_BED_GUARD_WINDOW_MS) {
+            petBedGuardWindowStart = now;
+            petBedGuardAttemptsInWindow = 0;
+        }
+        if (now - petBedGuardLastAttemptAt < PET_BED_GUARD_COOLDOWN_MS ||
+            petBedGuardAttemptsInWindow >= PET_BED_GUARD_MAX_ATTEMPTS) {
+            petBedGuardLastResult = "Rate limit reached; no further automatic restoration yet";
+            return false;
+        }
+        petBedGuardLastAttemptAt = now;
+        ++petBedGuardAttemptsInWindow;
+        ++petBedGuardAttempts;
+        petBedGuardRestoring = true;
+        let restoredPlayerItem = null;
+        let restoredMirrorItem = null;
+        let mirror = null;
+        try {
+            if (!petBedGuardRestoreAppearance(C, snapshot)) return false;
+            restoredPlayerItem = getPetBedForGuard(C);
+            // On some BC builds ChatRoomCharacter is a separate instance from Player.
+            // Update its local visual state as well, but never mutate another member.
+            mirror = Array.isArray(window.ChatRoomCharacter)
+                ? window.ChatRoomCharacter.find(c => c?.MemberNumber === C.MemberNumber && c !== C)
+                : null;
+            if (mirror && petBedGuardRestoreAppearance(mirror, snapshot))
+                restoredMirrorItem = getPetBedForGuard(mirror);
+            try { window.CharacterRefresh?.(C, false, false); } catch (_) {}
+            window.ChatRoomCharacterUpdate(C);
+            const user = String(getCharacterDisplayName(C) || C.Name || "User").trim();
+            // A native BC Action emitted by the wearer's own client, not spoofed as the remover.
+            sendStandaloneActionMessage(`${user}'s bed must be unlocked before being removed.`);
+            petBedGuardLastResult = `${manual ? "Manual" : "Automatic"} restoration submitted after removal by #${actorNumber}`;
+            return true;
+        } catch (e) {
+            // A failed sync must not leave a false, locally-only locked bed visible.
+            if (restoredPlayerItem && Array.isArray(C.Appearance))
+                C.Appearance = C.Appearance.filter(i => i !== restoredPlayerItem);
+            if (restoredMirrorItem && Array.isArray(mirror?.Appearance))
+                mirror.Appearance = mirror.Appearance.filter(i => i !== restoredMirrorItem);
+            petBedGuardLastResult = `Restoration failed: ${String(e)}`;
+            warn("Pet Bed restoration failed:", e);
+            return false;
+        } finally {
+            petBedGuardRestoring = false;
+        }
+    }
+    // Manual recovery is armed only by a real incoming removal of the wearer's locked bed.
+    // It exists in memory for two minutes, never survives refreshes, and cannot overwrite devices.
+    function petBedGuardManualAvailability() {
+        const C = petBedRoomLocalPlayer();
+        if (!C) return { ok: false, reason: "Enter a chatroom as the bed wearer to restore it." };
+        const pending = petBedGuardPendingManual;
+        if (!pending) return { ok: false, reason: "No recent removal of your locked Pet Bed was detected." };
+        if (pending.memberNumber !== C.MemberNumber ||
+            pending.roomName !== String(window.ChatRoomData?.Name || "") ||
+            Date.now() - pending.time > PET_BED_MANUAL_EXPIRY_MS ||
+            Date.now() < pending.time) {
+            petBedGuardPendingManual = null;
+            return { ok: false, reason: "The previous restoration opportunity has expired or belongs to another room." };
+        }
+        if (C.Appearance.some(i => i?.Asset?.Group?.Name === PET_BED_LOCK_GROUP))
+            return { ok: false, reason: "Your ItemDevices slot is occupied. The bed cannot replace it." };
+        if (petBedGuardRestoring) return { ok: false, reason: "A restoration is already running." };
+        if (typeof window.ChatRoomCharacterUpdate !== "function" || typeof window.ServerSend !== "function")
+            return { ok: false, reason: "BC character synchronization is unavailable." };
+        const now = Date.now();
+        if (now - petBedGuardLastAttemptAt < PET_BED_GUARD_COOLDOWN_MS)
+            return { ok: false, reason: `Wait ${Math.ceil((PET_BED_GUARD_COOLDOWN_MS - (now - petBedGuardLastAttemptAt)) / 1000)} seconds before trying again.` };
+        if (now - petBedGuardWindowStart <= PET_BED_GUARD_WINDOW_MS &&
+            petBedGuardAttemptsInWindow >= PET_BED_GUARD_MAX_ATTEMPTS)
+            return { ok: false, reason: "Restore limit reached. Wait for the protection window to reset." };
+        return { ok: true, reason: "Restore the locked Pet Bed removed by another player in this room." };
+    }
+    function petBedGuardRestoreManually() {
+        const availability = petBedGuardManualAvailability();
+        if (!availability.ok) return { ok: false, message: availability.reason };
+        const pending = petBedGuardPendingManual;
+        const ok = petBedGuardRecover(pending.snapshot, pending.actorNumber, true);
+        return { ok, message: ok ? "Submitted your saved locked Pet Bed to BC for synchronization." : petBedGuardLastResult };
+    }
+    function installPetBedRemovalGuard() {
+        const result = installHook("ChatRoomSyncItem", 9970, (args, next) => {
+            const packet = args?.[0];
+            const C = petBedRoomLocalPlayer();
+            const target = packet?.Item?.Target;
+            const source = packet?.Source;
+            if (!C || packet?.Item?.Group !== PET_BED_LOCK_GROUP ||
+                target !== C.MemberNumber || !Number.isFinite(source) || petBedGuardRestoring)
+                return next(args);
+            if (source === C.MemberNumber) {
+                // A self-initiated change invalidates any saved remote-removal snapshot.
+                petBedGuardPendingManual = null;
+                return next(args);
+            }
+            const snapshot = makePetBedGuardSnapshot(getPetBedForGuard(C));
+            if (!snapshot) return next(args); // Never save an unlocked bed.
+            const result = next(args);
+            if (!getPetBedForGuard(C) &&
+                !C.Appearance.some(i => i?.Asset?.Group?.Name === PET_BED_LOCK_GROUP)) {
+                petBedGuardPendingManual = {
+                    snapshot, actorNumber: source, memberNumber: C.MemberNumber,
+                    roomName: String(window.ChatRoomData?.Name || ""), time: Date.now()
+                };
+                if (getFeatureSettings().petBedAutoRestore)
+                    petBedGuardRecover(snapshot, source);
+            }
+            return result;
+        });
+        if (!result) petBedGuardLastResult = "ChatRoomSyncItem hook unavailable";
+        return result;
+    }
 
     async function main() {
         log(`Starting standalone v${VERSION}...`);
@@ -20787,6 +21308,10 @@ function SubbysPlushiesPageMain() {
         }
         checkDuplicateAsset();
         initHookBackend();
+        if (!installPetBedRemovalGuard()) {
+            for (const delay of [1500, 5000, 12000])
+                window.setTimeout(() => { if (!installedHooks.has("ChatRoomSyncItem")) installPetBedRemovalGuard(); }, delay);
+        }
         installDogsCompatibilityBridge();
         scheduleNativeCommandFallbackHook();
         installNativeImageElementHook();
@@ -20822,6 +21347,8 @@ function SubbysPlushiesPageMain() {
         installMobileEssentials();
         try { initializeColorSearchEmoticons(); }
         catch (e) { warn('Color Studio / Emoticons setup failed:', e); }
+        // The harmonizer has its own UI lifecycle. Do not initialize its watchers
+        // before the core plushie, wardrobe and menu systems finish startup.
         essentialsStartBudget();
         if(essentialsConfig().safeMode){
             const flags=getFeatureSettings();
@@ -20842,6 +21369,12 @@ function SubbysPlushiesPageMain() {
         checkAchievements(true);
         scheduleAutomaticUpdateCheck();
         setStartupStage("ready");
+        // Optional feature setup runs only AFTER ready; an unsupported BC UI,
+        // unavailable DOM node, or timer failure can no longer abort plugin loading.
+        window.setTimeout(() => {
+            try { installSmartOutfitColorHarmonizer(); }
+            catch (e) { warn("Optional Outfit Harmonizer unavailable:", e); }
+        }, 350);
     }
     main().catch(e => {
         startupError = e;
@@ -20857,7 +21390,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.49";
+    const VERSION = "3.5.54";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
