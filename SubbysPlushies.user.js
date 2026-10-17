@@ -2,7 +2,7 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.54
+// @version      3.5.56
 // @description  Plushies, wardrobe harmonizer, Color Studio, optional chat emoticon button, Pet Bed locking, and mobile essentials
 // @released     2026-10-17
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.54";
+    const VERSION = "3.5.56";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -9128,7 +9128,7 @@ function SubbysPlushiesPageMain() {
             catch (e) { warn("Could not open Outfit Harmonizer:", e); }
         }));
         const harmonizerHint=document.createElement("span");
-        harmonizerHint.textContent="Choose two outfit colors: a primary and an accent — also in BC's Appearance picker.";
+        harmonizerHint.textContent="Three core colors plus 6 optional category colors with inheritance — also in BC's Appearance picker.";
         Object.assign(harmonizerHint.style,{fontSize:"12px",color:getExtensionsStyle().muted});
         harmonizerRow.appendChild(harmonizerHint);
         section.appendChild(harmonizerRow);
@@ -20335,7 +20335,7 @@ function SubbysPlushiesPageMain() {
         if(mobileEssentialMode())window.setInterval(()=>{if(!document.hidden)mobileRefreshDock();},2000);
         window.SubbysPlushiesMobileDiag=()=>({version:VERSION,mobile:mobileEssentialMode(),visible:mobileDockButtons.size,editing:mobileDockEditing,canvas:(mobileCanvasRect()?.toJSON?.()||null)});
     }
-    // Smart Outfit Color Harmonizer: two colors -> coordinated main and accent tones for your clothing.
+    // Smart Outfit Color Harmonizer: three core colors and six category overrides.
     // The native Appearance picker is canvas-based, so this lightweight dock is DOM-based.
     // Character body colors, restraints, locks and worn items belonging to other members stay untouched.
     function installSmartOutfitColorHarmonizer() {
@@ -20364,7 +20364,53 @@ function SubbysPlushiesPageMain() {
         const writeAccent = hex => {
             try { window.localStorage?.setItem(`${settingsKey()}:accent`, hex); } catch (_) {}
         };
-        let chosen = readColor(), accent = readAccent(), activeAccount = account(), previous = null, dock = null;
+        // An independent, per-account metal/jewelry swatch. Gold matches the default
+        // Heart Charm chain; primary and accent keys are unchanged for upgrades.
+        const readMetal = () => {
+            try { return safeHex(window.localStorage?.getItem(`${settingsKey()}:metal`)) || '#D9AE71'; }
+            catch (_) { return '#D9AE71'; }
+        };
+        const writeMetal = hex => {
+            try { window.localStorage?.setItem(`${settingsKey()}:metal`, hex); } catch (_) {}
+        };
+        // Category palettes are optional and inherit from the three core colors
+        // until the wearer explicitly enables a custom swatch. Store the six
+        // small category entries together, separately for each BC account.
+        const CATEGORY_DEFS = Object.freeze([
+            {id:'leather', label:'Leather & Straps', inherit:'primary', initial:'#705874'},
+            {id:'lace', label:'Lace & Mesh', inherit:'accent', initial:'#E6C7EC'},
+            {id:'ribbons', label:'Ribbons & Bows', inherit:'accent', initial:'#F2B9D8'},
+            {id:'gems', label:'Gems & Crystals', inherit:'metal', initial:'#A46BEF'},
+            {id:'stockings', label:'Stockings & Socks', inherit:'accent', initial:'#8E719A'},
+            {id:'shoes', label:'Shoes & Boots', inherit:'primary', initial:'#705874'}
+        ]);
+        const CATEGORY_SOURCES = Object.freeze(['primary','accent','metal']);
+        const categoryDefaults = () => Object.fromEntries(CATEGORY_DEFS.map(d => [d.id,{
+            custom:false, inherit:d.inherit, color:d.initial
+        }]));
+        const readCategories = () => {
+            const defaults = categoryDefaults();
+            try {
+                const saved = JSON.parse(window.localStorage?.getItem(`${settingsKey()}:categories`) || '{}');
+                if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return defaults;
+                for (const d of CATEGORY_DEFS) {
+                    const data = saved[d.id];
+                    if (!data || typeof data !== 'object') continue;
+                    defaults[d.id] = {
+                        custom:data.custom === true,
+                        inherit:CATEGORY_SOURCES.includes(data.inherit) ? data.inherit : d.inherit,
+                        color:safeHex(data.color) || d.initial
+                    };
+                }
+            } catch (_) { /* Treat corrupt or unavailable storage as defaults. */ }
+            return defaults;
+        };
+        const writeCategories = () => {
+            try { window.localStorage?.setItem(`${settingsKey()}:categories`,JSON.stringify(categorySettings)); }
+            catch (_) {}
+        };
+        let chosen = readColor(), accent = readAccent(), metal = readMetal(), categorySettings=readCategories();
+        let activeAccount = account(), previous = null, dock = null;
         let dialog = null, details = "", movedDock = false;
         const countColorZones = item => {
             const custom = WARDROBE_ITEMS.find(entry => entry.name === item.Asset?.Name);
@@ -20373,10 +20419,20 @@ function SubbysPlushiesPageMain() {
             const existingCount = Array.isArray(item.Color) ? item.Color.length : 0;
             return clamp(Math.max(customCount, nativeCount, existingCount, 1), 1, 12);
         };
+        // Some vanilla jewelry groups are appearance accessories rather than
+        // clothing; explicitly allow only recognized jewelry, not body parts.
+        const isJewelryItem = item => {
+            const asset = item?.Asset;
+            const group = String(asset?.Group?.Name || '');
+            const name = String(asset?.Name || '');
+            return /(?:necklace|earrings?|bracelets?|anklets?|brooch|jewel(?:l?ery)?|pendant|amulet|choker|armlet|bangle|tiara|piercing|finger.?rings?)/i.test(group) ||
+                /(?:necklace|earrings?|bracelets?|anklets?|brooch|jewel(?:l?ery)?|pendant|amulet|choker|armlet|bangle|tiara)/i.test(name) ||
+                /^rings?$/i.test(group);
+        };
         function canRecolor(item) {
             const asset = item?.Asset, group = asset?.Group;
             if (!asset || group?.Category !== "Appearance" ||
-                !(group.Clothing || WARDROBE_ITEM_NAME_SET.has(asset.Name))) return false;
+                !(group.Clothing || WARDROBE_ITEM_NAME_SET.has(asset.Name) || isJewelryItem(item))) return false;
             if (item.Property?.LockedBy || item.Property?.LockMemberNumber != null ||
                 item.Property?.Effect?.includes?.("Lock") ||
                 item.Property?.Effect?.includes?.("Enclose") ||
@@ -20409,27 +20465,92 @@ function SubbysPlushiesPageMain() {
             };
             return `#${[channel(0),channel(8),channel(4)].map(n=>Math.round(clamp(n,0,1)*255).toString(16).padStart(2,'0')).join('')}`.toUpperCase();
         }
-        // The first tone fills tops and other primary pieces, the second fills
-        // bottoms, footwear, and accents. Multiple color zones alternate between
-        // the two chosen hues; subtle lightness variation preserves garment details.
-        // The per-group occurrence fallback makes two one-zone tops use different colors, too.
-        function outfitColors(primary, secondary, item, itemIndex=0) {
+        // The third swatch colors jewelry and explicit metal layers without
+        // turning bows, lace or gemstone inlays into metal. For vanilla assets,
+        // read layer names only when their sequence matches the colorable zones;
+        // never guess a zone from an unrelated base/rendering layer.
+        function colorZoneNames(item, count) {
+            const custom = WARDROBE_ITEMS.find(entry => entry.name === item?.Asset?.Name);
+            if (Array.isArray(custom?.colorZones) && custom.colorZones.length === count)
+                return custom.colorZones.map(String);
+            const layers = item?.Asset?.Layer;
+            if (!Array.isArray(layers)) return [];
+            if (layers.length === count) return layers.map(layer => String(layer?.Name || ''));
+            const colorable = layers.filter(layer => layer?.AllowColorize === true ||
+                layer?.ColorGroup != null || layer?.ColorIndex != null);
+            return colorable.length === count ? colorable.map(layer => String(layer?.Name || '')) : [];
+        }
+        const isMetalZone = label => /(?:chain|metal|gold|silver|buckle|clasp|stud|hardware|zipper|eyelet|rivet|fastener|setting|padlock|lockplate|metallic|link|button)/i.test(label);
+        const isNonMetalJewelryZone = label => /(?:gem|crystal|stone|glass|bow|ribbon|fabric|cloth|lace|mesh|leather|strap|bead|enamel|velvet|silk)/i.test(label);
+        // A zone label is stronger evidence than an item's name: on a boot,
+        // e.g., a buckle gets Metal, a ribbon gets Ribbons, its base gets Shoes.
+        // This does not invent independent layers on single-color vanilla items.
+        function categoryForZone(name) {
+            if (!name) return null;
+            if (/(?:gem|crystal|jewel|precious.?stone|rhinestone|diamond|ruby|sapphire|emerald|opal)/i.test(name)) return 'gems';
+            if (/(?:ribbon|bow|rosette)/i.test(name)) return 'ribbons';
+            if (/(?:lace|mesh|fishnet|netting|tulle|crochet)/i.test(name)) return 'lace';
+            if (/(?:leather|strap|harness|corset|belt|pleather|buckskin)/i.test(name)) return 'leather';
+            return null;
+        }
+        function categoryForItem(item) {
+            const group = String(item?.Asset?.Group?.Name || '');
+            const name = String(item?.Asset?.Name || '');
+            if (/(?:shoe|boot|footwear|heels?|sneaker|slipper)/i.test(group)) return 'shoes';
+            if (/(?:sock|stocking|hosiery|tights?|legwear)/i.test(group)) return 'stockings';
+            const text = `${name} ${group}`;
+            if (/(?:gem|crystal|jewel|rhinestone|diamond|ruby|sapphire|emerald|opal)/i.test(text)) return 'gems';
+            if (/(?:ribbon|bow|rosette)/i.test(text)) return 'ribbons';
+            if (/(?:lace|mesh|fishnet|netting|tulle|crochet)/i.test(text)) return 'lace';
+            if (/(?:leather|strap|harness|corset|belt|pleather|buckskin)/i.test(text)) return 'leather';
+            return null;
+        }
+        function categoryColor(id, primary, secondary, jewelry, categories=categorySettings) {
+            const def = CATEGORY_DEFS.find(d=>d.id===id);
+            if (!def) return null;
+            const selection = categories?.[id] || {};
+            const source = CATEGORY_SOURCES.includes(selection.inherit) ? selection.inherit : def.inherit;
+            const inherited = source === 'primary' ? primary : source === 'accent' ? secondary : jewelry;
+            return selection.custom === true ? (safeHex(selection.color) || inherited) : inherited;
+        }
+        // Metal and gemstones are always recognized independently of generic
+        // item-category matching. For unnamed jewelry zones, the usual metal
+        // swatch is used, except when the whole asset explicitly names a gem.
+        function outfitColors(primary, secondary, jewelry, item, itemIndex=0, categories=categorySettings) {
             const group = String(item?.Asset?.Group?.Name || '').toLowerCase();
             const zones = countColorZones(item);
+            const names = colorZoneNames(item, zones);
+            const jewelryItem = isJewelryItem(item);
+            const itemCategory = categoryForItem(item);
             let useAccent = /shoe|boot|sock|stocking|glove|lower|pant|skirt|neck|accessor|hat|ribbon|glasses|bracelet|belt/.test(group);
             if (!/shoe|boot|sock|stocking|glove|lower|pant|skirt|neck|accessor|hat|ribbon|glasses|bracelet|belt|cloth|suit|dress|bra|underwear/.test(group))
                 useAccent = itemIndex % 2 === 1;
             const baseColor = useAccent ? secondary : primary;
             const trimColor = useAccent ? primary : secondary;
-            // A second same-type single-zone item can still use the alternate hue.
-            if (zones === 1 && itemIndex % 2 === 1 && /cloth|suit|dress|bra|underwear/.test(group))
-                return [shade(secondary, group, 0)];
-            const result = [];
+            const colors = [];
             for (let i=0;i<zones;i++) {
-                const hex = i % 2 === 0 ? baseColor : trimColor;
-                result.push(shade(hex, group, i, false));
+                const zone = names[i] || '';
+                const namedCategory = categoryForZone(zone);
+                const explicitlyMetal = isMetalZone(zone) && !namedCategory;
+                let hex, toneGroup;
+                if (explicitlyMetal) { hex = jewelry; toneGroup = 'jewelry'; }
+                else if (namedCategory) {
+                    hex = categoryColor(namedCategory,primary,secondary,jewelry,categories);
+                    toneGroup = namedCategory === 'shoes' ? 'shoe' : namedCategory === 'stockings' ? 'sock' : namedCategory;
+                } else if (itemCategory) {
+                    hex = categoryColor(itemCategory,primary,secondary,jewelry,categories);
+                    toneGroup = itemCategory === 'shoes' ? 'shoe' : itemCategory === 'stockings' ? 'sock' : itemCategory;
+                } else if (jewelryItem && !isNonMetalJewelryZone(zone)) {
+                    hex = jewelry; toneGroup = 'jewelry';
+                } else {
+                    hex = i%2===0 ? baseColor : trimColor;
+                    if (zones===1 && itemIndex%2===1 && /cloth|suit|dress|bra|underwear/.test(group))
+                        hex = secondary;
+                    toneGroup = group;
+                }
+                colors.push(shade(hex,toneGroup,i));
             }
-            return result;
+            return colors;
         }
         function shade(hex, group, zone) {
             const [h,s,l] = hexToHsl(hex);
@@ -20438,7 +20559,7 @@ function SubbysPlushiesPageMain() {
             else if (/sock|stocking|glove/.test(group)) base = l*.86;
             else if (/lower|pant|skirt/.test(group)) base = l*.90;
             else if (/bra|panties|underwear/.test(group)) base = l + (1-l)*.12;
-            else if (/neck|accessor|hat|ribbon|glasses|bracelet|belt/.test(group)) {
+            else if (/jewelry|neck|accessor|hat|ribbon|glasses|bracelet|belt/.test(group)) {
                 base = l + (1-l)*.16;
                 saturation = Math.max(.15,s*.86);
             }
@@ -20482,9 +20603,9 @@ function SubbysPlushiesPageMain() {
             const status = dialog?.querySelector('[data-harmonizer-status]');
             if (status) status.textContent = message;
         }
-        function applyColor(color = chosen, accentColor = accent) {
-            const hex = safeHex(color), secondHex = safeHex(accentColor);
-            if (!hex || !secondHex) { setStatus("Enter two valid six-digit hex colors, e.g. #D8A8C9 and #705874."); return {ok:false,count:0}; }
+        function applyColor(color = chosen, accentColor = accent, metalColor = metal) {
+            const hex = safeHex(color), secondHex = safeHex(accentColor), jewelryHex = safeHex(metalColor);
+            if (!hex || !secondHex || !jewelryHex) { setStatus("Enter three valid six-digit hex colors (Primary, Accent, Jewelry / Metal)."); return {ok:false,count:0}; }
             const forbidden = allowedToChange();
             if (forbidden) { setStatus(forbidden); return {ok:false,count:0}; }
             const items = eligibleItems();
@@ -20497,15 +20618,16 @@ function SubbysPlushiesPageMain() {
                     const group = String(item.Asset?.Group?.Name || '').toLowerCase();
                     const occurrence = garmentOccurrences.get(group) || 0;
                     garmentOccurrences.set(group, occurrence + 1);
-                    const colors = outfitColors(hex,secondHex,item,occurrence);
+                    const colors = outfitColors(hex,secondHex,jewelryHex,item,occurrence);
                     // BC accepts a string for single-layer clothing and an array for multi-zone assets.
                     item.Color = countColorZones(item)>1 || Array.isArray(item.Color) ? colors : colors[0];
                 }
                 synchronize();
                 for (const item of items) rememberWardrobe(item);
                 previous = {member,changes:saved};
-                chosen = hex; accent = secondHex; writeColor(hex); writeAccent(secondHex);
-                setStatus(`Harmonized ${items.length} clothing item${items.length===1?'':'s'} with ${hex} + ${secondHex}. One-step Undo is ready.`);
+                chosen = hex; accent = secondHex; metal = jewelryHex;
+                writeColor(hex); writeAccent(secondHex); writeMetal(jewelryHex);
+                setStatus(`Harmonized ${items.length} item${items.length===1?'':'s'} with ${hex} + ${secondHex} (jewelry / metal: ${jewelryHex}). Undo is ready.`);
                 return {ok:true,count:items.length};
             } catch (e) {
                 for (const save of saved) save.item.Color=save.original;
@@ -20543,6 +20665,7 @@ function SubbysPlushiesPageMain() {
             if (dialog?.isConnected) return dialog;
             chosen = safeHex(chosen) || readColor();
             accent = safeHex(accent) || readAccent();
+            metal = safeHex(metal) || readMetal();
             const shell = elt("div"); shell.id=DIALOG_ID;
             Object.assign(shell.style,{position:"fixed",inset:"0",zIndex:"2147483500",background:"rgba(18,11,22,.65)",display:"flex",alignItems:"center",justifyContent:"center",padding:"14px",boxSizing:"border-box"});
             const panel=elt("section"); panel.setAttribute("role","dialog");panel.setAttribute("aria-modal","true");
@@ -20552,13 +20675,13 @@ function SubbysPlushiesPageMain() {
             const heading=elt("strong","🎨 Smart Outfit Color Harmonizer");heading.style.fontSize="17px";
             const close=elt("button","✕");close.type="button";close.title="Close";
             close.addEventListener("click",closeDialog);header.append(heading,close);
-            const summary=elt("p","Choose a primary and an accent color. Tops, bottoms, shoes and multi-zone items will use coordinated shades of both. Body colors, restraints, and locked items stay unchanged.");
+            const summary=elt("p","Choose Primary, Accent and Jewelry / Metal colors. Expand Advanced Categories for leather, lace, bows, gems, stockings and shoes. Leave Custom off to inherit a core color; switch it on for a separate swatch. Locked items, restraints and body colors are untouched.");
             Object.assign(summary.style,{lineHeight:"1.5",color:"#D6C8DD"});
             const controls=elt("div");Object.assign(controls.style,{display:"flex",flexDirection:"column",gap:"10px"});
-            // Both hex fields and native color pickers stay in sync.
+            // All three hex fields and native color pickers stay in sync.
             function makeColorRow(label,value,onSelect) {
                 const row=elt("label");Object.assign(row.style,{display:"flex",flexWrap:"wrap",alignItems:"center",gap:"9px"});
-                const text=elt("span",label);Object.assign(text.style,{minWidth:"107px",fontSize:"13px",fontWeight:"bold"});
+                const text=elt("span",label);Object.assign(text.style,{minWidth:"116px",fontSize:"13px",fontWeight:"bold"});
                 const picker=elt("input");picker.type="color";picker.value=value;
                 picker.title=`${label} picker`;picker.setAttribute("aria-label",`${label} picker`);
                 Object.assign(picker.style,{width:"65px",height:"44px",cursor:"pointer"});
@@ -20571,15 +20694,71 @@ function SubbysPlushiesPageMain() {
                 row.append(text,picker,hexInput);
                 return {row,hexInput,swatch};
             }
-            const primaryRow=makeColorRow("Primary color",chosen,hex=>{chosen=hex;writeColor(hex);});
-            const accentRow=makeColorRow("Accent color",accent,hex=>{accent=hex;writeAccent(hex);});
-            controls.append(primaryRow.row,accentRow.row);
+            const categoryRefreshes=[];
+            const refreshCategoryPreviews=()=>categoryRefreshes.forEach(fn=>fn());
+            const primaryRow=makeColorRow("Primary color",chosen,hex=>{chosen=hex;writeColor(hex);refreshCategoryPreviews();});
+            const accentRow=makeColorRow("Accent color",accent,hex=>{accent=hex;writeAccent(hex);refreshCategoryPreviews();});
+            const metalRow=makeColorRow("Jewelry / Metal",metal,hex=>{metal=hex;writeMetal(hex);refreshCategoryPreviews();});
+            controls.append(primaryRow.row,accentRow.row,metalRow.row);
+            const advanced=elt("details");advanced.dataset.harmonizerCategories="true";
+            Object.assign(advanced.style,{marginTop:"12px",padding:"10px",border:"1px solid #886CA0",borderRadius:"9px",background:"#3A2D43"});
+            const toggle=elt("summary","Advanced Categories · 6");toggle.style.cursor="pointer";toggle.style.fontWeight="bold";
+            advanced.append(toggle);
+            const hint=elt("p","Each category can use Primary, Accent, or Metal. Check Custom for its own color. Named color zones are used where BC exposes them; otherwise a matching whole item is recolored.");
+            Object.assign(hint.style,{fontSize:"12px",lineHeight:"1.5",color:"#D6C8DD"});advanced.append(hint);
+            for (const def of CATEGORY_DEFS) {
+                const state=categorySettings[def.id];
+                const section=elt("div");section.dataset.harmonizerCategory=def.id;
+                Object.assign(section.style,{borderTop:"1px solid #66536E",padding:"9px 0",display:"flex",flexDirection:"column",gap:"7px"});
+                const label=elt("strong",def.label);label.style.fontSize="13px";
+                const controlsRow=elt("div");Object.assign(controlsRow.style,{display:"flex",flexWrap:"wrap",alignItems:"center",gap:"8px"});
+                const inherit=elt("select");inherit.setAttribute("aria-label",`${def.label} inherits from`);
+                for (const [id,name] of [['primary','Primary'],['accent','Accent'],['metal','Jewelry / Metal']]) {
+                    const option=elt("option",name);option.value=id;inherit.append(option);
+                }
+                inherit.value=state.inherit;
+                Object.assign(inherit.style,{maxWidth:"145px",minHeight:"32px",background:"#463650",border:"1px solid #9878AB",borderRadius:"6px",color:"white"});
+                const customLabel=elt("label");Object.assign(customLabel.style,{display:"flex",alignItems:"center",gap:"4px"});
+                const custom=elt("input");custom.type="checkbox";custom.checked=state.custom;
+                custom.setAttribute("aria-label",`${def.label} custom color`);
+                customLabel.append(custom,document.createTextNode("Custom"));
+                const picker=elt("input");picker.type="color";picker.setAttribute("aria-label",`${def.label} color picker`);
+                Object.assign(picker.style,{width:"39px",height:"32px",cursor:"pointer"});
+                const hexInput=elt("input");hexInput.type="text";hexInput.maxLength=7;
+                hexInput.setAttribute("aria-label",`${def.label} hex color`);
+                Object.assign(hexInput.style,{width:"93px",padding:"8px",boxSizing:"border-box",background:"#463650",border:"1px solid #9878AB",borderRadius:"6px",color:"white"});
+                const preview=()=>{
+                    const swatch=categoryColor(def.id,chosen,accent,metal,categorySettings);
+                    picker.value=swatch;hexInput.value=swatch;
+                    picker.disabled=!state.custom;hexInput.disabled=!state.custom;
+                    picker.style.opacity=state.custom?"1":".65";
+                    hexInput.title=state.custom?"Independent swatch":`Inherits ${state.inherit}`;
+                };
+                inherit.addEventListener("change",()=>{
+                    state.inherit=CATEGORY_SOURCES.includes(inherit.value)?inherit.value:def.inherit;
+                    writeCategories();preview();
+                });
+                custom.addEventListener("change",()=>{state.custom=custom.checked;writeCategories();preview();});
+                picker.addEventListener("input",()=>{if(!state.custom)return;state.color=safeHex(picker.value)||state.color;writeCategories();preview();});
+                hexInput.addEventListener("change",()=>{
+                    if(!state.custom)return;
+                    const hex=safeHex(hexInput.value);if(hex){state.color=hex;writeCategories();}
+                    else setStatus(`${def.label}: enter a valid six-digit hex color.`);
+                    preview();
+                });
+                categoryRefreshes.push(preview);
+                controlsRow.append(inherit,customLabel,picker,hexInput);
+                section.append(label,controlsRow);advanced.append(section);
+            }
+            refreshCategoryPreviews();
+            controls.append(advanced);
             const buttons=elt("div");Object.assign(buttons.style,{display:"flex",flexWrap:"wrap",gap:"9px",marginTop:"15px"});
             const makeButton=(text,handler)=>{const b=elt("button",text);b.type="button";Object.assign(b.style,{font:"inherit",color:"white",border:"1px solid #9878AB",borderRadius:"7px",background:"#624671",padding:"10px 12px",cursor:"pointer",minHeight:"38px"});b.addEventListener("click",handler);return b;};
-            const run=makeButton("Apply Both Colors",()=>{
-                const h=safeHex(primaryRow.hexInput.value),s=safeHex(accentRow.hexInput.value);
-                if(!h||!s){setStatus("Enter two valid hex colors like #F0EC0F and #A46BEF.");return;}
-                primaryRow.swatch(h);accentRow.swatch(s);applyColor(h,s);
+            const run=makeButton("Apply Outfit Colors",()=>{
+                const h=safeHex(primaryRow.hexInput.value),s=safeHex(accentRow.hexInput.value),m=safeHex(metalRow.hexInput.value);
+                if(!h||!s||!m){setStatus("Enter valid Primary, Accent and Jewelry / Metal hex colors.");return;}
+                primaryRow.swatch(h);accentRow.swatch(s);metalRow.swatch(m);
+                applyColor(h,s,m);
             });
             const swap=makeButton("⇄ Swap Colors",()=>{
                 const h=safeHex(primaryRow.hexInput.value),s=safeHex(accentRow.hexInput.value);
@@ -20598,11 +20777,11 @@ function SubbysPlushiesPageMain() {
         }
         function isAppearancePicker() {return window.CurrentScreen==="Appearance" || window.CurrentScreen==="Wardrobe";}
         function refreshDock() {
-            if (account()!==activeAccount) {activeAccount=account();chosen=readColor();accent=readAccent();previous=null;}
+            if (account()!==activeAccount) {activeAccount=account();chosen=readColor();accent=readAccent();metal=readMetal();categorySettings=readCategories();previous=null;closeDialog();}
             if (!isAppearancePicker()) {dock?.remove();dock=null;closeDialog();return;}
             if (dock?.isConnected) return;
             dock=elt("button","🎨 Harmonize Outfit"); dock.id=ID;dock.type="button";
-            dock.title="Choose two colors for your outfit • drag to move";
+            dock.title="Choose three core colors and optional category colors • drag to move";
             Object.assign(dock.style,{position:"fixed",zIndex:"2147482500",bottom:"18px",right:"20px",background:"#4D365A",color:"white",border:"2px solid #CB9BDC",borderRadius:"12px",padding:"11px 14px",font:"bold 13px Arial,sans-serif",boxShadow:"0 4px 15px #0008",cursor:"grab",touchAction:"none",maxWidth:"calc(100vw - 30px)"});
             let drag=null,dragged=false;
             dock.addEventListener("pointerdown",e=>{if(e.button!==0)return; const r=dock.getBoundingClientRect();drag={x:e.clientX,y:e.clientY,left:r.left,top:r.top};dragged=false;try{dock.setPointerCapture(e.pointerId);}catch(_){} });
@@ -20621,9 +20800,12 @@ function SubbysPlushiesPageMain() {
         };
         const watcher=window.setInterval(safeRefreshDock,1500);safeRefreshDock();
         const api=Object.freeze({version:VERSION,open:openDialog,apply:applyColor,undo:undoColor,
-            status:()=>({version:VERSION,chosen,accent,eligible:eligibleItems().length,canUndo:!!previous,screen:window.CurrentScreen,message:details}),
+            status:()=>({version:VERSION,chosen,accent,metal,
+                categories:Object.fromEntries(CATEGORY_DEFS.map(d=>[d.id,{...categorySettings[d.id]}])),
+                eligible:eligibleItems().length,canUndo:!!previous,screen:window.CurrentScreen,message:details}),
             destroy:()=>{window.clearInterval(watcher);dock?.remove();closeDialog();if(window.SubbysOutfitHarmonizer===api)delete window.SubbysOutfitHarmonizer;},
-            _test:{safeHex,hexToHsl,hslToHex,outfitColors,eligibleItems,canRecolor,refreshDock,safeRefreshDock}
+            _test:{safeHex,hexToHsl,hslToHex,outfitColors,colorZoneNames,isJewelryItem,isMetalZone,
+                categoryForZone,categoryForItem,categoryColor,eligibleItems,canRecolor,refreshDock,safeRefreshDock}
         });
         window.SubbysOutfitHarmonizer=api;
         return api;
@@ -21390,7 +21572,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.54";
+    const VERSION = "3.5.56";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
