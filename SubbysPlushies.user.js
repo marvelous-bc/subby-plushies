@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.47
-// @description  Plushies, wardrobe, Color Studio, chat emoticons, and mobile essentials
+// @version      3.5.49
+// @description  Plushies, wardrobe, Color Studio, chat emoticons, native Pet Bed padlocks, and mobile essentials
 // @released     2026-10-16
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.47";
+    const VERSION = "3.5.49";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -9213,6 +9213,7 @@ function SubbysPlushiesPageMain() {
         const section = makeExtensionsSection("Addon status");
         appendExtensionsKeyValue(section, "Version", status.version);
         appendExtensionsKeyValue(section, "Build date", status.buildDate);
+        appendExtensionsKeyValue(section, "Native Pet Bed padlocks", petBedLockingDiagnostics().allowLock ? "Enabled (on this client)" : "Not available");
         appendExtensionsKeyValue(section, "State", status.state);
         appendExtensionsKeyValue(section, "Held plushie", status.held);
         appendExtensionsKeyValue(section, "Current mood", status.mood);
@@ -9274,6 +9275,21 @@ function SubbysPlushiesPageMain() {
             )
         );
         container.appendChild(poseSafety);
+        const petBed = makeExtensionsSection("Native Pet Bed Locking");
+        const petBedNote = document.createElement("div");
+        petBedNote.textContent = petBedLockingDiagnostics().allowLock
+            ? "Enabled: place the normal Pet Bed (ItemDevices), then apply a padlock through BC's regular item controls. BC permissions, keys, and unlock rules are unchanged. Players without Essentials may not recognize this client-side compatibility change."
+            : "Waiting for BC's Pet Bed asset; use the diagnostic button to check support.";
+        Object.assign(petBedNote.style, { color: getExtensionsStyle().muted, fontSize: "12px", lineHeight: "1.45", marginBottom: "8px" });
+        petBed.append(petBedNote, makeExtensionsButton("Check Pet Bed Locking", () => {
+            const result = petBedLockingDiagnostics();
+            appendLocalInfoBox("Native Pet Bed Locking", [
+                result.allowLock ? "Pet Bed can receive normal BC padlocks on this client." : `Unavailable: ${result.result}`,
+                "Use the game's standard padlock menu on an equipped Pet Bed. No locks are applied automatically.",
+                "Other clients may require the addon; this does not change the BC server."
+            ], { compact: true });
+        }));
+        container.appendChild(petBed);
         const section = makeExtensionsSection("Settings");
         section.append(
             extensionsSettingRow("Protect Me", "The held plush reacts to selected incoming actions.", settings.protectMe, () => toggleFeatureSetting("protectMe")),
@@ -10017,7 +10033,6 @@ function SubbysPlushiesPageMain() {
             if(backup?.performanceMode)setPerformanceMode(backup.performanceMode);
         }
         essentialsRefreshChatColors();
-        blindfoldSync();
         if(extensionsPanelElement?.isConnected)renderExtensionsPanel();
     }
     function essentialsSetHand(hand) {
@@ -10116,235 +10131,7 @@ function SubbysPlushiesPageMain() {
         if(!worn.length)section.append(essentialsH('p','No worn clothing layers were detected.'));
     }
 
-    const BLINDFOLD_STORAGE_PREFIX = 'SubbysPlushies:ImmersiveBlindfold:v1:';
-    const BLINDFOLD_EFFECTS = Object.freeze({BlindLight:1, BlindNormal:2, BlindHeavy:3, BlindTotal:3, Blind:2});
-    let blindfoldState = null;
-    let blindfoldOverlay = null;
-    let blindfoldExit = null;
-    let blindfoldInterval = null;
-    let blindfoldPreviewTimeout = null;
-    let blindfoldPreviewUntil = 0;
-    let blindfoldIsInstalled = false;
-    let blindfoldLastPaint = '';
-    let blindfoldDetected = null;
-    function blindfoldStorageKey() {
-        const member = Number(window.Player?.MemberNumber);
-        return BLINDFOLD_STORAGE_PREFIX + (Number.isInteger(member) && member > 0 ? member : 'local');
-    }
-    function blindfoldSettings() {
-        const key = blindfoldStorageKey();
-        if (blindfoldState?.key === key) return blindfoldState;
-        const raw = readLocalJSON(key, {});
-        blindfoldState = {
-            key,
-            enabled: raw.enabled === true,
-            mode: ['veil','tunnel','blackout'].includes(raw.mode) ? raw.mode : 'tunnel',
-            intensity: Math.min(95, Math.max(25, Number(raw.intensity) || 65)),
-            matchStrength: raw.matchStrength !== false,
-        };
-        return blindfoldState;
-    }
-    function blindfoldSave() {
-        const state = blindfoldSettings();
-        writeLocalJSON(state.key, {enabled:state.enabled,mode:state.mode,intensity:state.intensity,matchStrength:state.matchStrength});
-    }
-    function blindfoldEquipped() {
-        const appearance = window.Player?.Appearance;
-        if (!Array.isArray(appearance)) return null;
-        let strongest = null;
-        for (const item of appearance) {
-            const group = String(item?.Asset?.Group?.Name || '');
-            if (!['ItemHead','ItemHood','ItemNeck','ItemDevices','ItemAddon'].includes(group)) continue;
-            const actual = item?.Property?.Effect;
-            const effects = [...(Array.isArray(item?.Asset?.Effect) ? item.Asset.Effect : []), ...(Array.isArray(actual) ? actual : [])];
-            for (const effect of effects) {
-                const strength = BLINDFOLD_EFFECTS[String(effect)] || 0;
-                if (!strength || (strongest && strength <= strongest.level)) continue;
-                strongest = {level:strength, name:String(item?.Asset?.Description || item?.Asset?.Name || 'Vision-restricting equipment').slice(0,100), group, effect:String(effect)};
-            }
-        }
-        return strongest;
-    }
-    function blindfoldClearPreviewTimer() {
-        if (blindfoldPreviewTimeout !== null) {
-            clearTimeout(blindfoldPreviewTimeout);
-            blindfoldPreviewTimeout = null;
-        }
-    }
-    function blindfoldRemoveView() {
-        blindfoldOverlay?.remove();
-        blindfoldExit?.remove();
-        blindfoldOverlay = null;
-        blindfoldExit = null;
-        blindfoldLastPaint = '';
-    }
-    function blindfoldStrengthValue(level, settings) {
-        const base = settings.intensity / 100;
-        return Math.min(.98, Math.max(.18, base * (settings.matchStrength ? [0,.62,.83,1.1][level] : 1)));
-    }
-    function blindfoldBackground(mode, amount) {
-        if (mode === 'blackout') return `rgba(2,1,7,${Math.min(.985,.46+amount*.53).toFixed(3)})`;
-        if (mode === 'veil') return `linear-gradient(130deg,rgba(12,8,20,${(.13+amount*.48).toFixed(3)}),rgba(0,0,0,${(.2+amount*.72).toFixed(3)}))`;
-        const edge = Math.min(.98,.42+amount*.58).toFixed(3);
-        const near = Math.min(.75,.08+amount*.45).toFixed(3);
-        const radius = Math.round(38-amount*23);
-        return `radial-gradient(ellipse ${radius}% ${Math.max(12,radius-4)}% at 50% 49%,rgba(0,0,0,${near}) 0%,rgba(3,1,9,${edge}) 100%)`;
-    }
-    function blindfoldEnsureView() {
-        if (!blindfoldOverlay) {
-            const overlay = document.createElement('div');
-            overlay.id = 'SubbysPlushiesBlindfoldOverlay';
-            overlay.setAttribute('aria-hidden','true');
-            Object.assign(overlay.style, {
-                position:'fixed',boxSizing:'border-box',pointerEvents:'none',zIndex:'2147480900',
-                borderRadius:'0',display:'block',willChange:'auto'
-            });
-            blindfoldOverlay = overlay;
-            document.body.append(overlay);
-        }
-        if (!blindfoldExit) {
-            const exit = document.createElement('button');
-            exit.type = 'button';
-            exit.id = 'SubbysPlushiesBlindfoldExit';
-            exit.textContent = '✕ Exit Blindfold';
-            exit.title = 'Immediately turn off the immersive blindfold effect (Esc)';
-            exit.setAttribute('aria-label','Exit immersive blindfold effect');
-            Object.assign(exit.style,{
-                position:'fixed',zIndex:'2147483600',top:'max(10px, env(safe-area-inset-top))',
-                right:'max(10px, env(safe-area-inset-right))',maxWidth:'min(220px,60vw)',
-                background:'#361626',color:'#fff',border:'2px solid #ffacc8',borderRadius:'999px',
-                padding:'12px 16px',font:'bold 14px Arial, sans-serif',lineHeight:'1.2',
-                cursor:'pointer',touchAction:'manipulation',boxShadow:'0 2px 16px rgba(0,0,0,.8)'
-            });
-            exit.addEventListener('click',() => blindfoldDisable(true));
-            blindfoldExit = exit;
-            document.body.append(exit);
-        }
-    }
-    function blindfoldDisable(refreshMenu = false) {
-        const config = blindfoldSettings();
-        config.enabled = false;
-        blindfoldSave();
-        blindfoldPreviewUntil = 0;
-        blindfoldClearPreviewTimer();
-        blindfoldRemoveView();
-        blindfoldSchedule();
-        if (refreshMenu && extensionsPanelElement?.isConnected && extensionsActiveTab === 'essentials') renderExtensionsPanel();
-    }
-    function blindfoldSchedule() {
-        const enabled = blindfoldSettings().enabled || blindfoldPreviewUntil > Date.now();
-        if (enabled && blindfoldInterval === null) blindfoldInterval = window.setInterval(blindfoldSync,1800);
-        if (!enabled && blindfoldInterval !== null) {
-            window.clearInterval(blindfoldInterval);
-            blindfoldInterval = null;
-        }
-    }
-    function blindfoldSync() {
-        const settings = blindfoldSettings();
-        const previewing = blindfoldPreviewUntil > Date.now();
-        blindfoldDetected = blindfoldEquipped();
-        const room = String(window.CurrentScreen || '') === 'ChatRoom';
-        const active = !essentialsConfig().safeMode && !document.hidden && room &&
-            (previewing || (settings.enabled && !!blindfoldDetected));
-        if (!active) {blindfoldRemoveView();blindfoldSchedule();return;}
-        const canvas = document.getElementById('MainCanvas') || document.querySelector('canvas#MainCanvas') || document.querySelector('canvas');
-        const rect = canvas?.getBoundingClientRect?.();
-        if (!rect || rect.width < 120 || rect.height < 90) {blindfoldRemoveView();return;}
-        blindfoldEnsureView();
-        const value = blindfoldStrengthValue(previewing ? 2 : blindfoldDetected.level,settings);
-        const bg = blindfoldBackground(settings.mode,value);
-        const blur = settings.mode === 'veil' ? Math.min(3,value*2.7).toFixed(1) : (settings.mode === 'tunnel' ? Math.min(1.8,value*1.5).toFixed(1) : '0');
-        const pixelRect = [rect.left,rect.top,rect.width,rect.height].map(n=>Math.round(n*10)/10);
-        const paint = `${pixelRect.join(',')}/${settings.mode}/${value.toFixed(3)}/${blur}`;
-        if (paint !== blindfoldLastPaint) {
-            Object.assign(blindfoldOverlay.style, {
-                left:`${pixelRect[0]}px`,top:`${pixelRect[1]}px`,width:`${pixelRect[2]}px`,height:`${pixelRect[3]}px`,
-                background:bg,backdropFilter:blur==='0'?'none':`blur(${blur}px)`,
-                webkitBackdropFilter:blur==='0'?'none':`blur(${blur}px)`,
-                clipPath:'inset(7% 28% 15% 2%)'
-            });
-            blindfoldLastPaint = paint;
-        }
-    }
-    function blindfoldUpdate(patch) {
-        const settings=blindfoldSettings();
-        if (Object.prototype.hasOwnProperty.call(patch,'enabled')) settings.enabled = patch.enabled === true;
-        if (['veil','tunnel','blackout'].includes(patch.mode)) settings.mode=patch.mode;
-        if (Number.isFinite(Number(patch.intensity))) settings.intensity=Math.min(95,Math.max(25,Number(patch.intensity)));
-        if (typeof patch.matchStrength === 'boolean') settings.matchStrength = patch.matchStrength;
-        blindfoldSave();
-        blindfoldSchedule();
-        blindfoldSync();
-    }
-    function blindfoldPreview() {
-        if (essentialsConfig().safeMode) return false;
-        blindfoldClearPreviewTimer();
-        blindfoldPreviewUntil=Date.now()+7000;
-        blindfoldPreviewTimeout = window.setTimeout(()=>{blindfoldPreviewUntil=0;blindfoldPreviewTimeout=null;blindfoldSync();},7100);
-        blindfoldSchedule();
-        blindfoldSync();
-        return true;
-    }
-    function blindfoldSnapshot() {
-        const state=blindfoldSettings();
-        return {version:VERSION,enabled:state.enabled,active:!!blindfoldOverlay?.isConnected,
-            mode:state.mode,intensity:state.intensity,matchStrength:state.matchStrength,
-            equipment:blindfoldDetected||blindfoldEquipped(),previewing:blindfoldPreviewUntil>Date.now(),
-            safeMode:essentialsConfig().safeMode};
-    }
-    function blindfoldRenderControls(container) {
-        const section=makeExtensionsSection('Immersive Blindfold Mode');
-        const state=blindfoldSettings();
-        const found=blindfoldEquipped();
-        section.append(essentialsH('p','Optional, private visual effects when wearing vision-restricting equipment. BC chat, permissions, menus and other players are unchanged. Press Esc or tap Exit Blindfold at any time.',{fontSize:'12px',color:getExtensionsStyle().muted}));
-        section.append(essentialsH('p',found?`Detected: ${found.name} (${['','Light','Normal','Heavy'][found.level]})`:'No compatible blindfold or hood currently detected. You can try a seven-second preview.',{fontSize:'12px',color:found?'#b8e4cb':getExtensionsStyle().muted}));
-        const buttons=essentialsH('div',null,{display:'flex',flexWrap:'wrap',gap:'7px'});
-        buttons.append(
-            makeExtensionsButton(state.enabled?'Disable immersive mode':'Enable immersive mode',()=>{blindfoldUpdate({enabled:!blindfoldSettings().enabled});renderExtensionsPanel();},{active:state.enabled}),
-            essentialsBtn('Preview 7 sec',()=>blindfoldPreview()),
-            essentialsBtn('Exit / turn off',()=>blindfoldDisable(true))
-        );
-        section.append(buttons);
-        const line=essentialsH('label',null,{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap',margin:'12px 0 7px'});
-        line.append(essentialsH('span','Vision style:',{fontSize:'13px'}));
-        const select=document.createElement('select');
-        Object.assign(select.style,{fontSize:'13px',minHeight:'38px',padding:'5px',background:'#30263d',color:'white',borderRadius:'6px'});
-        for(const [value,name] of [['veil','Soft veil / silhouettes'],['tunnel','Tunnel vision'],['blackout','Near-blackout']]) {
-            const option=document.createElement('option');option.value=value;option.textContent=name;select.append(option);
-        }
-        select.value=state.mode;
-        select.addEventListener('change',()=>blindfoldUpdate({mode:select.value}));
-        line.append(select);section.append(line);
-        const rangeLine=essentialsH('label',null,{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap',margin:'8px 0'});
-        const amountLabel=essentialsH('span',`Strength: ${state.intensity}%`,{fontSize:'13px'});
-        const range=document.createElement('input');range.type='range';range.min='25';range.max='95';range.step='5';range.value=String(state.intensity);
-        range.style.flex='1 1 160px';range.setAttribute('aria-label','Blindfold strength');
-        range.addEventListener('input',()=>{amountLabel.textContent=`Strength: ${range.value}%`;blindfoldUpdate({intensity:Number(range.value)});});
-        rangeLine.append(amountLabel,range);section.append(rangeLine);
-        const toggle=essentialsH('label',null,{display:'flex',gap:'8px',alignItems:'center',fontSize:'13px',margin:'8px 0'});
-        const check=document.createElement('input');check.type='checkbox';check.checked=state.matchStrength;
-        check.addEventListener('change',()=>blindfoldUpdate({matchStrength:check.checked}));
-        toggle.append(check,document.createTextNode('Match visual strength to equipped blindfold'));section.append(toggle);
-        section.append(essentialsH('p','Effects are drawn above the game canvas only; they cannot lock controls or change what other users see. Normal BC blindfold effects still work independently.',{fontSize:'11px',color:getExtensionsStyle().muted}));
-        container.append(section);
-    }
-    function blindfoldInstall() {
-        if (blindfoldIsInstalled) return;
-        blindfoldIsInstalled=true;
-        window.SubbysPlushiesBlindfoldDiag=blindfoldSnapshot;
-        window.addEventListener('resize',blindfoldSync,{passive:true});
-        document.addEventListener('visibilitychange',blindfoldSync,{passive:true});
-        window.addEventListener('pagehide',blindfoldRemoveView,{passive:true});
-        window.addEventListener('keydown',event=>{
-            if (event.key !== 'Escape' || !blindfoldOverlay?.isConnected) return;
-            blindfoldDisable(true);
-        },{capture:true});
-        blindfoldSchedule();
-        blindfoldSync();
-    }
-
     function renderEssentialsPanel(container) {
-        blindfoldRenderControls(container);
         const section=makeExtensionsSection('Clothing X-Ray Mode');
         essentialsRenderXRay(section);container.append(section);
         const chat=makeExtensionsSection('Character Chat Colors');
@@ -18736,6 +18523,7 @@ function SubbysPlushiesPageMain() {
             hookBackend,
             installedHooks: [...installedHooks],
             dogsCompatibility: dogsCompatibilityDebugSnapshot(),
+            nativePetBedLocking: petBedLockingDiagnostics(),
             assetAddStrategy,
             modularRegistrationStrategy,
             modularArchetype: resolveModularArchetype(),
@@ -19081,7 +18869,6 @@ function SubbysPlushiesPageMain() {
         openUpdate: openLatestUpdatePage,
         extensions: tab => openExtensionsPanel(tab || "status"),
         settings: () => openExtensionsPanel("settings"),
-        blindfold: Object.freeze({ enable:()=>blindfoldUpdate({enabled:true}), disable:()=>blindfoldDisable(), preview:blindfoldPreview, status:blindfoldSnapshot, settings:blindfoldUpdate }),
         status: () => extensionsStatusSnapshot(),
         offerStatus: () => extensionsStatusSnapshot().offer,
         dataStatus: () => ({ ...gitDataState, status: gitDataStatusText() }),
@@ -20922,6 +20709,66 @@ function SubbysPlushiesPageMain() {
     }
     // === END MAINLINE CREATIVE TOOLS ===
 
+    // Native Pet Bed padlocks: opt the existing BC asset into its usual lock menu.
+    // No custom padlocks, lock properties, shortcuts, or permission bypasses are added.
+    const PET_BED_LOCK_GROUP = "ItemDevices";
+    const PET_BED_LOCK_ASSET = "PetBed";
+    let petBedLockingLastResult = "waiting for BC assets";
+    function getNativePetBedAsset() {
+        try {
+            const found = window.AssetGet?.(FAMILY, PET_BED_LOCK_GROUP, PET_BED_LOCK_ASSET);
+            if (found?.Name === PET_BED_LOCK_ASSET && found?.Group?.Name === PET_BED_LOCK_GROUP)
+                return found;
+        } catch (e) {
+            petBedLockingLastResult = `asset lookup failed: ${String(e)}`;
+        }
+        return null;
+    }
+    function installNativePetBedLocking() {
+        const asset = getNativePetBedAsset();
+        if (!asset) {
+            petBedLockingLastResult = "BC PetBed asset was not registered";
+            return false;
+        }
+        // This is the standard BC asset capability read by native lock selection.
+        // Intentionally do not change ItemDevices group, difficulty, effects,
+        // placement, extended menus, or any InventoryLock/Unlock function.
+        try {
+            asset.AllowLock = true;
+        } catch (e) {
+            petBedLockingLastResult = `unable to enable native AllowLock: ${String(e)}`;
+            warn("Pet Bed native padlock compatibility failed:", e);
+            return false;
+        }
+        if (asset.AllowLock !== true) {
+            petBedLockingLastResult = "PetBed.AllowLock is not writable";
+            return false;
+        }
+        petBedLockingLastResult = "native AllowLock enabled";
+        log("Pet Bed supports the game's normal padlock menu on this client.");
+        return true;
+    }
+    function petBedLockingDiagnostics() {
+        const asset = getNativePetBedAsset();
+        const equipped = Array.isArray(window.Player?.Appearance)
+            ? window.Player.Appearance.find(item =>
+                item?.Asset?.Name === PET_BED_LOCK_ASSET &&
+                item?.Asset?.Group?.Name === PET_BED_LOCK_GROUP)
+            : null;
+        return {
+            version: VERSION,
+            asset: `${PET_BED_LOCK_GROUP}/${PET_BED_LOCK_ASSET}`,
+            found: Boolean(asset),
+            allowLock: asset?.AllowLock === true,
+            nativeLockInterface: typeof window.InventoryLock === "function",
+            equippedByYou: Boolean(equipped),
+            currentlyLockedByYou: Boolean(equipped?.Property?.LockedBy),
+            result: petBedLockingLastResult,
+            compatibility: "Client-side BC asset capability; game lock and unlock rules unchanged. Other unmodded clients may not recognize this change.",
+        };
+    }
+    window.SubbysPetBedLockingDiag = petBedLockingDiagnostics;
+
     async function main() {
         log(`Starting standalone v${VERSION}...`);
         window.addEventListener("pagehide", flushDeferredProgressStores, { capture: true });
@@ -20929,6 +20776,15 @@ function SubbysPlushiesPageMain() {
         void refreshGitDataFromGitHub({ force: false, silent: true });
         setStartupStage("waiting-for-bc");
         await waitForBC();
+        // Enable the native Pet Bed lock capability as soon as the asset registry is usable.
+        // Retry only if BC has not exposed the asset yet; do not install background polling.
+        if (!installNativePetBedLocking()) {
+            for (const delay of [1500, 5000, 12000]) {
+                window.setTimeout(() => {
+                    if (!petBedLockingDiagnostics().allowLock) installNativePetBedLocking();
+                }, delay);
+            }
+        }
         checkDuplicateAsset();
         initHookBackend();
         installDogsCompatibilityBridge();
@@ -20966,7 +20822,6 @@ function SubbysPlushiesPageMain() {
         installMobileEssentials();
         try { initializeColorSearchEmoticons(); }
         catch (e) { warn('Color Studio / Emoticons setup failed:', e); }
-        try { blindfoldInstall(); } catch (e) { warn('Blindfold mode setup failed:', e); }
         essentialsStartBudget();
         if(essentialsConfig().safeMode){
             const flags=getFeatureSettings();
@@ -21002,7 +20857,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.47";
+    const VERSION = "3.5.49";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
