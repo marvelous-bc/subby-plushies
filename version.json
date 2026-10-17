@@ -1,31 +1,31 @@
 {
-  "version": "3.5.56",
+  "version": "3.5.66",
   "releaseDate": "2026-10-17",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "NEW: Smart Outfit Color Harmonizer adds six optional advanced color categories—Leather & Straps, Lace & Mesh, Ribbons & Bows, Gems & Crystals, Stockings & Socks, and Shoes & Boots. Each category can inherit from Primary, Accent, or Jewelry / Metal, or use its own custom color. The Advanced Categories panel remembers your choices per account. The existing three colors, Swap, Undo, locked-item protection, and all plushie, chat and Pet Bed features remain. Separate detail recoloring requires suitable colorable layers in the BC asset.",
+  "notes": "Fix desktop browsers incorrectly receiving mobile one-handed Essentials navigation when the window is narrow, zoomed, or uses touch support. Mobile view now requires touch-first mobile input, while real phones and tablets retain mobile gestures, bottom navigation and responsive layout. All v3.5.65 functionality is retained and Photo Booth remains removed.",
   "changes": [
     {
-      "category": "Added",
+      "category": "Desktop / mobile detection",
       "items": [
-        "Six customizable harmonizer categories for leather/straps, lace/mesh, ribbons/bows, gems/crystals, stockings/socks and shoes/boots.",
-        "Per-category inheritance source (Primary / Accent / Jewelry & Metal), optional independent color picker and saved settings per account.",
-        "Expanded Advanced Categories panel inside BC Appearance and Essentials Wardrobe harmonizer dialogs.",
-        "Metadata-aware color-zone mapping: different recolorable layers of the same garment can receive different category colors."
+        "Desktop viewport width alone no longer enables the mobile layout.",
+        "Touchscreen Windows and Linux desktop browsers keep the desktop Essentials menu.",
+        "Mobile navigation activates only on mobile OS/touch-first devices with mobile-sized viewports, including phone landscape.",
+        "The dock and mobile window-sizing logic use the same corrected detector.",
+        "Changing screen dimensions can switch layouts through existing event-based resize handling; no new timers."
       ]
     },
     {
-      "category": "Retained",
+      "category": "Preserved",
       "items": [
-        "Primary, Accent and Jewelry / Metal core colors, Swap Primary / Accent and Undo Last.",
-        "Appearance safety: unchanged restraints, body colors, locked equipment and other characters.",
-        "All existing plushies, emoticons, Color Studio, wardrobe tools, mobile features and Pet Bed compatibility."
+        "Mobile Gesture Controls, one-handed bottom navigation (on phones), and Outfit Lock System.",
+        "Smart Library Merge, crafting replacement, three-color harmonizer, Photo Booth removed.",
+        "R132/R133 compatibility code and floating dock black-space safety."
       ]
     },
     {
-      "category": "Compatibility",
+      "category": "Testing",
       "items": [
-        "Embedded artwork details cannot be recolored independently if BC does not provide separate colorable layers.",
-        "Automated category detection uses recognizable clothing groups and asset names; not every third-party asset exposes enough metadata."
+        "JavaScript syntax and simulated browser desktop/mobile detection and regression tests passed. Live Bondage Club not tested."
       ]
     }
   ]
