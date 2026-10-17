@@ -1,22 +1,31 @@
 {
-  "version": "3.5.54",
+  "version": "3.5.56",
   "releaseDate": "2026-10-17",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "NEW: Smart Outfit Color Harmonizer now supports TWO outfit colors! Choose a primary color and an accent color in BC Appearance or Essentials Wardrobe, then apply both across worn clothing with coordinated shades. Multi-zone garments alternate both hues. Swap Colors and Undo are included. Previously chosen primary colors carry over; the accent is saved separately. All v3.5.53 fixes and optional emoticon button settings are retained.",
+  "notes": "NEW: Smart Outfit Color Harmonizer adds six optional advanced color categories—Leather & Straps, Lace & Mesh, Ribbons & Bows, Gems & Crystals, Stockings & Socks, and Shoes & Boots. Each category can inherit from Primary, Accent, or Jewelry / Metal, or use its own custom color. The Advanced Categories panel remembers your choices per account. The existing three colors, Swap, Undo, locked-item protection, and all plushie, chat and Pet Bed features remain. Separate detail recoloring requires suitable colorable layers in the BC asset.",
   "changes": [
     {
       "category": "Added",
       "items": [
-        "Two independent color pickers and HEX entries (Primary and Accent) for Smart Outfit Color Harmonizer.",
-        "Apply Both Colors across currently worn clothing: primary tones for main garments, accents for lower pieces and accessories, and both shades in compatible multi-color layers.",
-        "Swap Colors button and independent per-account color persistence."
+        "Six customizable harmonizer categories for leather/straps, lace/mesh, ribbons/bows, gems/crystals, stockings/socks and shoes/boots.",
+        "Per-category inheritance source (Primary / Accent / Jewelry & Metal), optional independent color picker and saved settings per account.",
+        "Expanded Advanced Categories panel inside BC Appearance and Essentials Wardrobe harmonizer dialogs.",
+        "Metadata-aware color-zone mapping: different recolorable layers of the same garment can receive different category colors."
       ]
     },
     {
       "category": "Retained",
       "items": [
-        "One-step Undo, ownership/lock restrictions, existing Wardrobe and Appearance access, and Color Studio.",
-        "Hide Emoticon Button preference, plushie/chat emoticons, and Pet Bed protection/restoration."
+        "Primary, Accent and Jewelry / Metal core colors, Swap Primary / Accent and Undo Last.",
+        "Appearance safety: unchanged restraints, body colors, locked equipment and other characters.",
+        "All existing plushies, emoticons, Color Studio, wardrobe tools, mobile features and Pet Bed compatibility."
+      ]
+    },
+    {
+      "category": "Compatibility",
+      "items": [
+        "Embedded artwork details cannot be recolored independently if BC does not provide separate colorable layers.",
+        "Automated category detection uses recognizable clothing groups and asset names; not every third-party asset exposes enough metadata."
       ]
     }
   ]
