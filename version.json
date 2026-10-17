@@ -1,36 +1,22 @@
 {
-  "version": "3.5.49",
-  "releaseDate": "2026-10-16",
+  "version": "3.5.54",
+  "releaseDate": "2026-10-17",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "New: native Pet Bed padlock compatibility using BC’s usual lock controls (client-side; live multiplayer testing required). Removed: Immersive Blindfold Mode. Retained: Color Studio, wardrobe tools, plushies, and 64×64 chat emoticons.",
+  "notes": "NEW: Smart Outfit Color Harmonizer now supports TWO outfit colors! Choose a primary color and an accent color in BC Appearance or Essentials Wardrobe, then apply both across worn clothing with coordinated shades. Multi-zone garments alternate both hues. Swap Colors and Undo are included. Previously chosen primary colors carry over; the accent is saved separately. All v3.5.53 fixes and optional emoticon button settings are retained.",
   "changes": [
     {
       "category": "Added",
       "items": [
-        "Native Pet Bed lock compatibility: enables the built-in PetBed asset’s AllowLock capability on clients using Essentials.",
-        "Native Pet Bed Locking status and diagnostic button in Essentials > Settings > General.",
-        "SubbysPetBedLockingDiag() console command for troubleshooting asset availability and locking support."
+        "Two independent color pickers and HEX entries (Primary and Accent) for Smart Outfit Color Harmonizer.",
+        "Apply Both Colors across currently worn clothing: primary tones for main garments, accents for lower pieces and accessories, and both shades in compatible multi-color layers.",
+        "Swap Colors button and independent per-account color persistence."
       ]
     },
     {
-      "category": "Removed",
+      "category": "Retained",
       "items": [
-        "Immersive Blindfold Mode, including its visual overlay, settings, preview, API, and associated background behavior (v3.5.48)."
-      ]
-    },
-    {
-      "category": "Maintained",
-      "items": [
-        "Existing plushie interactions, wardrobe features, Color Studio, mobile essentials, and chat emoticon picker.",
-        "22 bundled 64×64 PNG chat icons, including :hari:, :loona: and :subbycat:, and the 12 original SVG reactions with short codes such as :happy: and :love:."
-      ]
-    },
-    {
-      "category": "Compatibility and safety",
-      "items": [
-        "Pet Bed locking uses BC’s normal padlock and permission controls; it adds no custom padlock state or permission bypass.",
-        "This feature is a client-side capability patch, not a server-side BC update. Clients without it may not recognize the lock; do not rely on it for security or consent enforcement.",
-        "Live-game and multiplayer locking/unlocking behavior has not been verified."
+        "One-step Undo, ownership/lock restrictions, existing Wardrobe and Appearance access, and Color Studio.",
+        "Hide Emoticon Button preference, plushie/chat emoticons, and Pet Bed protection/restoration."
       ]
     }
   ]
