@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.58
-// @description  R133, plushies, custom crafted-items JSON browser (/plushieitems), wardrobe, emoticons and Pet Bed tools
+// @version      3.5.59
+// @description  R133 custom crafted-items JSON browser with guarded live-library replacement, wardrobe, emoticons and plushies
 // @released     2026-10-17
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.58";
+    const VERSION = "3.5.59";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -10767,6 +10767,10 @@ function SubbysPlushiesPageMain() {
             const next = account();
             if (next === loadedAccount) return;
             loadedAccount = next;
+            // Explicit backup approval never transfers between characters/accounts.
+            if (typeof live !== 'undefined') {
+                live.downloaded = false; live.backup = null; live.account = ''; live.savedAt = 0;
+            }
             state.library = null; state.incoming = null; state.previous = null;
             state.selection = -1; state.source = -1; state.page = 0;
             try {
@@ -10824,6 +10828,136 @@ function SubbysPlushiesPageMain() {
             window.setTimeout(() => URL.revokeObjectURL(url), 250);
             return true;
         }
+        // The account's crafting data is separate from the editor's local JSON copy.
+        // Only R133's native crafting converter and account-update queue are trusted to save it.
+        const live = { backup: null, account: '', downloaded: false, working: false, savedAt: 0 };
+        function craftApis() {
+            const p = window.Player;
+            if (!p || !Number.isInteger(Number(p.MemberNumber)) || Number(p.MemberNumber) <= 0 ||
+                !p.CharacterID || !Array.isArray(p.Crafting)) {
+                return { error: 'Log in to a BC character with a loaded crafting library first.' };
+            }
+            if (window.ServerIsConnected === false) return { error: 'BC is disconnected. Reconnect before replacing your items.' };
+            if (typeof window.CraftingCompressServerData !== 'function' ||
+                typeof window.CraftingDecompressServerData !== 'function' ||
+                !window.ServerAccountUpdate || typeof window.ServerAccountUpdate.QueueData !== 'function') {
+                return { error: 'R133 native crafting conversion/save APIs are unavailable. Use Export customitems.json and BC’s normal crafting import instead.' };
+            }
+            return { player: p };
+        }
+        function liveExport() {
+            const { player, error } = craftApis();
+            if (error) throw new Error(error);
+            const raw = window.CraftingCompressServerData(player.Crafting);
+            if (!Array.isArray(raw) || raw.length > MAX_SLOTS || !raw.length) {
+                throw new Error('Could not create a complete native BC crafting backup.');
+            }
+            const saved = { version: 1, date: stamp(), crafts: Array.from(raw, x => x == null ? null : x) };
+            if (!valid(saved)) throw new Error('Native crafting backup failed validation. Nothing changed.');
+            // Decode the backup before offering an irreversible operation.
+            const verify = window.CraftingDecompressServerData(saved.crafts);
+            if (!Array.isArray(verify) || verify.length > MAX_SLOTS ||
+                verify.filter(x => x && typeof x === 'object' && typeof x.Item === 'string').length !== occupied(saved)) {
+                throw new Error('Could not verify the original crafting items. Nothing changed.');
+            }
+            return saved;
+        }
+        function liveAvailability() {
+            try {
+                checkAccount();
+                const { error, player } = craftApis();
+                if (error) return { error };
+                if (!state.library) return { error: 'Load a custom-items JSON into /plushieitems first.' };
+                const incoming = clone(state.library);
+                if (!valid(incoming) || !incoming.crafts.every(x => x == null || !!info(x)))
+                    return { error: 'Some source entries are unreadable. No in-game changes allowed.' };
+                const native = window.CraftingDecompressServerData(incoming.crafts);
+                if (!Array.isArray(native) || native.length > MAX_SLOTS ||
+                    native.filter(x => x && typeof x === 'object' && typeof x.Item === 'string').length !== occupied(incoming)) {
+                    return { error: 'BC rejected or altered entries while decoding. Export the JSON and use the normal BC importer instead.' };
+                }
+                if (incoming.crafts.some((x, i) => x != null && i >= player.Crafting.length)) {
+                    return { error: `The JSON uses slots past your in-game capacity (${player.Crafting.length}). Replacement was blocked.` };
+                }
+                if (native.some((x, i) => !!x && i >= player.Crafting.length)) {
+                    return { error: 'Native crafting conversion exceeded your available slots.' };
+                }
+                const before = liveExport();
+                const incomingCount = occupied(incoming);
+                return { native, before, afterCount: incomingCount, beforeCount: occupied(before),
+                    capacity: player.Crafting.length, member: String(player.MemberNumber) };
+            } catch (e) { return { error: e?.message || String(e) }; }
+        }
+        function downloadLiveBackup() {
+            const prepared = liveAvailability();
+            if (prepared.error) throw new Error(prepared.error);
+            const data = clone(prepared.before);
+            const member = prepared.member;
+            // Store a second recoverable copy per account if storage is available.
+            // A backup never transmits through Essentials; the browser controls the file download.
+            try { localStorage.setItem(STORAGE_PREFIX + 'live-backup:' + member, JSON.stringify(data)); }
+            catch (_) {}
+            if (!download(data, `BC-crafting-BACKUP-${member}-${Date.now()}.json`))
+                throw new Error('Backup download did not start.');
+            live.backup = data;
+            live.account = member;
+            live.downloaded = true;
+            live.savedAt = Date.now();
+            state.feedback = `Original BC crafting library backup requested (${occupied(data)} items). Verify that the download finished before proceeding.`;
+            return prepared;
+        }
+        function replaceLiveLibrary() {
+            if (live.working) throw new Error('A crafting replacement is already in progress.');
+            const prepared = liveAvailability();
+            if (prepared.error) throw new Error(prepared.error);
+            if (!live.downloaded || !live.backup || live.account !== prepared.member ||
+                Date.now() - live.savedAt > 10 * 60 * 1000) {
+                throw new Error('Download a fresh in-game backup for this account first.');
+            }
+            // Refuse overwriting another tab's/newer BC craft edits after the backup was taken.
+            if (JSON.stringify(live.backup.crafts) !== JSON.stringify(prepared.before.crafts)) {
+                live.downloaded = false;
+                throw new Error('Your in-game crafting library changed since the backup. Download a fresh backup.');
+            }
+            const input = window.prompt(
+                `PERMANENT ACCOUNT CHANGE\nBC account: #${prepared.member}\n` +
+                `Current in-game crafting items: ${prepared.beforeCount}\n` +
+                `Items in replacement JSON: ${prepared.afterCount}\n` +
+                `In-game crafting capacity: ${prepared.capacity} slots\n\n` +
+                `Your existing items will be REPLACED, including empty slots.\n` +
+                `Check your downloaded backup first. Type REPLACE to continue:`);
+            if (input !== 'REPLACE') return false;
+            // Recheck immediately after the confirmation, before touching Player.Crafting.
+            const again = liveAvailability();
+            if (again.error || again.member !== prepared.member ||
+                JSON.stringify(again.before.crafts) !== JSON.stringify(live.backup.crafts) ||
+                JSON.stringify(again.native) !== JSON.stringify(prepared.native)) {
+                throw new Error('Crafting state changed while confirming. Nothing was replaced.');
+            }
+            const p = window.Player;
+            const oldArray = p.Crafting;
+            // Pad missing trailing entries to keep BC's current slot capacity.
+            const next = again.native.slice();
+            while (next.length < again.capacity) next.push(null);
+            if (next.length > again.capacity) throw new Error('Imported item count exceeds in-game capacity.');
+            live.working = true;
+            try {
+                p.Crafting = next;
+                // Re-encode the exact objects BC accepted and verify the complete server payload.
+                const payload = window.CraftingCompressServerData(p.Crafting);
+                const checked = { version: 1, date: stamp(), crafts: Array.from(payload || [], x => x == null ? null : x) };
+                if (!valid(checked) || occupied(checked) !== again.afterCount)
+                    throw new Error('BC could not validate the outgoing crafting data.');
+                window.ServerAccountUpdate.QueueData({ Crafting: checked.crafts }, true);
+                // The local update and server send were invoked, but no server acknowledgement is exposed here.
+                live.downloaded = false;
+                state.feedback = `Sent ${again.afterCount} crafted items to BC for account #${again.member}. Reopen /craft or relog to verify the server saved them. Keep the backup file.`;
+                return true;
+            } catch (e) {
+                p.Crafting = oldArray;
+                throw e;
+            } finally { live.working = false; }
+        }
         function create(tag, text, css = {}, parent) {
             const el = document.createElement(tag);
             if (text !== undefined && text !== null) el.textContent = String(text);
@@ -10876,6 +11010,24 @@ function SubbysPlushiesPageMain() {
             button('Export customitems.json', () => download(state.library, 'customitems.json'), top, !state.library);
             button('Download Backup', () => download(state.previous, 'customitems-backup.json'), top, !state.previous);
             button('Undo Last Change', () => { undo(); render(); }, top, !state.previous);
+            // An explicit, guarded in-game save is distinct from editing a local JSON file.
+            const liveBar = create('div', null, { border:'1px solid #b88ed7', padding:'11px',
+                borderRadius:'9px', margin:'12px 0', background:'#2a1c3b' }, root);
+            create('h3', 'Replace My In-Game Crafting Library', { margin:'0 0 5px',fontSize:'15px' }, liveBar);
+            const availability = liveAvailability();
+            if (availability.error) create('p', availability.error, { ...small, color:'#f2b4af' },liveBar);
+            else create('p', `Current BC library: ${availability.beforeCount} items → JSON: ${availability.afterCount} items • ${availability.capacity} game slots. Empty slots are also replaced.`, small,liveBar);
+            const liveButtons = toolbar(liveBar);
+            button('1. Download Current In-Game Backup', () => {
+                try { downloadLiveBackup(); } catch (e) { state.feedback = `Backup failed: ${e.message}`; }
+                render();
+            }, liveButtons, !!availability.error || live.working);
+            button('2. Replace My In-Game Crafting Library', () => {
+                try { replaceLiveLibrary(); } catch (e) { state.feedback = `Replacement blocked: ${e.message}`; }
+                render();
+            }, liveButtons, !!availability.error || live.working || !live.downloaded || live.account !== availability.member);
+            create('p', 'First download and keep your original in-game library backup. The second button previews the item counts and requires typing REPLACE. This changes the active BC account, not just the JSON editor. BC server acceptance must be verified in-game.',
+                {...small, lineHeight:'1.45'},liveBar);
             const rememberBar = toolbar(root);
             button('Save Library On This Device', () => {
                 try {
@@ -10890,7 +11042,7 @@ function SubbysPlushiesPageMain() {
                 catch (_) { state.feedback = 'Could not clear saved library.'; }
                 render();
             }, rememberBar);
-            create('p', 'BC crafting export format • version 1 • 800 slots maximum. Select a slot, load a replacement source JSON, and replace just that slot. Export the finished customitems.json for BC’s normal crafting import. No account changes are made automatically.', {...small, lineHeight: '1.45'}, root);
+            create('p', 'BC crafting export format • version 1 • 800 slots maximum. Select a slot, load a replacement source JSON, and replace just that slot. Export the finished customitems.json for BC’s normal crafting import, or use the separate two-step guarded in-game replacement controls.', {...small, lineHeight: '1.45'}, root);
             if (state.feedback) create('p', state.feedback, {...small, color: '#d8c079'}, root);
             if (!state.library) {
                 create('p', 'No crafting JSON loaded yet. Click Load / Replace JSON to choose your exported custom items file.', {padding: '16px', border: '1px dashed #b8a2d1', borderRadius: '9px'}, root);
@@ -10996,6 +11148,8 @@ function SubbysPlushiesPageMain() {
             replacementSource: occupied(state.incoming) }; },
             // Non-UI diagnostic tools; mutating methods act on this in-memory JSON only, not BC.
             importJson, replaceSlot, undo, getSnapshot: () => state.library ? clone(state.library) : null,
+            // Explicit methods for testing and troubleshooting. Neither runs without a user action.
+            liveAvailability, downloadLiveBackup, replaceLiveLibrary,
             getItemInfo(index) { const item = state.library?.crafts[index]; return info(item); } };
     })();
     window.SubbysPlushieItems = plushieItemsBrowser;
@@ -21997,7 +22151,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.58";
+    const VERSION = "3.5.59";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
