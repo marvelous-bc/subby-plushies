@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.56
-// @description  Plushies, wardrobe harmonizer, Color Studio, optional chat emoticon button, Pet Bed locking, and mobile essentials
+// @version      3.5.57
+// @description  R133 compatibility, plushies, advanced wardrobe harmonizer, Color Studio, emoticons, Pet Bed locking and mobile essentials
 // @released     2026-10-17
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.56";
+    const VERSION = "3.5.57";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -1766,9 +1766,16 @@ function SubbysPlushiesPageMain() {
         const original = window[functionName];
         if (typeof original !== "function") return false;
         if (modApi && typeof modApi.hookFunction === "function") {
-            modApi.hookFunction(functionName, priority, (args, next) => handler(args, next));
-            installedHooks.add(functionName);
-            return true;
+            try {
+                modApi.hookFunction(functionName, priority, (args, next) => handler(args, next));
+                installedHooks.add(functionName);
+                return true;
+            } catch (e) {
+                // BC release changes can remove or replace individual functions.
+                // Do not let one optional SDK hook crash the entire addon.
+                warn(`Native hook ${functionName} was not accepted by ModSDK:`, e);
+                if (typeof window[functionName] !== "function") return false;
+            }
         }
         if (original[CUSTOM_HOOK_MARK]) {
             installedHooks.add(functionName);
@@ -11000,6 +11007,69 @@ function SubbysPlushiesPageMain() {
         while (usedIDs.has(activityID)) activityID++;
         return activityID;
     }
+    // BC R133 moves parts of the activity UI into shared modules. The historical
+    // Female3DCG activity array is still preferred, but it must not be a hard
+    // requirement for loading the unrelated wardrobe and plush asset systems.
+    function r133ActivityRegistry() {
+        const candidates = [
+            window.ActivityFemale3DCG,
+            window.ActivityListFemale3DCG,
+            window.Activity?.Female3DCG,
+            window.Activity?.Female3DCG?.Activities,
+            window.Activity?.Activities?.Female3DCG,
+            window.ActivityList,
+        ];
+        for (const candidate of candidates) {
+            if (!Array.isArray(candidate) || Object.isFrozen(candidate)) continue;
+            if (candidate.length && !candidate.some(entry => entry && typeof entry.Name === "string")) continue;
+            return candidate;
+        }
+        return null;
+    }
+    function r133CompatibilityDiagnostics() {
+        const registry = r133ActivityRegistry();
+        const player = window.Player;
+        const hasAsset = (group, name) => {
+            try { return !!window.AssetGet?.(FAMILY, group, name); }
+            catch (_) { return false; }
+        };
+        const report = {
+            addonVersion: VERSION,
+            targetRelease: "R133",
+            screen: window.CurrentScreen || null,
+            startupStage: startupStage,
+            ready,
+            hookBackend,
+            assets: {
+                plushHandheld: hasAsset(GROUP, ASSET_NAME),
+                plushAddon: hasAsset(ADDON_GROUP, ASSET_NAME),
+                wardrobe: WARDROBE_ITEMS.filter(item => hasAsset(item.group, item.name)).length,
+            },
+            nativeAPIs: {
+                assetGet: typeof window.AssetGet === "function",
+                assetAdd: typeof window.AssetAdd === "function",
+                assetTextGet: typeof window.AssetTextGet === "function",
+                activityDictionaryText: typeof window.ActivityDictionaryText === "function",
+                activityAllowedForGroup: typeof window.ActivityAllowedForGroup === "function",
+                activityRun: typeof window.ActivityRun === "function",
+                imageDraw: typeof window.DrawImageEx === "function",
+                syncItem: typeof window.ChatRoomSyncItem === "function",
+                inventoryGet: typeof window.InventoryGet === "function",
+            },
+            activityRegistry: registry ? "available" : "unavailable (activities gracefully degraded)",
+            registeredAddonActivities: registry ? registry.filter(item =>
+                item?.Name === HUG_TIGHTLY_ACTIVITY_NAME ||
+                PLUGIN_ACTIVITY_BY_NAME.has(item?.Name)).length : 0,
+            harmonizer: typeof window.SubbysOutfitHarmonizer?.status === "function",
+            emoticons: !!window.SubbysEssentialsExtras,
+            petBed: typeof petBedLockingDiagnostics === "function" ? petBedLockingDiagnostics() : null,
+            member: Number(player?.MemberNumber) || null,
+        };
+        console.table(report.nativeAPIs);
+        console.log("[Subby R133 compatibility]", report);
+        return report;
+    }
+    window.SubbysPlushiesR133Diag = r133CompatibilityDiagnostics;
     function makeHugTightlyActivity(activities) {
         const activityID = allocateHugTightlyActivityID(activities);
         hugTightlyActivityID = activityID;
@@ -11039,7 +11109,7 @@ function SubbysPlushiesPageMain() {
         };
     }
     function ensureCustomActivitiesRegistered(reason = "availability check") {
-        const activities = window.ActivityFemale3DCG;
+        const activities = r133ActivityRegistry();
         if (!Array.isArray(activities)) return false;
         for (let i = 0; i < CUSTOM_PLUSH_ACTIVITIES.length; i++) {
             const spec = CUSTOM_PLUSH_ACTIVITIES[i];
@@ -11059,7 +11129,7 @@ function SubbysPlushiesPageMain() {
         return true;
     }
     function removeCustomActivities(reason = "availability check") {
-        const activities = window.ActivityFemale3DCG;
+        const activities = r133ActivityRegistry();
         if (!Array.isArray(activities)) return false;
         const names = new Set(CUSTOM_PLUSH_ACTIVITIES.map(spec => spec.name));
         let removed = 0;
@@ -11094,7 +11164,7 @@ function SubbysPlushiesPageMain() {
         };
     }
     function ensureExtraActionsRegistered(reason = "availability check") {
-        const activities = window.ActivityFemale3DCG;
+        const activities = r133ActivityRegistry();
         if (!Array.isArray(activities) || !getFeatureSettings().extraActions) return false;
         for (let i = 0; i < EXTRA_ACTIONS.length; i++) {
             const spec = EXTRA_ACTIONS[i];
@@ -11114,7 +11184,7 @@ function SubbysPlushiesPageMain() {
         return true;
     }
     function removeExtraActions(reason = "availability check") {
-        const activities = window.ActivityFemale3DCG;
+        const activities = r133ActivityRegistry();
         if (!Array.isArray(activities)) return false;
         const names = new Set(EXTRA_ACTIONS.map(spec => spec.name));
         let removed = 0;
@@ -11131,7 +11201,7 @@ function SubbysPlushiesPageMain() {
     }
     function syncExtraActionsAvailability(reason = "availability check") {
         if (getFeatureSettings().extraActions) return ensureExtraActionsRegistered(reason);
-        const anyRegistered = window.ActivityFemale3DCG?.some?.(activity => EXTRA_ACTION_BY_NAME.has(activity?.Name));
+        const anyRegistered = r133ActivityRegistry()?.some?.(activity => EXTRA_ACTION_BY_NAME.has(activity?.Name));
         if (extraActionObjects.size || anyRegistered) removeExtraActions(reason);
         else extraActionsRegistration = `inactive (${reason})`;
         return false;
@@ -14242,7 +14312,7 @@ function SubbysPlushiesPageMain() {
         return true;
     }
     function ensureHugTightlyActivityRegistered(reason = "availability check") {
-        const activities = window.ActivityFemale3DCG;
+        const activities = r133ActivityRegistry();
         if (!Array.isArray(activities)) return false;
         const existing = activities.find(activity => activity?.Name === HUG_TIGHTLY_ACTIVITY_NAME);
         if (existing) {
@@ -14261,7 +14331,7 @@ function SubbysPlushiesPageMain() {
         return true;
     }
     function removeHugTightlyActivity(reason = "availability check") {
-        const activities = window.ActivityFemale3DCG;
+        const activities = r133ActivityRegistry();
         if (!Array.isArray(activities)) return false;
         let removed = false;
         for (let i = activities.length - 1; i >= 0; i--) {
@@ -14284,12 +14354,12 @@ function SubbysPlushiesPageMain() {
             const extrasReady = ensureCustomActivitiesRegistered(reason);
             return hugReady && extrasReady;
         }
-        if (hugTightlyActivityEnabled || window.ActivityFemale3DCG?.some?.(a => a?.Name === HUG_TIGHTLY_ACTIVITY_NAME)) {
+        if (hugTightlyActivityEnabled || r133ActivityRegistry()?.some?.(a => a?.Name === HUG_TIGHTLY_ACTIVITY_NAME)) {
             removeHugTightlyActivity(reason);
         } else {
             hugTightlyActivityRegistration = `inactive (${reason})`;
         }
-        const anyExtraRegistered = window.ActivityFemale3DCG?.some?.(
+        const anyExtraRegistered = r133ActivityRegistry()?.some?.(
             activity => CUSTOM_ACTIVITY_BY_NAME.has(activity?.Name)
         );
         if (customActivityObjects.size || anyExtraRegistered) {
@@ -16761,7 +16831,8 @@ function SubbysPlushiesPageMain() {
             return spec.label;
         });
         if (!activityHooked) {
-            throw new Error("ActivityDictionaryText is unavailable; cannot register plush activity text safely.");
+            warn("BC activity text API is unavailable; skipping native plush activity text until it loads.");
+            return false;
         }
         return true;
     }
@@ -17020,7 +17091,7 @@ function SubbysPlushiesPageMain() {
     function installImageMappingHooks() {
         const nativeImageHook = installNativeImageElementHook();
         let fallbackHook = null;
-        if (!nativeImageHook && modApi && typeof modApi.hookFunction === "function") {
+        if (typeof window.DrawGetImage === "function" || typeof window.DrawImage === "function" || typeof window.DrawImageEx === "function") {
             const candidates = [
                 "DrawGetImage",
                 "DrawImage",
@@ -17223,7 +17294,8 @@ function SubbysPlushiesPageMain() {
         if (!imageMappings) throw new Error("Render image mappings were not prepared.");
         installExtendedConfig();
         installAssetTextHook();
-        installHugTightlyTextHook();
+        try { installHugTightlyTextHook(); }
+        catch (e) { warn("Optional activity text hook could not be installed:", e); }
         installImageMappingHooks();
         let primaryAsset = null;
         for (const groupName of PLUSH_GROUPS) {
@@ -18327,13 +18399,12 @@ function SubbysPlushiesPageMain() {
             }
         }
         const hugTightlyShouldBeActive = isOurs(getHeld(window.Player));
-        if (hugTightlyShouldBeActive &&
-            (!Array.isArray(window.ActivityFemale3DCG) ||
-             !window.ActivityFemale3DCG.some(activity => activity?.Name === HUG_TIGHTLY_ACTIVITY_NAME))) {
+        if (hugTightlyShouldBeActive && Array.isArray(r133ActivityRegistry()) &&
+            !r133ActivityRegistry().some(activity => activity?.Name === HUG_TIGHTLY_ACTIVITY_NAME)) {
             problems.push("Hug Tightly is not registered while Subby's Plushies is held.");
         }
-        if (hugTightlyShouldBeActive && Array.isArray(window.ActivityFemale3DCG)) {
-            const registeredNames = new Set(window.ActivityFemale3DCG.map(activity => activity?.Name));
+        if (hugTightlyShouldBeActive && Array.isArray(r133ActivityRegistry())) {
+            const registeredNames = new Set(r133ActivityRegistry().map(activity => activity?.Name));
             const missingRuntime = CUSTOM_PLUSH_ACTIVITIES.filter(spec => !registeredNames.has(spec.name));
             if (missingRuntime.length) {
                 problems.push(
@@ -18341,8 +18412,8 @@ function SubbysPlushiesPageMain() {
                 );
             }
         }
-        if (getFeatureSettings().extraActions && Array.isArray(window.ActivityFemale3DCG)) {
-            const registeredNames = new Set(window.ActivityFemale3DCG.map(activity => activity?.Name));
+        if (getFeatureSettings().extraActions && Array.isArray(r133ActivityRegistry())) {
+            const registeredNames = new Set(r133ActivityRegistry().map(activity => activity?.Name));
             const missingExtras = EXTRA_ACTIONS.filter(spec => !registeredNames.has(spec.name));
             if (missingExtras.length) {
                 problems.push(`Missing enabled Extra Actions: ${missingExtras.map(spec => spec.label).join(", ")}.`);
@@ -18724,7 +18795,7 @@ function SubbysPlushiesPageMain() {
                     hugTightlyActivityID,
                     customActivityIDs: CUSTOM_PLUSH_ACTIVITIES.map(spec => ({
                         key: spec.key,
-                        id: window.ActivityFemale3DCG?.find?.(activity => activity?.Name === spec.name)?.ActivityID ?? null,
+                        id: r133ActivityRegistry()?.find?.(activity => activity?.Name === spec.name)?.ActivityID ?? null,
                     })),
                 },
                 offerPrompt: {
@@ -18789,7 +18860,7 @@ function SubbysPlushiesPageMain() {
                     targetSelf: spec.targetSelf,
                     handsFree: !!spec.handsFree,
                     prerequisites: customActivityPrerequisites(spec),
-                    registered: !!window.ActivityFemale3DCG?.some?.(activity => activity?.Name === spec.name),
+                    registered: !!r133ActivityRegistry()?.some?.(activity => activity?.Name === spec.name),
                 })),
             },
             optionalExtraActions: {
@@ -18802,7 +18873,7 @@ function SubbysPlushiesPageMain() {
                     name: spec.name,
                     label: spec.label,
                     targets: spec.targets,
-                    registered: !!window.ActivityFemale3DCG?.some?.(activity => activity?.Name === spec.name),
+                    registered: !!r133ActivityRegistry()?.some?.(activity => activity?.Name === spec.name),
                 })),
             },
             callbacks: {
@@ -18930,7 +19001,7 @@ function SubbysPlushiesPageMain() {
                 ActivityAllowedForGroup: typeof window.ActivityAllowedForGroup === "function",
                 ExtendedItemGetData: typeof window.ExtendedItemGetData === "function",
                 ModularItemCreateModularData: typeof window.ModularItemCreateModularData === "function",
-                ActivitySource: Array.isArray(window.ActivityFemale3DCG),
+                ActivitySource: Array.isArray(r133ActivityRegistry()),
                 InventoryWear: typeof window.InventoryWear === "function",
                 InventoryGet: typeof window.InventoryGet === "function",
                 AssetGroup: Array.isArray(window.AssetGroup),
@@ -18942,11 +19013,10 @@ function SubbysPlushiesPageMain() {
                 status.AssetGet &&
                 status.AssetAdd &&
                 status.AssetTextGet &&
-                status.ActivityDictionaryText &&
-                status.ActivityAllowedForGroup &&
+                // R133's activity interface can initialize later than the asset catalog.
+                // Text, activity menus and custom emotes are optional, not a blocker.
                 status.ExtendedItemGetData &&
                 status.ModularItemCreateModularData &&
-                status.ActivitySource &&
                 status.InventoryWear &&
                 status.InventoryGet &&
                 status.AssetGroup &&
@@ -21126,7 +21196,7 @@ function SubbysPlushiesPageMain() {
     }catch(e){refreshColorsStatus(`Import rejected: ${e.message}`);}
   };input.click();}
   function insertEmote(emote){
-    const input=document.getElementById('InputChat');
+    const input=document.getElementById('InputChat') || document.querySelector('textarea[data-chat-input], #ChatRoomInput, input[data-chat-input]');
     if(!input||!('value' in input)){showMessage('Enter a BC chat room first. The picker inserts a token into the normal chat input.');return false;}
     const token=emoteCode(emote);const start=Number.isFinite(input.selectionStart)?input.selectionStart:input.value.length;
     const end=Number.isFinite(input.selectionEnd)?input.selectionEnd:input.value.length;
@@ -21202,7 +21272,7 @@ function SubbysPlushiesPageMain() {
   }
   function setupChatButton(){
     const canChat=getFeatureSettings().showEmoticonButton &&
-      window.CurrentScreen==='ChatRoom' && !!document.getElementById('InputChat');
+      window.CurrentScreen==='ChatRoom' && !!(document.getElementById('InputChat') || document.querySelector('textarea[data-chat-input], #ChatRoomInput, input[data-chat-input]'));
     if(!canChat){state.chatButton?.remove();state.chatButton=null;return;}
     if(state.chatButton?.isConnected)return;
     const element=btn('😺',()=>{if(!element.dataset.dragged)openModal('emotes');});
@@ -21521,7 +21591,8 @@ function SubbysPlushiesPageMain() {
         await prepareRenderImages();
         setStartupStage("registering-plush-assets");
         setupNativeAsset();
-        installPlushStateHooks();
+        try { installPlushStateHooks(); }
+        catch (e) { warn("R133: some optional room/activity hooks could not be installed:", e); }
         startOfferChatObserverMonitor();
         installDirectDragHandlers();
         installDragToggleUi();
@@ -21541,7 +21612,20 @@ function SubbysPlushiesPageMain() {
         installRoomMascotAdminPicker();
         installVisibilityPerformanceHooks();
         startPreferencesExtensionsIntegration();
-        startHugTightlyActivityMonitor();
+        try { startHugTightlyActivityMonitor(); }
+        catch (e) { warn("Optional R133 activity registration unavailable:", e); }
+        // Late BC activity registration occurs after some screen transitions.
+        for (const delay of [1700, 5000, 11000]) {
+            window.setTimeout(() => {
+                try {
+                    if (!r133ActivityRegistry()) return;
+                    syncHugTightlyActivityAvailability("R133 late activity registry");
+                    syncExtraActionsAvailability("R133 late activity registry");
+                    if (!installedHooks.has("ActivityDictionaryText")) installHugTightlyTextHook();
+                    if (!installedHooks.has("ActivityAllowedForGroup")) installActivityMenuOrderingHook();
+                } catch (e) { warn("Optional late activity registration failed:", e); }
+            }, delay);
+        }
         scheduleNextIdleAnimation(3500);
         startPlushStatusIconMonitor();
         setStartupStage("validating");
@@ -21572,7 +21656,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.56";
+    const VERSION = "3.5.57";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
