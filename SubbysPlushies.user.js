@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.60
-// @description  R132/R133 crafting-library replacement fix; wardrobe, emoticons and plushies
+// @version      3.5.66
+// @description  Desktop/mobile view detection fix, gestures, protected outfits, R133 support
 // @released     2026-10-17
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.60";
+    const VERSION = "3.5.66";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -1232,6 +1232,7 @@ function SubbysPlushiesPageMain() {
         showHoverPreview: true,
         extensionsDensity: "cozy",
         loreListSide: "left",
+        mobileOneHanded: true,
     });
     const INTERFACE_COLOR_KEYS = Object.freeze([
         "background", "header", "surface", "surfaceHover", "selected",
@@ -1463,6 +1464,16 @@ function SubbysPlushiesPageMain() {
     let failed = false;
     let startupError = null;
     let startupStage = "script-injected";
+    const optionalStartupErrors = [];
+    function optionalStartupStep(label, func) {
+        try { return func(); }
+        catch (e) {
+            optionalStartupErrors.push({step:label, error:String(e?.message || e)});
+            if (optionalStartupErrors.length > 20) optionalStartupErrors.shift();
+            warn(`Optional initialization (${label}) failed; core plugin will continue:`, e);
+            return null;
+        }
+    }
     const setStartupStage = stage => {
         startupStage = stage;
         try { document.documentElement?.setAttribute("data-subbys-plushies-startup", stage); } catch (_) {}
@@ -1470,6 +1481,7 @@ function SubbysPlushiesPageMain() {
     window.SubbysPlushiesStartupDiag = () => {
         const status = {version: VERSION, stage: startupStage, ready, failed,
             error: startupError ? String(startupError?.stack || startupError) : null,
+            optionalErrors:[...optionalStartupErrors],
             guard: window[ACTIVE_GUARD] || null};
         try { console.table(status); } catch (_) { console.log(status); }
         return status;
@@ -2089,6 +2101,7 @@ function SubbysPlushiesPageMain() {
             showHoverPreview: Object.prototype.hasOwnProperty.call(stored, "showHoverPreview") ? !!stored.showHoverPreview : LAYOUT_DEFAULTS.showHoverPreview,
             extensionsDensity: stored.extensionsDensity === "compact" ? "compact" : LAYOUT_DEFAULTS.extensionsDensity,
             loreListSide: stored.loreListSide === "right" ? "right" : LAYOUT_DEFAULTS.loreListSide,
+            mobileOneHanded: Object.prototype.hasOwnProperty.call(stored, "mobileOneHanded") ? !!stored.mobileOneHanded : LAYOUT_DEFAULTS.mobileOneHanded,
             useMenuColors: normalizeInterfacePalette(stored.useMenuColors),
             extensionsColors: normalizeInterfacePalette(stored.extensionsColors),
         };
@@ -2111,7 +2124,10 @@ function SubbysPlushiesPageMain() {
         writeLocalJSON(LAYOUT_SETTINGS_STORAGE_KEY, settings);
         plushMenuListPage = 0;
         refreshPlushSearchInput();
-        if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+        if (extensionsPanelElement?.isConnected) {
+            if (key === "mobileOneHanded") openExtensionsPanel(extensionsActiveTab, extensionsOpenedFromNativePreference);
+            else renderExtensionsPanel();
+        }
         return value;
     }
     function setInterfaceColor(scope, key, value) {
@@ -2174,8 +2190,14 @@ function SubbysPlushiesPageMain() {
             ? { startY: 162, rowGap: 66, buttonH: 50, subStartY: 176, subRowGap: 90, searchTop: 105, searchHeight: 26, searchWidth: 340 }
             : { startY: 164, rowGap: 70, buttonH: 58, subStartY: 182, subRowGap: 106, searchTop: 104, searchHeight: 28, searchWidth: 350 };
     }
+    function extensionsMobileOneHanded() {
+        // The user's preference enables gestures only on an actual touch-first mobile
+        // environment. A narrow, zoomed, or resized desktop remains in desktop mode.
+        return getLayoutSettings().mobileOneHanded === true && mobileEssentialMode();
+    }
     function extensionsLayoutMetrics() {
         const compact = getLayoutSettings().extensionsDensity === "compact";
+        if (extensionsMobileOneHanded()) return { buttonMinHeight: 46, buttonPadding: "10px 12px", sectionPadding: 10, sectionGap: 9, headingSize: 17, fontSize: 14, rowPadding: "9px 2px" };
         return compact
             ? { buttonMinHeight: 32, buttonPadding: "4px 9px", sectionPadding: 10, sectionGap: 9, headingSize: 17, fontSize: 14, rowPadding: "5px 2px" }
             : { buttonMinHeight: 38, buttonPadding: "6px 11px", sectionPadding: 13, sectionGap: 12, headingSize: 19, fontSize: 15, rowPadding: "7px 2px" };
@@ -7660,6 +7682,7 @@ function SubbysPlushiesPageMain() {
         const right = document.createElement("span");
         right.textContent = String(value);
         right.style.color = getExtensionsStyle().muted;
+        if (extensionsMobileOneHanded()) Object.assign(row.style,{gridTemplateColumns:"minmax(0,1fr)",gap:"4px",overflowWrap:"anywhere"});
         row.append(left, right);
         section.appendChild(row);
     }
@@ -7687,6 +7710,7 @@ function SubbysPlushiesPageMain() {
             renderExtensionsPanel();
         }, { active: checked });
         button.style.minWidth = "72px";
+        if (extensionsMobileOneHanded()) Object.assign(row.style,{gridTemplateColumns:"minmax(0,1fr) auto",gap:"8px",minWidth:"0"});
         row.append(info, button);
         return row;
     }
@@ -9123,6 +9147,101 @@ function SubbysPlushiesPageMain() {
             return true;
         }catch(e){status.textContent=`Unable to load Wardrobe Studio: ${e?.message||e}`;return false;}
     }
+    // Outfit Locks: protect specific currently worn assets against every Essentials
+    // bulk recolor and Time Machine restore. Native manual appearance edits remain possible.
+    const OUTFIT_LOCK_PREFIX = 'SubbysPlushies:OutfitLocks:v1:';
+    let outfitLockCacheAccount = null, outfitLockCache = null;
+    function outfitLockAccount() { return String(window.Player?.MemberNumber ?? 'guest'); }
+    function outfitLockRead() {
+        const member = outfitLockAccount();
+        if (outfitLockCache && outfitLockCacheAccount === member) return outfitLockCache;
+        let saved = {};
+        try {
+            const raw = JSON.parse(window.localStorage?.getItem(OUTFIT_LOCK_PREFIX + member) || '{}');
+            if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+                for (const [group, asset] of Object.entries(raw).slice(0, 160)) {
+                    if (/^[a-z0-9_-]{1,90}$/i.test(group) && /^[a-z0-9_-]{1,100}$/i.test(asset)) saved[group] = asset;
+                }
+            }
+        } catch (_) {}
+        outfitLockCacheAccount = member;
+        outfitLockCache = saved;
+        return saved;
+    }
+    function outfitLockWrite() {
+        try { window.localStorage?.setItem(OUTFIT_LOCK_PREFIX + outfitLockAccount(), JSON.stringify(outfitLockRead())); return true; }
+        catch (_) { return false; }
+    }
+    function outfitLockClothingItem(item) {
+        const asset = item?.Asset, group = asset?.Group;
+        if (!asset?.Name || !group?.Name || group.Category !== 'Appearance') return false;
+        // Only wearables. Never protect body/face/hair base, restraints or devices.
+        return !!(group.Clothing || WARDROBE_ITEM_NAME_SET.has(asset.Name) ||
+            /^(Hat|Mask|Glasses|Necklace|Bracelet|Earring|Ring|Jewelry|Collar|Choker|HairAccessory|Gloves?|Shoes?|Boots?|Socks?|Stockings?|Garters?|Belt|Wings|Accessory|Bag|Tails?)/i.test(group.Name));
+    }
+    function isOutfitProtected(item) {
+        if (!outfitLockClothingItem(item)) return false;
+        return outfitLockRead()[item.Asset.Group.Name] === item.Asset.Name;
+    }
+    function setOutfitProtected(item, enabled) {
+        if (!outfitLockClothingItem(item) || !Array.isArray(window.Player?.Appearance) ||
+            !window.Player.Appearance.includes(item)) return false;
+        const { Name: group } = item.Asset.Group;
+        const data = outfitLockRead();
+        const old = data[group];
+        if (enabled) data[group] = item.Asset.Name;
+        else if (data[group] === item.Asset.Name) delete data[group];
+        if (!outfitLockWrite()) {
+            if (old === undefined) delete data[group]; else data[group] = old;
+            return false;
+        }
+        return true;
+    }
+    function renderOutfitLockControls(container) {
+        const section = makeExtensionsSection('🔒 Outfit Lock System');
+        const note = document.createElement('p');
+        note.textContent = 'Protect currently worn clothes and accessories from Harmonizer, Color Studio batch recoloring and Outfit Time Machine restores. Applies only to Essentials tools; you can still edit items normally in BC. Locks are saved for this account.';
+        Object.assign(note.style,{fontSize:'12px',lineHeight:'1.5',color:getExtensionsStyle().muted,margin:'0 0 9px'});
+        section.append(note);
+        const items = (Array.isArray(window.Player?.Appearance) ? window.Player.Appearance : []).filter(outfitLockClothingItem);
+        const details = document.createElement('details');
+        details.className = 'SubbysOutfitLockList';
+        const summary = document.createElement('summary');
+        const locked = items.filter(isOutfitProtected).length;
+        summary.textContent = `Manage worn items (${locked} protected / ${items.length})`;
+        Object.assign(summary.style,{cursor:'pointer',padding:'10px',fontWeight:'bold',minHeight:'40px',boxSizing:'border-box'});
+        details.append(summary);
+        const list = document.createElement('div');
+        Object.assign(list.style,{maxHeight:'38vh',overflowY:'auto',display:'grid',gap:'6px',marginTop:'5px'});
+        for (const item of items) {
+            const row = document.createElement('label');
+            row.dataset.outfitLockRow = 'true';
+            row.dataset.itemGroup = item.Asset.Group.Name;
+            Object.assign(row.style,{display:'flex',gap:'9px',alignItems:'center',padding:'8px',minHeight:'46px',borderRadius:'7px',background:getExtensionsStyle().header,boxSizing:'border-box',cursor:'pointer'});
+            const input = document.createElement('input'); input.type='checkbox'; input.checked=isOutfitProtected(item);
+            input.setAttribute('aria-label',`Protect ${item.Asset.Name} in ${item.Asset.Group.Name}`);
+            Object.assign(input.style,{width:'20px',height:'20px',flex:'0 0 auto'});
+            input.addEventListener('change',()=>{
+                if (!setOutfitProtected(item,input.checked)) input.checked=!input.checked;
+                summary.textContent=`Manage worn items (${items.filter(isOutfitProtected).length} protected / ${items.length})`;
+            });
+            const label=document.createElement('span'); label.textContent=`${item.Asset.Description || item.Asset.Name} · ${item.Asset.Group.Name}`;
+            Object.assign(label.style,{fontSize:'13px',overflowWrap:'anywhere'});
+            row.append(input,label); list.append(row);
+        }
+        if (!items.length) {
+            const msg=document.createElement('p');msg.textContent='No equipped clothes or accessories detected. Put on an item to protect it.';
+            list.append(msg);
+        }
+        details.append(list); section.append(details); container.append(section);
+    }
+    function registerOutfitLockApi() {
+        try {
+            window.SubbysOutfitLocks = Object.freeze({version:VERSION,isProtected:isOutfitProtected,
+                set:setOutfitProtected,list:()=>Object.assign({},outfitLockRead()),
+                protectedWorn:()=>Array.isArray(window.Player?.Appearance)?window.Player.Appearance.filter(isOutfitProtected).length:0});
+        } catch (e) { warn("Outfit Lock API unavailable; core startup continues:", e); }
+    }
     function renderExtensionsWardrobe(container) {
         const section = makeExtensionsSection("Subby's Wardrobe • clothing and accessories");
         const intro = document.createElement("div");
@@ -9136,11 +9255,13 @@ function SubbysPlushiesPageMain() {
             catch (e) { warn("Could not open Outfit Harmonizer:", e); }
         }));
         const harmonizerHint=document.createElement("span");
-        harmonizerHint.textContent="Three core colors plus 6 optional category colors with inheritance — also in BC's Appearance picker.";
+        harmonizerHint.textContent="Three core colors plus 6 optional category colors with inheritance. Outfit Locks below prevent bulk recoloring and Time Machine changes.";
         Object.assign(harmonizerHint.style,{fontSize:"12px",color:getExtensionsStyle().muted});
         harmonizerRow.appendChild(harmonizerHint);
         section.appendChild(harmonizerRow);
         section.appendChild(makeExtensionsButton("⏪ Open Outfit Time Machine", openOutfitTimeMachineFromExtensions));
+        try { renderOutfitLockControls(container); }
+        catch (e) { warn("Optional Outfit Lock controls failed to render:", e); }
         for (const entry of WARDROBE_ITEMS) {
             const itemSection = document.createElement("div");
             Object.assign(itemSection.style, { display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap", marginBottom: "16px", paddingBottom: "12px", borderBottom: `1px solid ${getExtensionsStyle().border}55` });
@@ -9586,10 +9707,17 @@ function SubbysPlushiesPageMain() {
             info.append(name, desc);
             const button = makeExtensionsButton(valueLabel, onClick, { active: true });
             button.style.minWidth = "118px";
+            if (extensionsMobileOneHanded()) Object.assign(row.style,{gridTemplateColumns:"minmax(0,1fr)",gap:"6px",overflowWrap:"anywhere"});
             row.append(info, button);
             return row;
         };
         section.append(
+            choiceRow(
+                "One-handed mobile navigation",
+                "On by default: bottom navigation, horizontal swipe tabs, header swipe-down minimize and item long-press quick actions. Dock stays off the game.",
+                settings.mobileOneHanded ? "Enabled" : "Disabled",
+                () => setLayoutSetting("mobileOneHanded", !settings.mobileOneHanded)
+            ),
             choiceRow(
                 "Use menu density",
                 "Choose roomier buttons or a tighter compact plush selector.",
@@ -10205,7 +10333,7 @@ function SubbysPlushiesPageMain() {
         const hand=makeExtensionsSection('One-Handed Mobile Mode');
         const row=essentialsH('div',null,{display:'flex',gap:'6px',flexWrap:'wrap'});
         for(const [id,label] of [['auto','Automatic'],['left','Left hand'],['right','Right hand']])row.append(makeExtensionsButton(label,()=>essentialsSetHand(id),{active:essentialsConfig().hand===id}));
-        hand.append(essentialsH('p','Arranges default mobile addon buttons toward your chosen edge. Each mode remembers its own dragged positions.',{fontSize:'12px',color:getExtensionsStyle().muted}),row);
+        hand.append(essentialsH('p','Choose which thumb side gets the More button in the in-window bottom navigation. Also positions the optional floating dock when black space is available. Each dock mode remembers its dragged positions.',{fontSize:'12px',color:getExtensionsStyle().muted}),row);
         const dockConf=essentialsConfig();
         for(const [key,title,min,max,step,fmt] of [
             ['dockSize','Button width',72,136,4,v=>`${v}px`],
@@ -10218,6 +10346,7 @@ function SubbysPlushiesPageMain() {
             slider.addEventListener('input',()=>{dockConf[key]=Number(slider.value);label.textContent=`${title}: ${fmt(dockConf[key])}`;essentialsSave();mobileApplyDockAppearance(true);});
             line.append(label,slider);hand.append(line);
         }
+        hand.append(essentialsBtn(getLayoutSettings().mobileOneHanded?'Disable in-window bottom navigation':'Enable in-window bottom navigation',()=>setLayoutSetting('mobileOneHanded',!getLayoutSettings().mobileOneHanded)));
         hand.append(essentialsBtn('Collapse / expand mobile dock',()=>{dockConf.dockCollapsed=!dockConf.dockCollapsed;essentialsSave();mobileApplyDockAppearance(false);}));
         container.append(hand);
         const windows=makeExtensionsSection('Floating Window Minimize');
@@ -10236,18 +10365,104 @@ function SubbysPlushiesPageMain() {
     }
 
 
+    // The one-handed bar lives INSIDE the Extensions modal, never on the BC game
+    // canvas. The separate floating dock still requires verified black space.
+    let extensionsMobileMoreOpen = false;
+    const EXTENSIONS_MOBILE_NAV_ITEMS = Object.freeze([
+        ["plushies", "🧸", "Plushies"],
+        ["wardrobe", "👗", "Wardrobe"],
+        ["essentials", "✨", "Essentials"],
+        ["settings", "⚙", "Settings"],
+        ["more", "⋯", "More"],
+    ]);
+    function extensionsMobileNavigate(destination) {
+        if (destination === "more") extensionsMobileMoreOpen = true;
+        else if (destination === "plushies") {
+            extensionsProgressTab = "plushies";
+            extensionsActiveTab = "progress";
+            extensionsMobileMoreOpen = false;
+        } else if (EXTENSIONS_TABS.includes(destination)) {
+            extensionsActiveTab = destination;
+            extensionsMobileMoreOpen = false;
+        } else return false;
+        renderExtensionsPanel();
+        if (extensionsPanelContent) extensionsPanelContent.scrollTop = 0;
+        return true;
+    }
+    function extensionsMobileSelectedNav() {
+        if (extensionsMobileMoreOpen) return "more";
+        if (extensionsActiveTab === "progress" && extensionsProgressTab === "plushies") return "plushies";
+        return ["wardrobe", "essentials", "settings"].includes(extensionsActiveTab) ? extensionsActiveTab : "more";
+    }
+    function refreshExtensionsMobileBottomNav() {
+        const bar = extensionsPanelElement?.querySelector?.(".SubbysPlushiesMobileBottomNav");
+        if (!bar) return;
+        const hand = essentialsConfig().hand;
+        const order = hand === "left" ? [...EXTENSIONS_MOBILE_NAV_ITEMS].reverse() : EXTENSIONS_MOBILE_NAV_ITEMS;
+        for (const [key] of order) {
+            const button = bar.querySelector(`[data-mobile-tab="${key}"]`);
+            if (button) bar.appendChild(button);
+        }
+        const activeTab = extensionsMobileSelectedNav();
+        for (const button of bar.querySelectorAll("button[data-mobile-tab]")) {
+            const active = button.dataset.mobileTab === activeTab;
+            button.dataset.lofiActive = active ? "true" : "false";
+            styleExtensionsButton(button, active, false);
+            Object.assign(button.style,{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"1px",minWidth:"0",minHeight:"54px",padding:"5px 1px",fontSize:"12px",fontWeight:active?"bold":"normal",borderRadius:"10px",flex:"1 1 0"});
+            button.setAttribute("aria-current",active?"page":"false");
+        }
+    }
+    function renderExtensionsMobileMore(container) {
+        const section = makeExtensionsSection("More Essentials features");
+        const message = document.createElement("p");
+        message.textContent = "Swipe left/right in Essentials content to switch tabs, swipe down on the title to minimize, or long-press an action or protected-clothing row for quick options.";
+        Object.assign(message.style,{fontSize:"13px",color:getExtensionsStyle().muted,margin:"0 0 12px"});
+        section.appendChild(message);
+        const grid = document.createElement("div");
+        grid.className = "SubbysPlushiesMobileMoreGrid";
+        Object.assign(grid.style,{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:"9px",maxWidth:"100%"});
+        const add = (label, action) => {
+            const b=makeExtensionsButton(label,action);
+            Object.assign(b.style,{minHeight:"52px",whiteSpace:"normal",overflowWrap:"anywhere",textAlign:"center",minWidth:"0"});
+            grid.appendChild(b);
+        };
+        for (const [label, tab] of [["📋 Status","status"],["📖 Lore","lore"],["📈 Progress","progress"],["⌨ Commands","commands"]])
+            add(label,()=>extensionsMobileNavigate(tab));
+        add("🧸 Pick Plushie",()=>mobilePlushBrowser());
+        add("⏪ Outfit History",()=>openOutfitTimeMachineFromExtensions());
+        add("🎨 Harmonizer",()=>{
+            try {(window.SubbysOutfitHarmonizer||installSmartOutfitColorHarmonizer())?.open();}
+            catch(e){warn("Unable to open Outfit Harmonizer",e);}
+        });
+        add("🖌 Color Studio",()=>window.SubbysEssentialsExtras?.colorStudio?.());
+        add("😺 Emoticons",()=>window.SubbysEssentialsExtras?.emoticons?.());
+        add("📦 Custom Items",()=>plushieItemsBrowser?.open?.());
+        add("⚔ Battle",()=>showBattleTargetPrompt());
+        add("🐾 Mascot",()=>openRoomMascotPicker());
+        section.appendChild(grid);
+        container.appendChild(section);
+    }
     function renderExtensionsPanel() {
         if (!extensionsPanelElement?.isConnected || !extensionsPanelContent) return false;
         applyExtensionsPanelTheme();
         extensionsPanelContent.innerHTML = "";
         extensionsPanelElement.style.font = `${extensionsLayoutMetrics().fontSize}px Arial, sans-serif`;
-        if (extensionsActiveTab === "lore") renderExtensionsLore(extensionsPanelContent);
-        else if (extensionsActiveTab === "wardrobe") renderExtensionsWardrobe(extensionsPanelContent);
-        else if (extensionsActiveTab === "settings") renderExtensionsSettings(extensionsPanelContent);
-        else if (extensionsActiveTab === "essentials") renderEssentialsPanel(extensionsPanelContent);
-        else if (extensionsActiveTab === "progress") renderExtensionsProgress(extensionsPanelContent);
-        else if (extensionsActiveTab === "commands") renderExtensionsCommands(extensionsPanelContent);
-        else renderExtensionsStatus(extensionsPanelContent);
+        try {
+            if (extensionsMobileOneHanded() && extensionsMobileMoreOpen) renderExtensionsMobileMore(extensionsPanelContent);
+            else if (extensionsActiveTab === "lore") renderExtensionsLore(extensionsPanelContent);
+            else if (extensionsActiveTab === "wardrobe") renderExtensionsWardrobe(extensionsPanelContent);
+            else if (extensionsActiveTab === "settings") renderExtensionsSettings(extensionsPanelContent);
+            else if (extensionsActiveTab === "essentials") renderEssentialsPanel(extensionsPanelContent);
+            else if (extensionsActiveTab === "progress") renderExtensionsProgress(extensionsPanelContent);
+            else if (extensionsActiveTab === "commands") renderExtensionsCommands(extensionsPanelContent);
+            else renderExtensionsStatus(extensionsPanelContent);
+        } catch (e) {
+            warn("Essentials tab failed (other tabs remain accessible):", e);
+            const message = document.createElement("p");
+            message.textContent = `This Essentials tab encountered an error. Try another tab or check the console: ${String(e?.message || e)}`;
+            Object.assign(message.style, {padding:"12px",border:"1px solid #a66",borderRadius:"8px",lineHeight:"1.5"});
+            extensionsPanelContent.append(message);
+        }
         const nav = extensionsPanelElement.querySelector?.(".SubbysPlushiesExtensionsTabs");
         if (nav) {
             for (const button of nav.querySelectorAll("button[data-tab]")) {
@@ -10257,22 +10472,42 @@ function SubbysPlushiesPageMain() {
                 button.style.fontWeight = active ? "bold" : "normal";
             }
         }
+        refreshExtensionsMobileBottomNav();
         return true;
+    }
+    // One event-driven listener for orientation/viewport changes (no background polling).
+    let extensionsResponsiveHookInstalled=false;
+    function installExtensionsResponsiveHook(){
+        if (extensionsResponsiveHookInstalled) return;
+        extensionsResponsiveHookInstalled=true;
+        const update=()=>{
+            if(!extensionsPanelElement?.isConnected)return;
+            const desired=extensionsMobileOneHanded();
+            if((extensionsPanelElement.dataset.mobileOneHanded==='true')!==desired)
+                openExtensionsPanel(extensionsActiveTab,extensionsOpenedFromNativePreference);
+            else positionExtensionsPanel();
+        };
+        window.addEventListener('resize',update,{passive:true});
+        window.visualViewport?.addEventListener?.('resize',update,{passive:true});
     }
     function positionExtensionsPanel() {
         if (!extensionsPanelElement?.isConnected) return false;
         const canvas = document.getElementById("MainCanvas") || document.querySelector("canvas");
         const rect = canvas?.getBoundingClientRect?.();
-        if (!rect || rect.width <= 0 || rect.height <= 0) {
-            Object.assign(extensionsPanelElement.style, { left: "5vw", top: "5vh", width: "90vw", height: "90vh" });
+        if (mobileEssentialMode()) {
+            const viewport=window.visualViewport;
+            const vw=Math.max(240, Math.min(window.innerWidth||900, viewport?.width||window.innerWidth||900,window.screen?.width||900));
+            const vh=Math.max(260, Math.min(window.innerHeight||900, viewport?.height||window.innerHeight||900,window.screen?.height||900));
+            Object.assign(extensionsPanelElement.style, {
+                left: `${Math.round((viewport?.offsetLeft||0)+4)}px`,
+                top: `${Math.round((viewport?.offsetTop||0)+4)}px`,
+                width: `${Math.round(vw-8)}px`, height: `${Math.round(vh-8)}px`,
+                maxWidth: `${Math.round(vw-8)}px`, maxHeight: `${Math.round(vh-8)}px`,
+            });
             return true;
         }
-        if (mobileEssentialMode()) {
-            Object.assign(extensionsPanelElement.style, {
-                left: "6px", top: "6px", width: "calc(100vw - 12px)",
-                height: "calc(100dvh - 12px)", maxWidth: "calc(100vw - 12px)",
-                maxHeight: "calc(100dvh - 12px)",
-            });
+        if (!rect || rect.width <= 0 || rect.height <= 0) {
+            Object.assign(extensionsPanelElement.style, { left: "5vw", top: "5vh", width: "90vw", height: "90vh" });
             return true;
         }
         const marginX = Math.max(12, rect.width * 0.035);
@@ -10336,6 +10571,102 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
+    // Touch gestures are event-driven and attached only to the open Essentials panel.
+    // Horizontal swipe changes the one-handed tab; header swipe down minimizes;
+    // a stationary long press opens a small non-destructive context menu.
+    function installExtensionsMobileGestures(root, content, header, minimize) {
+        if (!extensionsMobileOneHanded()) return;
+        let swipe = null, longPress = null, quickMenu = null, suppressClickUntil = 0;
+        const interactive = 'button,input,textarea,select,a,canvas,[contenteditable="true"],[data-no-swipe]';
+        const removeMenu = () => { quickMenu?.remove(); quickMenu=null; };
+        const resetLong = () => { if(longPress?.timer)window.clearTimeout(longPress.timer);longPress=null; };
+        const getTarget = node => node?.nodeType === 1 ? node : node?.parentElement;
+        function openQuickActions(target,px,py) {
+            removeMenu();
+            if (!root.isConnected || root.style.display==='none') return;
+            const selected=target.closest?.('[data-outfit-lock-row]') || target.closest?.('button');
+            if (!selected || !content.contains(selected)) return;
+            const itemGroup=selected.dataset.itemGroup;
+            const worn=itemGroup?window.Player?.Appearance?.find(x=>x?.Asset?.Group?.Name===itemGroup):null;
+            const label=String(selected.innerText||selected.textContent||worn?.Asset?.Description||'Selected item').trim().slice(0,90);
+            const menu=document.createElement('div'); menu.className='SubbysMobileQuickActions';
+            menu.setAttribute('role','menu');menu.setAttribute('aria-label',`Quick actions for ${label}`);
+            Object.assign(menu.style,{position:'absolute',zIndex:'9999',background:getExtensionsStyle().header,border:`1px solid ${getExtensionsStyle().border}`,borderRadius:'10px',padding:'10px',display:'grid',gap:'7px',minWidth:'190px',maxWidth:'min(290px,90vw)',boxShadow:'0 4px 16px #0009'});
+            const title=document.createElement('strong');title.textContent=label||'Quick actions';title.style.overflowWrap='anywhere';menu.append(title);
+            const add=(name,action)=>{const b=makeExtensionsButton(name,()=>{removeMenu();action();});b.setAttribute('role','menuitem');b.style.minHeight='44px';menu.append(b);};
+            if (worn && outfitLockClothingItem(worn)) add(isOutfitProtected(worn)?'🔓 Unprotect item':'🔒 Protect item',()=>{
+                setOutfitProtected(worn,!isOutfitProtected(worn));renderExtensionsPanel();
+            });
+            else if(selected.matches('button')) add('▶ Use this action',()=>selected.isConnected&&selected.click());
+            add('📋 Copy name',()=>{
+                const clipboard=window.navigator?.clipboard;
+                if (clipboard?.writeText) clipboard.writeText(label).catch(()=>window.prompt?.('Copy item name:',label));
+                else window.prompt?.('Copy item name:',label);
+            });
+            add('Close',()=>{});
+            root.append(menu);quickMenu=menu;
+            const rect=root.getBoundingClientRect();
+            menu.style.left=`${Math.max(8,Math.min(px-rect.left-95,rect.width-205))}px`;
+            menu.style.top=`${Math.max(8,Math.min(py-rect.top-20,rect.height-180))}px`;
+        }
+        root.addEventListener('click',event=>{
+            if (Date.now()<suppressClickUntil && content.contains(event.target) && event.detail!==0){
+                event.preventDefault();event.stopImmediatePropagation();return;
+            }
+            if(quickMenu && !quickMenu.contains(event.target))removeMenu();
+        },true);
+        content.addEventListener('pointerdown',event=>{
+            if(event.pointerType!=='touch'||event.isPrimary===false)return;
+            resetLong();swipe=null;
+            const target=getTarget(event.target);
+            const control=target?.closest?.(interactive);
+            const start={id:event.pointerId,x:event.clientX,y:event.clientY,at:Date.now()};
+            if (!control) {
+                // Nested horizontal lists should retain their own swiping.
+                const nested=target?.closest?.('[data-no-swipe], [style*="overflow-x"], .SubbysPlushiesMobileBottomNav');
+                if (!nested) swipe=start;
+            }
+            const candidate=target?.closest?.('[data-outfit-lock-row],button');
+            if (!candidate || !content.contains(candidate))return;
+            longPress={...start,target:candidate,timer:window.setTimeout(()=>{
+                if(!longPress||longPress.id!==start.id)return;
+                longPress.timer=null;
+                suppressClickUntil=Date.now()+750;
+                openQuickActions(candidate,start.x,start.y);
+                swipe=null;
+            },570)};
+        },{passive:true});
+        content.addEventListener('pointermove',event=>{
+            if(swipe?.id===event.pointerId && Math.hypot(event.clientX-swipe.x,event.clientY-swipe.y)>110 && Date.now()-swipe.at>1100)swipe=null;
+            if(longPress?.id===event.pointerId && Math.hypot(event.clientX-longPress.x,event.clientY-longPress.y)>12)resetLong();
+        },{passive:true});
+        content.addEventListener('pointerup',event=>{
+            resetLong();
+            const start=swipe;swipe=null;
+            if(!start||start.id!==event.pointerId)return;
+            const dx=event.clientX-start.x,dy=event.clientY-start.y;
+            if(Math.abs(dx)<65 || Math.abs(dx)<Math.abs(dy)*1.4 || Date.now()-start.at>950)return;
+            const order=EXTENSIONS_MOBILE_NAV_ITEMS.map(x=>x[0]);
+            const i=Math.max(0,order.indexOf(extensionsMobileSelectedNav()));
+            const next=Math.max(0,Math.min(order.length-1,i+(dx<0?1:-1)));
+            if(next!==i)extensionsMobileNavigate(order[next]);
+        },{passive:true});
+        content.addEventListener('pointercancel',()=>{resetLong();swipe=null;},{passive:true});
+        let down=null;
+        header.addEventListener('pointerdown',event=>{
+            if(event.pointerType!=='touch'||event.target.closest?.('button,input,a'))return;
+            down={id:event.pointerId,x:event.clientX,y:event.clientY};
+        },{passive:true});
+        header.addEventListener('pointerup',event=>{
+            if(!down||down.id!==event.pointerId)return;
+            const dx=event.clientX-down.x,dy=event.clientY-down.y;down=null;
+            if(dy>=65 && Math.abs(dx)<dy*.75)minimize.click();
+        },{passive:true});
+        header.addEventListener('pointercancel',()=>{down=null;},{passive:true});
+        root.addEventListener('pointerdown',event=>{
+            if(quickMenu && !quickMenu.contains(event.target))removeMenu();
+        },true);
+    }
     function openExtensionsPanel(tab = "status", fromNativePreference = false) {
         const requestedTab = String(tab || "status").toLowerCase();
         if (requestedTab === "layout") {
@@ -10362,10 +10693,13 @@ function SubbysPlushiesPageMain() {
             extensionsActiveTab = requestedTab;
         }
         destroyExtensionsPanel();
+        extensionsMobileMoreOpen = false;
         if (fromNativePreference) extensionsOpenedFromNativePreference = true;
         removeRoomMascotOverlay?.();
         const root = document.createElement("div");
         root.className = "SubbysPlushiesExtensionsPanel";
+        const mobileThumbMode = extensionsMobileOneHanded();
+        root.dataset.mobileOneHanded = mobileThumbMode ? 'true' : 'false';
         Object.assign(root.style, {
             position: "fixed",
             zIndex: "2147483200",
@@ -10394,7 +10728,8 @@ function SubbysPlushiesPageMain() {
         const titleWrap = document.createElement("div");
         const title = document.createElement("div");
         title.className = "SubbysPlushiesExtensionsTitle";
-        title.textContent = PLUGIN_DISPLAY_NAME;
+        title.textContent = mobileThumbMode ? "Subby's Essentials" : PLUGIN_DISPLAY_NAME;
+        title.title = PLUGIN_DISPLAY_NAME;
         Object.assign(title.style, { fontSize: "20px", fontWeight: "bold", color: getExtensionsStyle().text, letterSpacing: "0.03em" });
         const subtitle = document.createElement("div");
         subtitle.className = "SubbysPlushiesExtensionsSubtitle";
@@ -10458,10 +10793,65 @@ function SubbysPlushiesPageMain() {
             overscrollBehavior: "contain",
             flex: "1 1 auto",
         });
-        root.append(header, tabs, content);
+        // Mobile-first navigation: keep the title/actions inside the viewport, let
+        // players swipe the complete horizontal tab strip and scroll content alone.
+        if (mobileEssentialMode()) {
+            Object.assign(header.style,{gap:'6px',padding:'8px',flexShrink:'0',alignItems:'flex-start',flexWrap:'wrap'});
+            Object.assign(titleWrap.style,{flex:'1 1 160px',minWidth:'0',overflowWrap:'anywhere'});
+            Object.assign(title.style,{fontSize:'clamp(14px,4vw,19px)',letterSpacing:'0'});
+            Object.assign(subtitle.style,{fontSize:'11px'});
+            Object.assign(headerButtons.style,{flex:'0 1 auto',gap:'4px'});
+            for (const button of headerButtons.querySelectorAll('button')) Object.assign(button.style,{minHeight:'44px',padding:'9px 11px',fontSize:'13px'});
+            Object.assign(tabs.style,{padding:'7px',gap:'6px',flexWrap:'nowrap',overflowX:'auto',overflowY:'hidden',
+                minHeight:'46px',flexShrink:'0',maxWidth:'100%',boxSizing:'border-box',
+                WebkitOverflowScrolling:'touch',touchAction:'pan-x',overscrollBehaviorX:'contain'});
+            tabs.setAttribute('aria-label','Swipe sideways to navigate all Essentials tabs');
+            tabs.title='Swipe left or right to access all tabs';
+            for (const button of tabs.querySelectorAll('button')) Object.assign(button.style,{
+                flex:'0 0 auto',whiteSpace:'nowrap',minHeight:'34px',padding:'5px 9px',fontSize:'13px'});
+            Object.assign(content.style,{padding:'9px 8px 14px',minHeight:'0',minWidth:'0',overflowX:'auto',
+                WebkitOverflowScrolling:'touch',touchAction:'pan-y',boxSizing:'border-box'});
+        }
+        if (mobileThumbMode) {
+            tabs.style.display = 'none';
+            content.style.overflowX = 'hidden';
+            const bottom=document.createElement('nav');
+            bottom.className='SubbysPlushiesMobileBottomNav';
+            bottom.setAttribute('aria-label','One-handed Essentials navigation');
+            Object.assign(bottom.style,{display:'flex',flex:'0 0 auto',gap:'5px',padding:'7px 7px max(8px, env(safe-area-inset-bottom))',
+                minHeight:'64px',boxSizing:'border-box',background:getExtensionsStyle().header,
+                borderTop:`1px solid ${getExtensionsStyle().border}`,width:'100%',maxWidth:'100%'});
+            for (const [key,icon,label] of EXTENSIONS_MOBILE_NAV_ITEMS) {
+                const b=makeExtensionsButton(label,()=>extensionsMobileNavigate(key));
+                b.dataset.mobileTab=key;
+                b.replaceChildren();
+                const glyph=document.createElement('span');glyph.textContent=icon;glyph.setAttribute('aria-hidden','true');glyph.style.fontSize='19px';
+                const word=document.createElement('span');word.textContent=label;
+                Object.assign(word.style,{fontSize:'11px',whiteSpace:'nowrap'});
+                b.append(glyph,word);
+                b.setAttribute('aria-label',label);
+                bottom.appendChild(b);
+            }
+            const mobileStyle=document.createElement('style');
+            mobileStyle.textContent=`
+              .SubbysPlushiesExtensionsPanel[data-mobile-one-handed="true"] .SubbysPlushiesExtensionsContent button{min-height:44px!important;touch-action:manipulation}
+              .SubbysPlushiesExtensionsPanel[data-mobile-one-handed="true"] .SubbysPlushiesExtensionsContent input:not([type="checkbox"]):not([type="range"]),
+              .SubbysPlushiesExtensionsPanel[data-mobile-one-handed="true"] .SubbysPlushiesExtensionsContent select,
+              .SubbysPlushiesExtensionsPanel[data-mobile-one-handed="true"] .SubbysPlushiesExtensionsContent textarea{max-width:100%;min-height:44px;box-sizing:border-box;font-size:16px}
+              .SubbysPlushiesExtensionsPanel[data-mobile-one-handed="true"] .SubbysPlushiesExtensionsContent section{min-width:0;max-width:100%;box-sizing:border-box;overflow-wrap:anywhere}
+              .SubbysPlushiesExtensionsPanel[data-mobile-one-handed="true"] .SubbysPlushiesExtensionsContent section > div{max-width:100%;box-sizing:border-box}
+              .SubbysPlushiesExtensionsPanel[data-mobile-one-handed="true"] .SubbysPlushiesMobileBottomNav button{touch-action:manipulation}
+            `;
+            root.append(mobileStyle,header,tabs,content,bottom);
+        } else root.append(header, tabs, content);
         document.body.appendChild(root);
+        installExtensionsResponsiveHook();
         extensionsPanelElement = root;
         extensionsPanelContent = content;
+        if (mobileThumbMode) {
+            try { installExtensionsMobileGestures(root,content,header,minimize); }
+            catch (e) { warn("Optional mobile gestures unavailable; button navigation remains usable:", e); }
+        }
         positionExtensionsPanel();
         renderExtensionsPanel();
         return true;
@@ -10670,7 +11060,8 @@ function SubbysPlushiesPageMain() {
         const MAX_FILE_BYTES = 3_000_000;
         const STORAGE_PREFIX = 'SubbysPlushies:crafting-browser:v1:';
         const state = { library: null, incoming: null, previous: null, selection: -1, source: -1,
-            query: '', page: 0, includeEmpty: false, dialog: null, node: null, feedback: '' };
+            query: '', page: 0, includeEmpty: false, dialog: null, node: null, feedback: '',
+            mergeMode: 'preserve', mergeReview: null };
         let loadedAccount = '';
         const account = () => String(window.Player?.MemberNumber ?? 'guest');
         const storageKey = () => STORAGE_PREFIX + account();
@@ -10771,7 +11162,7 @@ function SubbysPlushiesPageMain() {
             if (typeof live !== 'undefined') {
                 live.downloaded = false; live.backup = null; live.account = ''; live.savedAt = 0;
             }
-            state.library = null; state.incoming = null; state.previous = null;
+            state.library = null; state.incoming = null; state.previous = null; state.mergeReview = null;
             state.selection = -1; state.source = -1; state.page = 0;
             try {
                 const saved = localStorage.getItem(storageKey());
@@ -10788,6 +11179,7 @@ function SubbysPlushiesPageMain() {
             const item = clone(parsed);
             if (!item.crafts.some(entry => typeof entry === 'string' && info(entry)))
                 throw new Error('No valid compressed BC craft entries could be decoded.');
+            state.mergeReview = null;
             if (source) { state.incoming = item; state.source = item.crafts.findIndex(x => typeof x === 'string'); }
             else {
                 state.previous = state.library ? clone(state.library) : null;
@@ -10804,6 +11196,7 @@ function SubbysPlushiesPageMain() {
                 sourceIndex < 0 || sourceIndex >= state.incoming.crafts.length ||
                 typeof state.incoming.crafts[sourceIndex] !== 'string' || !info(state.incoming.crafts[sourceIndex])) return false;
             state.previous = clone(state.library);
+            state.mergeReview = null;
             state.library.crafts[targetIndex] = state.incoming.crafts[sourceIndex];
             state.library.date = stamp();
             state.selection = targetIndex;
@@ -10813,9 +11206,107 @@ function SubbysPlushiesPageMain() {
         function undo() {
             if (!state.previous) return false;
             const current = state.library;
+            state.mergeReview = null;
             state.library = clone(state.previous);
             state.previous = current;
             state.feedback = 'Last library edit reversed. You can undo again to swap back.';
+            return true;
+        }
+        // Merge compressed craft entries without decoding/re-encoding the stored Base64.
+        // Non-destructive by default: retains all occupied destination slots, using free
+        // slots for incoming conflicts. Nothing touches Player.Crafting unless the user
+        // explicitly invokes the separate guarded live-replacement operation.
+        function stableItemSignature(raw) {
+            const json = decompressBase64(raw);
+            if (typeof json !== 'string') throw new Error('Cannot merge an unreadable compressed craft. No changes made.');
+            let item;
+            try { item = JSON.parse(json); } catch (_) { throw new Error('Cannot merge invalid crafting JSON. No changes made.'); }
+            if (!item || Array.isArray(item) || typeof item !== 'object' || typeof item.Item !== 'string' || !item.Item)
+                throw new Error('An incoming craft has no valid Item asset. No changes made.');
+            const canonical = value => {
+                if (Array.isArray(value)) return value.map(canonical);
+                if (value && typeof value === 'object') {
+                    const sorted = {};
+                    for (const key of Object.keys(value).sort()) sorted[key] = canonical(value[key]);
+                    return sorted;
+                }
+                return value;
+            };
+            return JSON.stringify(canonical(item));
+        }
+        function mergeSignature() {
+            return JSON.stringify([account(), state.library?.crafts, state.incoming?.crafts, state.mergeMode]);
+        }
+        function previewMerge(mode = state.mergeMode) {
+            checkAccount();
+            if (!state.library || !state.incoming) throw new Error('Load your library and a replacement source JSON first.');
+            if (mode !== 'preserve' && mode !== 'overwrite') throw new Error('Unknown merge mode.');
+            const result = Array.from({length: MAX_SLOTS}, (_,i) => state.library.crafts[i] ?? null);
+            const existing = new Set();
+            const fingerprints = new Map();
+            const existingNames = new Map();
+            for (let i = 0; i < result.length; i++) {
+                if (result[i] == null) continue;
+                const key = stableItemSignature(result[i]);
+                existing.add(key); fingerprints.set(i,key);
+                const rec = info(result[i]);
+                const nameKey = `${rec?.asset || ''}:${rec?.name || ''}`.toLowerCase();
+                if (nameKey !== ':') existingNames.set(nameKey,key);
+            }
+            const stats = { beforeCount: occupied(state.library), incomingCount: occupied(state.incoming),
+                added: 0, exactDuplicates: 0, slotConflicts: 0, similarNames: 0,
+                relocated: 0, overwritten: 0, overflow: 0, examples: [], mode };
+            for (let i = 0; i < state.incoming.crafts.length; i++) {
+                const raw = state.incoming.crafts[i];
+                if (raw == null) continue;
+                const key = stableItemSignature(raw);
+                if (existing.has(key)) { stats.exactDuplicates++; continue; }
+                const rec = info(raw);
+                const nameKey = `${rec?.asset || ''}:${rec?.name || ''}`.toLowerCase();
+                const similar = existingNames.has(nameKey) && existingNames.get(nameKey) !== key;
+                if (similar) stats.similarNames++;
+                let destination = i;
+                const conflict = result[i] != null;
+                if (conflict) {
+                    stats.slotConflicts++;
+                    if (mode === 'preserve') {
+                        destination = result.findIndex(value => value == null);
+                        if (destination < 0) { stats.overflow++; continue; }
+                        stats.relocated++;
+                    } else { stats.overwritten++; }
+                    if (stats.examples.length < 14) {
+                        stats.examples.push({from:i+1,to:destination+1,
+                            incoming:rec?.name || 'Unnamed craft',
+                            previous:info(result[i])?.name || 'Unnamed craft', similar});
+                    }
+                }
+                if (mode === 'overwrite' && result[destination] != null) {
+                    // A displaced item's content must not count as present for later entries.
+                    const oldKey = fingerprints.get(destination);
+                    if (oldKey) existing.delete(oldKey);
+                }
+                result[destination] = raw;
+                fingerprints.set(destination,key);
+                existing.add(key);
+                if (nameKey !== ':') existingNames.set(nameKey,key);
+                stats.added++;
+            }
+            stats.afterCount = result.filter(value => value != null).length;
+            return { ...stats, result: {version:1,date:stamp(),crafts:result} };
+        }
+        function mergeLibraries() {
+            const review = state.mergeReview;
+            if (!review || review.key !== mergeSignature()) throw new Error('Preview the current merge before applying.');
+            const fresh = previewMerge();
+            if (fresh.overflow) throw new Error(`${fresh.overflow} items cannot fit in the 800 slots. Merge blocked; nothing changed.`);
+            if (!window.confirm(`Apply this merge to the JSON editor?\nExisting: ${fresh.beforeCount}\nFrom source: ${fresh.incomingCount}\nNew entries: ${fresh.added}\nExact duplicates skipped: ${fresh.exactDuplicates}\nOccupied-slot conflicts: ${fresh.slotConflicts}\nItems overwritten: ${fresh.overwritten}\n\nYour original JSON remains available as a backup. This will NOT automatically save to BC.`)) return false;
+            if (review.key !== mergeSignature()) throw new Error('Your source or destination changed while confirming. Preview again.');
+            state.previous = clone(state.library);
+            state.library = fresh.result;
+            state.mergeReview = null;
+            state.selection = state.library.crafts.findIndex(x => typeof x === 'string');
+            state.page = 0;
+            state.feedback = `Merged: +${fresh.added} items, ${fresh.exactDuplicates} duplicates skipped, ${fresh.relocated} moved to free slots, ${fresh.overwritten} overwritten. Download Backup to restore the previous JSON. Export the merged file or separately replace your in-game crafting library.`;
             return true;
         }
         function download(data, name) {
@@ -11029,6 +11520,40 @@ function SubbysPlushiesPageMain() {
             button('Export customitems.json', () => download(state.library, 'customitems.json'), top, !state.library);
             button('Download Backup', () => download(state.previous, 'customitems-backup.json'), top, !state.previous);
             button('Undo Last Change', () => { undo(); render(); }, top, !state.previous);
+            const mergeArea = create('div', null, {border:'1px solid #a98adb', padding:'11px', borderRadius:'9px', margin:'12px 0', background:'#291f37'},root);
+            create('h3', 'Smart Library Merge', {margin:'0 0 5px',fontSize:'15px'},mergeArea);
+            create('p', 'Combine two JSON crafting libraries. Exact duplicates are skipped. By default, all existing items stay in place; incoming slot conflicts are moved into empty slots. Review conflicts before applying.', small,mergeArea);
+            if (!state.library || !state.incoming) {
+                create('p', 'Load your library and use “Load Replacement Source” to select the second JSON.', small, mergeArea);
+            } else {
+                const optRow=toolbar(mergeArea);
+                const modeLabel=create('label','Occupied-slot conflicts: ',{...small,display:'flex',alignItems:'center',gap:'6px'},optRow);
+                const modePicker=create('select',null,{padding:'7px',color:'white',background:'#342545',border:'1px solid #aa8aca',borderRadius:'6px',maxWidth:'100%'},modeLabel);
+                for(const [value,text] of [['preserve','Keep existing and use empty slots'],['overwrite','Replace same-slot items']]){
+                    const option=create('option',text,{},modePicker);option.value=value;
+                }
+                modePicker.value=state.mergeMode;
+                modePicker.addEventListener('change',()=>{state.mergeMode=modePicker.value;state.mergeReview=null;render();});
+                button('Preview Smart Merge',()=>{
+                    try { const preview=previewMerge();state.mergeReview={key:mergeSignature(),stats:preview};state.feedback='Merge preview ready. Review the counts and conflicts before applying.'; }
+                    catch(e){state.mergeReview=null;state.feedback=`Merge blocked: ${e.message}`;}
+                    render();
+                },optRow);
+                const review=state.mergeReview?.key===mergeSignature()?state.mergeReview.stats:null;
+                if(review){
+                    const detail=create('div',null,{padding:'9px',borderRadius:'8px',background:'#1c1426'},mergeArea);
+                    create('p',`Current: ${review.beforeCount} • Source: ${review.incomingCount} • After: ${review.afterCount} • New: ${review.added} • Exact duplicates: ${review.exactDuplicates} • Occupied-slot conflicts: ${review.slotConflicts} • Similar names: ${review.similarNames} • Relocated: ${review.relocated} • Overwritten: ${review.overwritten} • Cannot fit: ${review.overflow}`,{...small,lineHeight:'1.65'},detail);
+                    for(const example of review.examples)create('p',`Slot ${example.from}: ${example.previous} → ${example.incoming}${review.mode==='preserve'?` (incoming goes to ${example.to})`:''}${example.similar?' · same asset/name, different details':''}`,{...small,margin:'4px 0',overflowWrap:'anywhere'},detail);
+                    if(review.overflow)create('p','Merge blocked: not enough empty slots. Nothing will be changed.',{...small,color:'#ffb4af'},detail);
+                    const actions=toolbar(detail);
+                    button('Download Original JSON Backup',()=>download(state.library,'customitems-before-merge.json'),actions);
+                    button('Apply Merge to JSON Editor',()=>{
+                        try{if(mergeLibraries())render();}
+                        catch(e){state.feedback=`Merge blocked: ${e.message}`;render();}
+                    },actions,review.overflow>0);
+                    create('p','Applying changes only the local JSON editor. Export customitems.json or use the separately confirmed in-game replacement controls when ready.',small,detail);
+                }
+            }
             // An explicit, guarded in-game save is distinct from editing a local JSON file.
             const liveBar = create('div', null, { border:'1px solid #b88ed7', padding:'11px',
                 borderRadius:'9px', margin:'12px 0', background:'#2a1c3b' }, root);
@@ -11166,7 +11691,7 @@ function SubbysPlushiesPageMain() {
             loaded: !!state.library, items: occupied(state.library), slots: state.library?.crafts.length || 0,
             replacementSource: occupied(state.incoming) }; },
             // Non-UI diagnostic tools; mutating methods act on this in-memory JSON only, not BC.
-            importJson, replaceSlot, undo, getSnapshot: () => state.library ? clone(state.library) : null,
+            importJson, replaceSlot, undo, previewMerge, mergeLibraries, getSnapshot: () => state.library ? clone(state.library) : null,
             // Explicit methods for testing and troubleshooting. Neither runs without a user action.
             liveAvailability, downloadLiveBackup, replaceLiveLibrary, liveDiagnostic,
             getItemInfo(index) { const item = state.library?.crafts[index]; return info(item); } };
@@ -19917,6 +20442,7 @@ function SubbysPlushiesPageMain() {
         for (const g of groupSet) {
           const group = registry.get(g);
           if (!group) { if (desired.has(g)) skips.push(`${g}: Echo/custom slot not loaded`); continue; }
+          if (isOutfitProtected(currentItem(C,g))) { skips.push(`${g}: protected by Outfit Lock`); continue; }
           if (!canEditGroup(C,group)) { skips.push(`${g}: locked or restricted`); continue; }
           const from = actual.get(g); const to = desired.get(g);
           if (JSON.stringify(from || null) === JSON.stringify(to || null)) continue;
@@ -19934,6 +20460,9 @@ function SubbysPlushiesPageMain() {
         const replacements = new Map();
         const skipped = [...plan.skips];
         for (const move of plan.changes) {
+          if (isOutfitProtected(currentItem(C,move.group))) {
+            skipped.push(`${move.group}: protected by Outfit Lock`); continue;
+          }
           if (!move.to) { replacements.set(move.group, null); continue; }
           try {
             const asset = restoredAsset(C, move.to);
@@ -20693,10 +21222,26 @@ function SubbysPlushiesPageMain() {
     let mobileDockAccount = "";
     let mobileDockLastViewport = "";
     function mobileEssentialMode() {
-        const rect = (document.getElementById("MainCanvas") || document.querySelector("canvas"))?.getBoundingClientRect?.();
-        const w = window.innerWidth || document.documentElement?.clientWidth || 0;
-        const h = window.innerHeight || document.documentElement?.clientHeight || 0;
-        return w > 0 && w <= 900 && (window.matchMedia?.("(pointer: coarse)")?.matches || (!!rect && rect.height > 0 && rect.height < h * 0.8));
+        // Never use viewport width alone as a device detector: a resized desktop
+        // browser and a touchscreen laptop are still desktop environments.
+        const nav = window.navigator;
+        const ua = String(nav?.userAgent || "");
+        const mobileOS = nav?.userAgentData?.mobile === true ||
+            /iPhone|iPod|iPad|Android|Windows Phone|BlackBerry|webOS|Opera Mini|IEMobile/i.test(ua);
+        const touchPoints = Number(nav?.maxTouchPoints || nav?.msMaxTouchPoints || 0);
+        const coarse = window.matchMedia?.("(pointer: coarse)")?.matches === true;
+        const noHover = window.matchMedia?.("(hover: none)")?.matches === true;
+        // iPadOS may identify as Macintosh, but has no mouse-like primary pointer.
+        const ipadDesktopUA = /Macintosh/i.test(ua) && touchPoints > 1 && coarse && noHover;
+        const desktopOS = /Windows NT|Linux x86_64|X11/i.test(ua) && !mobileOS;
+        if (desktopOS || !(mobileOS || ipadDesktopUA)) return false;
+        // Fine pointer and hover indicate a desktop-style input mode; old mobile
+        // browsers that lack media-query support can fall back to touch points.
+        if (!(coarse && noHover) && !(mobileOS && touchPoints > 0 && !window.matchMedia)) return false;
+        const innerWidth = Math.min(window.innerWidth || 9999, window.visualViewport?.width || 9999);
+        const shortScreenSide = Math.min(window.screen?.width || 9999, window.screen?.height || 9999);
+        // Short physical side keeps phone landscape mode working at >900 CSS px.
+        return innerWidth <= 900 || shortScreenSide <= 900;
     }
     function mobileDockKey() {
         const hand=essentialsConfig().hand;
@@ -20717,49 +21262,116 @@ function SubbysPlushiesPageMain() {
         const rect=(document.getElementById('MainCanvas')||document.querySelector('canvas'))?.getBoundingClientRect?.();
         return rect && rect.width > 0 && rect.height > 0 ? rect : null;
     }
-    function mobileDefaultPosition(index) {
-        const vw=Math.max(150,window.innerWidth||360), vh=Math.max(200,window.innerHeight||700);
-        const canvas=mobileCanvasRect();
-        const size=essentialsConfig().dockSize;
-        const gap=essentialsConfig().dockGap;
-        const height=43;
-        const above=canvas?Math.max(0,canvas.top):0;
-        const below=canvas?Math.max(0,vh-canvas.bottom):0;
-        const topRegion=above>=below;
-        const baseY=topRegion ? Math.max(8,Math.min(above-108,22)) : Math.min(vh-110,Math.max(8,(canvas?.bottom||vh*0.7)+12));
-        const hand=essentialsConfig().hand;
-        if(hand==='left'||hand==='right'){
-            const col=index%2,row=Math.floor(index/2);
-            const right=hand==='right';
-            const x=right?vw-8-size-(1-col)*(size+gap):8+col*(size+gap);
-            return {x:Math.max(2,Math.min(vw-size-2,x)),y:Math.max(2,Math.min(vh-height-4,baseY+row*(height+gap)))};
+    // Only draw the floating mobile controls in unused, genuinely dark letterbox
+    // space outside BC's canvas. Touchscreen detection alone is NOT sufficient:
+    // phones/tablets can show room artwork and chat edge-to-edge (no black bars).
+    // A conservative DOM hit-test also rejects the chat column or other UI when
+    // the game canvas covers just the character half of the screen.
+    function mobileDarkSpaceAt(x,y) {
+        const w=window.innerWidth||0,h=window.innerHeight||0;
+        if(x<1||y<1||x>=w-1||y>=h-1)return false;
+        const stack=typeof document.elementsFromPoint==='function'?document.elementsFromPoint(x,y):
+            (typeof document.elementFromPoint==='function'?[document.elementFromPoint(x,y)]:[]);
+        const target=stack.find(node=>node?.nodeType===1 && !node.closest?.('[data-mobile-control]'));
+        if(!target)return false; // Unknown surface? Never cover the game.
+        if(target.closest?.('canvas,button,input,textarea,select,a,[role="button"],[role="dialog"]'))return false;
+        // Look through transparent wrappers, stopping at the visible painted layer.
+        let node=target;
+        for(let depth=0;node&&depth<12;node=node.parentElement,depth++) {
+            let style;
+            try{style=window.getComputedStyle(node);}catch(_){return false;}
+            if(!style)return false;
+            if(style.backgroundImage && style.backgroundImage!=='none')return false;
+            const bg=String(style.backgroundColor||'');
+            const match=bg.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)$/i);
+            if(match && (match[4]===undefined || Number(match[4])>0.1))
+                return Math.max(Number(match[1]),Number(match[2]),Number(match[3]))<=35;
         }
-        const columns=Math.max(1,Math.min(3,Math.floor((vw-14+gap)/(size+gap))));
-        const col=index%columns, row=Math.floor(index/columns);
-        const spacing=size+gap;
-        return {x:Math.max(2,Math.min(vw-size-2,8+col*spacing)),y:Math.max(2,Math.min(vh-height-4,baseY+row*(height+gap)))};
+        return false;
     }
-    function mobilePlaceControl(button,index) {
+    function mobileVacantRegions() {
+        const w=window.innerWidth||0,h=window.innerHeight||0;
+        const canvas=mobileCanvasRect();
+        if(!canvas||w<150||h<200)return [];
+        const l=Math.max(0,Math.min(w,canvas.left)),r=Math.max(0,Math.min(w,canvas.right));
+        const t=Math.max(0,Math.min(h,canvas.top)),b=Math.max(0,Math.min(h,canvas.bottom));
+        // Candidate bars entirely OUTSIDE the actual BC canvas, not over it.
+        return [
+            {left:0,top:0,right:l,bottom:h},
+            {left:r,top:0,right:w,bottom:h},
+            {left:0,top:0,right:w,bottom:t},
+            {left:0,top:b,right:w,bottom:h}
+        ].filter(a=>a.right-a.left>0&&a.bottom-a.top>0);
+    }
+    function mobilePositionIsEmpty(x,y,width,height) {
+        // Probe every button, not merely the center of a large candidate bar.
+        // This excludes chat panels, dialog boxes and visible artwork.
+        for(const [dx,dy] of [[.5,.5],[.14,.14],[.86,.14],[.14,.86],[.86,.86]])
+            if(!mobileDarkSpaceAt(x+width*dx,y+height*dy))return false;
+        return true;
+    }
+    function mobilePositionIsSafe(x,y,width,height,regions=mobileVacantRegions()) {
+        return regions.some(a=>x>=a.left+2&&y>=a.top+2&&x+width<=a.right-2&&y+height<=a.bottom-2)
+            && mobilePositionIsEmpty(x,y,width,height);
+    }
+    function mobileDockLayout() {
+        const config=essentialsConfig(), width=Math.round(config.dockSize),height=43;
+        const gap=config.dockGap, margin=8, count=MOBILE_CONTROL_SPECS.length;
+        const options=[];
+        for(const area of mobileVacantRegions()) {
+            for(let cols=1;cols<=count;cols++){
+                const rows=Math.ceil(count/cols);
+                const occupiedWidth=cols*width+(cols-1)*gap;
+                const occupiedHeight=rows*height+(rows-1)*gap;
+                if(occupiedWidth+2*margin>area.right-area.left || occupiedHeight+2*margin>area.bottom-area.top)continue;
+                const hand=config.hand;
+                const left=hand==='right'?area.right-margin-occupiedWidth:area.left+margin;
+                const top=area.top+margin;
+                let valid=true;
+                for(let i=0;i<count;i++) {
+                    const col=i%cols,row=Math.floor(i/cols);
+                    const x=left+col*(width+gap),y=top+row*(height+gap);
+                    if(!mobilePositionIsSafe(x,y,width,height,[area])){valid=false;break;}
+                }
+                if(valid)options.push({area,cols,left,top,width,height,gap,
+                    // Prefer an unobtrusive compact dock in narrow side bars.
+                    score:occupiedWidth*occupiedHeight + (cols===3?0:cols*100)});
+            }
+        }
+        options.sort((a,b)=>a.score-b.score);
+        return options[0]||null;
+    }
+    function mobileDefaultPosition(index,layout=mobileDockLayout()) {
+        if(!layout)return null;
+        const col=index%layout.cols,row=Math.floor(index/layout.cols);
+        return {x:layout.left+col*(layout.width+layout.gap),
+            y:layout.top+row*(layout.height+layout.gap)};
+    }
+    function mobilePlaceControl(button,index,layout=mobileDockLayout()) {
+        if(!layout){button.style.display='none';return;}
         const id=button.dataset.mobileControl;
         const saved=mobileDockLocations[id];
-        const defaults=mobileDefaultPosition(index);
-        const x=Number.isFinite(Number(saved?.x)) ? Number(saved.x)*window.innerWidth : defaults.x;
-        const y=Number.isFinite(Number(saved?.y)) ? Number(saved.y)*window.innerHeight : defaults.y;
-        const maxX=Math.max(2,window.innerWidth-button.offsetWidth-2);
-        const maxY=Math.max(2,window.innerHeight-button.offsetHeight-2);
-        button.style.left=Math.round(Math.max(2,Math.min(maxX,x)))+'px';
-        button.style.top=Math.round(Math.max(2,Math.min(maxY,y)))+'px';
+        const defaults=mobileDefaultPosition(index,layout);
+        let x=Number.isFinite(Number(saved?.x))?Number(saved.x)*window.innerWidth:defaults.x;
+        let y=Number.isFinite(Number(saved?.y))?Number(saved.y)*window.innerHeight:defaults.y;
+        // Old draggable locations can now be over the room/chat. Never reuse them.
+        if(!mobilePositionIsSafe(x,y,layout.width,layout.height)){
+            x=defaults.x;y=defaults.y;
+        }
+        button.style.left=Math.round(x)+'px';
+        button.style.top=Math.round(y)+'px';
     }
-    function mobileApplyDockAppearance(reposition=false){
+    function mobileApplyDockAppearance(reposition=false) {
         const config=essentialsConfig();
+        const layout=mobileDockLayout();
         MOBILE_CONTROL_SPECS.forEach(([id],i)=>{
             const b=mobileDockButtons.get(id);if(!b)return;
             b.style.width=Math.round(config.dockSize)+'px';
             b.style.height='43px';
             b.style.opacity=String(config.dockOpacity);
-            b.style.display=config.dockCollapsed&&id!=='collapse'?'none':'';
+            b.style.display=layout&&(!config.dockCollapsed||id==='collapse')?'':'none';
             if(id==='collapse')b.textContent=config.dockCollapsed?'▤ Show':'▤ Hide';
-            if(reposition)mobilePlaceControl(b,i);
+            if(reposition&&layout)mobilePlaceControl(b,i,layout);
         });
     }
     function mobileCloseDialog() {
@@ -20869,8 +21481,11 @@ function SubbysPlushiesPageMain() {
             if(!gesture.moved&&Math.hypot(dx,dy)<7)return;
             if(!mobileDockEditing)return;
             gesture.moved=true;e.preventDefault();e.stopPropagation();
-            b.style.left=Math.round(Math.max(2,Math.min(window.innerWidth-b.offsetWidth-2,gesture.left+dx)))+'px';
-            b.style.top=Math.round(Math.max(2,Math.min(window.innerHeight-b.offsetHeight-2,gesture.top+dy)))+'px';
+            const x=Math.round(Math.max(2,Math.min(window.innerWidth-b.offsetWidth-2,gesture.left+dx)));
+            const y=Math.round(Math.max(2,Math.min(window.innerHeight-b.offsetHeight-2,gesture.top+dy)));
+            if(mobilePositionIsSafe(x,y,b.offsetWidth,b.offsetHeight)){
+                b.style.left=x+'px';b.style.top=y+'px';
+            }
         });
         const finish=(e,activate)=>{
             if(!gesture||gesture.id!==e.pointerId)return;
@@ -20896,20 +21511,22 @@ function SubbysPlushiesPageMain() {
         if(!mobileEssentialMode()||!['ChatRoom','Dialog','ChatAdmin','Preference'].includes(String(window.CurrentScreen||''))){
             if(mobileDockButtons.size)mobileRemoveDock();return;
         }
+        const layout=mobileDockLayout();
+        if(!layout){if(mobileDockButtons.size)mobileRemoveDock();return;}
         const earlierAccount=mobileDockAccount;
         mobileLoadDock();
         if(earlierAccount && earlierAccount!==mobileDockAccount && mobileDockButtons.size){
-            MOBILE_CONTROL_SPECS.forEach(([id],i)=>{const b=mobileDockButtons.get(id);if(b)mobilePlaceControl(b,i);});
+            MOBILE_CONTROL_SPECS.forEach(([id],i)=>{const b=mobileDockButtons.get(id);if(b)mobilePlaceControl(b,i,layout);});
         }
         if(!mobileDockButtons.size){
             MOBILE_CONTROL_SPECS.forEach(([id,label],i)=>mobileCreateDockButton(id,label,i));
-            mobileDockLastViewport=`${window.innerWidth}:${window.innerHeight}`;
+            mobileDockLastViewport=`${window.innerWidth}:${window.innerHeight}:${layout.area.left}:${layout.area.top}:${layout.area.right}:${layout.area.bottom}:${layout.cols}`;
             mobileApplyDockAppearance(false);
         } else {
-            const viewport=`${window.innerWidth}:${window.innerHeight}`;
+            const viewport=`${window.innerWidth}:${window.innerHeight}:${layout.area.left}:${layout.area.top}:${layout.area.right}:${layout.area.bottom}:${layout.cols}`;
             if(viewport!==mobileDockLastViewport){
                 mobileDockLastViewport=viewport;
-                MOBILE_CONTROL_SPECS.forEach(([id],i)=>{const b=mobileDockButtons.get(id);if(b)mobilePlaceControl(b,i);});
+                MOBILE_CONTROL_SPECS.forEach(([id],i)=>{const b=mobileDockButtons.get(id);if(b)mobilePlaceControl(b,i,layout);});
             }
         }
     }
@@ -20918,7 +21535,9 @@ function SubbysPlushiesPageMain() {
         window.addEventListener('resize',mobileRefreshDock,{passive:true});
         document.addEventListener('visibilitychange',()=>{if(!document.hidden)mobileRefreshDock();});
         if(mobileEssentialMode())window.setInterval(()=>{if(!document.hidden)mobileRefreshDock();},2000);
-        window.SubbysPlushiesMobileDiag=()=>({version:VERSION,mobile:mobileEssentialMode(),visible:mobileDockButtons.size,editing:mobileDockEditing,canvas:(mobileCanvasRect()?.toJSON?.()||null)});
+        window.SubbysPlushiesMobileDiag=()=>({version:VERSION,mobile:mobileEssentialMode(),visible:mobileDockButtons.size,
+            hiddenForNoBlackSpace:mobileEssentialMode()&&!mobileDockLayout(),editing:mobileDockEditing,
+            safeRegion:mobileDockLayout()?.area||null,canvas:(mobileCanvasRect()?.toJSON?.()||null)});
     }
     // Smart Outfit Color Harmonizer: three core colors and six category overrides.
     // The native Appearance picker is canvas-based, so this lightweight dock is DOM-based.
@@ -21015,6 +21634,7 @@ function SubbysPlushiesPageMain() {
                 /^rings?$/i.test(group);
         };
         function canRecolor(item) {
+            if (isOutfitProtected(item)) return false;
             const asset = item?.Asset, group = asset?.Group;
             if (!asset || group?.Category !== "Appearance" ||
                 !(group.Clothing || WARDROBE_ITEM_NAME_SET.has(asset.Name) || isJewelryItem(item))) return false;
@@ -21194,7 +21814,7 @@ function SubbysPlushiesPageMain() {
             const forbidden = allowedToChange();
             if (forbidden) { setStatus(forbidden); return {ok:false,count:0}; }
             const items = eligibleItems();
-            if (!items.length) { setStatus("No unlocked, recolorable clothing is currently equipped."); return {ok:false,count:0}; }
+            if (!items.length) { setStatus("No unprotected, unlocked recolorable clothing is currently equipped."); return {ok:false,count:0}; }
             const member = window.Player.MemberNumber;
             const saved = items.map(item => ({item,asset:item.Asset,original:copyColor(item.Color)}));
             try {
@@ -21260,7 +21880,7 @@ function SubbysPlushiesPageMain() {
             const heading=elt("strong","🎨 Smart Outfit Color Harmonizer");heading.style.fontSize="17px";
             const close=elt("button","✕");close.type="button";close.title="Close";
             close.addEventListener("click",closeDialog);header.append(heading,close);
-            const summary=elt("p","Choose Primary, Accent and Jewelry / Metal colors. Expand Advanced Categories for leather, lace, bows, gems, stockings and shoes. Leave Custom off to inherit a core color; switch it on for a separate swatch. Locked items, restraints and body colors are untouched.");
+            const summary=elt("p","Choose Primary, Accent and Jewelry / Metal colors. Advanced Categories customize materials; Outfit Lock protected items, native locked items, restraints and body colors stay untouched.");
             Object.assign(summary.style,{lineHeight:"1.5",color:"#D6C8DD"});
             const controls=elt("div");Object.assign(controls.style,{display:"flex",flexDirection:"column",gap:"10px"});
             // All three hex fields and native color pickers stay in sync.
@@ -21639,11 +22259,12 @@ function SubbysPlushiesPageMain() {
       root.append(batch);
     }
     root.append(row(btn('Undo last recoloring',undoColorOperation)));
-    root.append(note('Palette saves are local. Applying changes your visible outfit using BC/Essentials APIs. Only your own unlocked clothing can be edited; keep outfit backups before changing multiple zones.'));
+    root.append(note('Palette saves are local. Protected Outfit Lock pieces, restraints and native locked items are skipped. Keep outfit backups before changing multiple zones.'));
     root.append(row(btn('Export palettes',exportPalettes),btn('Import palettes',importPalettes),btn('Reset default',()=>{if(confirm('Reset all your saved Color Studio palettes?')){data.palettes=defaultData().palettes;state.paletteIndex=0;persist();renderColors();}})));
     root.append($('div','sxe-message',state.message));
   }
   function recolorable(item){
+    if(isOutfitProtected(item))return false;
     const group=item?.Asset?.Group;
     if(group?.Category!=='Appearance' || (!group.Clothing && !WARDROBE_ITEM_NAME_SET.has(item.Asset?.Name)))return false;
     if(item?.Property?.LockedBy||item?.Property?.LockMemberNumber!=null||item?.Property?.Effect?.includes?.('Lock'))return false;
@@ -22059,9 +22680,9 @@ function SubbysPlushiesPageMain() {
 
     async function main() {
         log(`Starting standalone v${VERSION}...`);
-        window.addEventListener("pagehide", flushDeferredProgressStores, { capture: true });
-        loadCachedGitData();
-        void refreshGitDataFromGitHub({ force: false, silent: true });
+        optionalStartupStep("pagehide-save", () => window.addEventListener("pagehide", flushDeferredProgressStores, { capture: true }));
+        optionalStartupStep("cached-metadata", loadCachedGitData);
+        optionalStartupStep("remote-metadata", () => { void refreshGitDataFromGitHub({ force: false, silent: true }); });
         setStartupStage("waiting-for-bc");
         await waitForBC();
         // Enable the native Pet Bed lock capability as soon as the asset registry is usable.
@@ -22079,22 +22700,25 @@ function SubbysPlushiesPageMain() {
             for (const delay of [1500, 5000, 12000])
                 window.setTimeout(() => { if (!installedHooks.has("ChatRoomSyncItem")) installPetBedRemovalGuard(); }, delay);
         }
-        installDogsCompatibilityBridge();
-        scheduleNativeCommandFallbackHook();
-        installNativeImageElementHook();
-        installAssetTextHook();
-        installWardrobeLayerTextHook();
-        installWardrobeVisibleLabelFix();
+        optionalStartupStep("dogs-compatibility", installDogsCompatibilityBridge);
+        optionalStartupStep("native-command-fallback", scheduleNativeCommandFallbackHook);
+        optionalStartupStep("image-element-hook", installNativeImageElementHook);
+        optionalStartupStep("asset-text-hook", installAssetTextHook);
+        optionalStartupStep("wardrobe-layer-text", installWardrobeLayerTextHook);
+        optionalStartupStep("wardrobe-labels", installWardrobeVisibleLabelFix);
         setStartupStage("registering-wardrobe");
         setupWardrobeAssets();
         try { installSubbysOutfitTimeMachine(); }
         catch (e) { warn("Outfit Time Machine initialization failed:", e); }
-        installWardrobeNativePickerHooks();
+        optionalStartupStep("wardrobe-native-picker", installWardrobeNativePickerHooks);
         for (const delay of [1000, 4000, 12000]) {
-            window.setTimeout(() => installWardrobeNativePickerHooks(), delay);
+            window.setTimeout(() => optionalStartupStep("wardrobe-picker-retry", installWardrobeNativePickerHooks), delay);
         }
         setStartupStage("loading-wardrobe-colors");
-        const wardrobeImagesLoaded = await wardrobeEarlyLayerPromise;
+        const wardrobeImagesLoaded = await Promise.race([
+            wardrobeEarlyLayerPromise.catch(e => { warn("Wardrobe artwork unavailable:", e); return false; }),
+            new Promise(resolve => window.setTimeout(() => resolve(false), 12500))
+        ]);
         if (wardrobeImagesLoaded) {
             wardrobeSyncNativePicker();
             try { window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
@@ -22108,25 +22732,25 @@ function SubbysPlushiesPageMain() {
         setupNativeAsset();
         try { installPlushStateHooks(); }
         catch (e) { warn("R133: some optional room/activity hooks could not be installed:", e); }
-        startOfferChatObserverMonitor();
-        installDirectDragHandlers();
-        installDragToggleUi();
+        optionalStartupStep("offer-chat-observer", startOfferChatObserverMonitor);
+        optionalStartupStep("drag-handlers", installDirectDragHandlers);
+        optionalStartupStep("drag-toggle", installDragToggleUi);
         setStartupStage("mobile-interface");
-        installMobileEssentials();
+        optionalStartupStep("mobile-essentials", installMobileEssentials);
         try { initializeColorSearchEmoticons(); }
         catch (e) { warn('Color Studio / Emoticons setup failed:', e); }
         // The harmonizer has its own UI lifecycle. Do not initialize its watchers
         // before the core plushie, wardrobe and menu systems finish startup.
-        essentialsStartBudget();
+        optionalStartupStep("performance-budget", essentialsStartBudget);
         if(essentialsConfig().safeMode){
             const flags=getFeatureSettings();
             for(const flag of ESSENTIALS_SAFE_FLAGS)if(flags[flag])setFeatureSetting(flag,false);
             if(flags.performanceMode!=='low')setPerformanceMode('low');
         }
-        installRoomMascotUiSafety();
-        installRoomMascotAdminPicker();
-        installVisibilityPerformanceHooks();
-        startPreferencesExtensionsIntegration();
+        optionalStartupStep("mascot-ui-safety", installRoomMascotUiSafety);
+        optionalStartupStep("mascot-admin-picker", installRoomMascotAdminPicker);
+        optionalStartupStep("visibility-hooks", installVisibilityPerformanceHooks);
+        optionalStartupStep("native-extensions-menu", startPreferencesExtensionsIntegration);
         try { startHugTightlyActivityMonitor(); }
         catch (e) { warn("Optional R133 activity registration unavailable:", e); }
         // Late BC activity registration occurs after some screen transitions.
@@ -22141,15 +22765,16 @@ function SubbysPlushiesPageMain() {
                 } catch (e) { warn("Optional late activity registration failed:", e); }
             }, delay);
         }
-        scheduleNextIdleAnimation(3500);
-        startPlushStatusIconMonitor();
+        optionalStartupStep("idle-animations", () => scheduleNextIdleAnimation(3500));
+        optionalStartupStep("plush-status-icon", startPlushStatusIconMonitor);
         setStartupStage("validating");
         if (!validate()) {
             throw new Error("Standalone validation failed. Run /plushiedebug and check the console.");
         }
-        checkAchievements(true);
-        scheduleAutomaticUpdateCheck();
+        optionalStartupStep("achievements", () => checkAchievements(true));
+        optionalStartupStep("automatic-update-check", scheduleAutomaticUpdateCheck);
         setStartupStage("ready");
+        optionalStartupStep("outfit-lock-api", registerOutfitLockApi);
         // Optional feature setup runs only AFTER ready; an unsupported BC UI,
         // unavailable DOM node, or timer failure can no longer abort plugin loading.
         window.setTimeout(() => {
@@ -22171,7 +22796,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.60";
+    const VERSION = "3.5.66";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
