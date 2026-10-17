@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.57
-// @description  R133 compatibility, plushies, advanced wardrobe harmonizer, Color Studio, emoticons, Pet Bed locking and mobile essentials
+// @version      3.5.58
+// @description  R133, plushies, custom crafted-items JSON browser (/plushieitems), wardrobe, emoticons and Pet Bed tools
 // @released     2026-10-17
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.57";
+    const VERSION = "3.5.58";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -1334,6 +1334,7 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushielayout", description: "Open Settings → Layout customization." }),
                 Object.freeze({ command: "/plushieplushies", description: "Open Progress → Plushies with relationships, favorites, emotes, and saved poses." }),
                 Object.freeze({ command: "/plushiehistory", description: "Open Progress → Battle History." }),
+                Object.freeze({ command: "/plushieitems", description: "Browse BC custom-items JSON, replace crafted-item slots, and export a new customitems.json with backups." }),
                 Object.freeze({ command: "/plushiebackup", description: "Open Progress → Backup / Restore." }),
                 Object.freeze({ command: "/plushiecommands", description: "Open the Commands tab directly." }),
                 Object.freeze({ command: "/plushiecommand", description: "Alias for /plushiecommands." }),
@@ -10662,6 +10663,342 @@ function SubbysPlushiesPageMain() {
                 : "Subby's Plushies & Essentials is still loading. Wait for the READY message."
         );
     }
+    // R133 crafting-library JSON browser. Data stays on the user's device and is never embedded or transmitted.
+    // File format: {version:1,date:string,crafts:(string|null)[800]}, using BC LZString base64 item strings.
+    const plushieItemsBrowser = (() => {
+        const MAX_SLOTS = 800;
+        const MAX_FILE_BYTES = 3_000_000;
+        const STORAGE_PREFIX = 'SubbysPlushies:crafting-browser:v1:';
+        const state = { library: null, incoming: null, previous: null, selection: -1, source: -1,
+            query: '', page: 0, includeEmpty: false, dialog: null, node: null, feedback: '' };
+        let loadedAccount = '';
+        const account = () => String(window.Player?.MemberNumber ?? 'guest');
+        const storageKey = () => STORAGE_PREFIX + account();
+        const valid = value => {
+            if (!value || Array.isArray(value) || typeof value !== 'object' || value.version !== 1 ||
+                !Array.isArray(value.crafts) || value.crafts.length > MAX_SLOTS || !value.crafts.length ||
+                (value.date !== undefined && typeof value.date !== 'string')) return false;
+            return value.crafts.every(x => x == null || (typeof x === 'string' && x.length <= 45000 &&
+                x.length > 0 && /^[A-Za-z0-9+/=]+$/.test(x)));
+        };
+        const clone = value => ({ version: 1, date: String(value.date || ''), crafts: value.crafts.slice() });
+        const occupied = data => (data?.crafts || []).filter(x => typeof x === 'string').length;
+        const default64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+        function decompressBase64(input) {
+            if (typeof input !== 'string' || !input.length || input.length > 45000) return null;
+            try {
+                if (typeof window.LZString?.decompressFromBase64 === 'function') {
+                    const value = window.LZString.decompressFromBase64(input);
+                    if (typeof value === 'string' && value.length <= 120000) return value;
+                }
+            } catch (_) {}
+            // Small decoder fallback for BC versions that do not expose LZString globally.
+            try {
+                const data = { val: default64.indexOf(input.charAt(0)), position: 32, index: 1 };
+                if (data.val < 0) return null;
+                const read = count => {
+                    let bits = 0, power = 1;
+                    const max = Math.pow(2, count);
+                    while (power !== max) {
+                        bits += (data.val & data.position ? 1 : 0) * power;
+                        data.position >>= 1;
+                        if (!data.position) {
+                            data.position = 32;
+                            data.val = default64.indexOf(input.charAt(data.index++));
+                            if (data.val < 0 && data.index < input.length) throw new Error('Invalid compressed item');
+                        }
+                        power <<= 1;
+                    }
+                    return bits;
+                };
+                const dictionary = [0, 1, 2];
+                let c, w, entry, enlargeIn = 4, dictSize = 4, numBits = 3;
+                switch (read(2)) {
+                    case 0: c = String.fromCharCode(read(8)); break;
+                    case 1: c = String.fromCharCode(read(16)); break;
+                    case 2: return '';
+                    default: return null;
+                }
+                dictionary[3] = c;
+                w = c;
+                const result = [c];
+                for (let attempts = 0; attempts < 120000; attempts++) {
+                    if (data.index > input.length) return null;
+                    let code = read(numBits);
+                    if (code === 0 || code === 1) {
+                        dictionary[dictSize++] = String.fromCharCode(read(code === 0 ? 8 : 16));
+                        code = dictSize - 1;
+                        enlargeIn--;
+                    } else if (code === 2) return result.join('');
+                    if (!enlargeIn) { enlargeIn = Math.pow(2, numBits); numBits++; }
+                    entry = dictionary[code] !== undefined ? dictionary[code]
+                        : code === dictSize ? w + w.charAt(0) : null;
+                    if (entry == null) return null;
+                    result.push(entry);
+                    if (result.length > 120000) return null;
+                    dictionary[dictSize++] = w + entry.charAt(0);
+                    w = entry;
+                    enlargeIn--;
+                    if (!enlargeIn) { enlargeIn = Math.pow(2, numBits); numBits++; }
+                }
+            } catch (_) { return null; }
+            return null;
+        }
+        const decodedCache = new Map();
+        function info(raw) {
+            if (typeof raw !== 'string') return null;
+            if (decodedCache.has(raw)) return decodedCache.get(raw);
+            let item = null;
+            try {
+                const value = JSON.parse(decompressBase64(raw));
+                if (value && typeof value === 'object' && !Array.isArray(value)) {
+                    item = { name: String(value.Name || value.Item || 'Unnamed item').slice(0, 200),
+                        asset: String(value.Item || '').slice(0, 120),
+                        description: String(value.Description || '').slice(0, 1200),
+                        color: String(value.Color || '').slice(0, 200),
+                        private: value.Private === true };
+                }
+            } catch (_) {}
+            decodedCache.set(raw, item);
+            if (decodedCache.size > 850) decodedCache.clear();
+            return item;
+        }
+        function checkAccount() {
+            const next = account();
+            if (next === loadedAccount) return;
+            loadedAccount = next;
+            state.library = null; state.incoming = null; state.previous = null;
+            state.selection = -1; state.source = -1; state.page = 0;
+            try {
+                const saved = localStorage.getItem(storageKey());
+                const value = saved ? JSON.parse(saved) : null;
+                if (valid(value)) state.library = clone(value);
+            } catch (_) {}
+        }
+        function importJson(text, source = false) {
+            checkAccount();
+            if (typeof text !== 'string' || text.length > MAX_FILE_BYTES) throw new Error('JSON file too large (3 MB maximum).');
+            let parsed;
+            try { parsed = JSON.parse(text); } catch (_) { throw new Error('This is not valid JSON.'); }
+            if (!valid(parsed)) throw new Error('Expected a BC custom-items export: version 1 with up to 800 compressed crafts.');
+            const item = clone(parsed);
+            if (!item.crafts.some(entry => typeof entry === 'string' && info(entry)))
+                throw new Error('No valid compressed BC craft entries could be decoded.');
+            if (source) { state.incoming = item; state.source = item.crafts.findIndex(x => typeof x === 'string'); }
+            else {
+                state.previous = state.library ? clone(state.library) : null;
+                state.library = item; state.selection = item.crafts.findIndex(x => typeof x === 'string');
+                state.page = 0; state.query = '';
+            }
+            state.feedback = `${source ? 'Replacement source loaded' : 'Library loaded'}: ${occupied(item)} items / ${item.crafts.length} slots.`;
+            return item;
+        }
+        const stamp = () => new Date().toISOString().replace('T', ', ').slice(0, 19);
+        function replaceSlot(targetIndex, sourceIndex) {
+            if (!state.library || !state.incoming || !Number.isInteger(targetIndex) || !Number.isInteger(sourceIndex) ||
+                targetIndex < 0 || targetIndex >= state.library.crafts.length ||
+                sourceIndex < 0 || sourceIndex >= state.incoming.crafts.length ||
+                typeof state.incoming.crafts[sourceIndex] !== 'string' || !info(state.incoming.crafts[sourceIndex])) return false;
+            state.previous = clone(state.library);
+            state.library.crafts[targetIndex] = state.incoming.crafts[sourceIndex];
+            state.library.date = stamp();
+            state.selection = targetIndex;
+            state.feedback = `Replaced slot ${targetIndex + 1}. Download the updated customitems.json to import it into BC.`;
+            return true;
+        }
+        function undo() {
+            if (!state.previous) return false;
+            const current = state.library;
+            state.library = clone(state.previous);
+            state.previous = current;
+            state.feedback = 'Last library edit reversed. You can undo again to swap back.';
+            return true;
+        }
+        function download(data, name) {
+            if (!data) return false;
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url; link.download = name;
+            document.body.append(link); link.click(); link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 250);
+            return true;
+        }
+        function create(tag, text, css = {}, parent) {
+            const el = document.createElement(tag);
+            if (text !== undefined && text !== null) el.textContent = String(text);
+            Object.assign(el.style, css);
+            if (parent) parent.append(el);
+            return el;
+        }
+        const small = { font: '12px Arial,sans-serif', color: '#c7b9d9' };
+        const btnCss = { padding: '7px 10px', border: '1px solid #aa88c8', borderRadius: '8px',
+            background: '#3c2b50', color: '#fff', font: '13px Arial,sans-serif', cursor: 'pointer' };
+        function button(label, onClick, parent, disabled = false) {
+            const b = create('button', label, btnCss, parent);
+            b.type = 'button'; b.disabled = disabled;
+            if (disabled) b.style.opacity = '0.42';
+            else b.addEventListener('click', onClick);
+            return b;
+        }
+        function toolbar(parent) {
+            return create('div', null, { display: 'flex', flexWrap: 'wrap', gap: '7px', margin: '8px 0' }, parent);
+        }
+        function pickFile(asSource) {
+            const input = document.createElement('input');
+            input.type = 'file'; input.accept = '.json,application/json';
+            input.style.display = 'none';
+            document.body.append(input);
+            input.addEventListener('change', async () => {
+                try {
+                    const file = input.files?.[0];
+                    if (!file) return;
+                    if (file.size > MAX_FILE_BYTES) throw new Error('JSON file too large (3 MB maximum).');
+                    const text = await file.text();
+                    const changed = !asSource && !!state.library;
+                    if (changed && !window.confirm('Replace the loaded library? A copy remains available with Download Backup until you close or reload.')) return;
+                    importJson(text, asSource);
+                    render();
+                } catch (e) {
+                    state.feedback = `Import failed: ${e?.message || String(e)}`;
+                    render();
+                } finally { input.remove(); }
+            }, { once: true });
+            input.click();
+        }
+        function render() {
+            if (!state.node || !state.dialog?.isConnected) return;
+            const root = state.node;
+            root.replaceChildren();
+            const top = toolbar(root);
+            button('Load / Replace JSON', () => pickFile(false), top);
+            button('Load Replacement Source', () => pickFile(true), top);
+            button('Export customitems.json', () => download(state.library, 'customitems.json'), top, !state.library);
+            button('Download Backup', () => download(state.previous, 'customitems-backup.json'), top, !state.previous);
+            button('Undo Last Change', () => { undo(); render(); }, top, !state.previous);
+            const rememberBar = toolbar(root);
+            button('Save Library On This Device', () => {
+                try {
+                    if (!state.library) return;
+                    localStorage.setItem(storageKey(), JSON.stringify(state.library));
+                    state.feedback = 'Saved locally to this account/browser. Your library is not uploaded by Essentials.';
+                } catch (e) { state.feedback = `Could not save locally: ${e.message}`; }
+                render();
+            }, rememberBar, !state.library);
+            button('Forget Saved Library', () => {
+                try { localStorage.removeItem(storageKey()); state.feedback = 'Saved local copy removed (loaded library remains open).'; }
+                catch (_) { state.feedback = 'Could not clear saved library.'; }
+                render();
+            }, rememberBar);
+            create('p', 'BC crafting export format • version 1 • 800 slots maximum. Select a slot, load a replacement source JSON, and replace just that slot. Export the finished customitems.json for BC’s normal crafting import. No account changes are made automatically.', {...small, lineHeight: '1.45'}, root);
+            if (state.feedback) create('p', state.feedback, {...small, color: '#d8c079'}, root);
+            if (!state.library) {
+                create('p', 'No crafting JSON loaded yet. Click Load / Replace JSON to choose your exported custom items file.', {padding: '16px', border: '1px dashed #b8a2d1', borderRadius: '9px'}, root);
+                return;
+            }
+            create('h3', `My Crafting Library — ${occupied(state.library)} saved / ${state.library.crafts.length} slots`, { margin: '12px 0 5px', fontSize: '16px' }, root);
+            const searchBar = toolbar(root);
+            const search = create('input', null, { flex: '1 1 220px', minWidth: '125px',
+                padding: '8px', color: '#fff', background: '#251c35', border: '1px solid #9174b3', borderRadius: '7px' }, searchBar);
+            search.placeholder = 'Search by item name, asset, or slot'; search.value = state.query;
+            search.addEventListener('input', () => {
+                state.query = search.value; state.page = 0;
+                renderList(list, count, pageBar);
+            });
+            const showEmpty = create('label', null, {...small, display: 'flex', alignItems: 'center', gap: '5px'}, searchBar);
+            const toggle = create('input', null, { accentColor: '#b88ed7' }, showEmpty);
+            toggle.type = 'checkbox'; toggle.checked = state.includeEmpty;
+            create('span', 'Empty slots', {}, showEmpty);
+            toggle.addEventListener('change', () => { state.includeEmpty = toggle.checked; state.page = 0; renderList(list, count, pageBar); });
+            const count = create('span', '', {...small}, root);
+            const list = create('div', null, { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(210px,1fr))', gap: '6px', margin: '7px 0' }, root);
+            const pageBar = toolbar(root);
+            function renderList(list, count, bar) {
+                list.replaceChildren(); bar.replaceChildren();
+                const query = state.query.trim().toLowerCase();
+                const found = [];
+                state.library.crafts.forEach((raw, index) => {
+                    if (raw == null && !state.includeEmpty && !query) return;
+                    const record = info(raw);
+                    const searchable = `${index+1} ${record?.name || ''} ${record?.asset || ''}`.toLowerCase();
+                    if (query && !searchable.includes(query)) return;
+                    found.push(index);
+                });
+                const pages = Math.max(1, Math.ceil(found.length / 36));
+                state.page = Math.max(0, Math.min(state.page, pages-1));
+                count.textContent = `${found.length} matching slots · page ${state.page+1}/${pages}`;
+                for (const index of found.slice(state.page*36, (state.page+1)*36)) {
+                    const record = info(state.library.crafts[index]);
+                    const cell = button(`#${index+1}  ${record?.name || (state.library.crafts[index] ? 'Unreadable craft' : 'Empty slot')}`, () => {
+                        state.selection = index; render();
+                    }, list);
+                    cell.style.textAlign = 'left';
+                    cell.style.background = index === state.selection ? '#73529a' : '#30243f';
+                    cell.title = record?.asset || '';
+                }
+                button('← Previous', () => { state.page--; renderList(list,count,bar); }, bar, state.page===0);
+                button('Next →', () => { state.page++; renderList(list,count,bar); }, bar, state.page>=pages-1);
+            }
+            renderList(list, count, pageBar);
+            if (state.selection < 0 || state.selection >= state.library.crafts.length) return;
+            const chosen = info(state.library.crafts[state.selection]);
+            const detail = create('div', null, {border: '1px solid #795e9d', padding: '12px', borderRadius: '10px', marginTop: '10px', background: '#281c37'}, root);
+            create('h3', `Selected #${state.selection+1}: ${chosen?.name || 'Empty slot'}`, {margin: '0 0 7px', fontSize: '15px'}, detail);
+            if (chosen) {
+                create('p', `BC asset: ${chosen.asset || 'Unknown'}  •  ${chosen.private ? 'Private' : 'Public'}`, small, detail);
+                if (chosen.color) create('p', `Colors: ${chosen.color}`, small, detail);
+                if (chosen.description) create('p', chosen.description, {...small, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '90px', overflowY:'auto'}, detail);
+            }
+            if (state.incoming) {
+                const sourceCount = occupied(state.incoming);
+                create('p', `Replacement source (${sourceCount} items). Choose an item to put in the selected slot:`, small, detail);
+                const select = create('select', null, {width:'100%', padding:'7px', background:'#332345', color:'white', border:'1px solid #9174b3', borderRadius:'6px'},detail);
+                state.incoming.crafts.forEach((raw,index) => {
+                    if (typeof raw !== 'string') return;
+                    const rec = info(raw);
+                    const option = create('option', `#${index+1} ${rec?.name || 'Unreadable item'}`,{},select);
+                    option.value = String(index);
+                });
+                select.value = String(state.source);
+                select.addEventListener('change', () => { state.source = Number(select.value); });
+                const actions = toolbar(detail);
+                button('Replace Selected Slot', () => {
+                    const source = info(state.incoming?.crafts[state.source]);
+                    if (!source) return;
+                    if (!window.confirm(`Replace slot ${state.selection+1} with “${source.name}”? The full JSON can be exported afterward.`)) return;
+                    if (replaceSlot(state.selection, state.source)) render();
+                }, actions, !info(state.incoming?.crafts[state.source]));
+            }
+        }
+        function close() {
+            state.dialog?.remove(); state.dialog = null; state.node = null;
+            window.removeEventListener('keydown', onKeyDown, true);
+        }
+        function onKeyDown(event) { if (event.key === 'Escape') { event.preventDefault(); close(); } }
+        function open() {
+            checkAccount();
+            if (state.dialog?.isConnected) { state.dialog.focus(); return; }
+            const backdrop = create('div', null, {position:'fixed', inset:'0', background:'rgba(12,7,18,.76)', zIndex:'2147483550', display:'flex', alignItems:'center', justifyContent:'center', padding:'12px', boxSizing:'border-box'}, document.body);
+            const panel = create('section', null, {width:'min(960px,98vw)', maxHeight:'min(90vh,900px)', background:'#21152e', color:'#f2e9ff', border:'2px solid #b093ca', borderRadius:'13px', boxShadow:'0 12px 40px #000b', padding:'14px', boxSizing:'border-box', display:'flex', flexDirection:'column', font:'14px Arial,sans-serif'}, backdrop);
+            panel.setAttribute('role','dialog'); panel.setAttribute('aria-modal','true'); panel.setAttribute('aria-label','Subby’s Custom Items Browser');
+            panel.tabIndex = -1;
+            const header = toolbar(panel);
+            create('h2', '📦 Subby’s Custom Items — /plushieitems', {margin:'4px auto 4px 0',fontSize:'20px'},header);
+            button('✕ Close', close, header);
+            state.node = create('div',null,{overflowY:'auto', flex:'1', minHeight:'0'},panel);
+            state.dialog = backdrop;
+            backdrop.addEventListener('click', event => { if (event.target===backdrop) close(); });
+            window.addEventListener('keydown',onKeyDown,true);
+            render();panel.focus();
+        }
+        return { open, close, status() { checkAccount(); return {
+            loaded: !!state.library, items: occupied(state.library), slots: state.library?.crafts.length || 0,
+            replacementSource: occupied(state.incoming) }; },
+            // Non-UI diagnostic tools; mutating methods act on this in-memory JSON only, not BC.
+            importJson, replaceSlot, undo, getSnapshot: () => state.library ? clone(state.library) : null,
+            getItemInfo(index) { const item = state.library?.crafts[index]; return info(item); } };
+    })();
+    window.SubbysPlushieItems = plushieItemsBrowser;
     function normalizePlushieCommandInput(command) {
         let normalized = String(command || "").trim().toLowerCase();
         if (/^plushie(?:[a-z]|$)/.test(normalized)) normalized = `/${normalized}`;
@@ -10671,6 +11008,10 @@ function SubbysPlushiesPageMain() {
         command = normalizePlushieCommandInput(command);
         if (command === "/help plushie" || command === "/help plushies") {
             requireReady(() => showPlushieHelp({ detailed: true }));
+            return true;
+        }
+        if (command === "/plushieitems") {
+            requireReady(() => plushieItemsBrowser.open());
             return true;
         }
         if (command === "/plushieextensions" || command === "/plushiesettings") {
@@ -21656,7 +21997,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.57";
+    const VERSION = "3.5.58";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
