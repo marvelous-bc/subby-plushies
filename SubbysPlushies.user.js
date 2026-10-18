@@ -2,9 +2,9 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.68
-// @description  Achievement persistence fix, seven new trophies, crafting restore verification
-// @released     2026-10-17
+// @version      3.5.70
+// @description  Harmonizer: Rubber, Plastic, Silk/Satin, Fur and Buttons; body-slot recolor protection
+// @released     2026-10-18
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.68";
+    const VERSION = "3.5.70";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -32,7 +32,7 @@ function SubbysPlushiesPageMain() {
             document.documentElement?.setAttribute("data-subbys-plushies-load-source", "direct");
         }
     } catch (_) {}
-    const BUILD_DATE = "2026-10-17";
+    const BUILD_DATE = "2026-10-18";
     const TAG = "[Subby's Plushies & Essentials]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -9532,7 +9532,7 @@ function SubbysPlushiesPageMain() {
             catch (e) { warn("Could not open Outfit Harmonizer:", e); }
         }));
         const harmonizerHint=document.createElement("span");
-        harmonizerHint.textContent="Three core colors plus 6 optional category colors with inheritance. Outfit Locks below prevent bulk recoloring and Time Machine changes.";
+        harmonizerHint.textContent="Three core colors plus 12 material categories, including Rubber, Plastic, Silk/Satin, Fur and Buttons. Tail, wing, eye, hair and lip slots are excluded.";
         Object.assign(harmonizerHint.style,{fontSize:"12px",color:getExtensionsStyle().muted});
         harmonizerRow.appendChild(harmonizerHint);
         section.appendChild(harmonizerRow);
@@ -21973,7 +21973,15 @@ function SubbysPlushiesPageMain() {
             hiddenForNoBlackSpace:mobileEssentialMode()&&!mobileDockLayout(),editing:mobileDockEditing,
             safeRegion:mobileDockLayout()?.area||null,canvas:(mobileCanvasRect()?.toJSON?.()||null)});
     }
-    // Smart Outfit Color Harmonizer: three core colors and six category overrides.
+    // Appearance-group protection for every Essentials bulk recolor entry point.
+    // Use the actual group/slot name (never the asset name): for example a wing
+    // decoration on a Cloth item is still clothing, but an equipped Wings slot
+    // must not be recolored even if an addon marks that slot as Clothing.
+    function essentialsRecolorProtectedSlot(item) {
+        const group = item?.Asset?.Group?.Name;
+        return typeof group === 'string' && /(?:tail|wing|eye|hair|lip|mouth)/i.test(group);
+    }
+    // Smart Outfit Color Harmonizer: material-aware color layers and twelve category overrides.
     // The native Appearance picker is canvas-based, so this lightweight dock is DOM-based.
     // Character body colors, restraints, locks and worn items belonging to other members stay untouched.
     function installSmartOutfitColorHarmonizer() {
@@ -22012,10 +22020,16 @@ function SubbysPlushiesPageMain() {
             try { window.localStorage?.setItem(`${settingsKey()}:metal`, hex); } catch (_) {}
         };
         // Category palettes are optional and inherit from the three core colors
-        // until the wearer explicitly enables a custom swatch. Store the six
+        // until the wearer explicitly enables a custom swatch. Store all twelve
         // small category entries together, separately for each BC account.
         const CATEGORY_DEFS = Object.freeze([
             {id:'leather', label:'Leather & Straps', inherit:'primary', initial:'#705874'},
+            {id:'latex', label:'Latex & PVC', inherit:'primary', initial:'#29212F'},
+            {id:'rubber', label:'Rubber', inherit:'primary', initial:'#343039'},
+            {id:'plastic', label:'Plastic', inherit:'accent', initial:'#A5A2BB'},
+            {id:'silk', label:'Silk & Satin', inherit:'primary', initial:'#CFB0D9'},
+            {id:'fur', label:'Fur', inherit:'accent', initial:'#C9B9C6'},
+            {id:'buttons', label:'Buttons', inherit:'metal', initial:'#D9AE71'},
             {id:'lace', label:'Lace & Mesh', inherit:'accent', initial:'#E6C7EC'},
             {id:'ribbons', label:'Ribbons & Bows', inherit:'accent', initial:'#F2B9D8'},
             {id:'gems', label:'Gems & Crystals', inherit:'metal', initial:'#A46BEF'},
@@ -22055,7 +22069,8 @@ function SubbysPlushiesPageMain() {
             const customCount = custom?.colorZones?.length || 0;
             const nativeCount = Number(item.Asset?.ColorableLayerCount) || 0;
             const existingCount = Array.isArray(item.Color) ? item.Color.length : 0;
-            return clamp(Math.max(customCount, nativeCount, existingCount, 1), 1, 12);
+            const defaultCount = Array.isArray(item.Asset?.DefaultColor) ? item.Asset.DefaultColor.length : 0;
+            return clamp(Math.max(customCount, nativeCount, existingCount, defaultCount, 1), 1, 12);
         };
         // Some vanilla jewelry groups are appearance accessories rather than
         // clothing; explicitly allow only recognized jewelry, not body parts.
@@ -22068,7 +22083,7 @@ function SubbysPlushiesPageMain() {
                 /^rings?$/i.test(group);
         };
         function canRecolor(item) {
-            if (isOutfitProtected(item)) return false;
+            if (essentialsRecolorProtectedSlot(item) || isOutfitProtected(item)) return false;
             const asset = item?.Asset, group = asset?.Group;
             if (!asset || group?.Category !== "Appearance" ||
                 !(group.Clothing || WARDROBE_ITEM_NAME_SET.has(asset.Name) || isJewelryItem(item))) return false;
@@ -22104,29 +22119,59 @@ function SubbysPlushiesPageMain() {
             };
             return `#${[channel(0),channel(8),channel(4)].map(n=>Math.round(clamp(n,0,1)*255).toString(16).padStart(2,'0')).join('')}`.toUpperCase();
         }
-        // The third swatch colors jewelry and explicit metal layers without
-        // turning bows, lace or gemstone inlays into metal. For vanilla assets,
-        // read layer names only when their sequence matches the colorable zones;
-        // never guess a zone from an unrelated base/rendering layer.
+        // Use BC's actual colorable zones rather than assuming every render layer
+        // has one corresponding color slot. Many R132/R133 assets draw extra
+        // highlights, shadows, or silhouettes using AllowColorize:false.
+        // Never assign different colors to two visuals sharing one color index.
         function colorZoneNames(item, count) {
             const custom = WARDROBE_ITEMS.find(entry => entry.name === item?.Asset?.Name);
             if (Array.isArray(custom?.colorZones) && custom.colorZones.length === count)
                 return custom.colorZones.map(String);
             const layers = item?.Asset?.Layer;
-            if (!Array.isArray(layers)) return [];
-            if (layers.length === count) return layers.map(layer => String(layer?.Name || ''));
-            const colorable = layers.filter(layer => layer?.AllowColorize === true ||
-                layer?.ColorGroup != null || layer?.ColorIndex != null);
-            return colorable.length === count ? colorable.map(layer => String(layer?.Name || '')) : [];
+            if (!Array.isArray(layers) || !count) return [];
+            const colorable = layers.filter(layer => layer && layer.AllowColorize !== false);
+            // R133 runtime may annotate layers with a color index. Use it only
+            // if the indexes are valid, zero-based color slots.
+            const indexed = colorable.filter(layer => Number.isInteger(layer.ColorIndex) &&
+                layer.ColorIndex >= 0 && layer.ColorIndex < count);
+            if (indexed.length && indexed.length === colorable.length) {
+                const groups = Array.from({length:count},()=>[]);
+                for (const layer of indexed) groups[layer.ColorIndex].push(layer);
+                if (groups.every(group=>group.length))
+                    return groups.map(group=>group.map(layer=>String(layer.Name||layer.Description||'')).join(' / '));
+            }
+            // BC frequently omits ColorIndex: AllowColorize=false is sufficient
+            // to skip decorative layers and reveal the ordered colorable layers.
+            if (colorable.length === count)
+                return colorable.map(layer=>String(layer.Name||layer.Description||layer.Material||''));
+            // If the asset does not reveal an unambiguous mapping, use whole-item
+            // category colors instead of guessing that a chain is zone 2.
+            return [];
         }
-        const isMetalZone = label => /(?:chain|metal|gold|silver|buckle|clasp|stud|hardware|zipper|eyelet|rivet|fastener|setting|padlock|lockplate|metallic|link|button)/i.test(label);
-        const isNonMetalJewelryZone = label => /(?:gem|crystal|stone|glass|bow|ribbon|fabric|cloth|lace|mesh|leather|strap|bead|enamel|velvet|silk)/i.test(label);
-        // A zone label is stronger evidence than an item's name: on a boot,
-        // e.g., a buckle gets Metal, a ribbon gets Ribbons, its base gets Shoes.
-        // This does not invent independent layers on single-color vanilla items.
+        const isMetalZone = label => /(?:chain|metal|gold|silver|buckle|clasp|stud|hardware|zipper|eyelet|rivet|fastener|setting|padlock|lockplate|metallic|link|d[\s_-]?ring|o[\s_-]?ring|carabiner|metal.?button)/i.test(label);
+        const isNonMetalJewelryZone = label => /(?:gem|crystal|stone|glass|bow|ribbon|fabric|cloth|lace|mesh|leather|strap|bead|enamel|velvet|silk|satin|sateen|latex|rubber|neoprene|vinyl|pvc|plastic|polymer|faux.?fur|fluffy|button)/i.test(label);
+        // Latex/PVC and rubber must be distinct so an independently colorable
+        // rubber panel never accidentally inherits the latex palette.
+        const isLatexZone = label => /(?:latex|pvc|vinyl)/i.test(label);
+        const isRubberZone = label => /(?:rubber(?:i[sz]ed)?|neoprene)/i.test(label);
+        const isPlasticZone = label => /(?:plastic|acrylic|polycarbonate|polymer|perspex|plexiglass)/i.test(label);
+        const isSilkZone = label => /(?:silk|satin|sateen)/i.test(label);
+        const isFurZone = label => /(?:faux[\s_-]?fur|fur|fluffy|fluff|fleece)/i.test(label);
+        const isButtonZone = label => /(?:button|snap[\s_-]?fastener)/i.test(label);
+        // Layer material wins over the overall item name. A mixed belt can
+        // recolor Chain as Metal, RubberPanel as Rubber and Strap as Leather.
         function categoryForZone(name) {
             if (!name) return null;
+            if (isMetalZone(name)) return 'metal';
             if (/(?:gem|crystal|jewel|precious.?stone|rhinestone|diamond|ruby|sapphire|emerald|opal)/i.test(name)) return 'gems';
+            // Explicit material labels beat decorative shapes: SatinRibbon is
+            // satin, while an unlabeled Ribbon still follows the ribbon palette.
+            if (isLatexZone(name)) return 'latex';
+            if (isRubberZone(name)) return 'rubber';
+            if (isPlasticZone(name)) return 'plastic';
+            if (isSilkZone(name)) return 'silk';
+            if (isFurZone(name)) return 'fur';
+            if (isButtonZone(name)) return 'buttons';
             if (/(?:ribbon|bow|rosette)/i.test(name)) return 'ribbons';
             if (/(?:lace|mesh|fishnet|netting|tulle|crochet)/i.test(name)) return 'lace';
             if (/(?:leather|strap|harness|corset|belt|pleather|buckskin)/i.test(name)) return 'leather';
@@ -22139,6 +22184,12 @@ function SubbysPlushiesPageMain() {
             if (/(?:sock|stocking|hosiery|tights?|legwear)/i.test(group)) return 'stockings';
             const text = `${name} ${group}`;
             if (/(?:gem|crystal|jewel|rhinestone|diamond|ruby|sapphire|emerald|opal)/i.test(text)) return 'gems';
+            if (isLatexZone(text)) return 'latex';
+            if (isRubberZone(text)) return 'rubber';
+            if (isPlasticZone(text)) return 'plastic';
+            if (isSilkZone(text)) return 'silk';
+            if (isFurZone(text)) return 'fur';
+            if (isButtonZone(text)) return 'buttons';
             if (/(?:ribbon|bow|rosette)/i.test(text)) return 'ribbons';
             if (/(?:lace|mesh|fishnet|netting|tulle|crochet)/i.test(text)) return 'lace';
             if (/(?:leather|strap|harness|corset|belt|pleather|buckskin)/i.test(text)) return 'leather';
@@ -22170,9 +22221,8 @@ function SubbysPlushiesPageMain() {
             for (let i=0;i<zones;i++) {
                 const zone = names[i] || '';
                 const namedCategory = categoryForZone(zone);
-                const explicitlyMetal = isMetalZone(zone) && !namedCategory;
                 let hex, toneGroup;
-                if (explicitlyMetal) { hex = jewelry; toneGroup = 'jewelry'; }
+                if (namedCategory === 'metal') { hex = jewelry; toneGroup = 'jewelry'; }
                 else if (namedCategory) {
                     hex = categoryColor(namedCategory,primary,secondary,jewelry,categories);
                     toneGroup = namedCategory === 'shoes' ? 'shoe' : namedCategory === 'stockings' ? 'sock' : namedCategory;
@@ -22266,7 +22316,7 @@ function SubbysPlushiesPageMain() {
                 // The secret achievement requires distinct core swatches and an
                 // actual colorable jewelry/metal zone, not merely opening the picker.
                 if (new Set([hex,secondHex,jewelryHex]).size===3 && items.some(item=>
-                    isJewelryItem(item) || colorZoneNames(item,countColorZones(item)).some(zone=>isMetalZone(zone)))) {
+                    isJewelryItem(item) || colorZoneNames(item,countColorZones(item)).some(zone=>categoryForZone(zone)==='metal'))) {
                     markProgress("chromaticGenius",1);
                 }
                 previous = {member,changes:saved};
@@ -22280,6 +22330,20 @@ function SubbysPlushiesPageMain() {
                 setStatus(`Recoloring failed; local colors restored: ${String(e?.message||e)}`);
                 return {ok:false,count:0};
             }
+        }
+        // On demand only: no additional timers, per-frame inspection or storage.
+        function inspectMaterials() {
+            return eligibleItems().map(item=>{
+                const count=countColorZones(item), names=colorZoneNames(item,count);
+                return {
+                    asset:item.Asset?.Name||'',group:item.Asset?.Group?.Name||'',
+                    zones:Array.from({length:count},(_,i)=>({index:i,
+                        name:names[i]||`Color ${i+1}`,
+                        category:categoryForZone(names[i])||categoryForItem(item)||
+                            (isJewelryItem(item)?'metal':'primary/accent')})),
+                    mapped:names.length===count
+                };
+            });
         }
         function undoColor() {
             if (!previous || previous.member !== window.Player?.MemberNumber) {
@@ -22320,7 +22384,7 @@ function SubbysPlushiesPageMain() {
             const heading=elt("strong","🎨 Smart Outfit Color Harmonizer");heading.style.fontSize="17px";
             const close=elt("button","✕");close.type="button";close.title="Close";
             close.addEventListener("click",closeDialog);header.append(heading,close);
-            const summary=elt("p","Choose Primary, Accent and Jewelry / Metal colors. Advanced Categories customize materials; Outfit Lock protected items, native locked items, restraints and body colors stay untouched.");
+            const summary=elt("p","Choose Primary, Accent and Metal colors. Twelve optional material categories now include Latex/PVC, Rubber, Plastic, Silk & Satin, Fur, and Buttons. Independently colorable chains and material layers use the matching swatch. Tail, wing, eye, hair and lip slots, Outfit Locks, and restraints are never recolored.");
             Object.assign(summary.style,{lineHeight:"1.5",color:"#D6C8DD"});
             const controls=elt("div");Object.assign(controls.style,{display:"flex",flexDirection:"column",gap:"10px"});
             // All three hex fields and native color pickers stay in sync.
@@ -22347,9 +22411,9 @@ function SubbysPlushiesPageMain() {
             controls.append(primaryRow.row,accentRow.row,metalRow.row);
             const advanced=elt("details");advanced.dataset.harmonizerCategories="true";
             Object.assign(advanced.style,{marginTop:"12px",padding:"10px",border:"1px solid #886CA0",borderRadius:"9px",background:"#3A2D43"});
-            const toggle=elt("summary","Advanced Categories · 6");toggle.style.cursor="pointer";toggle.style.fontWeight="bold";
+            const toggle=elt("summary",`Advanced Categories · ${CATEGORY_DEFS.length}`);toggle.style.cursor="pointer";toggle.style.fontWeight="bold";
             advanced.append(toggle);
-            const hint=elt("p","Each category can use Primary, Accent, or Metal. Check Custom for its own color. Named color zones are used where BC exposes them; otherwise a matching whole item is recolored.");
+            const hint=elt("p","Each material can inherit Primary, Accent, or Metal, or use an independent Custom swatch. Chains, latex, rubber, plastic, silk/satin, fur, and buttons are detected from BC's colorable layer metadata. Details sharing one color slot cannot be colored independently. Body, tail, wing, hair, eye, and lip slots are excluded.");
             Object.assign(hint.style,{fontSize:"12px",lineHeight:"1.5",color:"#D6C8DD"});advanced.append(hint);
             for (const def of CATEGORY_DEFS) {
                 const state=categorySettings[def.id];
@@ -22411,10 +22475,18 @@ function SubbysPlushiesPageMain() {
                 primaryRow.swatch(s);accentRow.swatch(h);
             });
             const undo=makeButton("↶ Undo Last",()=>undoColor());
-            buttons.append(run,swap,undo);
+            const inspect=makeButton("🔍 Inspect Item Layers",()=>{
+                const entries=inspectMaterials();
+                if (!entries.length) return setStatus('No eligible, unprotected clothing to inspect.');
+                const lines=entries.slice(0,15).map(entry=>`${entry.asset}: `+
+                    (entry.mapped?entry.zones.map(zone=>`${zone.name} → ${zone.category}`).join(', '):
+                        `${entry.zones.length} color zone(s), no unambiguous layer names`));
+                setStatus(`Detected materials (first ${Math.min(entries.length,15)} items):\n`+lines.join('\n'));
+            });
+            buttons.append(run,swap,undo,inspect);
             const message=elt("div",details || `${eligibleItems().length} equipped clothing item(s) are eligible.`);
             message.dataset.harmonizerStatus="true";
-            Object.assign(message.style,{marginTop:"13px",padding:"9px",borderRadius:"7px",background:"#473750",fontSize:"12px",lineHeight:"1.5"});
+            Object.assign(message.style,{marginTop:"13px",padding:"9px",borderRadius:"7px",background:"#473750",fontSize:"12px",lineHeight:"1.5",whiteSpace:"pre-line"});
             panel.append(header,summary,controls,buttons,message);shell.append(panel);
             shell.addEventListener("mousedown",e=>{if(e.target===shell)closeDialog();});
             document.body.append(shell);dialog=shell;
@@ -22426,7 +22498,7 @@ function SubbysPlushiesPageMain() {
             if (!isAppearancePicker()) {dock?.remove();dock=null;closeDialog();return;}
             if (dock?.isConnected) return;
             dock=elt("button","🎨 Harmonize Outfit"); dock.id=ID;dock.type="button";
-            dock.title="Choose three core colors and optional category colors • drag to move";
+            dock.title="Choose three core colors and twelve optional material colors • drag to move";
             Object.assign(dock.style,{position:"fixed",zIndex:"2147482500",bottom:"18px",right:"20px",background:"#4D365A",color:"white",border:"2px solid #CB9BDC",borderRadius:"12px",padding:"11px 14px",font:"bold 13px Arial,sans-serif",boxShadow:"0 4px 15px #0008",cursor:"grab",touchAction:"none",maxWidth:"calc(100vw - 30px)"});
             let drag=null,dragged=false;
             dock.addEventListener("pointerdown",e=>{if(e.button!==0)return; const r=dock.getBoundingClientRect();drag={x:e.clientX,y:e.clientY,left:r.left,top:r.top};dragged=false;try{dock.setPointerCapture(e.pointerId);}catch(_){} });
@@ -22445,12 +22517,15 @@ function SubbysPlushiesPageMain() {
         };
         const watcher=window.setInterval(safeRefreshDock,1500);safeRefreshDock();
         const api=Object.freeze({version:VERSION,open:openDialog,apply:applyColor,undo:undoColor,
+            inspect:inspectMaterials,
             status:()=>({version:VERSION,chosen,accent,metal,
                 categories:Object.fromEntries(CATEGORY_DEFS.map(d=>[d.id,{...categorySettings[d.id]}])),
                 eligible:eligibleItems().length,canUndo:!!previous,screen:window.CurrentScreen,message:details}),
             destroy:()=>{window.clearInterval(watcher);dock?.remove();closeDialog();if(window.SubbysOutfitHarmonizer===api)delete window.SubbysOutfitHarmonizer;},
             _test:{safeHex,hexToHsl,hslToHex,outfitColors,colorZoneNames,isJewelryItem,isMetalZone,
-                categoryForZone,categoryForItem,categoryColor,eligibleItems,canRecolor,refreshDock,safeRefreshDock}
+                categoryForZone,categoryForItem,categoryColor,isLatexZone,isRubberZone,
+                isPlasticZone,isSilkZone,isFurZone,isButtonZone,inspectMaterials,
+                eligibleItems,canRecolor,essentialsRecolorProtectedSlot,refreshDock,safeRefreshDock}
         });
         window.SubbysOutfitHarmonizer=api;
         return api;
@@ -22631,7 +22706,7 @@ function SubbysPlushiesPageMain() {
   function availableItems(){
     const appearance = Array.isArray(window.Player?.Appearance) ? window.Player.Appearance : [];
     return appearance.filter(item => {
-      if (!item?.Asset?.Group) return false;
+      if (!item?.Asset?.Group || essentialsRecolorProtectedSlot(item)) return false;
       return (item.Asset.Group.Category === 'Appearance' && item.Asset.Group.Clothing) ||
         WARDROBE_ITEM_NAME_SET.has(item.Asset.Name);
     }).map(item => ({group:item.Asset.Group.Name,name:itemName(item),item}));
@@ -22704,7 +22779,7 @@ function SubbysPlushiesPageMain() {
     root.append($('div','sxe-message',state.message));
   }
   function recolorable(item){
-    if(isOutfitProtected(item))return false;
+    if(essentialsRecolorProtectedSlot(item) || isOutfitProtected(item))return false;
     const group=item?.Asset?.Group;
     if(group?.Category!=='Appearance' || (!group.Clothing && !WARDROBE_ITEM_NAME_SET.has(item.Asset?.Name)))return false;
     if(item?.Property?.LockedBy||item?.Property?.LockMemberNumber!=null||item?.Property?.Effect?.includes?.('Lock'))return false;
@@ -23236,7 +23311,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.68";
+    const VERSION = "3.5.70";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
