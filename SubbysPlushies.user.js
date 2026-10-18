@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.70
-// @description  Harmonizer: Rubber, Plastic, Silk/Satin, Fur and Buttons; body-slot recolor protection
+// @version      3.5.72
+// @description  R133 other-player plushie rendering fix; retains v3.5.70 features (no Appearance Shield)
 // @released     2026-10-18
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.70";
+    const VERSION = "3.5.72";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -18562,6 +18562,115 @@ function SubbysPlushiesPageMain() {
         }
         return installed;
     }
+    // R133 loads images with CommonFetch and caches ImageBitmap data directly.
+    // Legacy HTMLImageElement/src hooks cannot observe this loading path. Only
+    // intercept our own synthetic asset URLs, and return the prepared PNG bytes
+    // as a native Response so both Canvas and WebGL caches can decode them.
+    // Other requests always go directly to the original browser fetch.
+    const R133_NATIVE_PLUSH_FETCH_MARK = Symbol.for("SubbysPlushies.R133SyntheticAssetFetch");
+    const r133NativePngBytes = new Map();
+    const r133NativeFetchStats = { requests: 0, replies: 0, fallbacks: 0, errors: 0, lastPath: null, lastError: null };
+    let r133NativePlushFetchInstalled = false;
+    function isR133PlushAssetRequest(input, init) {
+        try {
+            const method = String(init?.method || input?.method || "GET").toUpperCase();
+            if (method !== "GET") return null;
+            const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input?.url;
+            if (typeof raw !== "string" || !/SubbysPlushies/i.test(raw)) return null;
+            const path = normalizeAssetImagePath(raw);
+            if (typeof path !== "string") return null;
+            if (!/^Assets\/Female3DCG\/(?:ItemHandheld|ItemAddon)\/SubbysPlushies(?:[_.\/]|$)/i.test(path)) return null;
+            if (!/\.png$/i.test(path)) return null;
+            return path;
+        } catch (_) { return null; }
+    }
+    function preparedNativePlushPngBytes(encoded) {
+        if (typeof encoded !== "string" || !encoded.startsWith("data:image/png;base64,")) return null;
+        let cached = r133NativePngBytes.get(encoded);
+        if (cached) return cached;
+        try {
+            const binary = atob(encoded.slice("data:image/png;base64,".length));
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; ++i) bytes[i] = binary.charCodeAt(i);
+            if (bytes.length < 8 || bytes[0] !== 137 || bytes[1] !== 80 || bytes[2] !== 78 || bytes[3] !== 71) return null;
+            if (r133NativePngBytes.size > PLUSHES.length + 5) r133NativePngBytes.clear();
+            r133NativePngBytes.set(encoded, bytes);
+            return bytes;
+        } catch (_) { return null; }
+    }
+    function installR133NativePlushImageFetchBridge() {
+        const bcVersion = String(window.GameVersion || "");
+        const isR133 = /^R(?:13[3-9]|1[4-9]\d|[2-9]\d{2,})\b/i.test(bcVersion) ||
+            /\/R(?:13[3-9]|1[4-9]\d|[2-9]\d{2,})(?:\/|$)/i.test(window.location?.pathname || "");
+        if (!isR133) return false;
+        const original = window.fetch;
+        if (typeof original !== "function" || typeof window.Response !== "function") return false;
+        if (original[R133_NATIVE_PLUSH_FETCH_MARK]) {
+            r133NativePlushFetchInstalled = true;
+            return true;
+        }
+        const wrapped = function (input, init) {
+            const path = isR133PlushAssetRequest(input, init);
+            if (!path) return original.apply(this, arguments);
+            r133NativeFetchStats.requests++;
+            r133NativeFetchStats.lastPath = path;
+            // Complete lazy artwork preparation BEFORE returning a bitmap to BC's
+            // cache: returning a temporary fallback would otherwise get cached.
+            return Promise.resolve().then(async () => {
+                const option = plushOptionFromNativeImagePath(path);
+                const encoded = validPlushOption(option)
+                    ? await ensureRenderImage(option)
+                    : renderFallbackImage;
+                const bytes = preparedNativePlushPngBytes(encoded);
+                if (!bytes) {
+                    r133NativeFetchStats.fallbacks++;
+                    return original.call(this, input, init);
+                }
+                const response = new window.Response(bytes.slice(), {
+                    status: 200,
+                    headers: { "Content-Type": "image/png", "Cache-Control": "no-store" },
+                });
+                r133NativeFetchStats.replies++;
+                return response;
+            }).catch(error => {
+                r133NativeFetchStats.errors++;
+                r133NativeFetchStats.lastError = String(error?.message || error);
+                return original.call(this, input, init);
+            });
+        };
+        Object.defineProperty(wrapped, R133_NATIVE_PLUSH_FETCH_MARK, { value: true });
+        try { window.fetch = wrapped; }
+        catch (e) { warn("R133 plush image bridge could not install:", e); return false; }
+        r133NativePlushFetchInstalled = window.fetch === wrapped;
+        if (r133NativePlushFetchInstalled) log("R133 native ImageBitmap cache: installed synthetic PNG fetch adapter.");
+        return r133NativePlushFetchInstalled;
+    }
+    // Runs only on demand. Does not change remote player inventory or sync data.
+    window.SubbysPlushiesRemoteRenderDiag = function () {
+        const characters = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
+        const remote = characters.filter(C => C && C !== window.Player && Number(C.MemberNumber) !== Number(window.Player?.MemberNumber));
+        const worn = remote.flatMap(C => getEquippedPlushItems(C).map(item => ({
+            member: C.MemberNumber,
+            group: item?.Asset?.Group?.Name,
+            type: item?.Property?.Type || null,
+            typeRecord: item?.Property?.TypeRecord?.[MODULE_KEY] ?? null,
+            option: getItemPlushOption(item),
+        })));
+        const data = {
+            version: VERSION, gameVersion: window.GameVersion || null,
+            bridgeInstalled: r133NativePlushFetchInstalled,
+            requests: r133NativeFetchStats.requests,
+            responses: r133NativeFetchStats.replies,
+            fallbacks: r133NativeFetchStats.fallbacks,
+            errors: r133NativeFetchStats.errors,
+            lastPath: r133NativeFetchStats.lastPath,
+            lastError: r133NativeFetchStats.lastError,
+            roomCharacters: remote.length, remotePlushItems: worn.length,
+            imageHook: bcImagePathHookInstalled, worn,
+        };
+        console.log("[Subby's Plushies] R133 remote render diagnostic", data);
+        return data;
+    };
     function installImageMappingHooks() {
         const nativeImageHook = installNativeImageElementHook();
         let fallbackHook = null;
@@ -18770,6 +18879,7 @@ function SubbysPlushiesPageMain() {
         installAssetTextHook();
         try { installHugTightlyTextHook(); }
         catch (e) { warn("Optional activity text hook could not be installed:", e); }
+        optionalStartupStep("R133-native-plush-image-fetch", installR133NativePlushImageFetchBridge);
         installImageMappingHooks();
         let primaryAsset = null;
         for (const groupName of PLUSH_GROUPS) {
@@ -20135,6 +20245,9 @@ function SubbysPlushiesPageMain() {
                 bcImagePathHook: bcImagePathHookInstalled,
                 htmlImageSrcHook: imageElementSrcHookInstalled,
                 htmlImageSetAttributeHook: imageElementSetAttributeHookInstalled,
+                r133NativeFetchBridge: r133NativePlushFetchInstalled,
+                r133NativeFetchReplies: r133NativeFetchStats.replies,
+                r133NativeFetchErrors: r133NativeFetchStats.errors,
                 nativeCommandFallback: nativeCommandHookInstalled,
                 unrelatedImageFastPath: true,
                 moveResizeLifecyclePollMs: LAYERING_BRIDGE_MONITOR_INTERVAL_MS,
@@ -20463,6 +20576,7 @@ function SubbysPlushiesPageMain() {
         dataStatus: () => ({ ...gitDataState, status: gitDataStatusText() }),
         reloadData: () => refreshGitDataFromGitHub({ force: true, silent: false, includeLore: true }),
         debug,
+        remoteRenderDiag: () => window.SubbysPlushiesRemoteRenderDiag(),
     };
     async function waitForBC() {
         let lastStatus = "";
