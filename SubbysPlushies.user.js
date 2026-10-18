@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.66
-// @description  Desktop/mobile view detection fix, gestures, protected outfits, R133 support
+// @version      3.5.68
+// @description  Achievement persistence fix, seven new trophies, crafting restore verification
 // @released     2026-10-17
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.66";
+    const VERSION = "3.5.68";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -695,6 +695,16 @@ function SubbysPlushiesPageMain() {
         Object.freeze({ id: "absolute_unit", name: "Absolute Unit", description: "Resize a plushie extremely large.", test: s => progressMetric(s, "absoluteUnit") >= 1 }),
         Object.freeze({ id: "fashionably_early", name: "Fashionably Early", description: "Join the cuddle room before the Cuddle Queen is there.", hidden: true, test: s => progressMetric(s, "fashionablyEarly") >= 1 }),
         Object.freeze({ id: "royal_audience", name: "Royal Audience", description: "Be in the cuddle room with the Cuddle Queen while holding a Bonded plushie.", hidden: true, test: s => progressMetric(s, "royalAudience") >= 1 }),
+        Object.freeze({ id: "chromatic_genius", name: "Chromatic Genius", description: "Apply a Harmonizer outfit palette using three distinct core colors.", hidden: true, test: s => progressMetric(s, "chromaticGenius") >= 1 }),
+        Object.freeze({ id: "unbreakable_bond", name: "Unbreakable Bond", description: "Reach Bonded relationship with five different plushies.", test: s => countPlushiesAtRelationship("Bonded") >= 5 }),
+        // v3.5.68: seven unique additions (Social Butterfly Deluxe appears once).
+        Object.freeze({ id: "cuddle_addict", name: "Cuddle Addict", rarity: "Rare", description: "Perform 100 affectionate plushie interactions.", test: s => statAffectionCount(s) >= 100 }),
+        Object.freeze({ id: "plushie_royalty", name: "Plushie Royalty", rarity: "Legendary", description: "Reach Bonded with ten different plushies.", test: s => countPlushiesAtRelationship("Bonded") >= 10 }),
+        Object.freeze({ id: "the_chosen_one", name: "The Chosen One", rarity: "Epic", description: "Use the same plushie on seven different days.", test: s => maxInteractionDaysForOnePlush(s) >= 7 }),
+        Object.freeze({ id: "treasure_hoarder", name: "Treasure Hoarder", rarity: "Rare", description: "Have 200 custom items in your in-game crafting library.", test: s => essentialsCraftingValidCount() >= 200 }),
+        Object.freeze({ id: "organized_chaos", name: "Organized Chaos", hidden: true, rarity: "Rare", description: "Replace and restore your in-game crafting library using a verified backup.", test: s => progressMetric(s,"craftingRestoredFromBackup") >= 1 }),
+        Object.freeze({ id: "crafting_empire", name: "Crafting Empire", rarity: "Legendary", description: "Have 500 valid custom items in your in-game crafting library.", test: s => essentialsCraftingValidCount() >= 500 }),
+        Object.freeze({ id: "social_butterfly_deluxe", name: "Social Butterfly Deluxe", rarity: "Legendary", description: "Interact with 50 distinct players using Essentials actions.", test: s => objectKeyCount(getAchievementProgress(s).playersInteracted) >= 50 }),
     ]);
     const BUILTIN_ACHIEVEMENTS = ACHIEVEMENTS;
     const ROOM_MASCOT_SET_RE = /(.+?)\s+sets\s+(.+?)\s+as\s+the\s+room\s+mascot\s+plushie\.?/i;
@@ -2857,7 +2867,10 @@ function SubbysPlushiesPageMain() {
                 drags: Math.max(0, Number(stored.drags) || 0),
                 offers: Math.max(0, Number(stored.offers) || 0),
                 progress: stored.progress && typeof stored.progress === "object" ? stored.progress : {},
-                achievements: stored.achievements && typeof stored.achievements === "object" ? stored.achievements : {},
+                achievements: stored.achievements && typeof stored.achievements === "object" && !Array.isArray(stored.achievements) ? stored.achievements : {},
+                // v3.5.68: v3.5.67 saved this field but forgot to hydrate it on reload.
+                essentialsProgression: stored.essentialsProgression && typeof stored.essentialsProgression === "object" && !Array.isArray(stored.essentialsProgression)
+                    ? stored.essentialsProgression : {},
             };
         }
         statsState.battles = getBattleStatsStore();
@@ -2951,7 +2964,7 @@ function SubbysPlushiesPageMain() {
             "baseCuddleSubbycat", "professionalPlushieWrangler", "actuallyThisOne", "plushieHoarder", "doubleTrouble",
             "plushieTherapist", "committed", "forgiven", "personalSpace", "overprotective", "roomCelebrity",
             "successfulOffers", "bestBattleWinStreak", "currentBattleWinStreak", "photoFinishWins", "tinyPlushie", "absoluteUnit",
-            "fashionablyEarly", "royalAudience", "protectTriggers", "balanceBestSeconds"
+            "fashionablyEarly", "royalAudience", "chromaticGenius", "protectTriggers", "balanceBestSeconds", "craftingRestoredFromBackup"
         ]) p[key] = Math.max(0, Number(p[key]) || 0);
         return p;
     }
@@ -3060,9 +3073,27 @@ function SubbysPlushiesPageMain() {
         const addon = getInventoryItem(window.Player, ADDON_GROUP);
         if (isOurs(hand) && isOurs(addon)) markProgress("plushieHoarder", 1);
     }
+    // Compact lifetime distinct-day counter per plushie; never stores unbounded calendar history.
+    function trackPlushDailyUse(name) {
+        const plush=String(name||"").trim();
+        if (!plush || plush.length>150) return false;
+        const days=getAchievementProgress().interactionDays;
+        const today=essentialsLocalDay();
+        const record=interactionDayRecord(days[plush]);
+        if (record.lastDay===today) return false;
+        const delta=interactionDayDifference(record.lastDay,today);
+        record.count+=1;
+        record.currentStreak=delta===1?Math.max(1,record.currentStreak+1):1;
+        record.longestStreak=Math.max(record.longestStreak,record.currentStreak);
+        record.lastDay=today;
+        days[plush]=record;
+        scheduleGeneralStatsSave();
+        return true;
+    }
     function trackSelectionAchievements(name, groupName = null) {
         const now = Date.now();
         const normalizedName = String(name || "Plushie");
+        trackPlushDailyUse(normalizedName);
         achievementSession.selectedPlushes.add(normalizedName);
         if (achievementSession.selectedPlushes.size >= 10) markProgress("professionalPlushieWrangler", 1);
         achievementSession.selectionHistory.push({ name: normalizedName, at: now });
@@ -3077,17 +3108,7 @@ function SubbysPlushiesPageMain() {
     function trackInteractionAchievements(actionKey, plushName) {
         const stats = getStatsStore();
         const p = getAchievementProgress(stats);
-        const today = new Date().toISOString().slice(0, 10);
-        const storedDayRecord = p.interactionDays[plushName];
-        const dayRecord = interactionDayRecord(storedDayRecord);
-        if (dayRecord.lastDay !== today) {
-            const dayDifference = interactionDayDifference(dayRecord.lastDay, today);
-            dayRecord.count += 1;
-            dayRecord.currentStreak = dayDifference === 1 ? Math.max(1, dayRecord.currentStreak + 1) : 1;
-            dayRecord.longestStreak = Math.max(dayRecord.longestStreak, dayRecord.currentStreak);
-            dayRecord.lastDay = today;
-            p.interactionDays[plushName] = dayRecord;
-        }
+        trackPlushDailyUse(plushName);
         if (actionKey === "bonk") {
             p.bonkedPlushies[plushName] = 1;
             p.pendingForgiveness[plushName] = 1;
@@ -3243,7 +3264,28 @@ function SubbysPlushiesPageMain() {
     function statAffectionCount(stats = getStatsStore()) {
         return AFFECTION_ACTION_KEYS.reduce((sum, key) => sum + (Number(stats.actions?.[key]) || 0), 0);
     }
+    let essentialsCraftingCachedArray=null;
+    let essentialsCraftingCacheAt=0;
+    let essentialsCraftingCachedCount=0;
+    function essentialsCraftingValidCount() {
+        const crafting=window.Player?.Crafting;
+        if (!Array.isArray(crafting)) return 0;
+        const now=Date.now();
+        if (crafting===essentialsCraftingCachedArray && now-essentialsCraftingCacheAt<15000)
+            return essentialsCraftingCachedCount;
+        // Native crafting stores decoded entries with Item asset names, not compressed JSON.
+        let count=0;
+        for (const entry of crafting) {
+            if (entry && typeof entry==="object" && !Array.isArray(entry) && typeof entry.Item==="string" && entry.Item.trim().length>0) count++;
+        }
+        essentialsCraftingCachedArray=crafting;
+        essentialsCraftingCacheAt=now;
+        essentialsCraftingCachedCount=count;
+        return count;
+    }
     function checkAchievements(showNew = true) {
+        // Opportunistic check only on existing achievement events (no interval/timer).
+        try { plushieItemsBrowser?.verifyCraftingJourney?.(); } catch (_) {}
         const stats = getStatsStore();
         const unlocked = [];
         achievementMetricCache = new Map();
@@ -3259,7 +3301,8 @@ function SubbysPlushiesPageMain() {
         } finally {
             achievementMetricCache = null;
         }
-        if (unlocked.length) {
+        const earnedProgressionXp=essentialsAwardAchievements(stats);
+        if (unlocked.length || earnedProgressionXp) {
             flushGeneralStatsSave();
             if (showNew) {
                 for (const achievement of unlocked) {
@@ -3267,6 +3310,7 @@ function SubbysPlushiesPageMain() {
                 }
             }
         }
+        try { essentialsRefreshAchievementUI(); } catch (_) {}
         return unlocked;
     }
     function recordStat(kind, amount = 1, detail = null) {
@@ -3288,6 +3332,7 @@ function SubbysPlushiesPageMain() {
         else if (kind === "battleDraw") stats.battles.draws += value;
         const plushName = detail?.plushName || currentPlushName();
         if (plushName) stats.plushesUsed[plushName] = (Number(stats.plushesUsed[plushName]) || 0) + (kind === "select" ? value : 0);
+        if (kind === "interaction" || kind === "battlePlayed") essentialsRecordDaily(kind,value,detail);
         if (kind.startsWith("battle")) saveBattleStatsStore();
         else scheduleGeneralStatsSave();
         scheduleAchievementCheck(true);
@@ -3297,6 +3342,7 @@ function SubbysPlushiesPageMain() {
         const stats = getStatsStore();
         stats.plushesUsed[name] = (Number(stats.plushesUsed[name]) || 0) + 1;
         trackSelectionAchievements(name, groupName);
+        essentialsRecordDaily("select",1,{plushName:name});
         queueStatsAchievementFlush(true);
     }
     function showStats() {
@@ -3308,6 +3354,7 @@ function SubbysPlushiesPageMain() {
             `Offers started: ${s.offers} • successful offers: ${progressMetric(s, "successfulOffers")} • room mascots set: ${s.mascotSets}`,
             `Different plushies used: ${Object.keys(s.plushesUsed).length} • rooms: ${objectKeyCount(getAchievementProgress(s).roomsVisited)} • players: ${objectKeyCount(getAchievementProgress(s).playersInteracted)}`,
             `Best battle win streak: ${progressMetric(s, "bestBattleWinStreak")} • longest plushie streak: ${maxInteractionStreakForOnePlush(s)} days • best balance: ${progressMetric(s, "balanceBestSeconds")}s`,
+            `Essentials Level ${essentialsLevelStatus(s).level} • ${essentialsLevelStatus(s).xp} XP`,
         ]);
         return { ...s };
     }
@@ -3322,6 +3369,236 @@ function SubbysPlushiesPageMain() {
         appendLocalInfoBox(`Achievements (${Object.keys(stats.achievements).length}/${ACHIEVEMENTS.length})`, lines);
         return ACHIEVEMENTS.map(a => ({ ...a, unlocked: !!stats.achievements[a.id] }));
     }
+    // Essentials achievement expansion (v3.5.67): all data lives alongside the
+    // existing local stats, so legacy unlocks and sealed progress backups survive.
+    // No new polling loops: awards are calculated in the existing stat/achievement events.
+    const ESSENTIALS_TIER_NAMES = Object.freeze(["Bronze", "Silver", "Gold", "Diamond", "Legendary"]);
+    const ESSENTIALS_TIER_XP = Object.freeze([15, 25, 40, 65, 100]);
+    const ESSENTIALS_COLLECTIONS = Object.freeze([
+        Object.freeze({id:"cuddle_master", name:"Cuddle Master", achievementIds:["first_friend","plush_pal","professional_cuddler","maximum_cuddle","stitched_together"], xp:125}),
+        Object.freeze({id:"plushie_collector", name:"Plushie Collector", achievementIds:["collector","plushie_hoarder","old_friends","unbreakable_bond"], xp:140}),
+        Object.freeze({id:"battle_champion", name:"Battle Champion", achievementIds:["battle_tested","plush_champion","unbeatable_ish","photo_finish"], xp:125}),
+        Object.freeze({id:"social_butterfly", name:"Social Butterfly", achievementIds:["sharing_is_caring","social_butterfly","world_tour","join_cuddle_room"], xp:125}),
+    ]);
+    const ESSENTIALS_DAILY_QUESTS = Object.freeze([
+        Object.freeze({id:"playtime", name:"Plushie Playtime", description:"Perform five plushie interactions today.", goal:5, xp:40, metric:"interactions"}),
+        Object.freeze({id:"kindness", name:"Warm & Fuzzy", description:"Perform three affectionate plushie actions today.", goal:3, xp:45, metric:"affection"}),
+        Object.freeze({id:"challenge", name:"Battle Ready", description:"Complete one plushie battle today.", goal:1, xp:55, metric:"battles"}),
+        Object.freeze({id:"variety", name:"Mix It Up", description:"Select two different plushies today.", goal:2, xp:45, metric:"unique"}),
+    ]);
+    // Historical progress metrics are read-only. A one-time/secret achievement
+    // without a durable counter remains a single-stage achievement.
+    const ESSENTIALS_ACHIEVEMENT_METRICS = Object.freeze({
+        first_friend:[1,s=>s.totalInteractions], plush_pal:[25,s=>s.totalInteractions],
+        professional_cuddler:[100,s=>statAffectionCount(s)],
+        bonk_scholar:[10,s=>s.actions?.bonk], head_case:[25,s=>s.actions?.balanceHead],
+        headwear:[50,s=>s.actions?.balanceHead], collector:[10,s=>objectKeyCount(s.plushesUsed)],
+        chatty_plush:[25,s=>s.speechBubbles], wiggle_worm:[25,s=>s.idleAnimations],
+        battle_tested:[1,s=>s.battles?.played], plush_champion:[10,s=>s.battles?.wins],
+        mascot_maker:[1,s=>s.mascotSets],
+        bestie_material:[50,s=>maxRelationshipInteractions()],
+        stitched_together:[100,s=>maxRelationshipInteractions()],
+        old_friends:[3,s=>countPlushiesAtRelationship("Bonded")],
+        unbreakable_bond:[5,s=>countPlushiesAtRelationship("Bonded")],
+        cuddle_addict:[100,s=>statAffectionCount(s)],
+        plushie_royalty:[10,s=>countPlushiesAtRelationship("Bonded")],
+        the_chosen_one:[7,s=>maxInteractionDaysForOnePlush(s)],
+        treasure_hoarder:[200,s=>essentialsCraftingValidCount()],
+        organized_chaos:[1,s=>progressMetric(s,"craftingRestoredFromBackup")],
+        crafting_empire:[500,s=>essentialsCraftingValidCount()],
+        social_butterfly_deluxe:[50,s=>objectKeyCount(getAchievementProgress(s).playersInteracted)],
+        everybody_loves_me:[1,s=>allAvailablePlushiesAtRelationship("Friend")?1:0],
+        maximum_cuddle:[100,s=>maxPlushMoodScore()],
+        still_here:[7,s=>maxInteractionStreakForOnePlush(s)],
+        world_tour:[10,s=>objectKeyCount(getAchievementProgress(s).roomsVisited)],
+        social_butterfly:[10,s=>objectKeyCount(getAchievementProgress(s).playersInteracted)],
+        unbeatable_ish:[5,s=>progressMetric(s,"bestBattleWinStreak")],
+        photo_finish:[1,s=>progressMetric(s,"photoFinishWins")],
+        chaos_gremlin:[1,s=>allAvailablePlushNames().length && objectKeyCount(getAchievementProgress(s).bonkedPlushies)>=allAvailablePlushNames().length?1:0],
+        sharing_is_caring:[1,s=>progressMetric(s,"successfulOffers")],
+        overprotective:[5,s=>progressMetric(s,"protectTriggers")],
+        chromatic_genius:[1,s=>progressMetric(s,"chromaticGenius")],
+        royal_cuddle:[1,s=>progressMetric(s,"baseCuddleSubbycat")],
+        personal_space:[1,s=>progressMetric(s,"personalSpace")],
+        plushie_therapist:[1,s=>progressMetric(s,"plushieTherapist")],
+        committed:[1,s=>progressMetric(s,"committed")],
+        tiny_plushie:[1,s=>progressMetric(s,"tinyPlushie")],
+        absolute_unit:[1,s=>progressMetric(s,"absoluteUnit")],
+        professional_plushie_wrangler:[1,s=>progressMetric(s,"professionalPlushieWrangler")],
+        actually_this_one:[1,s=>progressMetric(s,"actuallyThisOne")],
+        double_trouble:[1,s=>progressMetric(s,"doubleTrouble")],
+        plushie_hoarder:[1,s=>progressMetric(s,"plushieHoarder")],
+        forgiven:[1,s=>progressMetric(s,"forgiven")],
+    });
+    function essentialsLocalDay(date=new Date()) {
+        const pad = n => String(n).padStart(2,"0");
+        return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+    }
+    function getEssentialsProgression(stats=getStatsStore()) {
+        if (!stats.essentialsProgression || typeof stats.essentialsProgression!=="object" || Array.isArray(stats.essentialsProgression))
+            stats.essentialsProgression = {};
+        const p=stats.essentialsProgression;
+        p.xp=Math.min(100000000,Math.max(0,Math.floor(Number(p.xp)||0)));
+        for (const key of ["awardedTiers","awardedCollections"])
+            if (!p[key] || typeof p[key]!=="object" || Array.isArray(p[key])) p[key]={};
+        if (!Array.isArray(p.showcase)) p.showcase=[];
+        p.showcase=p.showcase.filter(id=>typeof id==="string").slice(0,3);
+        if (!p.daily || typeof p.daily!=="object" || Array.isArray(p.daily)) p.daily={};
+        const today=essentialsLocalDay();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(p.daily.day||"")) || p.daily.day<today) {
+            p.daily={day:today,interactions:0,affection:0,battles:0,selected:{},awarded:{}};
+            // A new day starts with fresh counters; never replay past lifetime actions.
+            scheduleGeneralStatsSave();
+        }
+        const daily=p.daily;
+        for (const key of ["interactions","affection","battles"])
+            daily[key]=Math.min(1000000,Math.max(0,Math.floor(Number(daily[key])||0)));
+        if (!daily.selected || typeof daily.selected!=="object" || Array.isArray(daily.selected)) daily.selected={};
+        if (!daily.awarded || typeof daily.awarded!=="object" || Array.isArray(daily.awarded)) daily.awarded={};
+        return p;
+    }
+    function essentialsDailyValue(daily, quest) {
+        return quest.metric==="unique" ? objectKeyCount(daily.selected) : Math.max(0,Number(daily[quest.metric])||0);
+    }
+    function essentialsAddXp(progress, amount) {
+        const num=Math.max(0,Math.floor(Number(amount)||0));
+        progress.xp=Math.min(100000000,progress.xp+num);
+    }
+    function essentialsLevelStatus(stats=getStatsStore()) {
+        const xp=getEssentialsProgression(stats).xp;
+        let remaining=xp, level=1, required=100;
+        while (remaining>=required && level<1000) {
+            remaining-=required; level++; required=100+(level-1)*50;
+        }
+        return {level,xp,current:remaining,needed:required,percent:Math.min(100,100*remaining/required)};
+    }
+    function essentialsAchievementInfo(achievement,stats=getStatsStore()) {
+        const metric=ESSENTIALS_ACHIEVEMENT_METRICS[achievement.id];
+        const fromCondition=achievement.condition && typeof achievement.condition==="object" ? achievement.condition:null;
+        let goal=metric?metric[0]:(fromCondition && Number(fromCondition.value)>0 ? Number(fromCondition.value) : 1);
+        goal=Math.max(1,Math.floor(Number(goal)||1));
+        let actual=0;
+        try {
+            if (metric) actual=Number(metric[1](stats))||0;
+            else if (fromCondition) actual=Number(achievementMetricValue(stats,fromCondition.metric))||0;
+            else actual=stats.achievements?.[achievement.id]?1:0;
+        } catch (_) {}
+        actual=Math.max(0,Math.floor(actual));
+        const unlocked=!!stats.achievements?.[achievement.id];
+        if (unlocked) actual=Math.max(actual,goal);
+        // Original unlock requirements remain exactly as before: they correspond
+        // to Gold for repeatable/count achievements, Bronze for one-time events.
+        const tiered=goal>1 && metric!=null;
+        const targets=tiered
+            ? [Math.max(1,Math.ceil(goal*.25)),Math.max(2,Math.ceil(goal*.5)),goal,Math.max(goal+1,goal*2),Math.max(goal+2,goal*4)]
+            : [goal];
+        // Small goals can have duplicate Bronze/Silver targets. Coalesce tiers
+        // by forcing monotonic target counts without changing original unlocks.
+        if (tiered) { for(let i=1;i<targets.length;i++) targets[i]=Math.max(targets[i],targets[i-1]+1); }
+        const earned=targets.filter(target=>actual>=target).length;
+        const rewardTier=Math.max(0,Math.min(targets.length,Number(getEssentialsProgression(stats).awardedTiers[achievement.id])||0));
+        const displayTier=Math.max(earned,rewardTier);
+        const nextTarget=targets[Math.min(displayTier,targets.length-1)];
+        const previousTarget=displayTier?targets[displayTier-1]:0;
+        return {actual,goal,targets,tiered,earned,displayTier,nextTarget,previousTarget,
+            percent:displayTier>=targets.length?100:Math.min(100,Math.max(0,100*(actual-previousTarget)/Math.max(1,nextTarget-previousTarget))),
+            label:displayTier ? ESSENTIALS_TIER_NAMES[tiered ? Math.min(4,displayTier-1):0] : "Not yet earned"};
+    }
+    function essentialsAwardAchievements(stats=getStatsStore()) {
+        const p=getEssentialsProgression(stats);
+        let changed=false;
+        for (const achievement of ACHIEVEMENTS) {
+            const info=essentialsAchievementInfo(achievement,stats);
+            const old=Math.max(0,Math.floor(Number(p.awardedTiers[achievement.id])||0));
+            if (info.earned<=old) continue;
+            for(let i=old;i<info.earned;i++) essentialsAddXp(p,info.tiered?ESSENTIALS_TIER_XP[i]:ESSENTIALS_TIER_XP[0]);
+            p.awardedTiers[achievement.id]=info.earned;
+            changed=true;
+        }
+        for (const collection of ESSENTIALS_COLLECTIONS) {
+            if (p.awardedCollections[collection.id]) continue;
+            if (collection.achievementIds.every(id=>!!stats.achievements[id])) {
+                p.awardedCollections[collection.id]=Date.now();
+                essentialsAddXp(p,collection.xp); changed=true;
+            }
+        }
+        return changed;
+    }
+    function essentialsRecordDaily(kind,amount=1,detail=null) {
+        const p=getEssentialsProgression();
+        const d=p.daily;
+        const n=Math.max(0,Math.floor(Number(amount)||0));
+        if (!n) return false;
+        if (kind==="interaction") {
+            d.interactions+=n;
+            if (AFFECTION_ACTION_KEYS.includes(String(detail?.action||""))) d.affection+=n;
+        } else if (kind==="battlePlayed") d.battles+=n;
+        else if (kind==="select") {
+            const name=String(detail?.plushName||"").trim();
+            if (name && name.length<=150) d.selected[name]=true;
+        } else return false;
+        const finished=[];
+        for (const quest of ESSENTIALS_DAILY_QUESTS) {
+            if (d.awarded[quest.id] || essentialsDailyValue(d,quest)<quest.goal) continue;
+            d.awarded[quest.id]=Date.now();
+            essentialsAddXp(p,quest.xp);
+            finished.push(quest);
+        }
+        scheduleGeneralStatsSave();
+        for (const quest of finished) {
+            try { appendLocalInfoBox(`Daily quest complete: ${quest.name}`, [`+${quest.xp} Essentials XP • available again tomorrow`]); } catch (_) {}
+        }
+        // Existing progression screen updates only on actual stat events.
+        try { essentialsRefreshAchievementUI(); } catch (_) {}
+        return finished.length>0;
+    }
+    function essentialsSetShowcase(slot,id) {
+        const p=getEssentialsProgression();
+        const index=Math.floor(Number(slot));
+        if (index<0||index>2) return false;
+        const value=String(id||"");
+        if (value && (!ACHIEVEMENTS.some(a=>a.id===value) || !getStatsStore().achievements[value])) return false;
+        if (value && p.showcase.some((chosen,i)=>i!==index&&chosen===value)) return false;
+        p.showcase[index]=value;
+        scheduleGeneralStatsSave();
+        return true;
+    }
+    function essentialsRefreshAchievementUI() {
+        if (extensionsActiveTab!=="progress" || extensionsProgressTab!=="achievements" || !extensionsPanelContent?.isConnected) return;
+        const stats=getStatsStore();
+        const level=essentialsLevelStatus(stats);
+        const levelNode=extensionsPanelContent.querySelector('[data-essentials-level]');
+        if (levelNode) levelNode.textContent=`Level ${level.level} • ${level.xp} XP • ${Math.round(level.current)}/${level.needed} to next level`;
+        const levelBar=extensionsPanelContent.querySelector('[data-essentials-level-bar]');
+        if (levelBar) levelBar.style.width=`${level.percent}%`;
+        for (const quest of ESSENTIALS_DAILY_QUESTS) {
+            const qnode=extensionsPanelContent.querySelector(`[data-essentials-quest="${quest.id}"]`);
+            if (!qnode) continue;
+            const p=getEssentialsProgression(stats),done=!!p.daily.awarded[quest.id],value=essentialsDailyValue(p.daily,quest);
+            const label=qnode.querySelector('[data-essentials-quest-count]');
+            const fill=qnode.querySelector('[data-essentials-quest-bar]');
+            if (label) label.textContent=done?"✓ Completed today":`${Math.min(value,quest.goal)}/${quest.goal} • +${quest.xp} XP`;
+            if (fill) fill.style.width=`${Math.min(100,100*value/quest.goal)}%`;
+        }
+        for (const achievement of ACHIEVEMENTS) {
+            const node=extensionsPanelContent.querySelector(`[data-essentials-achievement="${achievement.id}"]`);
+            if (!node || (achievement.hidden && !stats.achievements?.[achievement.id])) continue;
+            const info=essentialsAchievementInfo(achievement,stats);
+            const count=node.querySelector('[data-essentials-progress-count]');
+            const bar=node.querySelector('[data-essentials-progress-bar]');
+            if(count) count.textContent=info.displayTier>=info.targets.length
+                ? `${info.actual} • ${info.label} mastered`
+                : `${info.actual}/${info.nextTarget} → ${ESSENTIALS_TIER_NAMES[info.tiered?info.displayTier:0]} • ${info.label}`;
+            if(bar) bar.style.width=`${info.percent}%`;
+        }
+    }
+    // Read-only diagnostics useful for live R132/R133 troubleshooting.
+    window.SubbysEssentialsLevelsDiag=()=>({version:VERSION,level:essentialsLevelStatus(),
+        today:getEssentialsProgression().daily.day,
+        daily:ESSENTIALS_DAILY_QUESTS.map(q=>({name:q.name,completed:!!getEssentialsProgression().daily.awarded[q.id],
+            value:essentialsDailyValue(getEssentialsProgression().daily,q),goal:q.goal})),
+        collections:ESSENTIALS_COLLECTIONS.map(c=>({name:c.name,completed:!!getEssentialsProgression().awardedCollections[c.id]}))});
+
     function randomPlushSpeech() {
         const score = getPlushMoodRecord().score;
         const bucket = score <= 38 ? PLUSH_SPEECH.grumpy : score <= 65 ? PLUSH_SPEECH.calm : score <= 92 ? PLUSH_SPEECH.happy : PLUSH_SPEECH.adoring;
@@ -9369,10 +9646,21 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(section, "Plush state", `${status.sleepy}${status.favorite ? " • ★ Favorite" : ""}`);
         appendExtensionsKeyValue(section, "Room mascot", status.mascot);
         appendExtensionsKeyValue(section, "Achievements", status.achievements);
+        const statusLevel=essentialsLevelStatus();
+        appendExtensionsKeyValue(section, "Essentials level", `Level ${statusLevel.level} · ${statusLevel.xp} XP`);
         appendExtensionsKeyValue(section, "Latest version", status.latestVersion);
         appendExtensionsKeyValue(section, "Git data", status.gitData);
         appendExtensionsKeyValue(section, "Git data refreshed", status.gitDataRefreshed);
         container.appendChild(section);
+        const pinned=getEssentialsProgression().showcase.filter(id=>!!getStatsStore().achievements[id]);
+        if (pinned.length) {
+            const display=makeExtensionsSection("★ Achievement Showcase");
+            for (const id of pinned) {
+                const trophy=ACHIEVEMENTS.find(a=>a.id===id);
+                if (trophy) appendExtensionsKeyValue(display,trophy.name,`Unlocked · ${essentialsAchievementInfo(trophy).label}`);
+            }
+            container.appendChild(display);
+        }
         const wardrobePanel = makeExtensionsSection("Subby's Wardrobe • curated accessories");
         const wardrobe = window.SubbysWardrobeCurated;
         appendExtensionsKeyValue(wardrobePanel, "State", wardrobe?.status || "Loading");
@@ -9921,6 +10209,12 @@ function SubbysPlushiesPageMain() {
         const relationship = relationshipStatus(plushName);
         appendExtensionsKeyValue(current, "Relationship", `${relationship.level} • ${relationship.interactions} interactions`);
         container.appendChild(current);
+        const level = essentialsLevelStatus(s);
+        const levelSection = makeExtensionsSection("Essentials level");
+        appendExtensionsKeyValue(levelSection, "Level", level.level);
+        appendExtensionsKeyValue(levelSection, "Total XP", level.xp);
+        appendExtensionsKeyValue(levelSection, "Next level", `${level.current}/${level.needed} XP`);
+        container.appendChild(levelSection);
         const summary = makeExtensionsSection("Lifetime local stats");
         appendExtensionsKeyValue(summary, "Interactions", s.totalInteractions);
         appendExtensionsKeyValue(summary, "Affectionate interactions", statAffectionCount(s));
@@ -9960,42 +10254,111 @@ function SubbysPlushiesPageMain() {
         }
         container.appendChild(actions);
     }
+    function essentialsProgressBar(pct) {
+        const track=document.createElement("div");
+        Object.assign(track.style,{height:"7px",background:getExtensionsStyle().border,borderRadius:"9px",overflow:"hidden",marginTop:"6px"});
+        const fill=document.createElement("div");
+        Object.assign(fill.style,{height:"100%",borderRadius:"9px",background:getExtensionsStyle().accent,width:`${Math.min(100,Math.max(0,pct))}%`,transition:"width 200ms ease"});
+        track.appendChild(fill);return {track,fill};
+    }
     function renderExtensionsAchievements(container) {
-        const stats = getStatsStore();
+        const stats=getStatsStore();
         checkAchievements(false);
-        const unlockedCount = ACHIEVEMENTS.filter(a => !!stats.achievements[a.id]).length;
-        const section = makeExtensionsSection(`Achievements (${unlockedCount}/${ACHIEVEMENTS.length})`);
-        for (const achievement of ACHIEVEMENTS) {
-            const unlocked = !!stats.achievements[achievement.id];
-            const row = document.createElement("div");
-            Object.assign(row.style, {
-                display: "grid",
-                gridTemplateColumns: "34px 1fr",
-                gap: "10px",
-                padding: extensionsLayoutMetrics().rowPadding,
-                opacity: unlocked ? "1" : "0.62",
-                borderBottom: `1px solid ${getExtensionsStyle().border}55`,
+        const progress=getEssentialsProgression(stats);
+        const level=essentialsLevelStatus(stats);
+        const overview=makeExtensionsSection("Essentials level & XP");
+        const lvl=document.createElement("strong");lvl.dataset.essentialsLevel="true";
+        lvl.textContent=`Level ${level.level} • ${level.xp} XP • ${level.current}/${level.needed} to next level`;
+        lvl.style.color=getExtensionsStyle().text;overview.appendChild(lvl);
+        const levelBar=essentialsProgressBar(level.percent);
+        levelBar.fill.dataset.essentialsLevelBar="true";
+        overview.appendChild(levelBar.track);
+        const note=document.createElement("div");note.textContent="Earn XP from achievement tiers, completed collections and daily quests. Existing unlocks count automatically; rewards are never claimed twice.";
+        Object.assign(note.style,{fontSize:"12px",marginTop:"7px",color:getExtensionsStyle().muted});overview.appendChild(note);
+        container.appendChild(overview);
+
+        const showcase=makeExtensionsSection("Achievement Showcase · choose up to 3");
+        const showcaseHint=document.createElement("div");showcaseHint.textContent="Show off three unlocked achievements on your local Essentials profile. These choices are saved with your progress.";
+        Object.assign(showcaseHint.style,{fontSize:"12px",color:getExtensionsStyle().muted,marginBottom:"8px"});showcase.appendChild(showcaseHint);
+        const unlocked=ACHIEVEMENTS.filter(a=>stats.achievements[a.id]);
+        for (let slot=0;slot<3;slot++) {
+            const row=document.createElement("label");
+            Object.assign(row.style,{display:"flex",flexWrap:"wrap",alignItems:"center",gap:"8px",margin:"7px 0"});
+            const slotName=document.createElement("span");slotName.textContent=`★ Slot ${slot+1}`;slotName.style.minWidth="68px";
+            const select=document.createElement("select");
+            Object.assign(select.style,{flex:"1",minWidth:"155px",padding:"8px",borderRadius:"7px",background:getExtensionsStyle().background||"#312537",color:getExtensionsStyle().text,border:`1px solid ${getExtensionsStyle().border}`});
+            const none=document.createElement("option");none.value="";none.textContent="No achievement";select.appendChild(none);
+            for(const a of unlocked) {const opt=document.createElement("option");opt.value=a.id;opt.textContent=a.name;select.appendChild(opt);}
+            select.value=progress.showcase[slot]||"";
+            select.addEventListener("change",()=>{
+                if (!essentialsSetShowcase(slot,select.value)) {select.value=progress.showcase[slot]||"";return;}
+                renderExtensionsPanel();
             });
-            const mark = document.createElement("div");
-            mark.textContent = unlocked ? "✓" : "○";
-            Object.assign(mark.style, { fontSize: "22px", fontWeight: "bold", textAlign: "center", color: unlocked ? getExtensionsStyle().accent : getExtensionsStyle().muted });
-            const info = document.createElement("div");
-            const name = document.createElement("strong");
-            name.textContent = achievement.hidden && !unlocked ? "???" : achievement.name;
-            name.style.color = getExtensionsStyle().text;
-            const desc = document.createElement("div");
-            desc.textContent = achievement.hidden && !unlocked ? "Hidden achievement" : achievement.description;
-            Object.assign(desc.style, { marginTop: "2px", color: getExtensionsStyle().muted });
-            info.append(name, desc);
-            if (unlocked) {
-                const when = document.createElement("div");
-                const timestamp = Number(stats.achievements[achievement.id]);
-                when.textContent = Number.isFinite(timestamp) ? `Unlocked ${new Date(timestamp).toLocaleString()}` : "Unlocked";
-                Object.assign(when.style, { fontSize: "12px", color: getExtensionsStyle().muted, marginTop: "3px" });
-                info.appendChild(when);
+            row.append(slotName,select);showcase.appendChild(row);
+        }
+        container.appendChild(showcase);
+
+        const daily=makeExtensionsSection(`Daily Quests · ${progress.daily.day}`);
+        const hint=document.createElement("div");hint.textContent="Each quest can award XP once per local calendar day. Progress resets on the next day; you keep your earned levels.";
+        Object.assign(hint.style,{fontSize:"12px",color:getExtensionsStyle().muted,marginBottom:"8px"});daily.appendChild(hint);
+        for (const quest of ESSENTIALS_DAILY_QUESTS) {
+            const entry=document.createElement("div");entry.dataset.essentialsQuest=quest.id;
+            Object.assign(entry.style,{padding:"9px 2px",borderBottom:`1px solid ${getExtensionsStyle().border}55`});
+            const heading=document.createElement("strong");heading.textContent=quest.name;heading.style.color=getExtensionsStyle().text;
+            const desc=document.createElement("div");desc.textContent=quest.description;desc.style.color=getExtensionsStyle().muted;desc.style.fontSize="12px";
+            const count=document.createElement("div");count.dataset.essentialsQuestCount="true";
+            const done=!!progress.daily.awarded[quest.id],value=essentialsDailyValue(progress.daily,quest);
+            count.textContent=done?"✓ Completed today":`${Math.min(value,quest.goal)}/${quest.goal} • +${quest.xp} XP`;
+            count.style.fontSize="12px";
+            const bar=essentialsProgressBar(100*value/quest.goal);bar.fill.dataset.essentialsQuestBar="true";
+            entry.append(heading,desc,count,bar.track);daily.appendChild(entry);
+        }
+        container.appendChild(daily);
+
+        const collectionSection=makeExtensionsSection("Achievement Collections");
+        for (const collection of ESSENTIALS_COLLECTIONS) {
+            const found=collection.achievementIds.filter(id=>!!stats.achievements[id]).length;
+            const complete=found===collection.achievementIds.length;
+            const entry=document.createElement("div");Object.assign(entry.style,{padding:"9px 2px",borderBottom:`1px solid ${getExtensionsStyle().border}55`});
+            const heading=document.createElement("strong");heading.textContent=`${complete?"✓ ":""}${collection.name}`;heading.style.color=getExtensionsStyle().text;
+            const count=document.createElement("div");count.textContent=`${found}/${collection.achievementIds.length} unlocked • +${collection.xp} XP ${complete?"earned":"on completion"}`;
+            Object.assign(count.style,{fontSize:"12px",color:getExtensionsStyle().muted});
+            const bar=essentialsProgressBar(100*found/collection.achievementIds.length);
+            entry.append(heading,count,bar.track);collectionSection.appendChild(entry);
+        }
+        container.appendChild(collectionSection);
+
+        const unlockedCount=ACHIEVEMENTS.filter(a=>!!stats.achievements[a.id]).length;
+        const section=makeExtensionsSection(`Achievements (${unlockedCount}/${ACHIEVEMENTS.length}) · Tiers`);
+        for (const achievement of ACHIEVEMENTS) {
+            const isUnlocked=!!stats.achievements[achievement.id];
+            const row=document.createElement("div");row.dataset.essentialsAchievement=achievement.id;
+            Object.assign(row.style,{display:"grid",gridTemplateColumns:"30px minmax(0,1fr)",gap:"10px",padding:extensionsLayoutMetrics().rowPadding,opacity:isUnlocked?"1":".80",borderBottom:`1px solid ${getExtensionsStyle().border}55`});
+            const mark=document.createElement("div");mark.textContent=isUnlocked?"✓":"○";
+            Object.assign(mark.style,{fontSize:"22px",fontWeight:"bold",textAlign:"center",color:isUnlocked?getExtensionsStyle().accent:getExtensionsStyle().muted});
+            const info=document.createElement("div");
+            const title=document.createElement("strong");title.textContent=achievement.hidden&&!isUnlocked?"???":achievement.name;title.style.color=getExtensionsStyle().text;
+            const description=document.createElement("div");description.textContent=achievement.hidden&&!isUnlocked?"Hidden achievement":achievement.description;
+            Object.assign(description.style,{fontSize:"12px",marginTop:"2px",color:getExtensionsStyle().muted});
+            info.append(title,description);
+            if (achievement.rarity && !(achievement.hidden&&!isUnlocked)) {
+                const rarity=document.createElement("div");rarity.textContent=`Rarity: ${achievement.rarity}`;
+                Object.assign(rarity.style,{fontSize:"11px",marginTop:"2px",color:getExtensionsStyle().accent});info.appendChild(rarity);
             }
-            row.append(mark, info);
-            section.appendChild(row);
+            if(!(achievement.hidden&&!isUnlocked)) {
+                const status=essentialsAchievementInfo(achievement,stats);
+                const text=document.createElement("div");text.dataset.essentialsProgressCount="true";
+                text.textContent=status.displayTier>=status.targets.length
+                    ? `${status.actual} • ${status.label} mastered`
+                    : `${status.actual}/${status.nextTarget} → ${ESSENTIALS_TIER_NAMES[status.tiered?status.displayTier:0]} • ${status.label}`;
+                Object.assign(text.style,{fontSize:"12px",marginTop:"4px",color:getExtensionsStyle().accent});
+                const bar=essentialsProgressBar(status.percent);bar.fill.dataset.essentialsProgressBar="true";
+                info.append(text,bar.track);
+            }
+            if(isUnlocked){const when=document.createElement("div");const time=Number(stats.achievements[achievement.id]);
+                when.textContent=Number.isFinite(time)&&time>0?`Unlocked ${new Date(time).toLocaleString()}`:"Unlocked";
+                Object.assign(when.style,{fontSize:"11px",marginTop:"3px",color:getExtensionsStyle().muted});info.appendChild(when);}
+            row.append(mark,info);section.appendChild(row);
         }
         container.appendChild(section);
     }
@@ -11412,6 +11775,71 @@ function SubbysPlushiesPageMain() {
             state.feedback = `Requested download of your original BC crafting library (${occupied(data)} items). Verify the file exists before confirming replacement.`;
             return prepared;
         }
+        const JOURNEY_KEY=STORAGE_PREFIX+'restore-journey:';
+        const JOURNEY_RUNTIME=Math.random().toString(36).slice(2)+Date.now().toString(36);
+        let journeyCheckedAt=0;
+        function craftFingerprint(items) {
+            if (!Array.isArray(items)) return null;
+            let h1=2166136261,h2=0x9e3779b9,size=0;
+            // Canonicalize each craft, including slot and all fields. Never persist items in the tracker.
+            for (let i=0;i<MAX_SLOTS;i++) {
+                const obj=items[i]??null;
+                const str=stableBackupStringify(obj);
+                size+=str.length;
+                for (let j=0;j<str.length;j++) {
+                    const ch=str.charCodeAt(j);
+                    h1=Math.imul(h1^ch,16777619);
+                    h2=Math.imul(h2^ch,2246822519);
+                }
+                h1=Math.imul(h1^i,16777619);
+                h2=Math.imul(h2^(i+1),2246822519);
+            }
+            return `${(h1>>>0).toString(16)}:${(h2>>>0).toString(16)}:${size}`;
+        }
+        function readJourney(member) {
+            try { const v=JSON.parse(localStorage.getItem(JOURNEY_KEY+member)||'null');
+                if (v && typeof v==='object' && !Array.isArray(v) &&
+                    ['replacementPending','replacementConfirmed','restorationPending'].includes(v.phase) &&
+                    typeof v.original==='string' && typeof v.replacement==='string' &&
+                    Date.now()-(Number(v.startedAt)||0)<90*86400000) return v;
+            } catch (_) {}
+            return null;
+        }
+        function writeJourney(member,value) {
+            try { if (value) localStorage.setItem(JOURNEY_KEY+member,JSON.stringify(value));
+                else localStorage.removeItem(JOURNEY_KEY+member); } catch (_) {}
+        }
+        function verifyCraftingJourney() {
+            if (Date.now()-journeyCheckedAt<4000) return false;
+            journeyCheckedAt=Date.now();
+            const p=window.Player, member=String(p?.MemberNumber||'');
+            if (!member || !Array.isArray(p?.Crafting)) return false;
+            const journey=readJourney(member);
+            if (!journey || journey.runtime===JOURNEY_RUNTIME) return false;
+            const current=craftFingerprint(p.Crafting);
+            if (journey.phase==='replacementPending' && current===journey.replacement) {
+                journey.phase='replacementConfirmed';journey.runtime=JOURNEY_RUNTIME;writeJourney(member,journey);
+                return true;
+            }
+            if (journey.phase==='restorationPending' && current===journey.original) {
+                writeJourney(member,null);
+                markProgress('craftingRestoredFromBackup',1,{check:false});
+                return true;
+            }
+            return false;
+        }
+        function recordCraftingReplacement(member,beforeItems,afterItems) {
+            const before=craftFingerprint(beforeItems),after=craftFingerprint(afterItems);
+            const existing=readJourney(member);
+            if (existing && existing.phase==='replacementConfirmed' &&
+                existing.replacement===before && existing.original===after) {
+                // Only a previously verified replacement can turn into a verified restoration.
+                writeJourney(member,{...existing,phase:'restorationPending',runtime:JOURNEY_RUNTIME});
+            } else if (before!==after) {
+                writeJourney(member,{original:before,replacement:after,phase:'replacementPending',startedAt:Date.now(),runtime:JOURNEY_RUNTIME});
+            }
+            journeyCheckedAt=Date.now();
+        }
         function replaceLiveLibrary() {
             if (live.working) throw new Error('A crafting replacement is already in progress.');
             const prepared = liveAvailability();
@@ -11448,6 +11876,11 @@ function SubbysPlushiesPageMain() {
             try {
                 p.Crafting = newArray;
                 window.ServerAccountUpdate.QueueData({Crafting:raw}, true);
+                try { recordCraftingReplacement(again.member,oldArray,newArray); }
+                catch (e) { console.warn('[Subby crafting achievements] Tracker error', e); }
+                // Refresh the lifetime item-count achievements on successful local update.
+                essentialsCraftingCachedArray=null;
+                scheduleAchievementCheck(false);
                 live.downloaded = false;
                 state.feedback = `Sent ${again.afterCount} items to BC account #${again.member}. Reopen /craft or relog to confirm the server accepted them. KEEP YOUR BACKUP.`;
                 return true;
@@ -11673,6 +12106,7 @@ function SubbysPlushiesPageMain() {
         function onKeyDown(event) { if (event.key === 'Escape') { event.preventDefault(); close(); } }
         function open() {
             checkAccount();
+            try { verifyCraftingJourney(); scheduleAchievementCheck(false); } catch (_) {}
             if (state.dialog?.isConnected) { state.dialog.focus(); return; }
             const backdrop = create('div', null, {position:'fixed', inset:'0', background:'rgba(12,7,18,.76)', zIndex:'2147483550', display:'flex', alignItems:'center', justifyContent:'center', padding:'12px', boxSizing:'border-box'}, document.body);
             const panel = create('section', null, {width:'min(960px,98vw)', maxHeight:'min(90vh,900px)', background:'#21152e', color:'#f2e9ff', border:'2px solid #b093ca', borderRadius:'13px', boxShadow:'0 12px 40px #000b', padding:'14px', boxSizing:'border-box', display:'flex', flexDirection:'column', font:'14px Arial,sans-serif'}, backdrop);
@@ -11693,7 +12127,7 @@ function SubbysPlushiesPageMain() {
             // Non-UI diagnostic tools; mutating methods act on this in-memory JSON only, not BC.
             importJson, replaceSlot, undo, previewMerge, mergeLibraries, getSnapshot: () => state.library ? clone(state.library) : null,
             // Explicit methods for testing and troubleshooting. Neither runs without a user action.
-            liveAvailability, downloadLiveBackup, replaceLiveLibrary, liveDiagnostic,
+            liveAvailability, downloadLiveBackup, replaceLiveLibrary, liveDiagnostic, verifyCraftingJourney,
             getItemInfo(index) { const item = state.library?.crafts[index]; return info(item); } };
     })();
     window.SubbysPlushieItems = plushieItemsBrowser;
@@ -21829,6 +22263,12 @@ function SubbysPlushiesPageMain() {
                 }
                 synchronize();
                 for (const item of items) rememberWardrobe(item);
+                // The secret achievement requires distinct core swatches and an
+                // actual colorable jewelry/metal zone, not merely opening the picker.
+                if (new Set([hex,secondHex,jewelryHex]).size===3 && items.some(item=>
+                    isJewelryItem(item) || colorZoneNames(item,countColorZones(item)).some(zone=>isMetalZone(zone)))) {
+                    markProgress("chromaticGenius",1);
+                }
                 previous = {member,changes:saved};
                 chosen = hex; accent = secondHex; metal = jewelryHex;
                 writeColor(hex); writeAccent(secondHex); writeMetal(jewelryHex);
@@ -22796,7 +23236,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.66";
+    const VERSION = "3.5.68";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
