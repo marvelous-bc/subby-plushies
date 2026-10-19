@@ -1,5 +1,5 @@
 {
-  "version": "3.5.75",
+  "version": "3.5.76",
   "releaseDate": "2026-10-18",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
   "notes": "Appearance Shield now detects user-initiated BCOM outfit edits without a manual 90-second allowance. Requires a genuine browser gesture and identifiable BCOM call path. Retains R133 plushie rendering fix and all v3.5.74 Harmonizer improvements.",
