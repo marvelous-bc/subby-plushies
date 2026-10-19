@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.72
-// @description  R133 other-player plushie rendering fix; retains v3.5.70 features (no Appearance Shield)
+// @version      3.5.75
+// @description  R133 fixes + Appearance Shield + Harmonizer + automatic user-initiated BCOM edits
 // @released     2026-10-18
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.72";
+    const VERSION = "3.5.75";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -9519,6 +9519,552 @@ function SubbysPlushiesPageMain() {
                 protectedWorn:()=>Array.isArray(window.Player?.Appearance)?window.Player.Appearance.filter(isOutfitProtected).length:0});
         } catch (e) { warn("Outfit Lock API unavailable; core startup continues:", e); }
     }
+    // Appearance Shield v1: local, opt-in protection of the player's clothing.
+    // Other scripts execute in the same JS realm and cannot be authenticated.
+    // This is best-effort reconciliation, not a BC/server permission system.
+    const APPEARANCE_SHIELD_KEY = 'SubbysPlushies:AppearanceShield:v1:';
+    const APPEARANCE_SHIELD_LOG_LIMIT = 40;
+    const APPEARANCE_SHIELD_LIMIT = 3;
+    const APPEARANCE_SHIELD_WINDOW_MS = 60000;
+    const APPEARANCE_SHIELD_COOLDOWN_MS = 3500;
+    const appearanceShieldState = {
+        account: '', settings: null, baseline: null, logs: [], lastResult: 'Not started',
+        hooks: new Set(), timer: null, busy: false, allowUntil: 0,
+        allowLabel: '', lastRecovery: 0, recoveries: [], suspendedUntil: 0,
+        pending: false, notices: 0,
+        lastUserGesture: 0, bcomAutoUntil: 0, bcomAutoListeners: false
+    };
+    function appearanceShieldAccount() { return String(window.Player?.MemberNumber ?? 'guest'); }
+    function appearanceShieldSettings() {
+        const account = appearanceShieldAccount();
+        if (appearanceShieldState.settings && appearanceShieldState.account === account)
+            return appearanceShieldState.settings;
+        if (appearanceShieldState.account && appearanceShieldState.account !== account) appearanceShieldStopWatcher();
+        let stored = {};
+        try { stored = JSON.parse(window.localStorage?.getItem(APPEARANCE_SHIELD_KEY + account) || '{}') || {}; }
+        catch (_) {}
+        appearanceShieldState.account = account;
+        appearanceShieldState.settings = {
+            enabled: stored.enabled === true, mode: stored.mode === 'monitor' ? 'monitor' : 'restore',
+            nativeEditing: stored.nativeEditing !== false,
+            autoBCOM: stored.autoBCOM !== false,
+            trusted: {
+                BCX: stored.trusted?.BCX === true,
+                Echo: stored.trusted?.Echo === true,
+                BCOM: stored.trusted?.BCOM === true
+            }
+        };
+        appearanceShieldState.baseline = null;
+        appearanceShieldState.logs = [];
+        appearanceShieldState.recoveries = [];
+        appearanceShieldState.lastRecovery = 0;
+        appearanceShieldState.suspendedUntil = 0;
+        appearanceShieldState.allowUntil = 0;
+        appearanceShieldState.bcomAutoUntil = 0;
+        appearanceShieldState.lastUserGesture = 0;
+        if (appearanceShieldState.hooks.size && appearanceShieldState.settings.enabled)
+            appearanceShieldStartWatcher();
+        return appearanceShieldState.settings;
+    }
+    function appearanceShieldSave() {
+        try { window.localStorage?.setItem(APPEARANCE_SHIELD_KEY + appearanceShieldAccount(), JSON.stringify(appearanceShieldSettings())); return true; }
+        catch (e) { warn('Appearance Shield settings could not be saved:', e); return false; }
+    }
+    function appearanceShieldEvent(action, groups = [], source = 'unknown') {
+        appearanceShieldState.lastResult = action;
+        appearanceShieldState.logs.unshift({time: new Date().toLocaleTimeString(), action,
+            groups: groups.slice(0, 24).map(String), source});
+        appearanceShieldState.logs.length = Math.min(appearanceShieldState.logs.length, APPEARANCE_SHIELD_LOG_LIMIT);
+    }
+    function appearanceShieldClothingGroup(group) {
+        if (!group || group.Category !== 'Appearance' || !group.Name) return false;
+        const name = String(group.Name);
+        // Body/face/wing/tail assets, poses and restraint Item groups are NOT clothes.
+        if (/^(?:Hair(?:Front|Back|Side|Color|Highlight|Full)?|Eyes?|Eyebrows?|Pupils?|Lips?|Mouth|Face|Body|Nose|Blush|Skin|Tails?|Wings?|Height|Pose|Expression)(?:\d|$)/i.test(name)) return false;
+        return group.Clothing === true ||
+            /^(?:Cloth|Suit|Dress|Bra|Pant|Skirt|Shoe|Boot|Sock|Stocking|Glove|Hat|Belt|Corset|Jacket|Coat|Cape|Mask|Glasses|Necklace|Bracelet|Earring|Ring|Jewelry|Choker|Accessory|HairAccessory|Garter|Underwear|Panties|Apron|Bodysuit|Top|Bottom|Shirt|Blouse|Socks|Bag)/i.test(name);
+    }
+    function appearanceShieldItemGroup(item) { return item?.Asset?.Group?.Name || ''; }
+    function appearanceShieldColorClone(color) {
+        if (Array.isArray(color)) return color.slice(0, 32).map(appearanceShieldColorClone);
+        return typeof color === 'string' ? color : 'Default';
+    }
+    function appearanceShieldJsonCopy(value, limit = 20000) {
+        if (value == null) return null;
+        try {
+            const json = JSON.stringify(value);
+            return typeof json === 'string' && json.length <= limit ? JSON.parse(json) : null;
+        } catch (_) { return null; }
+    }
+    function appearanceShieldCosmeticProperty(item) {
+        if (!item?.Property || typeof item.Property !== 'object') return null;
+        // Never snapshot/restore padlocks, permissions, effects or restraints.
+        const allowed = ['Type','Opacity','OverridePriority','OverrideHeight','OverrideAssetHeight',
+            'Color','ColorGroup','Pattern','Text','Text2','Font','Offset','Rotate','Variation'];
+        const value = {};
+        for (const key of allowed) if (Object.prototype.hasOwnProperty.call(item.Property, key)) {
+            const safe = appearanceShieldJsonCopy(item.Property[key], 4000);
+            if (safe != null) value[key] = safe;
+        }
+        return Object.keys(value).length ? value : null;
+    }
+    function appearanceShieldSafeCopy(item) {
+        return { name: item.Asset.Name, asset: item.Asset, color: appearanceShieldColorClone(item.Color),
+            difficulty: Number(item.Difficulty) || 0, craft: appearanceShieldJsonCopy(item.Craft),
+            cosmetic: appearanceShieldCosmeticProperty(item) };
+    }
+    function appearanceShieldSnapshot(player = window.Player) {
+        if (!player || !Array.isArray(player.Appearance)) return null;
+        const items = new Map();
+        for (const item of player.Appearance) {
+            if (!appearanceShieldClothingGroup(item?.Asset?.Group)) continue;
+            if (!items.has(appearanceShieldItemGroup(item))) items.set(appearanceShieldItemGroup(item), appearanceShieldSafeCopy(item));
+        }
+        return {member: player.MemberNumber, family: player.AssetFamily, items};
+    }
+    function appearanceShieldItemSignature(item) {
+        return item ? JSON.stringify([item.name,item.color,item.difficulty,item.craft,item.cosmetic]) : null;
+    }
+    function appearanceShieldChanges(before, now) {
+        const changed = [];
+        if (!before || !now || before.member !== now.member || before.family !== now.family) return changed;
+        for (const group of new Set([...before.items.keys(), ...now.items.keys()]))
+            if (appearanceShieldItemSignature(before.items.get(group)) !== appearanceShieldItemSignature(now.items.get(group)))
+                changed.push(group);
+        return changed;
+    }
+    function appearanceShieldAllowEssentials(label = 'Essentials', ms = 2500) {
+        if (!appearanceShieldSettings().enabled) return;
+        appearanceShieldState.allowUntil = Math.max(appearanceShieldState.allowUntil, Date.now() + Math.min(15000, Math.max(200, ms)));
+        appearanceShieldState.allowLabel = label;
+    }
+    function appearanceShieldAllowTemporary(label, ms = 60000) {
+        if (!appearanceShieldSettings().enabled) return false;
+        const duration = Math.max(1000, Math.min(120000, Number(ms) || 60000));
+        appearanceShieldState.allowUntil = Math.max(appearanceShieldState.allowUntil, Date.now() + duration);
+        appearanceShieldState.allowLabel = String(label || 'manual trusted edit');
+        appearanceShieldEvent('Approved edit window', [], appearanceShieldState.allowLabel);
+        return true;
+    }
+    // BCOM is an independent addon. Never trust it merely because it is installed.
+    // Require BOTH a recent browser-trusted user gesture and an identifiable BCOM
+    // call path. A brief allowance lets an async outfit application finish without
+    // handing unlimited editing permission to other addons in the same JS realm.
+    const APPEARANCE_SHIELD_BCOM_GESTURE_MS = 3500;
+    const APPEARANCE_SHIELD_BCOM_APPLY_MS = 8000;
+    function appearanceShieldObserveUserGesture(event) {
+        // Do not collect keys, pointer coordinates, targets, passwords or chat.
+        if (event?.isTrusted === true && appearanceShieldSettings().enabled)
+            appearanceShieldState.lastUserGesture = Date.now();
+    }
+    function appearanceShieldInstallBCOMUserGestures() {
+        if (appearanceShieldState.bcomAutoListeners || typeof document?.addEventListener !== 'function') return;
+        // Capturing works for both DOM-based and canvas-based BCOM UIs. A canvas
+        // click alone never grants permission; a BCOM-specific call path is needed.
+        for (const name of ['pointerdown', 'touchstart', 'keydown'])
+            document.addEventListener(name, appearanceShieldObserveUserGesture, {capture:true, passive:true});
+        appearanceShieldState.bcomAutoListeners = true;
+    }
+    function appearanceShieldIsBCOMCall() {
+        let stack = '';
+        try { stack = String(new Error().stack || ''); } catch (_) { return false; }
+        // Recognize BCOM's published script origin and named BCOM entry points.
+        // Deliberately avoid generic "bcom" substrings (including this script).
+        return /(?:utsumi24\.github\.io\/BCOM\/|github\.com\/Utsumi24\/BCOM\/|(?:^|[\s(])BCOM[A-Z][A-Za-z0-9_$]*\s*[@(])/im.test(stack);
+    }
+    function appearanceShieldMaybePermitBCOM(origin, args) {
+        const settings = appearanceShieldSettings(), state = appearanceShieldState;
+        if (!settings.enabled || !settings.autoBCOM || state.busy) return false;
+        if (args?.[0]?.MemberNumber != null && args[0] !== window.Player) return false;
+        const stamp = Date.now();
+        if (!(state.lastUserGesture > 0 && stamp - state.lastUserGesture <= APPEARANCE_SHIELD_BCOM_GESTURE_MS)) return false;
+        if (!appearanceShieldIsBCOMCall()) return false;
+        // Renewal requires a NEW real user gesture plus another attributable call.
+        const firstAction = stamp >= state.bcomAutoUntil;
+        state.bcomAutoUntil = Math.max(state.bcomAutoUntil, stamp + APPEARANCE_SHIELD_BCOM_APPLY_MS);
+        state.allowLabel = 'BCOM: user-initiated edit';
+        if (firstAction) appearanceShieldEvent('Automatically approved BCOM user edit', [], origin);
+        return true;
+    }
+    function appearanceShieldNativeScreen() {
+        return appearanceShieldSettings().nativeEditing &&
+            (window.CurrentScreen === 'Appearance' || window.CurrentScreen === 'Wardrobe');
+    }
+    function appearanceShieldPermit(source, duration = 2500) {
+        // Cooperative plugin integration ONLY. Not an authenticity/security check.
+        if (!Object.prototype.hasOwnProperty.call(appearanceShieldSettings().trusted, source) ||
+            !appearanceShieldSettings().trusted[source]) return false;
+        appearanceShieldAllowEssentials(source, duration);
+        return true;
+    }
+    function appearanceShieldTrustedReason() {
+        if (appearanceShieldNativeScreen()) return 'native appearance editor';
+        if (appearanceShieldState.bcomAutoUntil > Date.now()) return 'BCOM user-initiated edit';
+        if (appearanceShieldState.allowUntil > Date.now()) return appearanceShieldState.allowLabel || 'temporary allowance';
+        return '';
+    }
+    function appearanceShieldIsLocked(item) {
+        return !!(item?.Property?.LockedBy || item?.Property?.LockMemberNumber != null ||
+            item?.Property?.Effect?.includes?.('Lock'));
+    }
+    function appearanceShieldMayRestoreAsset(player, group, saved, current) {
+        if (!saved) return true;
+        if (!saved.asset || saved.asset.Group?.Name !== group) return false;
+        if (typeof window.AssetGet === 'function') {
+            try { if (window.AssetGet(player.AssetFamily, group, saved.name) !== saved.asset) return false; }
+            catch (_) { return false; }
+        }
+        if (saved.asset.Value > 0 && current?.Asset?.Name !== saved.name) {
+            try {
+                if (typeof window.InventoryAvailable !== 'function' ||
+                    !window.InventoryAvailable(player, saved.name, group)) return false;
+            } catch (_) { return false; }
+        }
+        return true;
+    }
+    function appearanceShieldBuildItem(saved) {
+        const fromAsset = window.AppearanceItem?.fromAsset;
+        let item;
+        if (typeof fromAsset === 'function') {
+            item = fromAsset.call(window.AppearanceItem, saved.asset, {color: appearanceShieldColorClone(saved.color), difficulty:saved.difficulty});
+        } else item = {Asset:saved.asset, Color:appearanceShieldColorClone(saved.color), Difficulty:saved.difficulty};
+        if (!item || item.Asset !== saved.asset) throw Error('BC rejected clothing asset restoration');
+        item.Color = appearanceShieldColorClone(saved.color);
+        item.Difficulty = saved.difficulty;
+        if (saved.craft) item.Craft = appearanceShieldJsonCopy(saved.craft);
+        if (saved.cosmetic) item.Property = {...(item.Property || {}), ...appearanceShieldJsonCopy(saved.cosmetic)};
+        return item;
+    }
+    function appearanceShieldRestore(changes, current) {
+        const state = appearanceShieldState, player = window.Player, prior = state.baseline;
+        if (!prior || !Array.isArray(player?.Appearance) || !changes.length) return {restored:[],skipped:changes};
+        const skip = [], replacements = new Map();
+        if (typeof player.CanChange === 'function' && !player.CanChange()) return {restored:[],skipped:changes};
+        for (const group of changes) {
+            const original = prior.items.get(group), currentItem = player.Appearance.find(i => appearanceShieldItemGroup(i) === group);
+            // Never remove or replace an item whose lock/permission is enforced by BC.
+            if (appearanceShieldIsLocked(currentItem) || !appearanceShieldMayRestoreAsset(player, group, original, currentItem)) {
+                skip.push(group); continue;
+            }
+            // Never remove a mandatory appearance slot (would lead to invalid BC bundles).
+            if (!original && currentItem?.Asset?.Group?.AllowNone === false) { skip.push(group); continue; }
+            try { replacements.set(group, original ? appearanceShieldBuildItem(original) : null); }
+            catch (e) { warn('Appearance Shield could not rebuild', group, e); skip.push(group); }
+        }
+        if (!replacements.size) return {restored:[],skipped:skip};
+        const oldAppearance = player.Appearance;
+        const next = [], processed = new Set();
+        for (const item of oldAppearance) {
+            const group = appearanceShieldItemGroup(item);
+            if (!replacements.has(group)) { next.push(item); continue; }
+            if (processed.has(group)) continue;
+            processed.add(group);
+            if (replacements.get(group)) next.push(replacements.get(group));
+        }
+        for (const [group, item] of replacements)
+            if (!processed.has(group) && item) next.push(item);
+        try {
+            player.Appearance = next;
+            window.CharacterRefresh?.(player, false, false);
+            window.CharacterLoadCanvas?.(player);
+        } catch (e) {
+            player.Appearance = oldAppearance;
+            appearanceShieldEvent(`Restore error: ${String(e?.message || e).slice(0, 80)}`, changes);
+            return {restored:[], skipped:changes};
+        }
+        return {restored:[...replacements.keys()],skipped:skip};
+    }
+    function appearanceShieldCheck(origin = 'event', attemptSync = false) {
+        const state = appearanceShieldState, settings = appearanceShieldSettings();
+        if (!settings.enabled || state.busy || !Array.isArray(window.Player?.Appearance)) return false;
+        const now = appearanceShieldSnapshot();
+        if (!state.baseline || state.baseline.member !== now.member || state.baseline.family !== now.family) {
+            state.baseline = now; return false;
+        }
+        const changes = appearanceShieldChanges(state.baseline, now);
+        if (!changes.length) return false;
+        const trust = appearanceShieldTrustedReason();
+        if (trust) { state.baseline = now; appearanceShieldEvent('Allowed clothing update', changes, trust); return false; }
+        appearanceShieldEvent(settings.mode === 'monitor' ? 'Observed clothing change' : 'Unexpected clothing change', changes, origin);
+        if (settings.mode === 'monitor') { state.baseline = now; return true; }
+        const stamp = Date.now();
+        state.recoveries = state.recoveries.filter(time => stamp - time < APPEARANCE_SHIELD_WINDOW_MS);
+        if (state.recoveries.length >= APPEARANCE_SHIELD_LIMIT || stamp < state.suspendedUntil) {
+            if (stamp >= state.suspendedUntil) {
+                state.suspendedUntil = stamp + 60000;
+                appearanceShieldEvent('Safety pause: repeated changes; use Re-arm to resume', changes, origin);
+            }
+            return true;
+        }
+        if (stamp - state.lastRecovery < APPEARANCE_SHIELD_COOLDOWN_MS) return true;
+        state.busy = true;
+        let result;
+        try { result = appearanceShieldRestore(changes, now); }
+        finally { state.busy = false; }
+        if (!result?.restored?.length) {
+            appearanceShieldEvent('Restoration skipped (BC permissions or missing assets)', changes, origin);
+            return true;
+        }
+        state.lastRecovery = stamp;
+        state.recoveries.push(stamp);
+        appearanceShieldEvent(`Restored ${result.restored.length} clothing slot(s)`, result.restored, origin);
+        // One bounded correction only; never send in a loop or while outside chat/online.
+        if (attemptSync && window.CurrentScreen === 'ChatRoom' && typeof window.ChatRoomCharacterUpdate === 'function') {
+            state.busy = true;
+            try { window.ChatRoomCharacterUpdate(window.Player); }
+            catch (e) { appearanceShieldEvent('Room sync failed', result.restored, String(e?.message||e).slice(0,64)); }
+            finally { state.busy = false; }
+        }
+        return true;
+    }
+    function appearanceShieldSetSettings(changes) {
+        const config = appearanceShieldSettings(), wasEnabled = config.enabled;
+        if (typeof changes.enabled === 'boolean') config.enabled = changes.enabled;
+        if (changes.mode === 'monitor' || changes.mode === 'restore') config.mode = changes.mode;
+        if (typeof changes.nativeEditing === 'boolean') config.nativeEditing = changes.nativeEditing;
+        if (typeof changes.autoBCOM === 'boolean') {
+            config.autoBCOM = changes.autoBCOM;
+            if (!config.autoBCOM) appearanceShieldState.bcomAutoUntil = 0;
+        }
+        if (changes.trusted && typeof changes.trusted === 'object') {
+            for (const name of ['BCX', 'Echo', 'BCOM'])
+                if (typeof changes.trusted[name] === 'boolean') config.trusted[name] = changes.trusted[name];
+        }
+        if (!appearanceShieldSave()) { config.enabled = wasEnabled; return false; }
+        if (!config.enabled) { appearanceShieldStopWatcher(); appearanceShieldState.baseline = null; appearanceShieldState.bcomAutoUntil = 0; }
+        else {
+            if (!wasEnabled) {
+                appearanceShieldState.recoveries = [];
+                appearanceShieldState.suspendedUntil = 0;
+                appearanceShieldState.lastRecovery = 0;
+                appearanceShieldState.allowUntil = 0;
+                appearanceShieldState.bcomAutoUntil = 0;
+            }
+            if (!wasEnabled || !appearanceShieldState.baseline) appearanceShieldState.baseline = appearanceShieldSnapshot();
+            appearanceShieldInstall(); // opt-in only: do not hook native BC functions when off
+            appearanceShieldStartWatcher();
+        }
+        return true;
+    }
+    function appearanceShieldStopWatcher() {
+        if (appearanceShieldState.timer != null) {
+            window.clearInterval(appearanceShieldState.timer);
+            appearanceShieldState.timer = null;
+        }
+    }
+    function appearanceShieldStartWatcher() {
+        if (!appearanceShieldSettings().enabled || appearanceShieldState.timer != null) return;
+        // Only active when explicitly enabled. Event hooks do most of the work.
+        appearanceShieldState.timer = window.setInterval(() => {
+            if (!document.hidden) appearanceShieldCheck('lightweight 4s backup check', true);
+        }, 4000);
+    }
+    function appearanceShieldInstallHook(name, handler) {
+        const state = appearanceShieldState;
+        if (state.hooks.has(name) || typeof window[name] !== 'function') return false;
+        if (modApi && typeof modApi.hookFunction === 'function') {
+            try {
+                modApi.hookFunction(name, 9750, (args, next) => handler(args, next));
+                state.hooks.add(name); return true;
+            } catch (e) { warn(`Appearance Shield ${name} SDK hook unavailable; trying local wrapper:`, e); }
+        }
+        const original = window[name];
+        if (typeof original !== 'function') return false;
+        try {
+            window[name] = function (...args) {
+                const target = this;
+                return handler(args, newArgs => original.apply(target, Array.isArray(newArgs) ? newArgs : args));
+            };
+            state.hooks.add(name); return true;
+        } catch (e) { warn(`Appearance Shield ${name} wrapper unavailable:`, e); return false; }
+    }
+    function appearanceShieldScheduleCheck(source, resync = false) {
+        if (!appearanceShieldSettings().enabled || appearanceShieldState.pending) return;
+        appearanceShieldState.pending = true;
+        window.queueMicrotask ? window.queueMicrotask(() => {
+            appearanceShieldState.pending = false;
+            appearanceShieldCheck(source, resync);
+        }) : window.setTimeout(() => {
+            appearanceShieldState.pending = false;
+            appearanceShieldCheck(source, resync);
+        }, 0);
+    }
+    function appearanceShieldFilterOutbound(args) {
+        // Defend against accidental/direct crafted packets that bypass Player.Appearance.
+        // Only ever rewrite the clothing portion of a known, native BC appearance bundle.
+        if (!appearanceShieldSettings().enabled || appearanceShieldSettings().mode !== 'restore' ||
+            appearanceShieldState.busy || appearanceShieldTrustedReason()) return args;
+        if (!['ChatRoomCharacterUpdate', 'AccountUpdate'].includes(args?.[0]) ||
+            !Array.isArray(args?.[1]?.Appearance) || typeof window.ServerAppearanceBundle !== 'function') return args;
+        appearanceShieldCheck('before outbound appearance packet', false);
+        const baseline = appearanceShieldState.baseline;
+        if (!baseline || baseline.member !== window.Player?.MemberNumber) return args;
+        let expected;
+        try { expected = window.ServerAppearanceBundle(window.Player.Appearance); }
+        catch (_) { return args; }
+        if (!Array.isArray(expected)) return args;
+        const incoming = args[1].Appearance;
+        const registry = new Map((Array.isArray(window.AssetGroup) ? window.AssetGroup : [])
+            .filter(group => appearanceShieldClothingGroup(group)).map(group => [group.Name,group]));
+        const isClothing = name => baseline.items.has(name) || registry.has(name);
+        const expectedMap = new Map(expected.filter(item => isClothing(item?.Group)).map(item => [item.Group,item]));
+        const result = [], seen = new Set();
+        let corrected = false;
+        for (const incomingItem of incoming) {
+            const group = incomingItem?.Group;
+            if (!isClothing(group)) { result.push(incomingItem); continue; }
+            if (seen.has(group)) { corrected = true; continue; }
+            seen.add(group);
+            const replacement = expectedMap.get(group);
+            if (!replacement) { corrected = true; continue; }
+            result.push(replacement);
+            try { if (JSON.stringify(incomingItem) !== JSON.stringify(replacement)) corrected = true; }
+            catch (_) { corrected = true; }
+        }
+        for (const [group, item] of expectedMap)
+            if (!seen.has(group)) { result.push(item); corrected = true; }
+        if (!corrected) return args;
+        appearanceShieldEvent('Filtered clothing in outgoing appearance packet', [...seen], 'direct packet');
+        return [args[0], {...args[1], Appearance:result}, ...args.slice(2)];
+    }
+    function appearanceShieldInstall() {
+        // Stay COMPLETELY PASSIVE until enabled. BCOM uses several shared BC
+        // functions; wrapping them while protection is off causes needless risk.
+        // Enabling later installs hooks, and installed hooks become no-ops when off.
+        if (!appearanceShieldSettings().enabled) {
+            appearanceShieldExposeApi();
+            return;
+        }
+        appearanceShieldInstallBCOMUserGestures();
+        appearanceShieldInstallHook('ServerSend', (args, next) => {
+            if (args?.[0] === 'AccountUpdate' || args?.[0] === 'ChatRoomCharacterUpdate')
+                appearanceShieldMaybePermitBCOM('outgoing '+args[0], args);
+            return next(appearanceShieldFilterOutbound(args));
+        });
+        for (const name of ['ChatRoomCharacterUpdate', 'ServerPlayerAppearanceSync']) {
+            appearanceShieldInstallHook(name, (args, next) => {
+                if (args.length === 0 || args[0] === window.Player || name === 'ServerPlayerAppearanceSync') {
+                    appearanceShieldMaybePermitBCOM('sync '+name, args);
+                    appearanceShieldCheck(`before ${name}`, false);
+                }
+                return next(args);
+            });
+        }
+        appearanceShieldInstallHook('ServerAppearanceLoadFromBundle', (args, next) => {
+            const result = next(args); // Let BC enforce its native validations/permissions first.
+            if (args[0] === window.Player) appearanceShieldScheduleCheck('server appearance update', true);
+            return result;
+        });
+        for (const name of ['CharacterAppearanceSetItem', 'InventoryWear', 'InventoryRemove']) {
+            appearanceShieldInstallHook(name, (args, next) => {
+                appearanceShieldMaybePermitBCOM('native '+name, args);
+                const result = next(args);
+                // These native signatures vary between BC releases; check identity AFTER.
+                appearanceShieldScheduleCheck(`native ${name}`, true);
+                return result;
+            });
+        }
+        if (appearanceShieldSettings().enabled) {
+            if (!appearanceShieldState.baseline) appearanceShieldState.baseline = appearanceShieldSnapshot();
+            appearanceShieldStartWatcher();
+        }
+        appearanceShieldExposeApi();
+    }
+    function appearanceShieldExposeApi() {
+        try { window.SubbysAppearanceShield = Object.freeze({
+            version: VERSION,
+            status: () => appearanceShieldStatus(),
+            log: () => appearanceShieldState.logs.map(x => ({...x,groups:[...x.groups]})),
+            enable: enabled => appearanceShieldSetSettings({enabled:!!enabled}),
+            mode: mode => appearanceShieldSetSettings({mode}),
+            check: () => appearanceShieldCheck('manual check', false),
+            rearm: () => { appearanceShieldState.suspendedUntil = 0; appearanceShieldState.recoveries = []; appearanceShieldState.lastRecovery = 0; appearanceShieldState.baseline = appearanceShieldSnapshot(); return true; },
+            trust: (source,ms) => appearanceShieldPermit(source,ms),
+            allowBCOM: (ms = 90000) => appearanceShieldAllowTemporary('BCOM user-approved edit',ms),
+            allowTemporary: (ms = 60000) => appearanceShieldAllowTemporary('user-approved edit',ms),
+            emergencyOff: () => appearanceShieldSetSettings({enabled:false})
+        }); } catch (_) {}
+    }
+    function appearanceShieldStatus() {
+        const settings = appearanceShieldSettings();
+        return {
+            version:VERSION,enabled:settings.enabled,mode:settings.mode,
+            protectedSlots:appearanceShieldState.baseline?.items.size ?? 0,
+            activeHooks:[...appearanceShieldState.hooks],watcherActive:appearanceShieldState.timer != null,
+            trusted:{...settings.trusted},
+            autoBCOM:settings.autoBCOM,
+            bcomUserEditSeconds:Math.max(0,Math.ceil((appearanceShieldState.bcomAutoUntil-Date.now())/1000)),
+            paused: Date.now() < appearanceShieldState.suspendedUntil,
+            secondsPaused:Math.max(0,Math.ceil((appearanceShieldState.suspendedUntil-Date.now())/1000)),
+            editWindowSeconds: Math.max(0,Math.ceil((appearanceShieldState.allowUntil-Date.now())/1000)),
+            lastResult:appearanceShieldState.lastResult,
+            recentChanges:appearanceShieldState.logs.slice(0,8).map(x=>({...x}))
+        };
+    }
+    function renderAppearanceShieldSettings(container) {
+        const settings = appearanceShieldSettings();
+        const state = appearanceShieldState;
+        const section = makeExtensionsSection('🛡 Appearance Shield • All Clothing');
+        const hint = document.createElement('p');
+        hint.textContent = 'Protects all equipped clothing and wearable accessories on YOUR character, including colors. Start with Monitor to see normal activity, then use Restore for active protection. It never guards restraints or body/face/wing/tail slots. It does not bypass BC permissions, locks, or server authority. Addons cannot be securely identified in browser JavaScript.';
+        Object.assign(hint.style, {fontSize:'12px',lineHeight:'1.5',color:getExtensionsStyle().muted,margin:'0 0 10px'});
+        section.append(hint,
+            extensionsSettingRow('Enable Appearance Shield', 'Off by default until you opt in. Captures your currently worn clothing as the protected outfit.',settings.enabled,
+                () => appearanceShieldSetSettings({enabled:!appearanceShieldSettings().enabled})),
+            extensionsSettingRow('Restore Unknown Changes', 'OFF = monitor/log only. ON = attempt a limited restore of changed clothing and colors.',settings.mode==='restore',
+                () => appearanceShieldSetSettings({mode:settings.mode==='restore'?'monitor':'restore'})),
+            extensionsSettingRow('Allow Native Appearance Editing', 'Update the protected outfit while manually using the BC Appearance/Wardrobe screen.',settings.nativeEditing,
+                () => appearanceShieldSetSettings({nativeEditing:!settings.nativeEditing})),
+            extensionsSettingRow('Automatically Allow My BCOM Edits', 'Allows edits when a real user action leads to an identifiable BCOM call. No repeated permission button. Other addons remain guarded; detection is best-effort.',settings.autoBCOM,
+                () => appearanceShieldSetSettings({autoBCOM:!appearanceShieldSettings().autoBCOM})));
+        const text = document.createElement('p');
+        const stat = appearanceShieldStatus();
+        text.textContent = `Protected: ${stat.protectedSlots} clothing slots · Hooks: ${stat.activeHooks.length} · ${stat.paused ? `Safety paused (${stat.secondsPaused}s)` : stat.bcomUserEditSeconds ? `BCOM user edit (${stat.bcomUserEditSeconds}s)` : stat.editWindowSeconds ? `Editing allowed (${stat.editWindowSeconds}s)` : 'Ready'} · Last: ${stat.lastResult}`;
+        Object.assign(text.style,{fontSize:'12px',color:getExtensionsStyle().muted,lineHeight:'1.5'});
+        section.append(text);
+        const actions = document.createElement('div');
+        Object.assign(actions.style,{display:'flex',gap:'8px',flexWrap:'wrap'});
+        actions.append(
+            makeExtensionsButton('Allow Changes for 60 Seconds', () => {
+                appearanceShieldAllowTemporary('user-approved 60s edit window', 60000);
+                renderExtensionsPanel();
+            }),
+            makeExtensionsButton('Allow BCOM Outfit Edits for 90 Seconds', () => {
+                appearanceShieldAllowTemporary('BCOM user-approved edit', 90000);
+                renderExtensionsPanel();
+            }),
+            makeExtensionsButton('Use Current Outfit as Baseline', () => {
+                appearanceShieldState.baseline = appearanceShieldSnapshot();
+                appearanceShieldState.recoveries = []; appearanceShieldState.suspendedUntil = 0;
+                appearanceShieldEvent('Protected outfit updated by user'); renderExtensionsPanel();
+            }),
+            makeExtensionsButton('Re-arm Shield', () => {
+                appearanceShieldState.recoveries=[];appearanceShieldState.suspendedUntil=0;
+                appearanceShieldState.lastRecovery=0;appearanceShieldEvent('Re-armed');renderExtensionsPanel();
+            }),
+            makeExtensionsButton('EMERGENCY OFF', () => {
+                appearanceShieldSetSettings({enabled:false});
+                appearanceShieldEvent('Emergency disabled');renderExtensionsPanel();
+            }));
+        section.append(actions);
+        const trusted = document.createElement('details');
+        const summary = document.createElement('summary'); summary.textContent='Advanced: cooperative trusted addons & change log';
+        Object.assign(summary.style,{cursor:'pointer',padding:'10px 0',fontSize:'13px'});
+        trusted.append(summary);
+        const note=document.createElement('p');
+        note.textContent='Automatic BCOM permissions require a recent genuine click/key action and an identifiable BCOM execution path. Detection is best-effort, not security authentication. If your BCOM build cannot be identified, use the manual 90s window below. BCX/Echo/BCOM can separately use the cooperative trust() API.';
+        Object.assign(note.style,{color:getExtensionsStyle().muted,fontSize:'12px',lineHeight:'1.5'});
+        trusted.append(note);
+        for (const name of ['BCX','Echo','BCOM']) trusted.append(extensionsSettingRow(`Allow ${name} cooperative updates`, 'Only effective when that addon integrates the Shield API. Never authenticates its origin.', settings.trusted[name],
+            () => appearanceShieldSetSettings({trusted:{[name]:!appearanceShieldSettings().trusted[name]}})));
+        const log = document.createElement('div');
+        Object.assign(log.style,{maxHeight:'170px',overflowY:'auto',fontSize:'11px',whiteSpace:'pre-wrap',wordBreak:'break-word',color:getExtensionsStyle().muted,padding:'6px'});
+        log.textContent=state.logs.slice(0,15).map(entry=>`${entry.time} ${entry.action} · ${entry.groups.join(', ') || '—'} [${entry.source}]`).join('\n') || 'No changes recorded yet.';
+        trusted.append(log);
+        section.append(trusted);
+        container.append(section);
+    }
+
     function renderExtensionsWardrobe(container) {
         const section = makeExtensionsSection("Subby's Wardrobe • clothing and accessories");
         const intro = document.createElement("div");
@@ -9532,7 +10078,7 @@ function SubbysPlushiesPageMain() {
             catch (e) { warn("Could not open Outfit Harmonizer:", e); }
         }));
         const harmonizerHint=document.createElement("span");
-        harmonizerHint.textContent="Three core colors plus 12 material categories, including Rubber, Plastic, Silk/Satin, Fur and Buttons. Tail, wing, eye, hair and lip slots are excluded.";
+        harmonizerHint.textContent="Three core colors + 12 materials, per-item/layer rules, preview and safe undo. Tail, wing, eye, hair and lip slots stay excluded.";
         Object.assign(harmonizerHint.style,{fontSize:"12px",color:getExtensionsStyle().muted});
         harmonizerRow.appendChild(harmonizerHint);
         section.appendChild(harmonizerRow);
@@ -9700,6 +10246,7 @@ function SubbysPlushiesPageMain() {
         container.appendChild(actions);
     }
     function renderExtensionsSettingsGeneral(container) {
+        renderAppearanceShieldSettings(container);
         const settings = getFeatureSettings();
         const poseSafety = makeExtensionsSection(`Pose Safety • v${VERSION}`);
         poseSafety.append(
@@ -21077,6 +21624,7 @@ function SubbysPlushiesPageMain() {
           const previousAppearance = C.Appearance;
           state.restoring = true;
           try {
+            appearanceShieldAllowEssentials("Essentials Outfit Time Machine");
             C.Appearance = batch.next;
             if (typeof window.CharacterLoadCanvas === 'function') window.CharacterLoadCanvas(C);
             changed = batch.changed;
@@ -22175,16 +22723,60 @@ function SubbysPlushiesPageMain() {
             try { window.localStorage?.setItem(`${settingsKey()}:categories`,JSON.stringify(categorySettings)); }
             catch (_) {}
         };
+        // Rules are account-local, keyed by BOTH group and asset name. Never
+        // classify different assets or other players by a name alone.
+        const RULE_SOURCES = Object.freeze(['auto','keep','primary','accent','metal',...CATEGORY_DEFS.map(d=>d.id)]);
+        const RULE_KEY = () => `${settingsKey()}:layer-rules:v1`;
+        const itemRuleId = item => `${String(item?.Asset?.Group?.Name || '').slice(0,80)}::${String(item?.Asset?.Name || '').slice(0,100)}`;
+        function loadLayerRules() {
+            try {
+                const json=JSON.parse(window.localStorage?.getItem(RULE_KEY())||'{}');
+                if (!json || typeof json !== 'object' || Array.isArray(json)) return {};
+                const rules=Object.create(null);
+                for (const [key,value] of Object.entries(json).slice(0,350)) {
+                    if (!key.includes('::') || key.length > 190 || !value || typeof value !== 'object') continue;
+                    const zones=Object.create(null);
+                    for (const [index,choice] of Object.entries(value.zones||{}).slice(0,64)) {
+                        if (/^(?:0|[1-9]\d{0,1})$/.test(index) && RULE_SOURCES.includes(choice) && choice!=='auto') zones[index]=choice;
+                    }
+                    rules[key]={excluded:value.excluded===true,zones};
+                }
+                return rules;
+            } catch (_) { return {}; }
+        }
+        let layerRules=loadLayerRules();
+        function saveLayerRules() {
+            try { window.localStorage?.setItem(RULE_KEY(),JSON.stringify(layerRules)); }
+            catch (_) { setStatus('Could not save layer rules. Check available browser storage.'); }
+        }
+        function setLayerRule(item, index, choice) {
+            if (!RULE_SOURCES.includes(choice) || !Number.isInteger(index) || index < 0 || index >= countColorZones(item)) return false;
+            const key=itemRuleId(item), rule=layerRules[key]||{excluded:false,zones:Object.create(null)};
+            if (choice==='auto') delete rule.zones[String(index)];
+            else rule.zones[String(index)]=choice;
+            layerRules[key]=rule;
+            saveLayerRules();return true;
+        }
+        function setItemExcluded(item, excluded) {
+            const key=itemRuleId(item),rule=layerRules[key]||{excluded:false,zones:Object.create(null)};
+            rule.excluded=excluded===true;layerRules[key]=rule;saveLayerRules();return true;
+        }
+        const itemExcluded=item=>layerRules[itemRuleId(item)]?.excluded===true;
         let chosen = readColor(), accent = readAccent(), metal = readMetal(), categorySettings=readCategories();
         let activeAccount = account(), previous = null, dock = null;
         let dialog = null, details = "", movedDock = false;
+        // R133 uses Asset.ColorableLayerCount and DefaultColor when accepting
+        // outfit bundles. Do not let a stale item.Color array or a decorative
+        // render layer invent extra server-side slots.
         const countColorZones = item => {
-            const custom = WARDROBE_ITEMS.find(entry => entry.name === item.Asset?.Name);
-            const customCount = custom?.colorZones?.length || 0;
-            const nativeCount = Number(item.Asset?.ColorableLayerCount) || 0;
-            const existingCount = Array.isArray(item.Color) ? item.Color.length : 0;
-            const defaultCount = Array.isArray(item.Asset?.DefaultColor) ? item.Asset.DefaultColor.length : 0;
-            return clamp(Math.max(customCount, nativeCount, existingCount, defaultCount, 1), 1, 12);
+            const asset = item?.Asset;
+            const native = Number(asset?.ColorableLayerCount);
+            if (Number.isInteger(native) && native > 0 && native <= 64) return native;
+            if (Array.isArray(asset?.DefaultColor) && asset.DefaultColor.length && asset.DefaultColor.length <= 64)
+                return asset.DefaultColor.length;
+            const custom = WARDROBE_ITEMS.find(entry => entry.name === asset?.Name && entry.group === asset?.Group?.Name);
+            if (custom?.colorZones?.length) return clamp(custom.colorZones.length,1,64);
+            return clamp(Array.isArray(item?.Color) ? item.Color.length : 1,1,64);
         };
         // Some vanilla jewelry groups are appearance accessories rather than
         // clothing; explicitly allow only recognized jewelry, not body parts.
@@ -22199,6 +22791,8 @@ function SubbysPlushiesPageMain() {
         function canRecolor(item) {
             if (essentialsRecolorProtectedSlot(item) || isOutfitProtected(item)) return false;
             const asset = item?.Asset, group = asset?.Group;
+            if (Number.isInteger(asset?.ColorableLayerCount) &&
+                (asset.ColorableLayerCount < 1 || asset.ColorableLayerCount > 64)) return false;
             if (!asset || group?.Category !== "Appearance" ||
                 !(group.Clothing || WARDROBE_ITEM_NAME_SET.has(asset.Name) || isJewelryItem(item))) return false;
             if (item.Property?.LockedBy || item.Property?.LockMemberNumber != null ||
@@ -22208,9 +22802,10 @@ function SubbysPlushiesPageMain() {
                 item.Property?.Effect?.includes?.("Freeze")) return false;
             return true;
         }
-        function eligibleItems() {
+        function inspectableItems() {
             return (Array.isArray(window.Player?.Appearance) ? window.Player.Appearance : []).filter(canRecolor);
         }
+        function eligibleItems() {return inspectableItems().filter(item=>!itemExcluded(item));}
         function hexToHsl(hex) {
             let r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255;
             const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max-min;
@@ -22238,7 +22833,7 @@ function SubbysPlushiesPageMain() {
         // highlights, shadows, or silhouettes using AllowColorize:false.
         // Never assign different colors to two visuals sharing one color index.
         function colorZoneNames(item, count) {
-            const custom = WARDROBE_ITEMS.find(entry => entry.name === item?.Asset?.Name);
+            const custom = WARDROBE_ITEMS.find(entry => entry.name === item?.Asset?.Name && entry.group === item?.Asset?.Group?.Name);
             if (Array.isArray(custom?.colorZones) && custom.colorZones.length === count)
                 return custom.colorZones.map(String);
             const layers = item?.Asset?.Layer;
@@ -22276,7 +22871,7 @@ function SubbysPlushiesPageMain() {
         // recolor Chain as Metal, RubberPanel as Rubber and Strap as Leather.
         function categoryForZone(name) {
             if (!name) return null;
-            if (isMetalZone(name)) return 'metal';
+            if (isMetalZone(name) && /(?:metal|gold|silver|steel|brass|copper|chrome|titanium|alumini?um|bronze|platinum)/i.test(name)) return 'metal';
             if (/(?:gem|crystal|jewel|precious.?stone|rhinestone|diamond|ruby|sapphire|emerald|opal)/i.test(name)) return 'gems';
             // Explicit material labels beat decorative shapes: SatinRibbon is
             // satin, while an unlabeled Ribbon still follows the ribbon palette.
@@ -22285,6 +22880,8 @@ function SubbysPlushiesPageMain() {
             if (isPlasticZone(name)) return 'plastic';
             if (isSilkZone(name)) return 'silk';
             if (isFurZone(name)) return 'fur';
+            if (isButtonZone(name) && !isMetalZone(name)) return 'buttons';
+            if (isMetalZone(name)) return 'metal';
             if (isButtonZone(name)) return 'buttons';
             if (/(?:ribbon|bow|rosette)/i.test(name)) return 'ribbons';
             if (/(?:lace|mesh|fishnet|netting|tulle|crochet)/i.test(name)) return 'lace';
@@ -22323,35 +22920,37 @@ function SubbysPlushiesPageMain() {
         function outfitColors(primary, secondary, jewelry, item, itemIndex=0, categories=categorySettings) {
             const group = String(item?.Asset?.Group?.Name || '').toLowerCase();
             const zones = countColorZones(item);
-            const names = colorZoneNames(item, zones);
-            const jewelryItem = isJewelryItem(item);
-            const itemCategory = categoryForItem(item);
+            const names = colorZoneNames(item,zones);
+            const jewelryItem=isJewelryItem(item),itemCategory=categoryForItem(item);
+            const rules=layerRules[itemRuleId(item)]?.zones||{};
             let useAccent = /shoe|boot|sock|stocking|glove|lower|pant|skirt|neck|accessor|hat|ribbon|glasses|bracelet|belt/.test(group);
             if (!/shoe|boot|sock|stocking|glove|lower|pant|skirt|neck|accessor|hat|ribbon|glasses|bracelet|belt|cloth|suit|dress|bra|underwear/.test(group))
-                useAccent = itemIndex % 2 === 1;
-            const baseColor = useAccent ? secondary : primary;
-            const trimColor = useAccent ? primary : secondary;
-            const colors = [];
-            for (let i=0;i<zones;i++) {
-                const zone = names[i] || '';
-                const namedCategory = categoryForZone(zone);
-                let hex, toneGroup;
-                if (namedCategory === 'metal') { hex = jewelry; toneGroup = 'jewelry'; }
-                else if (namedCategory) {
-                    hex = categoryColor(namedCategory,primary,secondary,jewelry,categories);
-                    toneGroup = namedCategory === 'shoes' ? 'shoe' : namedCategory === 'stockings' ? 'sock' : namedCategory;
-                } else if (itemCategory) {
-                    hex = categoryColor(itemCategory,primary,secondary,jewelry,categories);
-                    toneGroup = itemCategory === 'shoes' ? 'shoe' : itemCategory === 'stockings' ? 'sock' : itemCategory;
-                } else if (jewelryItem && !isNonMetalJewelryZone(zone)) {
-                    hex = jewelry; toneGroup = 'jewelry';
-                } else {
-                    hex = i%2===0 ? baseColor : trimColor;
-                    if (zones===1 && itemIndex%2===1 && /cloth|suit|dress|bra|underwear/.test(group))
-                        hex = secondary;
-                    toneGroup = group;
+                useAccent=itemIndex%2===1;
+            const baseColor=useAccent?secondary:primary,trimColor=useAccent?primary:secondary;
+            const current=Array.isArray(item.Color)?item.Color:[item.Color];
+            const fallback=Array.isArray(item.Asset?.DefaultColor)?item.Asset.DefaultColor:[];
+            const colors=[];
+            for(let i=0;i<zones;i++) {
+                const override=rules[String(i)]||'auto',zone=names[i]||'';
+                if (override==='keep') {
+                    colors.push(current[i] ?? (current.length===1?current[0]:undefined) ?? fallback[i] ?? 'Default');
+                    continue;
                 }
-                colors.push(shade(hex,toneGroup,i));
+                if (override!=='auto') {
+                    colors.push(override==='primary'?primary:override==='accent'?secondary:
+                        override==='metal'?jewelry:categoryColor(override,primary,secondary,jewelry,categories)||baseColor);
+                    continue;
+                }
+                const namedCategory=categoryForZone(zone);
+                if (namedCategory==='metal') colors.push(jewelry);
+                else if (namedCategory) colors.push(categoryColor(namedCategory,primary,secondary,jewelry,categories));
+                else if (itemCategory) colors.push(categoryColor(itemCategory,primary,secondary,jewelry,categories));
+                else if (jewelryItem && !isNonMetalJewelryZone(zone)) colors.push(jewelry);
+                else {
+                    let hex=i%2===0?baseColor:trimColor;
+                    if(zones===1 && itemIndex%2===1 && /cloth|suit|dress|bra|underwear/.test(group))hex=secondary;
+                    colors.push(shade(hex,group,i));
+                }
             }
             return colors;
         }
@@ -22406,38 +23005,52 @@ function SubbysPlushiesPageMain() {
             const status = dialog?.querySelector('[data-harmonizer-status]');
             if (status) status.textContent = message;
         }
+        const sameColor=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+        const colorArray=color=>Array.isArray(color)?color:[color];
+        // Calculate in isolation; no BC data mutation during preview.
+        function planColors(primary=chosen, secondary=accent, jewelry=metal) {
+            const h=safeHex(primary),a=safeHex(secondary),m=safeHex(jewelry);
+            if (!h || !a || !m) return [];
+            const groupCounts=new Map(),changes=[];
+            for (const item of eligibleItems()) {
+                const group=String(item.Asset?.Group?.Name||'').toLowerCase();
+                const occurrence=groupCounts.get(group)||0;groupCounts.set(group,occurrence+1);
+                const colors=outfitColors(h,a,m,item,occurrence);
+                const normalized=countColorZones(item)>1 || Array.isArray(item.Color)?colors:colors[0];
+                if(sameColor(normalized,item.Color))continue;
+                changes.push({item,group:item.Asset.Group.Name,asset:item.Asset.Name,
+                    before:copyColor(item.Color),after:normalized,zoneNames:colorZoneNames(item,countColorZones(item))});
+            }
+            return changes;
+        }
         function applyColor(color = chosen, accentColor = accent, metalColor = metal) {
             const hex = safeHex(color), secondHex = safeHex(accentColor), jewelryHex = safeHex(metalColor);
             if (!hex || !secondHex || !jewelryHex) { setStatus("Enter three valid six-digit hex colors (Primary, Accent, Jewelry / Metal)."); return {ok:false,count:0}; }
             const forbidden = allowedToChange();
             if (forbidden) { setStatus(forbidden); return {ok:false,count:0}; }
-            const items = eligibleItems();
+            const items=eligibleItems();
             if (!items.length) { setStatus("No unprotected, unlocked recolorable clothing is currently equipped."); return {ok:false,count:0}; }
-            const member = window.Player.MemberNumber;
-            const saved = items.map(item => ({item,asset:item.Asset,original:copyColor(item.Color)}));
+            const plan=planColors(hex,secondHex,jewelryHex);
+            if (!plan.length) { setStatus("All included clothing already matches the planned colors. Nothing changed.");return {ok:true,count:0}; }
+            const member=window.Player.MemberNumber;
+            const saved=plan.map(change=>({item:change.item,asset:change.item.Asset,
+                original:copyColor(change.before),applied:copyColor(change.after)}));
             try {
-                const garmentOccurrences = new Map();
-                for (const item of items) {
-                    const group = String(item.Asset?.Group?.Name || '').toLowerCase();
-                    const occurrence = garmentOccurrences.get(group) || 0;
-                    garmentOccurrences.set(group, occurrence + 1);
-                    const colors = outfitColors(hex,secondHex,jewelryHex,item,occurrence);
-                    // BC accepts a string for single-layer clothing and an array for multi-zone assets.
-                    item.Color = countColorZones(item)>1 || Array.isArray(item.Color) ? colors : colors[0];
-                }
+                for(const change of plan)change.item.Color=copyColor(change.after);
+                appearanceShieldAllowEssentials("Essentials Harmonizer");
                 synchronize();
-                for (const item of items) rememberWardrobe(item);
+                for (const change of plan) rememberWardrobe(change.item);
                 // The secret achievement requires distinct core swatches and an
                 // actual colorable jewelry/metal zone, not merely opening the picker.
-                if (new Set([hex,secondHex,jewelryHex]).size===3 && items.some(item=>
+                if (new Set([hex,secondHex,jewelryHex]).size===3 && plan.some(({item})=>
                     isJewelryItem(item) || colorZoneNames(item,countColorZones(item)).some(zone=>categoryForZone(zone)==='metal'))) {
                     markProgress("chromaticGenius",1);
                 }
                 previous = {member,changes:saved};
                 chosen = hex; accent = secondHex; metal = jewelryHex;
                 writeColor(hex); writeAccent(secondHex); writeMetal(jewelryHex);
-                setStatus(`Harmonized ${items.length} item${items.length===1?'':'s'} with ${hex} + ${secondHex} (jewelry / metal: ${jewelryHex}). Undo is ready.`);
-                return {ok:true,count:items.length};
+                setStatus(`Updated ${plan.length} item${plan.length===1?'':'s'} (of ${items.length} included). Skipped unchanged items. Undo is ready.`);
+                return {ok:true,count:plan.length};
             } catch (e) {
                 for (const save of saved) save.item.Color=save.original;
                 try { window.CharacterRefresh?.(window.Player,false,false); window.CharacterLoadCanvas?.(window.Player); } catch (_) {}
@@ -22447,12 +23060,14 @@ function SubbysPlushiesPageMain() {
         }
         // On demand only: no additional timers, per-frame inspection or storage.
         function inspectMaterials() {
-            return eligibleItems().map(item=>{
+            return inspectableItems().map(item=>{
                 const count=countColorZones(item), names=colorZoneNames(item,count);
                 return {
                     asset:item.Asset?.Name||'',group:item.Asset?.Group?.Name||'',
+                    excluded:itemExcluded(item),
                     zones:Array.from({length:count},(_,i)=>({index:i,
                         name:names[i]||`Color ${i+1}`,
+                        override:layerRules[itemRuleId(item)]?.zones?.[String(i)]||'auto',
                         category:categoryForZone(names[i])||categoryForItem(item)||
                             (isJewelryItem(item)?'metal':'primary/accent')})),
                     mapped:names.length===count
@@ -22466,15 +23081,18 @@ function SubbysPlushiesPageMain() {
             const forbidden = allowedToChange();
             if (forbidden) { setStatus(forbidden); return false; }
             const entries = previous.changes.filter(e => canRecolor(e.item) &&
-                e.item.Asset === e.asset && window.Player.Appearance.includes(e.item));
-            if (!entries.length) { previous = null; setStatus("Outfit changed since recoloring; nothing safe to undo."); return false; }
+                e.item.Asset === e.asset && window.Player.Appearance.includes(e.item) &&
+                sameColor(e.item.Color,e.applied));
+            if (!entries.length) { previous=null;setStatus("The outfit was edited after Harmonizer applied; nothing safe to undo.");return false; }
             const backup = entries.map(e => ({item:e.item,color:copyColor(e.item.Color)}));
             try {
                 for (const entry of entries) entry.item.Color = copyColor(entry.original);
+                appearanceShieldAllowEssentials("Essentials Harmonizer Undo");
                 synchronize();
                 for (const entry of entries) rememberWardrobe(entry.item);
+                const skipped=previous.changes.length-entries.length;
                 previous = null;
-                setStatus(`Restored original colors for ${entries.length} item${entries.length===1?'':'s'}.`);
+                setStatus(`Restored original colors for ${entries.length} item${entries.length===1?'':'s'}.${skipped?' Other items had newer edits and were left untouched.':''}`);
                 return true;
             } catch (e) {
                 for (const entry of backup) entry.item.Color = entry.color;
@@ -22493,12 +23111,12 @@ function SubbysPlushiesPageMain() {
             Object.assign(shell.style,{position:"fixed",inset:"0",zIndex:"2147483500",background:"rgba(18,11,22,.65)",display:"flex",alignItems:"center",justifyContent:"center",padding:"14px",boxSizing:"border-box"});
             const panel=elt("section"); panel.setAttribute("role","dialog");panel.setAttribute("aria-modal","true");
             panel.setAttribute("aria-label","Smart Outfit Color Harmonizer");
-            Object.assign(panel.style,{font:"14px Arial,sans-serif",color:"#F7EEF5",width:"min(400px,95vw)",maxHeight:"90vh",overflowY:"auto",background:"#302638",border:"1px solid #AC81C3",borderRadius:"14px",padding:"20px",boxShadow:"0 10px 34px #0009",boxSizing:"border-box"});
+            Object.assign(panel.style,{font:"14px Arial,sans-serif",color:"#F7EEF5",width:"min(620px,95vw)",maxHeight:"90vh",overflowY:"auto",background:"#302638",border:"1px solid #AC81C3",borderRadius:"14px",padding:"20px",boxShadow:"0 10px 34px #0009",boxSizing:"border-box"});
             const header=elt("div");Object.assign(header.style,{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"6px"});
             const heading=elt("strong","🎨 Smart Outfit Color Harmonizer");heading.style.fontSize="17px";
             const close=elt("button","✕");close.type="button";close.title="Close";
             close.addEventListener("click",closeDialog);header.append(heading,close);
-            const summary=elt("p","Choose Primary, Accent and Metal colors. Twelve optional material categories now include Latex/PVC, Rubber, Plastic, Silk & Satin, Fur, and Buttons. Independently colorable chains and material layers use the matching swatch. Tail, wing, eye, hair and lip slots, Outfit Locks, and restraints are never recolored.");
+            const summary=elt("p","Choose Primary, Accent and Metal colors, then preview your changes. Use Item & Layer Rules to exclude individual clothes, preserve specific layers, or correct automatic material detection. All body, tail, wing, eye, hair, lip slots and Outfit Locks remain protected.");
             Object.assign(summary.style,{lineHeight:"1.5",color:"#D6C8DD"});
             const controls=elt("div");Object.assign(controls.style,{display:"flex",flexDirection:"column",gap:"10px"});
             // All three hex fields and native color pickers stay in sync.
@@ -22575,6 +23193,79 @@ function SubbysPlushiesPageMain() {
             }
             refreshCategoryPreviews();
             controls.append(advanced);
+            const editor=elt('details');editor.dataset.harmonizerLayerRules='true';
+            Object.assign(editor.style,{padding:'10px',border:'1px solid #886CA0',borderRadius:'9px',background:'#3A2D43'});
+            const editorToggle=elt('summary','🧵 Item & Layer Rules');editorToggle.style.cursor='pointer';editorToggle.style.fontWeight='bold';
+            const editorBody=elt('div');Object.assign(editorBody.style,{marginTop:'10px',maxHeight:'40vh',overflowY:'auto'});
+            const editorHint=elt('p','Untick an item to exclude it. Select Keep Current to preserve a specific slot. Overrides are saved per BC account and asset.');
+            Object.assign(editorHint.style,{fontSize:'12px',color:'#D6C8DD'});
+            const refreshItems=elt('button','↻ Refresh equipped items');refreshItems.type='button';
+            Object.assign(refreshItems.style,{color:'white',border:'1px solid #9878AB',borderRadius:'6px',background:'#624671',padding:'6px 9px',cursor:'pointer'});
+            editor.append(editorToggle,editorHint,refreshItems,editorBody);
+            refreshItems.addEventListener('click',()=>{renderLayerEditor();editorRendered=true;});
+            let editorRendered=false;
+            editor.addEventListener('toggle',()=>{if(editor.open && !editorRendered){renderLayerEditor();editorRendered=true;}});
+            function renderLayerEditor() {
+                editorBody.replaceChildren();
+                const things=inspectableItems();
+                if(!things.length){editorBody.append(elt('p','No eligible clothes to edit.'));return;}
+                for(const item of things) {
+                    const row=elt('div');Object.assign(row.style,{padding:'9px 0',borderTop:'1px solid #66536E'});
+                    const checkLabel=elt('label');Object.assign(checkLabel.style,{display:'flex',gap:'8px',alignItems:'center'});
+                    const checkbox=elt('input');checkbox.type='checkbox';checkbox.checked=!itemExcluded(item);
+                    const title=elt('strong',`${item.Asset.Name} (${item.Asset.Group.Name})`);
+                    checkLabel.append(checkbox,title);row.append(checkLabel);
+                    const sub=elt('div');Object.assign(sub.style,{paddingLeft:'23px',display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(165px,1fr))',gap:'6px',marginTop:'8px'});
+                    checkbox.addEventListener('change',()=>{setItemExcluded(item,!checkbox.checked);sub.style.opacity=checkbox.checked?'1':'.55';setStatus('Layer rules saved. Preview again before applying.');});
+                    const count=countColorZones(item),names=colorZoneNames(item,count);
+                    for(let index=0;index<count;index++){
+                        const cell=elt('label');Object.assign(cell.style,{display:'flex',flexDirection:'column',gap:'3px',fontSize:'11px'});
+                        cell.append(elt('span',`${index+1}: ${names[index]||'Unlabeled color slot'}`));
+                        const selector=elt('select');selector.setAttribute('aria-label',`${item.Asset.Name} layer ${index+1} color rule`);
+                        for(const [value,text] of [ ['auto','Auto detect'],['keep','Keep current'],['primary','Primary'],['accent','Accent'],['metal','Jewelry / Metal'],...CATEGORY_DEFS.map(d=>[d.id,d.label]) ]){
+                            const opt=elt('option',text);opt.value=value;selector.append(opt);
+                        }
+                        selector.value=layerRules[itemRuleId(item)]?.zones?.[String(index)]||'auto';
+                        Object.assign(selector.style,{background:'#463650',border:'1px solid #9878AB',borderRadius:'6px',color:'white',minHeight:'31px',width:'100%'});
+                        selector.addEventListener('change',()=>{setLayerRule(item,index,selector.value);setStatus('Layer rule saved. Preview again before applying.');});
+                        cell.append(selector);sub.append(cell);
+                    }
+                    sub.style.opacity=checkbox.checked?'1':'.55';row.append(sub);editorBody.append(row);
+                }
+            }
+            controls.append(editor);
+            const preview=elt('details');preview.dataset.harmonizerPreview='true';
+            Object.assign(preview.style,{padding:'10px',border:'1px solid #886CA0',borderRadius:'9px',background:'#3A2D43'});
+            const previewHeader=elt('summary','🔎 Preview Color Changes');previewHeader.style.cursor='pointer';previewHeader.style.fontWeight='bold';
+            const previewBody=elt('div');Object.assign(previewBody.style,{paddingTop:'8px',fontSize:'12px',maxHeight:'35vh',overflowY:'auto'});
+            preview.append(previewHeader,previewBody);controls.append(preview);
+            function updatePreview() {
+                const h=safeHex(primaryRow.hexInput.value),a=safeHex(accentRow.hexInput.value),m=safeHex(metalRow.hexInput.value);
+                previewBody.replaceChildren();preview.open=true;
+                if(!h||!a||!m){previewBody.append(elt('p','Enter three valid colors first.'));return [];} 
+                const plans=planColors(h,a,m);
+                previewHeader.textContent=`🔎 Preview Color Changes · ${plans.length} item(s)`;
+                if(!plans.length){previewBody.append(elt('p','No changes needed for the included outfit.'));return plans;}
+                for(const change of plans){
+                    const row=elt('div');Object.assign(row.style,{padding:'7px 0',borderBottom:'1px solid #66536E'});
+                    row.append(elt('strong',`${change.asset} (${change.group})`));
+                    const names=change.zoneNames;
+                    const old=colorArray(change.before),next=colorArray(change.after);
+                    for(let i=0;i<next.length;i++){
+                        if(old[i]===next[i])continue;
+                        const line=elt('div');Object.assign(line.style,{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'});
+                        line.append(elt('span',`${names[i]||'Color '+(i+1)}: ${old[i]||'Default'} → ${next[i]}`));
+                        if(safeHex(next[i])){
+                            const chip=elt('span');Object.assign(chip.style,{display:'inline-block',background:next[i],width:'16px',height:'16px',border:'1px solid #eee',borderRadius:'4px'});
+                            line.append(chip);
+                        }
+                        row.append(line);
+                    }
+                    previewBody.append(row);
+                }
+                setStatus(`Preview ready: ${plans.length} item(s) will change. The preview does not modify your outfit.`);
+                return plans;
+            }
             const buttons=elt("div");Object.assign(buttons.style,{display:"flex",flexWrap:"wrap",gap:"9px",marginTop:"15px"});
             const makeButton=(text,handler)=>{const b=elt("button",text);b.type="button";Object.assign(b.style,{font:"inherit",color:"white",border:"1px solid #9878AB",borderRadius:"7px",background:"#624671",padding:"10px 12px",cursor:"pointer",minHeight:"38px"});b.addEventListener("click",handler);return b;};
             const run=makeButton("Apply Outfit Colors",()=>{
@@ -22597,7 +23288,8 @@ function SubbysPlushiesPageMain() {
                         `${entry.zones.length} color zone(s), no unambiguous layer names`));
                 setStatus(`Detected materials (first ${Math.min(entries.length,15)} items):\n`+lines.join('\n'));
             });
-            buttons.append(run,swap,undo,inspect);
+            const previewButton=makeButton('🔎 Preview Changes',updatePreview);
+            buttons.append(previewButton,run,swap,undo,inspect);
             const message=elt("div",details || `${eligibleItems().length} equipped clothing item(s) are eligible.`);
             message.dataset.harmonizerStatus="true";
             Object.assign(message.style,{marginTop:"13px",padding:"9px",borderRadius:"7px",background:"#473750",fontSize:"12px",lineHeight:"1.5",whiteSpace:"pre-line"});
@@ -22608,7 +23300,7 @@ function SubbysPlushiesPageMain() {
         }
         function isAppearancePicker() {return window.CurrentScreen==="Appearance" || window.CurrentScreen==="Wardrobe";}
         function refreshDock() {
-            if (account()!==activeAccount) {activeAccount=account();chosen=readColor();accent=readAccent();metal=readMetal();categorySettings=readCategories();previous=null;closeDialog();}
+            if (account()!==activeAccount) {activeAccount=account();chosen=readColor();accent=readAccent();metal=readMetal();categorySettings=readCategories();layerRules=loadLayerRules();previous=null;closeDialog();}
             if (!isAppearancePicker()) {dock?.remove();dock=null;closeDialog();return;}
             if (dock?.isConnected) return;
             dock=elt("button","🎨 Harmonize Outfit"); dock.id=ID;dock.type="button";
@@ -22631,15 +23323,22 @@ function SubbysPlushiesPageMain() {
         };
         const watcher=window.setInterval(safeRefreshDock,1500);safeRefreshDock();
         const api=Object.freeze({version:VERSION,open:openDialog,apply:applyColor,undo:undoColor,
-            inspect:inspectMaterials,
+            inspect:inspectMaterials,preview:(primary=chosen,secondary=accent,jewelry=metal)=>
+                planColors(primary,secondary,jewelry).map(change=>({group:change.group,asset:change.asset,
+                    before:copyColor(change.before),after:copyColor(change.after)})),
+            setLayerRule:(group,name,index,choice)=>{const item=inspectableItems().find(item=>
+                item.Asset.Group.Name===group&&item.Asset.Name===name);return item?setLayerRule(item,index,choice):false;},
+            excludeItem:(group,name,excluded=true)=>{const item=inspectableItems().find(item=>
+                item.Asset.Group.Name===group&&item.Asset.Name===name);return item?setItemExcluded(item,excluded):false;},
             status:()=>({version:VERSION,chosen,accent,metal,
                 categories:Object.fromEntries(CATEGORY_DEFS.map(d=>[d.id,{...categorySettings[d.id]}])),
-                eligible:eligibleItems().length,canUndo:!!previous,screen:window.CurrentScreen,message:details}),
+                ruleCount:Object.keys(layerRules).length,eligible:eligibleItems().length,canUndo:!!previous,screen:window.CurrentScreen,message:details}),
             destroy:()=>{window.clearInterval(watcher);dock?.remove();closeDialog();if(window.SubbysOutfitHarmonizer===api)delete window.SubbysOutfitHarmonizer;},
             _test:{safeHex,hexToHsl,hslToHex,outfitColors,colorZoneNames,isJewelryItem,isMetalZone,
                 categoryForZone,categoryForItem,categoryColor,isLatexZone,isRubberZone,
                 isPlasticZone,isSilkZone,isFurZone,isButtonZone,inspectMaterials,
-                eligibleItems,canRecolor,essentialsRecolorProtectedSlot,refreshDock,safeRefreshDock}
+                eligibleItems,canRecolor,essentialsRecolorProtectedSlot,refreshDock,safeRefreshDock,
+                planColors,countColorZones,itemRuleId,inspectableItems}
         });
         window.SubbysOutfitHarmonizer=api;
         return api;
@@ -22923,6 +23622,7 @@ function SubbysPlushiesPageMain() {
           if(item)wardrobeRememberColors(changed.itemName,Array.isArray(item.Color)?item.Color:[item.Color]);
         }
       }
+      appearanceShieldAllowEssentials("Essentials Color Studio");
       window.CharacterRefresh?.(player,false,false);
       window.CharacterLoadCanvas?.(player);
       if(window.CurrentScreen==='ChatRoom')window.ChatRoomCharacterUpdate?.(player);
@@ -22945,6 +23645,7 @@ function SubbysPlushiesPageMain() {
       const item=player.Appearance?.find(x=>x?.Asset?.Name===old.itemName&&x?.Asset?.Group?.Name===old.group);
       if(item&&recolorable(item)){item.Color=Array.isArray(old.old)?[...old.old]:old.old;count++;}
     }
+    appearanceShieldAllowEssentials('Essentials Color Studio Undo');
     try{window.CharacterRefresh?.(player,false,false);window.CharacterLoadCanvas?.(player);
       if(window.CurrentScreen==='ChatRoom')window.ChatRoomCharacterUpdate?.(player);
       else window.ServerPlayerAppearanceSync?.();
@@ -23404,6 +24105,10 @@ function SubbysPlushiesPageMain() {
         optionalStartupStep("automatic-update-check", scheduleAutomaticUpdateCheck);
         setStartupStage("ready");
         optionalStartupStep("outfit-lock-api", registerOutfitLockApi);
+        optionalStartupStep("appearance-shield", appearanceShieldInstall);
+        // Some R133 hooks become available late; only retry if opted in.
+        if (appearanceShieldSettings().enabled)
+            for (const delay of [1200, 4800]) window.setTimeout(() => optionalStartupStep("appearance-shield-late-hooks", appearanceShieldInstall), delay);
         // Optional feature setup runs only AFTER ready; an unsupported BC UI,
         // unavailable DOM node, or timer failure can no longer abort plugin loading.
         window.setTimeout(() => {
@@ -23425,7 +24130,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.70";
+    const VERSION = "3.5.73";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
