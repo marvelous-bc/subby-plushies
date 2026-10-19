@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.75
-// @description  R133 fixes + Appearance Shield + Harmonizer + automatic user-initiated BCOM edits
+// @version      3.5.76
+// @description  R133 fixes + Outfit Change Forensics + Harmonizer Palette Extractor + Plushie Snap Points
 // @released     2026-10-18
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.75";
+    const VERSION = "3.5.76";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -1341,6 +1341,7 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushiestatus", description: "Open the Status tab." }),
                 Object.freeze({ command: "/plushiewardrobe", description: "Open Wardrobe: multicolor cat-ear headband and heart charm, with position controls." }),
                 Object.freeze({ command: "/plushietimemachine", description: "Open outfit history, undo/redo, saved looks and Echo-compatible wardrobe batch restore." }),
+                Object.freeze({ command: "/plushieforensics", description: "Open Wardrobe → Outfit Change Forensics and inspect clothing changes." }),
                 Object.freeze({ command: "/plushiesettings", description: "Open Settings → General." }),
                 Object.freeze({ command: "/plushielayout", description: "Open Settings → Layout customization." }),
                 Object.freeze({ command: "/plushieplushies", description: "Open Progress → Plushies with relationships, favorites, emotes, and saved poses." }),
@@ -1362,6 +1363,8 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushiedrag [on|off]", description: "Toggle Easy Drag, or explicitly turn it on/off." }),
                 Object.freeze({ command: "/plushiebalance", description: "Open the progressive Balance on Head minigame (8–20 seconds)." }),
                 Object.freeze({ command: "/plushieposes", description: "Open the Plushies tab at the saved-pose controls." }),
+                Object.freeze({ command: "/plushiesnap <hands|shoulder|chest|lap|beside>", description: "Snap your selected plushie to an anchor; each point remembers its custom placement." }),
+                Object.freeze({ command: "/plushiesnaps", description: "Open Progress → Plushies → Snap Points." }),
                 Object.freeze({ command: "/plushieposesave <1|2|3>", description: "Save the current plushie's X/Y position, scale, and rotation to a pose slot." }),
                 Object.freeze({ command: "/plushieposeload <1|2|3>", description: "Apply a saved pose for the held plushie." }),
                 Object.freeze({ command: "/plushieposeclear <1|2|3>", description: "Clear a saved pose slot for the held plushie." }),
@@ -2547,6 +2550,137 @@ function SubbysPlushiesPageMain() {
         emitPluginApiEvent("pose", { action: "clear", plushName: name, slot: numericSlot });
         return true;
     }
+
+    // === PLUSHIE SNAP POINTS v1 ===
+    // Coordinates are offsets for this plugin's native 128x128 sprite anchor.
+    // Custom placements for each plush, slot, and anchor survive reloads.
+    const PLUSH_SNAP_KEY_PREFIX = 'SubbysPlushies:snap-points:v1:';
+    const PLUSH_SNAP_PRESETS = Object.freeze([
+        {id:'hands',label:'Hands',x:0,y:0},
+        {id:'shoulder',label:'Shoulder',x:-93,y:-75},
+        {id:'chest',label:'Chest',x:-32,y:-65},
+        {id:'lap',label:'Lap',x:0,y:145},
+        {id:'beside',label:'Beside',x:170,y:25}
+    ].map(Object.freeze));
+    const plushSnapCache = {member:null,data:null};
+    function plushSnapStore() {
+        const member=String(window.Player?.MemberNumber || 'guest');
+        if (plushSnapCache.data && plushSnapCache.member===member) return plushSnapCache.data;
+        plushSnapCache.member=member;
+        const raw=readLocalJSON(PLUSH_SNAP_KEY_PREFIX+member,{});
+        plushSnapCache.data=(raw&&typeof raw==='object'&&!Array.isArray(raw))?raw:{};
+        return plushSnapCache.data;
+    }
+    function plushSnapSave() {
+        return writeLocalJSON(PLUSH_SNAP_KEY_PREFIX+plushSnapCache.member,plushSnapStore());
+    }
+    function plushSnapTarget() {
+        const selected=getDragTargetItem();
+        const item=isOurs(selected)?selected:getHeld(window.Player);
+        if(!isOurs(item))return null;
+        const group=item?.Asset?.Group?.Name;
+        const name=plushNameForItem(item);
+        const layer=getActivePlushLayerName(item);
+        return group&&name&&layer?{item,group,name,layer,key:`${group}::${name}`}:null;
+    }
+    function plushSnapRecord(target=plushSnapTarget()) {
+        if(!target)return null;
+        const store=plushSnapStore();
+        if(!store[target.key]||typeof store[target.key]!=='object')store[target.key]={active:null,anchors:{}};
+        const record=store[target.key];
+        if(!record.anchors||typeof record.anchors!=='object')record.anchors={};
+        return record;
+    }
+    function plushSnapCurrent(target) {
+        const transform=readActivePlushLayerTransform(target.item);
+        if(!transform)return null;
+        const generic=readNativeItemTransform(target.item);
+        if(generic)for(const key of NATIVE_LAYER_TRANSFORM_KEYS)
+            if(Number.isFinite(generic[key])&&generic[key]!==DEFAULT_TRANSFORM[key])transform[key]=generic[key];
+        return sanitizeSavedPoseTransform(transform);
+    }
+    function plushSnapApply(id) {
+        const preset=PLUSH_SNAP_PRESETS.find(x=>x.id===String(id||'').toLowerCase());
+        const target=plushSnapTarget();
+        if(!preset||!target||!window.Player)return false;
+        const record=plushSnapRecord(target),current=plushSnapCurrent(target);
+        if(!current)return false;
+        if(activeBalanceHeadSession)restoreActiveBalanceHead('snap point');
+        if(activeHideBehindSession)restoreActiveHideBehind('snap point');
+        if(activeProtectSession)restoreActiveProtect('snap point');
+        if(activeIdleAnimationSession)cancelIdleAnimation();
+        if(record.active && record.active!==preset.id && PLUSH_SNAP_PRESETS.some(p=>p.id===record.active))
+            record.anchors[record.active]=current;
+        // Default offsets apply only to new points. Custom scale, rotation and
+        // translation for each anchor are retained after switching away.
+        const saved=record.anchors[preset.id];
+        const transform=saved?sanitizeSavedPoseTransform(saved):sanitizeSavedPoseTransform({
+            ...current,TranslationX:preset.x,TranslationY:preset.y});
+        if(!setPlushLayerTransform(target.item,target.layer,transform)) {
+            // No change can also mean the item was already at this anchor.
+            if(!getProperty(target.item))return false;
+        }
+        compactPlushLayerTransformsToActive(target.item,transform);
+        resetGenericNativeTransform(target.item);
+        record.active=preset.id;record.anchors[preset.id]=transform;
+        plushSnapSave();
+        rememberCharacterPlushState(window.Player,target.item);
+        rebuildCharacterCanvas(window.Player,'snap point '+preset.id);
+        try {window.ChatRoomCharacterUpdate?.(window.Player);}catch(e){warn('Snap point room sync failed:',e);}
+        positionSpeechBubble();positionPlushStatusIcon();
+        emitPluginApiEvent('snap',{name:target.name,group:target.group,anchor:preset.id,transform});
+        return true;
+    }
+    function plushSnapRemember(id=null) {
+        const target=plushSnapTarget();if(!target)return false;
+        const record=plushSnapRecord(target);
+        const anchor=id||record.active;
+        if(!PLUSH_SNAP_PRESETS.some(p=>p.id===anchor))return false;
+        const current=plushSnapCurrent(target);if(!current)return false;
+        record.anchors[anchor]=current;record.active=anchor;
+        plushSnapSave();return true;
+    }
+    function plushSnapReset(id) {
+        const target=plushSnapTarget();if(!target)return false;
+        const record=plushSnapRecord(target);
+        const preset=PLUSH_SNAP_PRESETS.find(p=>p.id===id);if(!preset)return false;
+        delete record.anchors[id];
+        if(record.active===id)record.active=null;
+        plushSnapSave();return plushSnapApply(id);
+    }
+    function plushSnapStatus() {
+        const target=plushSnapTarget();if(!target)return {equipped:false,presets:PLUSH_SNAP_PRESETS};
+        const record=plushSnapRecord(target);
+        return {equipped:true,name:target.name,group:target.group,active:record.active,
+            custom:Object.keys(record.anchors),presets:PLUSH_SNAP_PRESETS};
+    }
+    function renderPlushSnapPoints(container) {
+        const section=makeExtensionsSection('📍 Plushie Snap Points');
+        const stat=plushSnapStatus();
+        const hint=document.createElement('p');hint.style.cssText='font-size:12px;line-height:1.5';
+        hint.textContent=stat.equipped?`Selected: ${stat.name} (${stat.group}). Each point remembers its own X/Y, scale and rotation. Positions are adjustable presets relative to the default plush sprite, not pose-aware body tracking.`:
+            'Equip a plushie to use snap points. Separate placement settings are stored per plushie and item slot.';
+        section.append(hint);
+        const row=document.createElement('div');Object.assign(row.style,{display:'flex',gap:'7px',flexWrap:'wrap'});
+        for(const preset of PLUSH_SNAP_PRESETS){
+            const button=makeExtensionsButton(`${stat.active===preset.id?'● ':'○ '}${preset.label}`,()=>{
+                plushSnapApply(preset.id);renderExtensionsPanel();},{active:stat.active===preset.id});
+            button.disabled=!stat.equipped;row.append(button);
+        }
+        section.append(row);
+        const actions=document.createElement('div');Object.assign(actions.style,{display:'flex',gap:'7px',flexWrap:'wrap',marginTop:'8px'});
+        const save=makeExtensionsButton('Save Current Position to This Point',()=>{
+            if(plushSnapRemember())renderExtensionsPanel();});
+        const reset=makeExtensionsButton('Reset Current Point',()=>{
+            if(stat.active&&plushSnapReset(stat.active))renderExtensionsPanel();});
+        save.disabled=!stat.active;reset.disabled=!stat.active;
+        actions.append(save,reset);section.append(actions);container.append(section);
+    }
+    window.SubbysPlushieSnapPoints=Object.freeze({version:VERSION,
+        presets:PLUSH_SNAP_PRESETS.map(x=>({...x})),apply:plushSnapApply,remember:plushSnapRemember,
+        reset:plushSnapReset,status:plushSnapStatus});
+    // === END PLUSHIE SNAP POINTS ===
+
     function cloneBackupValue(value) {
         try { return JSON.parse(JSON.stringify(value ?? {})); } catch (_) { return {}; }
     }
@@ -6203,7 +6337,7 @@ function SubbysPlushiesPageMain() {
                 for (const entry of group.commands.slice(0, 100)) {
                     const command = gitDataString(entry?.command, "", 180);
                     const description = gitDataString(entry?.description, "", 600);
-                    if (!command.startsWith("/") || !description || /^\/plushiesnap(?:\s|$)/i.test(command)) continue;
+                    if (!command.startsWith("/") || !description) continue;
                     commands.push(Object.freeze({ command, description }));
                 }
                 if (commands.length) groups.push(Object.freeze({ title, commands: Object.freeze(commands) }));
@@ -9777,6 +9911,7 @@ function SubbysPlushiesPageMain() {
     function appearanceShieldCheck(origin = 'event', attemptSync = false) {
         const state = appearanceShieldState, settings = appearanceShieldSettings();
         if (!settings.enabled || state.busy || !Array.isArray(window.Player?.Appearance)) return false;
+        outfitForensicsObserve('Appearance Shield observation (origin unverified)');
         const now = appearanceShieldSnapshot();
         if (!state.baseline || state.baseline.member !== now.member || state.baseline.family !== now.family) {
             state.baseline = now; return false;
@@ -9808,6 +9943,7 @@ function SubbysPlushiesPageMain() {
         state.lastRecovery = stamp;
         state.recoveries.push(stamp);
         appearanceShieldEvent(`Restored ${result.restored.length} clothing slot(s)`, result.restored, origin);
+        outfitForensicsObserve('Appearance Shield automatic restoration');
         // One bounded correction only; never send in a loop or while outside chat/online.
         if (attemptSync && window.CurrentScreen === 'ChatRoom' && typeof window.ChatRoomCharacterUpdate === 'function') {
             state.busy = true;
@@ -10078,13 +10214,15 @@ function SubbysPlushiesPageMain() {
             catch (e) { warn("Could not open Outfit Harmonizer:", e); }
         }));
         const harmonizerHint=document.createElement("span");
-        harmonizerHint.textContent="Three core colors + 12 materials, per-item/layer rules, preview and safe undo. Tail, wing, eye, hair and lip slots stay excluded.";
+        harmonizerHint.textContent="Three core colors + 12 materials, outfit palette extraction, per-item/layer rules, preview and safe undo. Tail, wing, eye, hair and lip slots stay excluded.";
         Object.assign(harmonizerHint.style,{fontSize:"12px",color:getExtensionsStyle().muted});
         harmonizerRow.appendChild(harmonizerHint);
         section.appendChild(harmonizerRow);
         section.appendChild(makeExtensionsButton("⏪ Open Outfit Time Machine", openOutfitTimeMachineFromExtensions));
         try { renderOutfitLockControls(container); }
         catch (e) { warn("Optional Outfit Lock controls failed to render:", e); }
+        try { renderOutfitForensics(container); }
+        catch (e) { warn("Optional Outfit Forensics view failed:", e); }
         for (const entry of WARDROBE_ITEMS) {
             const itemSection = document.createElement("div");
             Object.assign(itemSection.style, { display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap", marginBottom: "16px", paddingBottom: "12px", borderBottom: `1px solid ${getExtensionsStyle().border}55` });
@@ -10471,6 +10609,7 @@ function SubbysPlushiesPageMain() {
             poses.appendChild(row);
         }
         container.appendChild(poses);
+        try { renderPlushSnapPoints(container); } catch(e) { warn('Snap Points UI failed:',e); }
         const favorites = makeExtensionsSection(`Favorites (${favoritePlushNames().length})`);
         const favoriteNames = favoritePlushNames();
         if (!favoriteNames.length) {
@@ -10940,7 +11079,7 @@ function SubbysPlushiesPageMain() {
                     command: String(Array.isArray(entry) ? entry[0] : entry?.command || "").trim(),
                     description: String(Array.isArray(entry) ? entry[1] : entry?.description || "").trim(),
                 }))
-                .filter(entry => entry.command.startsWith("/") && entry.description && !/^\/plushiesnap(?:\s|$)/i.test(entry.command)),
+                .filter(entry => entry.command.startsWith("/") && entry.description),
         })).filter(group => group.commands.length);
         const groups = cloneGroups(CURRENT_COMMAND_GROUPS);
         const documentedBases = new Set();
@@ -12940,6 +13079,15 @@ function SubbysPlushiesPageMain() {
                 ]);
             });
             return true;
+        }
+        if (command === '/plushieforensics') { requireReady(()=>openExtensionsPanel('wardrobe')); return true; }
+        if (command === '/plushiesnaps') { requireReady(()=>{extensionsProgressTab='plushies';openExtensionsPanel('progress');});return true; }
+        if (command === '/plushiesnap' || command.startsWith('/plushiesnap ')) {
+            requireReady(()=>{
+                const arg=command.slice('/plushiesnap'.length).trim().toLowerCase();
+                if(!plushSnapApply(arg))appendLocalInfoBox('Plushie Snap Points',[
+                    'Equip a plushie, then use /plushiesnap hands, shoulder, chest, lap or beside.']);
+            });return true;
         }
         switch (command) {
             case "/plushie":
@@ -21184,6 +21332,198 @@ function SubbysPlushiesPageMain() {
             );
         }
     }
+
+    // === OUTFIT CHANGE FORENSICS v1 ===
+    // Reuses the Time Machine's existing 1.4-second outfit monitor; no new poll.
+    // Captures local clothing changes only. The source of an anonymous change
+    // cannot be securely attributed to an addon in shared page JavaScript.
+    const OUTFIT_FORENSICS_PREFIX = "SubbysPlushies:outfit-forensics:v1:";
+    const OUTFIT_FORENSICS_LIMIT = 24;
+    const outfitForensicsState = { member: null, signature: null, baseline: null, events: [], next: 0 };
+    function outfitForensicsAccount() {
+        const n = Number(window.Player?.MemberNumber);
+        return Number.isInteger(n) && n > 0 ? String(n) : null;
+    }
+    function outfitForensicsInit() {
+        const member = outfitForensicsAccount();
+        if (outfitForensicsState.member === member) return;
+        outfitForensicsState.member = member;
+        outfitForensicsState.signature = null;
+        outfitForensicsState.baseline = null;
+        outfitForensicsState.events = [];
+        outfitForensicsState.next = 0;
+        if (!member) return;
+        try {
+            const data = JSON.parse(window.localStorage?.getItem(OUTFIT_FORENSICS_PREFIX + member) || '{}');
+            if (Array.isArray(data.events)) outfitForensicsState.events = data.events.slice(-OUTFIT_FORENSICS_LIMIT)
+                .filter(x => x && Array.isArray(x.changes) && Number.isFinite(x.at));
+            outfitForensicsState.next = Math.max(0, Number(data.next) || 0);
+        } catch (_) { /* Corrupt data is not trusted. */ }
+    }
+    function outfitForensicsPersist() {
+        if (!outfitForensicsState.member) return;
+        try { window.localStorage?.setItem(OUTFIT_FORENSICS_PREFIX + outfitForensicsState.member,
+            JSON.stringify({next:outfitForensicsState.next,events:outfitForensicsState.events})); }
+        catch (e) { warn('Outfit Forensics history could not be saved:', e); }
+    }
+    function outfitForensicsTakeSnapshot() {
+        const snapshot = appearanceShieldSnapshot();
+        if (!snapshot || !outfitForensicsAccount()) return null;
+        const items = Object.create(null);
+        for (const [group, entry] of snapshot.items) {
+            items[group] = {group,name:entry.name,color:appearanceShieldColorClone(entry.color),
+                difficulty:entry.difficulty,craft:appearanceShieldJsonCopy(entry.craft, 2500),
+                cosmetic:appearanceShieldJsonCopy(entry.cosmetic, 3000)};
+        }
+        return items;
+    }
+    function outfitForensicsDiff(old, current) {
+        const changes = [];
+        for (const group of new Set([...Object.keys(old || {}), ...Object.keys(current || {})])) {
+            const before = old?.[group] || null, after = current?.[group] || null;
+            if (JSON.stringify(before) === JSON.stringify(after)) continue;
+            const fields = [];
+            if (before?.name !== after?.name) fields.push('asset');
+            if (JSON.stringify(before?.color) !== JSON.stringify(after?.color)) fields.push('color');
+            if (JSON.stringify(before?.cosmetic) !== JSON.stringify(after?.cosmetic)) fields.push('cosmetic properties');
+            if (before?.difficulty !== after?.difficulty) fields.push('difficulty');
+            if (JSON.stringify(before?.craft) !== JSON.stringify(after?.craft)) fields.push('crafting');
+            changes.push({group,fields,before,after});
+        }
+        return changes;
+    }
+    function outfitForensicsObserve(origin = 'Detected appearance change') {
+        outfitForensicsInit();
+        if (!outfitForensicsState.member) return [];
+        const current = outfitForensicsTakeSnapshot();
+        if (!current) return [];
+        const signature = JSON.stringify(current);
+        if (signature === outfitForensicsState.signature) return [];
+        const old = outfitForensicsState.baseline;
+        outfitForensicsState.baseline = current;
+        outfitForensicsState.signature = signature;
+        if (!old) return [];
+        const changes = outfitForensicsDiff(old, current);
+        if (!changes.length) return [];
+        const event = {id:++outfitForensicsState.next,at:Date.now(),
+            source:String(origin || 'Detected appearance change').slice(0,100), changes};
+        outfitForensicsState.events.push(event);
+        outfitForensicsState.events = outfitForensicsState.events.slice(-OUTFIT_FORENSICS_LIMIT);
+        outfitForensicsPersist();
+        return changes;
+    }
+    function outfitForensicsRestore(id) {
+        outfitForensicsInit();
+        const event = outfitForensicsState.events.find(e => e.id === Number(id));
+        const player = window.Player;
+        if (!event || !Array.isArray(player?.Appearance) || !event.changes?.length ||
+            typeof player.CanChange === 'function' && !player.CanChange()) return {ok:false,restored:[],skipped:['Unavailable or cannot change appearance']};
+        // Capture recent unrecorded edits first; never overwrite a newer outfit.
+        outfitForensicsObserve('Change before forensic restore');
+        const current = outfitForensicsTakeSnapshot();
+        const replacements = new Map(), skipped = [];
+        for (const change of event.changes) {
+            const group = change.group;
+            const currentItem = player.Appearance.find(x => x?.Asset?.Group?.Name === group) || null;
+            const groupMeta = currentItem?.Asset?.Group ||
+                (Array.isArray(window.AssetGroup) ? window.AssetGroup.find(x => x?.Name === group) : null);
+            if (!appearanceShieldClothingGroup(groupMeta) ||
+                JSON.stringify(current?.[group] || null) !== JSON.stringify(change.after || null)) {
+                skipped.push(group + ': no longer matches recorded after-state');continue;
+            }
+            if (appearanceShieldIsLocked(currentItem) || (currentItem && isOutfitProtected(currentItem))) {
+                skipped.push(group + ': locked or protected');continue;
+            }
+            const prior = change.before;
+            if (!prior && groupMeta?.AllowNone === false) { skipped.push(group + ': required slot');continue; }
+            if (!prior) { replacements.set(group,null);continue; }
+            const asset = window.AssetGet?.(player.AssetFamily,group,prior.name);
+            const restored = {...prior,asset};
+            if (!asset || !appearanceShieldMayRestoreAsset(player,group,restored,currentItem)) {
+                skipped.push(group + ': asset not available');continue;
+            }
+            try { replacements.set(group,appearanceShieldBuildItem(restored)); }
+            catch (_) { skipped.push(group + ': could not reconstruct item'); }
+        }
+        if (!replacements.size) return {ok:false,restored:[],skipped};
+        if (typeof window.confirm === 'function' && !window.confirm(
+            `Restore ${replacements.size} clothing slot(s) from this forensic event?\n`+
+            `Only unchanged, currently permitted slots will be affected. ${skipped.length} skipped.`))
+            return {ok:false,restored:[],skipped:['Cancelled']};
+        const original = player.Appearance;
+        const next = [], done = new Set();
+        for (const item of original) {
+            const group = item?.Asset?.Group?.Name;
+            if (!replacements.has(group)) {next.push(item);continue;}
+            if (done.has(group)) continue;
+            done.add(group);
+            if (replacements.get(group)) next.push(replacements.get(group));
+        }
+        for (const [group,item] of replacements) if (!done.has(group) && item) next.push(item);
+        try {
+            appearanceShieldAllowEssentials('Essentials Outfit Forensics',4500);
+            player.Appearance = next;
+            window.CharacterRefresh?.(player,false,false);
+            window.CharacterLoadCanvas?.(player);
+        } catch (e) {
+            player.Appearance = original;
+            try {window.CharacterLoadCanvas?.(player);}catch(_){}
+            return {ok:false,restored:[],skipped:[...skipped,String(e?.message||e)]};
+        }
+        const restored = [...replacements.keys()];
+        outfitForensicsObserve('Forensics restore (user confirmed)');
+        try {window.ServerPlayerAppearanceSync?.();}catch(e){skipped.push('Account sync: '+String(e?.message||e));}
+        if (window.CurrentScreen === 'ChatRoom' && player.OnlineID != null)
+            try {window.ChatRoomCharacterUpdate?.(player);}catch(e){skipped.push('Room sync: '+String(e?.message||e));}
+        try {window.__BCOutfitTimeMachine?.capture?.('Forensics restoration');}catch(_){}
+        return {ok:true,restored,skipped};
+    }
+    function outfitForensicsClear() {
+        outfitForensicsInit();outfitForensicsState.events=[];
+        outfitForensicsPersist();return true;
+    }
+    function outfitForensicsReport() {
+        outfitForensicsInit();
+        return outfitForensicsState.events.map(e=>({id:e.id,at:e.at,source:e.source,
+            changes:e.changes.map(c=>({group:c.group,fields:c.fields,before:c.before,after:c.after}))}));
+    }
+    function renderOutfitForensics(container) {
+        const section=makeExtensionsSection('🔎 Outfit Change Forensics');
+        const intro=document.createElement('p');
+        intro.textContent='Local history of your clothing asset, color and cosmetic-property changes. Reuses the Time Machine monitor; unknown addon origins are not guessed. Restores only slots still matching the recorded after-state and respecting BC permissions and Outfit Locks.';
+        Object.assign(intro.style,{fontSize:'12px',lineHeight:'1.5',color:getExtensionsStyle().muted});section.append(intro);
+        outfitForensicsObserve('Wardrobe view');
+        const row=document.createElement('div');Object.assign(row.style,{display:'flex',gap:'7px',flexWrap:'wrap'});
+        row.append(makeExtensionsButton('Check Now',()=>{outfitForensicsObserve('Manual scan');renderExtensionsPanel();}),
+            makeExtensionsButton('Copy Report',()=>{
+                const report=JSON.stringify(outfitForensicsReport(),null,2);
+                if(navigator.clipboard?.writeText)void navigator.clipboard.writeText(report).catch(()=>window.prompt?.('Copy forensic report',report));
+                else window.prompt?.('Copy forensic report',report);
+            }),makeExtensionsButton('Clear Log',()=>{if(window.confirm?.('Clear your local outfit forensic history?')!==false){outfitForensicsClear();renderExtensionsPanel();}}));
+        section.append(row);
+        const history=outfitForensicsReport().slice(-12).reverse();
+        if(!history.length){const empty=document.createElement('p');empty.textContent='No clothing changes recorded yet.';section.append(empty);}
+        for(const event of history){
+            const entry=document.createElement('details');Object.assign(entry.style,{margin:'7px 0',padding:'7px',border:'1px solid '+getExtensionsStyle().border,borderRadius:'7px'});
+            const summary=document.createElement('summary');summary.style.cursor='pointer';
+            summary.textContent=`${new Date(event.at).toLocaleTimeString()} · ${event.changes.length} slot(s) · ${event.source}`;entry.append(summary);
+            const desc=document.createElement('div');Object.assign(desc.style,{fontSize:'12px',whiteSpace:'pre-wrap',wordBreak:'break-word',lineHeight:'1.5',padding:'7px 0'});
+            desc.textContent=event.changes.map(c=>`${c.group} [${c.fields.join(', ')}]\n  ${c.before?.name||'(empty)'} → ${c.after?.name||'(empty)'}\n  Colors: ${JSON.stringify(c.before?.color??null)} → ${JSON.stringify(c.after?.color??null)}${c.fields.includes('cosmetic properties')?'\n  Properties: '+JSON.stringify(c.before?.cosmetic??null)+' → '+JSON.stringify(c.after?.cosmetic??null):''}`).join('\n');
+            entry.append(desc,makeExtensionsButton('Restore eligible prior slots',()=>{
+                const result=outfitForensicsRestore(event.id);
+                appendLocalInfoBox('Outfit Forensics',[
+                    `Restored ${result.restored.length} slot(s).`,...result.skipped.slice(0,8)]);
+                renderExtensionsPanel();
+            }));section.append(entry);
+        }
+        container.append(section);
+    }
+    window.SubbysOutfitForensics=Object.freeze({version:VERSION,observe:outfitForensicsObserve,
+        report:outfitForensicsReport,restore:outfitForensicsRestore,clear:outfitForensicsClear,
+        status:()=>({account:outfitForensicsAccount(),count:outfitForensicsReport().length,
+            monitored:!!outfitForensicsState.baseline,poll:'shared Outfit Time Machine'})});
+    // === END OUTFIT CHANGE FORENSICS ===
+
     function installSubbysOutfitTimeMachine() {
       'use strict';
       const NAME = "Subby's Outfit Time Machine";
@@ -21495,6 +21835,8 @@ function SubbysPlushiesPageMain() {
         if (state.restoring || !loadAccount()) return;
         const snap = collect(); if (!snap) return;
         const sig = fingerprint(snap);
+        // Piggyback on Time Machine's signature; avoid re-scanning stable outfits.
+        if (sig !== state.watchSignature) outfitForensicsObserve('Time Machine outfit monitor (source unverified)');
         if (!state.history.length) { recordSnapshot('First outfit', true); return; }
         if (sig === state.watchSignature || appearanceKey(snap) === appearanceKey(state.history[state.cursor]?.snapshot)) { state.watchPending = null; state.watchSignature = sig; return; }
         if (!state.watchPending || state.watchPending.sig !== sig) state.watchPending = { sig, at: Date.now() };
@@ -21614,6 +21956,7 @@ function SubbysPlushiesPageMain() {
           `Restore “${entry.label || 'outfit'}” on your own character?\n\n`+
           `${plan.changes.length} appearance slots will change. ${plan.skips.length} groups will be skipped.\n`+
           `Only BC Appearance slots will be touched; restraints and locks won't be removed.`)) return {ok:false, changed:0, skipped:['Cancelled']};
+        outfitForensicsObserve('Before Time Machine restore');
         const batch = buildAppearanceBatch(C, plan);
         let changed = 0;
         const skipped = [...batch.skipped];
@@ -21644,6 +21987,7 @@ function SubbysPlushiesPageMain() {
             }
           }
         }
+        outfitForensicsObserve('Outfit Time Machine restore');
         const result = collect(C);
         state.watchSignature = fingerprint(result); state.watchPending = null;
         if (opts.historyIndex != null) {
@@ -22828,6 +23172,42 @@ function SubbysPlushiesPageMain() {
             };
             return `#${[channel(0),channel(8),channel(4)].map(n=>Math.round(clamp(n,0,1)*255).toString(16).padStart(2,'0')).join('')}`.toUpperCase();
         }
+
+        // Extract literal hex colors from eligible worn clothing and accessories;
+        // never sample excluded body, tail, wing, hair, lip or eye groups.
+        function wornPaletteSources() {
+            const sources=[];
+            for(const item of (Array.isArray(window.Player?.Appearance)?window.Player.Appearance:[])) {
+                if(essentialsRecolorProtectedSlot(item))continue;
+                const group=item?.Asset?.Group;
+                if(!group || group.Category!=='Appearance' || !(group.Clothing||isJewelryItem(item)||WARDROBE_ITEM_NAME_SET.has(item?.Asset?.Name)))continue;
+                const count=countColorZones(item);
+                const colors=Array.isArray(item.Color)?item.Color:[item.Color];
+                const defaults=Array.isArray(item.Asset?.DefaultColor)?item.Asset.DefaultColor:[item.Asset?.DefaultColor];
+                const zones=colorZoneNames(item,count);
+                for(let i=0;i<Math.min(count,64);i++) {
+                    const value=safeHex(colors[i])||
+                        (colors[i]===undefined||colors[i]==='Default'?safeHex(defaults[i]||defaults[0]):null);
+                    if(value)sources.push({group:group.Name,name:item.Asset.Name,index:i,
+                        zone:zones[i]||`Color ${i+1}`,hex:value});
+                }
+            }
+            return sources;
+        }
+        function suggestedPalette(base,mode='complementary') {
+            const valid=safeHex(base);if(!valid)return null;
+            const [h,s,l]=hexToHsl(valid);
+            const color=(shift,saturation=s,lightness=l)=>hslToHex((h+shift+360)%360,
+                clamp(saturation,0,1),clamp(lightness,0.08,0.92));
+            const variants={
+                complementary:[valid,color(180),color(35,Math.min(.65,s),.68)],
+                analogous:[valid,color(30),color(-30)],
+                monochrome:[valid,color(0,s,clamp(l+.20,.08,.92)),color(0,s,clamp(l-.20,.08,.92))],
+                triadic:[valid,color(120),color(240)]
+            };
+            return variants[mode]||variants.complementary;
+        }
+
         // Use BC's actual colorable zones rather than assuming every render layer
         // has one corresponding color slot. Many R132/R133 assets draw extra
         // highlights, shadows, or silhouettes using AllowColorize:false.
@@ -23036,6 +23416,7 @@ function SubbysPlushiesPageMain() {
             const saved=plan.map(change=>({item:change.item,asset:change.item.Asset,
                 original:copyColor(change.before),applied:copyColor(change.after)}));
             try {
+                outfitForensicsObserve('Before Harmonizer recolor');
                 for(const change of plan)change.item.Color=copyColor(change.after);
                 appearanceShieldAllowEssentials("Essentials Harmonizer");
                 synchronize();
@@ -23046,6 +23427,7 @@ function SubbysPlushiesPageMain() {
                     isJewelryItem(item) || colorZoneNames(item,countColorZones(item)).some(zone=>categoryForZone(zone)==='metal'))) {
                     markProgress("chromaticGenius",1);
                 }
+                outfitForensicsObserve('Harmonizer recolor');
                 previous = {member,changes:saved};
                 chosen = hex; accent = secondHex; metal = jewelryHex;
                 writeColor(hex); writeAccent(secondHex); writeMetal(jewelryHex);
@@ -23086,10 +23468,12 @@ function SubbysPlushiesPageMain() {
             if (!entries.length) { previous=null;setStatus("The outfit was edited after Harmonizer applied; nothing safe to undo.");return false; }
             const backup = entries.map(e => ({item:e.item,color:copyColor(e.item.Color)}));
             try {
+                outfitForensicsObserve('Before Harmonizer undo');
                 for (const entry of entries) entry.item.Color = copyColor(entry.original);
                 appearanceShieldAllowEssentials("Essentials Harmonizer Undo");
                 synchronize();
                 for (const entry of entries) rememberWardrobe(entry.item);
+                outfitForensicsObserve('Harmonizer undo');
                 const skipped=previous.changes.length-entries.length;
                 previous = null;
                 setStatus(`Restored original colors for ${entries.length} item${entries.length===1?'':'s'}.${skipped?' Other items had newer edits and were left untouched.':''}`);
@@ -23141,6 +23525,62 @@ function SubbysPlushiesPageMain() {
             const accentRow=makeColorRow("Accent color",accent,hex=>{accent=hex;writeAccent(hex);refreshCategoryPreviews();});
             const metalRow=makeColorRow("Jewelry / Metal",metal,hex=>{metal=hex;writeMetal(hex);refreshCategoryPreviews();});
             controls.append(primaryRow.row,accentRow.row,metalRow.row);
+            const extractor=elt('details');extractor.dataset.harmonizerPaletteExtractor='true';
+            Object.assign(extractor.style,{padding:'10px',border:'1px solid #886CA0',borderRadius:'9px',background:'#3A2D43'});
+            const extractTitle=elt('summary','🎨 Extract Palette from Worn Outfit');
+            Object.assign(extractTitle.style,{cursor:'pointer',fontWeight:'bold'});extractor.append(extractTitle);
+            const sources=wornPaletteSources();
+            extractor.append(elt('p',`Sample from ${sources.length} colorable clothing zone(s). Suggestions update only the three color pickers; your outfit will not change until you press Apply Outfit Colors.`));
+            const sourceSelect=elt('select');sourceSelect.setAttribute('aria-label','Choose an equipped clothing color');
+            Object.assign(sourceSelect.style,{width:'100%',maxWidth:'530px',padding:'8px',background:'#463650',color:'white',borderRadius:'6px'});
+            const popularity=new Map();for(const entry of sources)popularity.set(entry.hex,(popularity.get(entry.hex)||0)+1);
+            const unique=[...sources].sort((a,b)=>(popularity.get(b.hex)||0)-(popularity.get(a.hex)||0));
+            const trimmed=unique.slice(0,160);
+            for(const [i,src] of trimmed.entries()) {
+                const opt=elt('option',`${src.hex} · ${src.name} (${src.group}, ${src.zone})`);
+                opt.value=String(i);sourceSelect.append(opt);
+            }
+            if(!trimmed.length){const opt=elt('option','No worn hex colors found');sourceSelect.append(opt);sourceSelect.disabled=true;}
+            extractor.append(sourceSelect);
+            const suggestions=elt('div');Object.assign(suggestions.style,{display:'flex',flexWrap:'wrap',gap:'8px',marginTop:'9px'});
+            const recommendation=elt('div');Object.assign(recommendation.style,{display:'flex',gap:'7px',flexWrap:'wrap',alignItems:'center',marginTop:'10px'});
+            function renderRecommendation(palette,mode) {
+                recommendation.replaceChildren();
+                if(!palette)return;
+                recommendation.append(elt('span',`Preview · ${mode}: `));
+                for(const hex of palette){const chip=elt('span',hex);
+                    Object.assign(chip.style,{background:hex,color:hexToHsl(hex)[2]>.54?'#151515':'white',
+                        border:'1px solid #ddd',borderRadius:'5px',padding:'6px 8px',fontWeight:'bold'});
+                    recommendation.append(chip);}
+            }
+            const choosePalette=(mode)=>{
+                const source=trimmed[Number(sourceSelect.value)||0];
+                if(!source)return setStatus('No extractable hex color in your worn clothing.');
+                const palette=suggestedPalette(source.hex,mode);
+                if(!palette)return;
+                primaryRow.swatch(palette[0]);accentRow.swatch(palette[1]);metalRow.swatch(palette[2]);
+                renderRecommendation(palette,mode);
+                setStatus(`Palette extracted from ${source.name} / ${source.zone} (${source.hex}). ${mode} suggested colors are ready to preview; nothing has been applied.`);
+            };
+            function paletteButton(text,mode) {
+                const button=elt('button',text);button.type='button';
+                Object.assign(button.style,{padding:'8px',border:'1px solid #9878AB',borderRadius:'6px',color:'white',background:'#624671',cursor:'pointer'});
+                button.addEventListener('click',()=>choosePalette(mode));button.disabled=!trimmed.length;
+                return button;
+            }
+            suggestions.append(paletteButton('Complementary','complementary'),paletteButton('Analogous','analogous'),
+                paletteButton('Monochrome','monochrome'),paletteButton('Triadic','triadic'));
+            const existing=elt('button','Use Most Common 3');existing.type='button';
+            Object.assign(existing.style,{padding:'8px',border:'1px solid #9878AB',borderRadius:'6px',color:'white',background:'#624671',cursor:'pointer'});
+            existing.disabled=!trimmed.length;
+            existing.addEventListener('click',()=>{
+                const most=[...popularity.entries()].sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+                if(!most.length)return;
+                const palette=[most[0],most[1]||accentRow.hexInput.value,most[2]||metalRow.hexInput.value];
+                primaryRow.swatch(palette[0]);accentRow.swatch(palette[1]);metalRow.swatch(palette[2]);
+                renderRecommendation(palette,'most common');
+                setStatus('The three most common available outfit colors were loaded into the pickers. No clothing has changed.');
+            });suggestions.append(existing);extractor.append(suggestions,recommendation);controls.append(extractor);
             const advanced=elt("details");advanced.dataset.harmonizerCategories="true";
             Object.assign(advanced.style,{marginTop:"12px",padding:"10px",border:"1px solid #886CA0",borderRadius:"9px",background:"#3A2D43"});
             const toggle=elt("summary",`Advanced Categories · ${CATEGORY_DEFS.length}`);toggle.style.cursor="pointer";toggle.style.fontWeight="bold";
@@ -23323,7 +23763,8 @@ function SubbysPlushiesPageMain() {
         };
         const watcher=window.setInterval(safeRefreshDock,1500);safeRefreshDock();
         const api=Object.freeze({version:VERSION,open:openDialog,apply:applyColor,undo:undoColor,
-            inspect:inspectMaterials,preview:(primary=chosen,secondary=accent,jewelry=metal)=>
+            inspect:inspectMaterials,paletteSources:()=>wornPaletteSources(),suggestPalette:suggestedPalette,
+            preview:(primary=chosen,secondary=accent,jewelry=metal)=>
                 planColors(primary,secondary,jewelry).map(change=>({group:change.group,asset:change.asset,
                     before:copyColor(change.before),after:copyColor(change.after)})),
             setLayerRule:(group,name,index,choice)=>{const item=inspectableItems().find(item=>
@@ -24130,7 +24571,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.73";
+    const VERSION = "3.5.76";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
