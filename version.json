@@ -1,31 +1,28 @@
 {
-  "version": "3.5.66",
-  "releaseDate": "2026-10-17",
+  "version": "3.5.75",
+  "releaseDate": "2026-10-18",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Fix desktop browsers incorrectly receiving mobile one-handed Essentials navigation when the window is narrow, zoomed, or uses touch support. Mobile view now requires touch-first mobile input, while real phones and tablets retain mobile gestures, bottom navigation and responsive layout. All v3.5.65 functionality is retained and Photo Booth remains removed.",
+  "notes": "Appearance Shield now detects user-initiated BCOM outfit edits without a manual 90-second allowance. Requires a genuine browser gesture and identifiable BCOM call path. Retains R133 plushie rendering fix and all v3.5.74 Harmonizer improvements.",
   "changes": [
     {
-      "category": "Desktop / mobile detection",
+      "category": "Appearance Shield + BCOM",
       "items": [
-        "Desktop viewport width alone no longer enables the mobile layout.",
-        "Touchscreen Windows and Linux desktop browsers keep the desktop Essentials menu.",
-        "Mobile navigation activates only on mobile OS/touch-first devices with mobile-sized viewports, including phone landscape.",
-        "The dock and mobile window-sizing logic use the same corrected detector.",
-        "Changing screen dimensions can switch layouts through existing event-based resize handling; no new timers."
+        "Allows a short 8-second, renewable operation window for asynchronous BCOM outfit application, so repeated manual 90-second allowances are usually unnecessary.",
+        "Disallows changes that are not attributable to user-initiated BCOM activity; generic clicks and BCOM installation alone do not grant trust.",
+        "Turning off BCOM auto-allow cancels any outstanding BCOM-specific allowance immediately.",
+        "Retains Allow BCOM Outfit Edits for 90 Seconds as fallback for BCOM versions with unrecognizable stack traces.",
+        "No additional recurring timer. Event listeners activate only when Appearance Shield is enabled.",
+        "Settings remain scoped to the current Bondage Club member number."
       ]
     },
     {
-      "category": "Preserved",
+      "category": "Compatibility and limitations",
       "items": [
-        "Mobile Gesture Controls, one-handed bottom navigation (on phones), and Outfit Lock System.",
-        "Smart Library Merge, crafting replacement, three-color harmonizer, Photo Booth removed.",
-        "R132/R133 compatibility code and floating dock black-space safety."
-      ]
-    },
-    {
-      "category": "Testing",
-      "items": [
-        "JavaScript syntax and simulated browser desktop/mobile detection and regression tests passed. Live Bondage Club not tested."
+        "Based on v3.5.74; R133 remote plushie rendering, Harmonizer material categories/layer rules, Outfit Lock, achievements, crafting, wardrobe, and mobile navigation preserved.",
+        "Never bypasses BC server authority, item locks, restraints, or native game permissions.",
+        "BCOM user-intent detection is best-effort, not cryptographic addon authentication. Unidentifiable asynchronous actions may still need the manual allowance.",
+        "Does not fix the separately reported BCOM missing-outfits/interface problem, which requires a separate diagnosis.",
+        "Ten JavaScript regression suites passed; real R133 and BCOM testing is still required."
       ]
     }
   ]
