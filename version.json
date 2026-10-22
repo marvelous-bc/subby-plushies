@@ -1,29 +1,12 @@
+
+    
+  
 {
-  "version": "3.5.76",
-  "releaseDate": "2026-10-18",
+  "version": "3.5.83",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Appearance Shield now detects user-initiated BCOM outfit edits without a manual 90-second allowance. Requires a genuine browser gesture and identifiable BCOM call path. Retains R133 plushie rendering fix and all v3.5.74 Harmonizer improvements.",
-  "changes": [
-    {
-      "category": "Appearance Shield + BCOM",
-      "items": [
-        "Allows a short 8-second, renewable operation window for asynchronous BCOM outfit application, so repeated manual 90-second allowances are usually unnecessary.",
-        "Disallows changes that are not attributable to user-initiated BCOM activity; generic clicks and BCOM installation alone do not grant trust.",
-        "Turning off BCOM auto-allow cancels any outstanding BCOM-specific allowance immediately.",
-        "Retains Allow BCOM Outfit Edits for 90 Seconds as fallback for BCOM versions with unrecognizable stack traces.",
-        "No additional recurring timer. Event listeners activate only when Appearance Shield is enabled.",
-        "Settings remain scoped to the current Bondage Club member number."
-      ]
-    },
-    {
-      "category": "Compatibility and limitations",
-      "items": [
-        "Based on v3.5.74; R133 remote plushie rendering, Harmonizer material categories/layer rules, Outfit Lock, achievements, crafting, wardrobe, and mobile navigation preserved.",
-        "Never bypasses BC server authority, item locks, restraints, or native game permissions.",
-        "BCOM user-intent detection is best-effort, not cryptographic addon authentication. Unidentifiable asynchronous actions may still need the manual allowance.",
-        "Does not fix the separately reported BCOM missing-outfits/interface problem, which requires a separate diagnosis.",
-        "Ten JavaScript regression suites passed; real R133 and BCOM testing is still required."
-      ]
-    }
-  ]
+  "launcherVersion": "2.3.8.0",
+  "launcherUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js",
+  "sha256": "b95e143b9cfcc7c94c480c09315f1d77db9c29ad59d2ff102bcb2795ab32cdaa",
+  "notes": "v3.5.83: Adjusted the Subbycat presence icon left, closer than v3.5.82. Includes the v3.5.79 performance engine, outfit forensics, Harmonizer palette extraction, and optimized plushie snap points."
 }
+
