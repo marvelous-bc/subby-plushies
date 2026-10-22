@@ -2,9 +2,9 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.76
-// @description  R133 fixes + Outfit Change Forensics + Harmonizer Palette Extractor + Plushie Snap Points
-// @released     2026-10-18
+// @version      3.5.83
+// @description  R133 fixes + performance engine + Subbycat icon left of NFT
+// @released     2026-10-21
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -22,7 +22,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.76";
+    const VERSION = "3.5.83";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -32,7 +32,259 @@ function SubbysPlushiesPageMain() {
             document.documentElement?.setAttribute("data-subbys-plushies-load-source", "direct");
         }
     } catch (_) {}
-    const BUILD_DATE = "2026-10-18";
+    // === Quiet Performance Helper (v3.5.79) ===
+    // Intentionally hidden from normal menus. Low-risk browser hints and in-addon
+    // workload avoidance, with a local kill switch for addon incompatibilities.
+    // Never overrides timers, canvas draws, equipment updates, ModSDK hooks or
+    // third-party addon functions. Does not claim to accelerate unknown addons.
+    const QUIET_PERF_KEY = 'SubbysPlushies:quiet-performance:v1';
+    const quietPerfData = { enabled: null, chatRows: 0, imagesHinted: 0,
+        nativeImages: 0, addonImages: 0, emoteCacheRebuilds: 0,
+        outfitScansSkipped: 0, groupCacheHits: 0, groupCacheMisses: 0,
+        lastImageHintAt: null };
+    const quietPerfSeenImages = new WeakSet();
+    function quietPerfEnabled() {
+        if (quietPerfData.enabled === null) {
+            try { quietPerfData.enabled = window.localStorage?.getItem(QUIET_PERF_KEY) !== 'off'; }
+            catch (_) { quietPerfData.enabled = true; }
+        }
+        return quietPerfData.enabled;
+    }
+    // Call only from the native chat-append path or existing chat observers.
+    // Native browser decode hints are advisory; we do not touch src, dimensions,
+    // events, visibility, click handlers, sprites, or gameplay canvases.
+    function quietPerfEnhanceChatNode(node) {
+        if (!quietPerfEnabled() || !node || node.nodeType !== 1) return 0;
+        if (typeof node.matches !== 'function' || typeof node.querySelectorAll !== 'function') return 0;
+        let rows;
+        try {
+            rows = node.matches('.ChatMessage, .ChatMessageAction') ? [node] :
+                node.querySelectorAll('.ChatMessage, .ChatMessageAction');
+        } catch (_) { return 0; }
+        let changed = 0;
+        for (const row of rows) {
+            // Treat all chat rows equally, including images rendered by loaded
+            // addons. No addon is loaded, invoked, or modified by this helper.
+            const images = row.querySelectorAll('img');
+            if (!images.length) continue;
+            quietPerfData.chatRows++;
+            for (const img of images) {
+                if (quietPerfSeenImages.has(img)) continue;
+                try {
+                    if (!img.isConnected && !row.isConnected) continue;
+                    quietPerfSeenImages.add(img);
+                    if (img.decoding !== 'async') { img.decoding = 'async'; changed++; }
+                    // Lazy loading only for size-stable chat images. Avoid
+                    // shifts for BC/plugin images without known dimensions.
+                    const sized = (Number(img.getAttribute('width')) > 0 && Number(img.getAttribute('height')) > 0) ||
+                        img.classList?.contains('sxe-inline-emote');
+                    if (sized && img.loading !== 'lazy' && img.loading !== 'eager') {
+                        img.loading = 'lazy'; changed++;
+                    }
+                    quietPerfData.nativeImages++;
+                    if (row.classList?.contains('SubbysPlushiesLocalInfo') ||
+                        img.classList?.contains('sxe-inline-emote') ||
+                        row.dataset?.addon || row.dataset?.mod) quietPerfData.addonImages++;
+                } catch (_) { /* Hints must never break chat. */ }
+            }
+        }
+        if (changed) { quietPerfData.imagesHinted += changed; quietPerfData.lastImageHintAt = Date.now(); }
+        return changed;
+    }
+    function quietPerfSdkMods() {
+        try {
+            const sdk = window.bcModSdk || window.bcModSDK;
+            const info = typeof sdk?.getModsInfo === 'function' ? sdk.getModsInfo() : [];
+            return Array.isArray(info) ? info.filter(m => {
+                const name = String(m?.name || m?.fullName || '');
+                return !!name && !/subbysplushies|subbycat.s essentials|subbycat's essentials/i.test(name);
+            }).slice(0, 40).map(m => String(m?.fullName || m?.name || '').slice(0, 120)) : [];
+        } catch (_) { return []; }
+    }
+    function quietPerfSetEnabled(enabled) {
+        quietPerfData.enabled = !!enabled;
+        try { window.localStorage?.setItem(QUIET_PERF_KEY, enabled ? 'on' : 'off'); } catch (_) {}
+        return quietPerfData.enabled;
+    }
+    function quietPerfExpose() {
+    window.SubbysQuietPerformance = Object.freeze({
+        version: '1.0.0',
+        status: () => ({ version: VERSION, enabled: quietPerfEnabled(),
+            mode: 'advisory-only: chat image decode hints + local cache + hidden-tab work avoidance',
+            detectedModSdkAddons: quietPerfSdkMods(),
+            imagesHinted: quietPerfData.imagesHinted, scannedChatRows: quietPerfData.chatRows,
+            chatImagesSeen: quietPerfData.nativeImages, possibleAddonChatImages: quietPerfData.addonImages,
+            emoticonTokenMapBuilds: quietPerfData.emoteCacheRebuilds,
+            hiddenOutfitScansAvoided: quietPerfData.outfitScansSkipped,
+            outfitGroupCacheHits: quietPerfData.groupCacheHits,
+            outfitGroupCacheMisses: quietPerfData.groupCacheMisses,
+            lastImageHintAt: quietPerfData.lastImageHintAt }),
+        enable: () => quietPerfSetEnabled(true),
+        disable: () => quietPerfSetEnabled(false),
+    });
+    }
+    // === End Quiet Performance Helper ===
+
+    // === Targeted Performance Engine (v3.5.79) ===
+    // Observes only our own work. Never patches global timers, native drawing,
+    // access permissions, third-party functions, or multiplayer traffic.
+    const PERF_ENGINE_KEY = 'SubbysPlushies:performance-engine:v1';
+    const PERF_FEATURES = Object.freeze(['outfitEvents','targetedLabels','unifiedUI','redrawBatch',
+        'assetCache','lazyPanels','memoryCleanup','addonAdapters']);
+    const perfEngineState = { flags: null, failures: Object.create(null), counters: Object.create(null),
+        lastFailure: null, profiler: null, callbacks: new Set(), uiTimer: null, uiObserver: null,
+        uiWatchdog: null, uiLastScreen: null, uiHooks: [], lastRoom: null, lastAddonList: [] };
+    function perfFlags() {
+        if (perfEngineState.flags) return perfEngineState.flags;
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(PERF_ENGINE_KEY) || '{}') || {}; } catch (_) {}
+        perfEngineState.flags = Object.fromEntries(PERF_FEATURES.map(k => [k, saved[k] !== false]));
+        return perfEngineState.flags;
+    }
+    function perfEnabled(key) { return perfFlags()[key] !== false; }
+    function perfSetFeature(key, on) {
+        if (!PERF_FEATURES.includes(key)) return false;
+        perfFlags()[key] = !!on;
+        try { localStorage.setItem(PERF_ENGINE_KEY, JSON.stringify(perfFlags())); } catch (_) {}
+        return perfFlags()[key];
+    }
+    function perfCount(name, number = 1) {
+        perfEngineState.counters[name] = (perfEngineState.counters[name] || 0) + number;
+    }
+    function perfSafe(feature, operation) {
+        try { return operation(); }
+        catch (e) {
+            const count = (perfEngineState.failures[feature] || 0) + 1;
+            perfEngineState.failures[feature] = count;
+            perfEngineState.lastFailure = {feature, at: new Date().toISOString(), message: String(e?.message || e)};
+            if (count >= 3) { perfSetFeature(feature, false); console.warn('[Subby performance] Disabled faulty feature:', feature, e); }
+            return null;
+        }
+    }
+    function perfMeasure(name, fn) {
+        const profile = perfEngineState.profiler;
+        if (!profile) return fn();
+        const start = performance.now();
+        try { return fn(); }
+        finally {
+            const cost = Math.max(0, performance.now() - start);
+            const rec = profile.records[name] || (profile.records[name] = {calls:0,totalMs:0,maxMs:0});
+            rec.calls++; rec.totalMs += cost; rec.maxMs = Math.max(rec.maxMs,cost);
+        }
+    }
+    function perfAddonAdapters() {
+        // Read-only SDK discovery. Only known integrations affect OUR code; no
+        // arbitrary callback interception or unsanctioned hook replacement.
+        const now=Date.now();
+        if (!perfEngineState.lastAddonCheck || now-perfEngineState.lastAddonCheck>30000) {
+            perfEngineState.lastAddonList=quietPerfSdkMods();
+            perfEngineState.lastAddonCheck=now;
+        }
+        const names = perfEngineState.lastAddonList.map(v => v.toLowerCase());
+        return [
+            { name:'Echo', detected:names.some(v => /\becho\b/.test(v)), optimization:'Time Machine group-registry reuse' },
+            { name:'BCX', detected:names.some(v => /\bbcx\b|bondage club extended/.test(v)), optimization:'Shared chat-image decode hints' },
+            { name:'BCOM', detected:names.some(v => /\bbcom\b/.test(v)), optimization:'Non-invasive chat-image decode hints' }
+        ].map(x => ({...x, applied: !!(perfEnabled('addonAdapters') && x.detected)}));
+    }
+    const perfUIBus = (() => {
+        let started = false;
+        function dispatch(reason = 'screen') {
+            perfEngineState.uiTimer = null;
+            const screen = String(window.CurrentScreen || '');
+            const previous = perfEngineState.uiLastScreen;
+            perfEngineState.uiLastScreen = screen;
+            if (screen !== previous) perfCount('screenTransitions');
+            for (const cb of Array.from(perfEngineState.callbacks)) {
+                const key='ui:'+String(cb._perfLabel||'listener');
+                try { perfMeasure(key,() => cb(screen, previous, reason)); }
+                catch(e) {
+                    perfCount('uiListenerErrors');
+                    const count=(perfEngineState.failures[key] || 0)+1;
+                    perfEngineState.failures[key]=count;
+                    perfEngineState.lastFailure={feature:key,at:new Date().toISOString(),message:String(e?.message||e)};
+                    if(count>=3) { perfEngineState.callbacks.delete(cb); console.warn('[Subby performance] Disabled failing UI watcher',key,e); }
+                }
+            }
+        }
+        function ping(reason = 'event') {
+            if (perfEngineState.uiTimer != null) return;
+            perfEngineState.uiTimer = window.setTimeout(() => dispatch(reason), 75);
+        }
+        function start() {
+            if (started) return;
+            started = true;
+            for (const name of ['focus','pageshow','hashchange','popstate'])
+                window.addEventListener(name, () => ping(name), {passive:true});
+            // Catch screen switches after UI clicks even when BC exposes no
+            // supported ModSDK screen hook. Same-screen clicks cost no work.
+            window.addEventListener('click', () => {
+                if (String(window.CurrentScreen || '') !== perfEngineState.uiLastScreen) ping('screen-click');
+            }, {passive:true});
+            if (document.body && typeof MutationObserver === 'function') {
+                // Direct body children only; never observe the whole game subtree.
+                perfEngineState.uiObserver = new MutationObserver(() => ping('body-root-change'));
+                perfEngineState.uiObserver.observe(document.body,{childList:true});
+            }
+            // A single slow recovery check replaces multiple independent UI timers.
+            perfEngineState.uiWatchdog = window.setInterval(() => ping('recovery-check'), 9000);
+            if (modApi?.hookFunction) {
+                for (const name of ['CommonSetScreen','ChatRoomLoad','AppearanceLoad']) {
+                    if (typeof window[name] !== 'function') continue;
+                    try {
+                        modApi.hookFunction(name, -100, (args, next) => {const value = next(args);ping(name);return value;});
+                        perfEngineState.uiHooks.push(name);
+                    } catch (_) {}
+                }
+            }
+            ping('initialize');
+        }
+        function watch(fn,label='listener') {
+            if (typeof fn !== 'function') return () => {};
+            fn._perfLabel = label;
+            perfEngineState.callbacks.add(fn);
+            start();
+            return () => perfEngineState.callbacks.delete(fn);
+        }
+        return Object.freeze({ start,watch,ping,status:()=>({listeners:perfEngineState.callbacks.size,
+            watchdogMs:9000, screenHooks:[...perfEngineState.uiHooks], broadBodySubtreeObserver:false})});
+    })();
+    function perfStartProfiler() {
+        perfEngineState.profiler = {startedAt:Date.now(),records:Object.create(null)};
+        return true;
+    }
+    function perfStopProfiler() {
+        const data = perfEngineState.profiler;
+        perfEngineState.profiler = null;
+        return data ? {elapsedMs:Date.now()-data.startedAt,records:data.records} : null;
+    }
+    function perfClearRoomCaches() {
+        if (!perfEnabled('memoryCleanup')) return;
+        // Only stale Essentials references. Do not alter BC-owned resources.
+        perfSafe('memoryCleanup', () => {
+            if (dirtyPlushRenderFrame) { cancelAnimationFrame(dirtyPlushRenderFrame); dirtyPlushRenderFrame=0; }
+            dirtyPlushCharacters.clear();
+            manualPlushMainBounds.clear();
+            lastCharacterChatRoomDraw.clear();
+            canvasOverlayImageCache.clear();
+            perfCount('roomCacheResets');
+        });
+    }
+    function perfExposeEngine() {
+        window.SubbysPerformanceEngine = Object.freeze({
+            version:'1.0.0',status:()=>({version:VERSION,features:{...perfFlags()},counters:{...perfEngineState.counters},
+                failures:{...perfEngineState.failures},lastFailure:perfEngineState.lastFailure,
+                ui:perfUIBus.status(),addons:perfAddonAdapters(),profiling:!!perfEngineState.profiler}),
+            setFeature: perfSetFeature,
+            profileStart: perfStartProfiler,
+            profileStop: perfStopProfiler,
+            detectedAddons: perfAddonAdapters,
+            ping:() => perfUIBus.ping('manual')
+        });
+    }
+    // === End Targeted Performance Engine ===
+
+    const BUILD_DATE = "2026-10-19";
     const TAG = "[Subby's Plushies & Essentials]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -716,6 +968,7 @@ function SubbysPlushiesPageMain() {
         return;
     }
     window[ACTIVE_GUARD] = VERSION;
+    quietPerfExpose();
     console.log(`[Subby v${VERSION}] Userscript injected.`);
     const REPOSITORY_RAW_ROOT = "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main";
     const DATA_INDEX_URL = `${REPOSITORY_RAW_ROOT}/data/index.json`;
@@ -1302,6 +1555,7 @@ function SubbysPlushiesPageMain() {
         MascotVisible: Object.freeze({ x: 1040, y: 914, w: 280, h: 58 }),
         AutoUpdate: Object.freeze({ x: 1335, y: 914, w: 300, h: 58 }),
         Update: Object.freeze({ x: 1650, y: 914, w: 300, h: 58 }),
+        HideEmoticonButton: Object.freeze({ x: 1040, y: 608, w: 430, h: 58 }),
         Idle: Object.freeze({ x: 1040, y: 690, w: 280, h: 58 }),
         Speech: Object.freeze({ x: 1335, y: 690, w: 300, h: 58 }),
         EmotesSettings: Object.freeze({ x: 1650, y: 690, w: 300, h: 58 }),
@@ -2551,7 +2805,7 @@ function SubbysPlushiesPageMain() {
         return true;
     }
 
-    // === PLUSHIE SNAP POINTS v1 ===
+    // === PLUSHIE SNAP POINTS v1.1 - event driven; redraw only on actual changes ===
     // Coordinates are offsets for this plugin's native 128x128 sprite anchor.
     // Custom placements for each plush, slot, and anchor survive reloads.
     const PLUSH_SNAP_KEY_PREFIX = 'SubbysPlushies:snap-points:v1:';
@@ -2572,7 +2826,8 @@ function SubbysPlushiesPageMain() {
         return plushSnapCache.data;
     }
     function plushSnapSave() {
-        return writeLocalJSON(PLUSH_SNAP_KEY_PREFIX+plushSnapCache.member,plushSnapStore());
+        const store=plushSnapStore();
+        return writeLocalJSON(PLUSH_SNAP_KEY_PREFIX+plushSnapCache.member,store);
     }
     function plushSnapTarget() {
         const selected=getDragTargetItem();
@@ -2599,31 +2854,51 @@ function SubbysPlushiesPageMain() {
             if(Number.isFinite(generic[key])&&generic[key]!==DEFAULT_TRANSFORM[key])transform[key]=generic[key];
         return sanitizeSavedPoseTransform(transform);
     }
+    function plushSnapSameTransform(a,b) {
+        return !!a&&!!b&&NATIVE_LAYER_TRANSFORM_KEYS.every(key => a[key]===b[key]);
+    }
     function plushSnapApply(id) {
         const preset=PLUSH_SNAP_PRESETS.find(x=>x.id===String(id||'').toLowerCase());
         const target=plushSnapTarget();
         if(!preset||!target||!window.Player)return false;
-        const record=plushSnapRecord(target),current=plushSnapCurrent(target);
-        if(!current)return false;
+        const record=plushSnapRecord(target);
+        // Restore temporary poses first. They may themselves redraw; a snap that
+        // matches the restored location must not trigger another update.
         if(activeBalanceHeadSession)restoreActiveBalanceHead('snap point');
         if(activeHideBehindSession)restoreActiveHideBehind('snap point');
         if(activeProtectSession)restoreActiveProtect('snap point');
         if(activeIdleAnimationSession)cancelIdleAnimation();
-        if(record.active && record.active!==preset.id && PLUSH_SNAP_PRESETS.some(p=>p.id===record.active))
-            record.anchors[record.active]=current;
-        // Default offsets apply only to new points. Custom scale, rotation and
-        // translation for each anchor are retained after switching away.
+        const current=plushSnapCurrent(target);
+        if(!current)return false;
+        let recordChanged=false;
+        if(record.active&&record.active!==preset.id&&PLUSH_SNAP_PRESETS.some(p=>p.id===record.active)) {
+            if(!plushSnapSameTransform(record.anchors[record.active],current)) {
+                record.anchors[record.active]=current;
+                recordChanged=true;
+            }
+        }
+        // A new point inherits the current scale and rotation. Existing points
+        // retain their independent position and size.
         const saved=record.anchors[preset.id];
         const transform=saved?sanitizeSavedPoseTransform(saved):sanitizeSavedPoseTransform({
             ...current,TranslationX:preset.x,TranslationY:preset.y});
-        if(!setPlushLayerTransform(target.item,target.layer,transform)) {
-            // No change can also mean the item was already at this anchor.
-            if(!getProperty(target.item))return false;
+        if(record.active!==preset.id) {record.active=preset.id;recordChanged=true;}
+        if(!plushSnapSameTransform(saved,transform)) {
+            record.anchors[preset.id]=transform;
+            recordChanged=true;
         }
-        compactPlushLayerTransformsToActive(target.item,transform);
-        resetGenericNativeTransform(target.item);
-        record.active=preset.id;record.anchors[preset.id]=transform;
-        plushSnapSave();
+        if(recordChanged)plushSnapSave();
+        // Read the stored layer separately from effective position. Native generic
+        // transforms need to be normalized even if the on-screen values match.
+        const layerBefore=readActivePlushLayerTransform(target.item);
+        const layerDiff=!plushSnapSameTransform(layerBefore,transform);
+        const nativeDiff=!nativeTransformIsDefault(target.item);
+        if(!layerDiff&&!nativeDiff)return true; // No canvas, network or DOM work.
+        const layerChanged=layerDiff&&setPlushLayerTransform(target.item,target.layer,transform);
+        if(layerDiff&&!layerChanged)return false;
+        const compactChanged=compactPlushLayerTransformsToActive(target.item,transform);
+        if(nativeDiff)resetGenericNativeTransform(target.item);
+        if(!(layerChanged||compactChanged||nativeDiff))return true;
         rememberCharacterPlushState(window.Player,target.item);
         rebuildCharacterCanvas(window.Player,'snap point '+preset.id);
         try {window.ChatRoomCharacterUpdate?.(window.Player);}catch(e){warn('Snap point room sync failed:',e);}
@@ -2637,6 +2912,7 @@ function SubbysPlushiesPageMain() {
         const anchor=id||record.active;
         if(!PLUSH_SNAP_PRESETS.some(p=>p.id===anchor))return false;
         const current=plushSnapCurrent(target);if(!current)return false;
+        if(record.active===anchor&&plushSnapSameTransform(record.anchors[anchor],current))return true;
         record.anchors[anchor]=current;record.active=anchor;
         plushSnapSave();return true;
     }
@@ -2646,7 +2922,8 @@ function SubbysPlushiesPageMain() {
         const preset=PLUSH_SNAP_PRESETS.find(p=>p.id===id);if(!preset)return false;
         delete record.anchors[id];
         if(record.active===id)record.active=null;
-        plushSnapSave();return plushSnapApply(id);
+        // plushSnapApply writes the updated record once; no duplicate disk write.
+        return plushSnapApply(id);
     }
     function plushSnapStatus() {
         const target=plushSnapTarget();if(!target)return {equipped:false,presets:PLUSH_SNAP_PRESETS};
@@ -2656,25 +2933,37 @@ function SubbysPlushiesPageMain() {
     }
     function renderPlushSnapPoints(container) {
         const section=makeExtensionsSection('📍 Plushie Snap Points');
-        const stat=plushSnapStatus();
-        const hint=document.createElement('p');hint.style.cssText='font-size:12px;line-height:1.5';
-        hint.textContent=stat.equipped?`Selected: ${stat.name} (${stat.group}). Each point remembers its own X/Y, scale and rotation. Positions are adjustable presets relative to the default plush sprite, not pose-aware body tracking.`:
-            'Equip a plushie to use snap points. Separate placement settings are stored per plushie and item slot.';
-        section.append(hint);
-        const row=document.createElement('div');Object.assign(row.style,{display:'flex',gap:'7px',flexWrap:'wrap'});
-        for(const preset of PLUSH_SNAP_PRESETS){
-            const button=makeExtensionsButton(`${stat.active===preset.id?'● ':'○ '}${preset.label}`,()=>{
-                plushSnapApply(preset.id);renderExtensionsPanel();},{active:stat.active===preset.id});
-            button.disabled=!stat.equipped;row.append(button);
+        function refreshSnapControls() {
+            if(!section.isConnected)return;
+            // Replace only the five snap controls, never the whole Extensions tab.
+            section.replaceChildren();
+            const heading=document.createElement('h3');
+            heading.textContent='📍 Plushie Snap Points';
+            const metrics=extensionsLayoutMetrics();
+            Object.assign(heading.style,{margin:'0 0 9px',fontSize:`${metrics.headingSize}px`,color:getExtensionsStyle().accent,letterSpacing:'0.02em'});
+            section.append(heading);
+            const stat=plushSnapStatus();
+            const hint=document.createElement('p');hint.style.cssText='font-size:12px;line-height:1.5';
+            hint.textContent=stat.equipped?`Selected: ${stat.name} (${stat.group}). Each point remembers its own X/Y, scale and rotation. Positions are adjustable presets relative to the default plush sprite, not pose-aware body tracking.`:
+                'Equip a plushie to use snap points. Separate placement settings are stored per plushie and item slot.';
+            section.append(hint);
+            const row=document.createElement('div');Object.assign(row.style,{display:'flex',gap:'7px',flexWrap:'wrap'});
+            for(const preset of PLUSH_SNAP_PRESETS){
+                const button=makeExtensionsButton(`${stat.active===preset.id?'● ':'○ '}${preset.label}`,()=>{
+                    plushSnapApply(preset.id);refreshSnapControls();},{active:stat.active===preset.id});
+                button.disabled=!stat.equipped;row.append(button);
+            }
+            section.append(row);
+            const actions=document.createElement('div');Object.assign(actions.style,{display:'flex',gap:'7px',flexWrap:'wrap',marginTop:'8px'});
+            const save=makeExtensionsButton('Save Current Position to This Point',()=>{
+                if(plushSnapRemember())refreshSnapControls();});
+            const reset=makeExtensionsButton('Reset Current Point',()=>{
+                if(stat.active&&plushSnapReset(stat.active))refreshSnapControls();});
+            save.disabled=!stat.active;reset.disabled=!stat.active;
+            actions.append(save,reset);section.append(actions);
         }
-        section.append(row);
-        const actions=document.createElement('div');Object.assign(actions.style,{display:'flex',gap:'7px',flexWrap:'wrap',marginTop:'8px'});
-        const save=makeExtensionsButton('Save Current Position to This Point',()=>{
-            if(plushSnapRemember())renderExtensionsPanel();});
-        const reset=makeExtensionsButton('Reset Current Point',()=>{
-            if(stat.active&&plushSnapReset(stat.active))renderExtensionsPanel();});
-        save.disabled=!stat.active;reset.disabled=!stat.active;
-        actions.append(save,reset);section.append(actions);container.append(section);
+        container.append(section);
+        refreshSnapControls();
     }
     window.SubbysPlushieSnapPoints=Object.freeze({version:VERSION,
         presets:PLUSH_SNAP_PRESETS.map(x=>({...x})),apply:plushSnapApply,remember:plushSnapRemember,
@@ -3939,10 +4228,23 @@ function SubbysPlushiesPageMain() {
             }
         } catch (_) {}
         let image = canvasOverlayImageCache.get(source);
+        if (image && perfEnabled('assetCache')) {
+            canvasOverlayImageCache.delete(source);canvasOverlayImageCache.set(source,image);
+            perfCount('overlayCacheHits');
+        }
         if (!image) {
             image = new Image();
             canvasOverlayImageCache.set(source, image);
             image.src = source;
+        }
+        if (perfEnabled('assetCache')) {
+            // Bound only private browser Image references, not BC's image cache.
+            while (canvasOverlayImageCache.size > 32) {
+                const oldest = canvasOverlayImageCache.keys().next().value;
+                if (oldest === source) break;
+                canvasOverlayImageCache.delete(oldest);
+                perfCount('overlayCacheEvictions');
+            }
         }
         const ready = image.complete && (Number(image.naturalWidth) > 0 || Number(image.width) > 0);
         if (!ready && typeof onReady === "function" && !image.__SubbysPlushiesReadyHooked) {
@@ -4834,7 +5136,10 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-    const ADDON_PRESENCE_ICON_SLOT_X = 229;
+    // Original position: 229. Adjusted to sit just to the left of the NFT badge.
+    // Small, position-only adjustment based on the latest screenshot (v3.5.82: 115).
+    // Uses the existing character-relative, zoom-scaled drawing path; no new hooks.
+    const ADDON_PRESENCE_ICON_SLOT_X = 190;
     const ADDON_PRESENCE_ICON_SLOT_TOP = 4;
     const ADDON_PRESENCE_ICON_CHARACTER_SIZE = 42;
     const ADDON_PRESENCE_ICON_ALPHA = 0.55;
@@ -5377,7 +5682,7 @@ function SubbysPlushiesPageMain() {
                 if (!isOurs(current) || getActivePlushLayerName(current) !== entry.layerName || !entry.base) continue;
                 if (setPlushLayerTransform(current, entry.layerName, entry.base)) changed = true;
             }
-            if (changed) rebuildCharacterCanvas(window.Player, "idle animation cancel");
+            if (changed) perfScheduleCosmeticRedraw(window.Player, "idle animation cancel");
         }
         if (reschedule && getFeatureSettings().idleAnimations) scheduleNextIdleAnimation();
         return true;
@@ -5425,7 +5730,7 @@ function SubbysPlushiesPageMain() {
                     if (setPlushLayerTransform(current, entry.layerName, nextTransform)) changed = true;
                 }
                 if (changed) {
-                    rebuildCharacterCanvas(window.Player, frame.restore ? "idle plush animation restore" : "idle plush animation");
+                    perfScheduleCosmeticRedraw(window.Player, frame.restore ? "idle plush animation restore" : "idle plush animation");
                     scheduleLocalOverlayReposition();
                 }
                 if (frame.restore) {
@@ -5670,7 +5975,7 @@ function SubbysPlushiesPageMain() {
                     TranslationY: base.TranslationY + frame.dy,
                     Rotation: base.Rotation + frame.rot,
                 });
-                rebuildCharacterCanvas(window.Player, "petting animation");
+                perfScheduleCosmeticRedraw(window.Player, "petting animation");
                 if (frame.delay === 270) rememberCharacterPlushState(window.Player, current);
             }, frame.delay);
         }
@@ -15800,6 +16105,8 @@ function SubbysPlushiesPageMain() {
                     for (const node of mutation.addedNodes) {
                         inspectOfferMutationNode(node, root);
                         if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
+                        // Fallback uses the already-installed offer observer.
+                        quietPerfEnhanceChatNode(node);
                     }
                 }
             }
@@ -17068,6 +17375,23 @@ function SubbysPlushiesPageMain() {
         if (!player || localPlushRepairSuppressed(player)) return;
         for (const item of getEquippedPlushItems(player)) rememberCharacterPlushState(player, item);
     }
+    // Coalesces cosmetic-only Essentials updates into one frame, without
+    // intercepting BC/other addons' character rendering or multiplayer sync.
+    const perfCosmeticRedraws = new Map();
+    let perfCosmeticRedrawFrame = 0;
+    function perfScheduleCosmeticRedraw(C, reason) {
+        if (!C) return false;
+        if (!perfEnabled('redrawBatch') || typeof window.requestAnimationFrame !== 'function')
+            return rebuildCharacterCanvas(C,reason);
+        perfCosmeticRedraws.set(C,reason);
+        if (!perfCosmeticRedrawFrame) perfCosmeticRedrawFrame=window.requestAnimationFrame(() => {
+            perfCosmeticRedrawFrame=0;
+            const pending=[...perfCosmeticRedraws.entries()];perfCosmeticRedraws.clear();
+            perfCount('cosmeticRedrawBatches');
+            for(const [character,why] of pending) rebuildCharacterCanvas(character,why);
+        });
+        return true;
+    }
     function rebuildCharacterCanvas(C, reason = "plush repair") {
         if (!C) return false;
         if (typeof CharacterLoadCanvas === "function") {
@@ -17216,6 +17540,8 @@ function SubbysPlushiesPageMain() {
             activeCustomActionRender = null;
             hideNativePresenceDomBadges(true);
             clearPetSuitPlushOverlays();
+            perfClearRoomCaches();
+            try {window.__BCOutfitTimeMachine?.releasePreviews?.();} catch (_) {}
             stopOfferChatObserver();
             pruneRememberedPlushStates(false);
             return result;
@@ -17679,6 +18005,8 @@ function SubbysPlushiesPageMain() {
             if (node && window.CurrentScreen === "ChatRoom") {
                 inspectOfferMutationNode(node, getOfferChatRoot());
                 if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
+                // Existing native hook: no new chat observer or polling loop.
+                try { quietPerfEnhanceChatNode(node); } catch (_) {}
             }
             return result;
         });
@@ -18523,7 +18851,7 @@ function SubbysPlushiesPageMain() {
         dirtyPlushRenderFrame = 0;
         if (!plushScreenVisible()) return;
         for (const C of dirtyPlushCharacters) {
-            try { rebuildCharacterCanvas(C, "plush artwork became ready"); }
+            try { perfScheduleCosmeticRedraw(C, "plush artwork became ready"); }
             catch (e) { warn("Deferred plush canvas update failed:", e); }
         }
         dirtyPlushCharacters.clear();
@@ -18535,7 +18863,12 @@ function SubbysPlushiesPageMain() {
         dirtyPlushRenderFrame = window.requestAnimationFrame(flushDirtyPlushCharacters);
     }
     function refreshLazyRenderConsumers(source) {
-        imageMappings = buildImageMappings();
+        // Reuse mapping object so existing image lookups never need a wholesale
+        // reconstruction whenever ONE lazily loaded plushie finishes decoding.
+        if (perfEnabled('assetCache') && imageMappings) {
+            buildImageMappings(imageMappings,new Set(renderIndexesForSource(source)));
+            perfCount('incrementalAssetRemaps');
+        } else imageMappings = buildImageMappings();
         if (window.CurrentScreen !== "ChatRoom") return;
         const characters = Array.isArray(window.ChatRoomCharacter) ? window.ChatRoomCharacter : [];
         const members = characters.includes(window.Player) ? characters : [...characters, window.Player];
@@ -18647,16 +18980,16 @@ function SubbysPlushiesPageMain() {
         });
         return { EN };
     }
-    function buildImageMappings() {
-        const mappings = {};
+    function buildImageMappings(mappings = {}, onlyIndexes = null) {
         for (const groupName of PLUSH_GROUPS) {
             const base = assetBaseForGroup(groupName);
-            mappings[`${base}.png`] = renderImages[0];
-            mappings[`${base.replace(`/${ASSET_NAME}`, `/Preview/${ASSET_NAME}`)}.png`] = renderImages[0];
-            for (const size of SIZE_TOKENS) {
-                mappings[`${base}_${size}.png`] = renderImages[0];
+            if (!onlyIndexes) {
+                mappings[`${base}.png`] = renderImages[0];
+                mappings[`${base.replace(`/${ASSET_NAME}`, `/Preview/${ASSET_NAME}`)}.png`] = renderImages[0];
+                for (const size of SIZE_TOKENS) mappings[`${base}_${size}.png`] = renderImages[0];
             }
             PLUSHES.forEach((_, index) => {
+                if (onlyIndexes && !onlyIndexes.has(index)) return;
                 const layerName = `Plush${index + 1}`;
                 const typeToken = `${MODULE_KEY}${index}`;
                 const image = renderImages[index];
@@ -18897,22 +19230,45 @@ function SubbysPlushiesPageMain() {
             }
         }
     }
+    const wardrobeLabelRoots = new Set();
+    function wardrobeUpdateObservedRoots() {
+        if (!perfEnabled('targetedLabels') || !wardrobeDomLabelObserver) return 0;
+        // Observe small UI containers only. Canvas text is handled by the
+        // existing DrawText/AssetTextGet hooks; no body-wide subtree scanning.
+        const roots = document.querySelectorAll('#DialogInventory, #DialogInventoryColor, #ScreenAppearance, '
+            +'#AppearanceMenu, #AppearancePreview, #Wardrobe, #WardrobeMenu, '
+            +'[data-subbys-wardrobe-editor], [id^="subby-wardrobe-"]');
+        const next = new Set(Array.from(roots).slice(0,12));
+        if (next.size === wardrobeLabelRoots.size && [...next].every(el => wardrobeLabelRoots.has(el))) return next.size;
+        wardrobeDomLabelObserver.disconnect();
+        wardrobeLabelRoots.clear();
+        for (const el of next) {
+            wardrobeLabelRoots.add(el);
+            wardrobeDomLabelObserver.observe(el,{subtree:true,childList:true,characterData:true});
+            wardrobeRepairInsertedText(el);
+        }
+        perfCount('wardrobeObserverRebinds');
+        return next.size;
+    }
     function installWardrobeDomLabelFallback() {
-        if (wardrobeDomLabelObserver || !document.body || typeof window.MutationObserver !== "function") return false;
+        if (wardrobeDomLabelObserver || !document.body || typeof window.MutationObserver !== 'function') return false;
         try {
             wardrobeDomLabelObserver = new window.MutationObserver(mutations => {
-                for (const mutation of mutations) {
-                    if (mutation.type === "characterData") wardrobeRepairVisibleTextNode(mutation.target);
-                    else if (mutation.type === "childList") for (const node of mutation.addedNodes) {
-                        wardrobeRepairInsertedText(node);
+                perfMeasure('wardrobe:labelObserver',()=>{
+                    for (const mutation of mutations) {
+                        if (mutation.type === 'characterData') wardrobeRepairVisibleTextNode(mutation.target);
+                        else if (mutation.type === 'childList') for (const node of mutation.addedNodes)
+                            wardrobeRepairInsertedText(node);
                     }
-                }
+                });
             });
-            wardrobeDomLabelObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
+            perfUIBus.watch(wardrobeUpdateObservedRoots,'wardrobe-roots');
+            wardrobeUpdateObservedRoots();
             return true;
         } catch (e) {
-            wardrobeDomLabelObserver = null;
-            warn("Wardrobe DOM label fallback unavailable:", e);
+            wardrobeDomLabelObserver?.disconnect();
+            wardrobeDomLabelObserver=null;
+            warn('Wardrobe DOM label fallback unavailable:',e);
             return false;
         }
     }
@@ -20167,6 +20523,7 @@ function SubbysPlushiesPageMain() {
         if (plushSearchQuery.trim()) return searchResults();
         return [
             { label: `★ Favorites (${favoritePlushNames().length})`, favoritesSubmenu: true },
+            { label: "🎲 Pick Random", randomPlushie: true },
             ...CHARACTER_MENU,
         ];
     }
@@ -20195,7 +20552,7 @@ function SubbysPlushiesPageMain() {
         for (let index = 0; index < page.items.length; index++) {
             if (!mouseInRect(menuGridRect(index))) continue;
             const entry = page.items[index];
-            if (entry.favoritesSubmenu) return null;
+            if (entry.favoritesSubmenu || entry.randomPlushie) return null;
             return entry.submenu ? { label: "Subbycat", option: 0 } : entry;
         }
         return null;
@@ -20311,6 +20668,9 @@ function SubbysPlushiesPageMain() {
             drawButton(FEATURE_MENU.MascotVisible, `Mascot Picture: ${settings.showRoomMascot ? "ON" : "hidden"}`, settings.showRoomMascot);
             drawButton(FEATURE_MENU.AutoUpdate, `Auto Update Check: ${settings.autoUpdateChecks ? "ON" : "off"}`, settings.autoUpdateChecks);
             drawButton(FEATURE_MENU.Update, "Check Update Now");
+            drawButton(FEATURE_MENU.HideEmoticonButton,
+                `Hide Emoticon Button: ${settings.showEmoticonButton ? "OFF" : "ON"}`,
+                !settings.showEmoticonButton);
             return;
         }
         if (emotesPage) {
@@ -20354,6 +20714,10 @@ function SubbysPlushiesPageMain() {
         page.items.forEach((entry, index) => {
             if (entry.favoritesSubmenu) {
                 drawButton(menuGridRect(index), `${entry.label} >`, false);
+                return;
+            }
+            if (entry.randomPlushie) {
+                drawButton(menuGridRect(index), entry.label);
                 return;
             }
             const selectedEntry = entry.submenu
@@ -20406,6 +20770,10 @@ function SubbysPlushiesPageMain() {
             }
             if (mouseInRect(FEATURE_MENU.AutoUpdate)) { toggleFeatureSetting("autoUpdateChecks"); return true; }
             if (mouseInRect(FEATURE_MENU.Update)) { void checkForUpdates({ silent: false }); return true; }
+            if (mouseInRect(FEATURE_MENU.HideEmoticonButton)) {
+                toggleFeatureSetting("showEmoticonButton");
+                return true;
+            }
             if (mouseInRect(FEATURE_MENU.SettingsBack)) {
                 plushMenuPage = "characters";
                 plushMenuListPage = 0;
@@ -20547,6 +20915,10 @@ function SubbysPlushiesPageMain() {
                 removePlushSearchInput();
                 return true;
             }
+            if (entry.randomPlushie) {
+                if (mouseInRect(rect)) { pickRandomHeldPlushie(); return true; }
+                continue;
+            }
             if (!entry.favoritesSubmenu) {
                 const favoriteOption = entry.submenu ? 0 : Number(entry.option);
                 if (validPublicPlushOption(favoriteOption) && mouseInRect(favoriteStarRect(rect))) {
@@ -20594,6 +20966,18 @@ function SubbysPlushiesPageMain() {
         } catch (e) {
             warn("Could not publish plush swap Action:", e);
         }
+    }
+    function pickRandomHeldPlushie() {
+        const { item }=getFocusedPlushItem();
+        if(!isOurs(item))return false;
+        const current=wireToPublicPlushOption(getItemPlushOption(item));
+        const eligible=[];
+        for(let option=0;option<PUBLIC_PLUSH_COUNT;option++)
+            if(validPublicPlushOption(option)&&option!==current)eligible.push(option);
+        if(!eligible.length)return false;
+        // One click, one ordinary plushie selection. Avoid immediately repeating
+        // the current plushie; reuse the existing lock checks and sync logic.
+        return setPlushOption(eligible[Math.floor(Math.random()*eligible.length)]);
     }
     function setPlushOption(optionIndex) {
         if (!validPublicPlushOption(optionIndex)) {
@@ -21530,7 +21914,7 @@ function SubbysPlushiesPageMain() {
       const VERSION = '0.2.0';
       const KEY_PREFIX = 'BCOutfitTimeMachine:v1:';
       const MAX_HISTORY = 50;
-      const POLL_MS = 1400;
+      const POLL_MS = 12000; // Recovery only; change hooks handle normal edits.
       const SETTLE_MS = 950;
       const MAX_PROPERTY_BYTES = 24000;
       const PAGE_ID = 'bc-otm-overlay';
@@ -21542,6 +21926,9 @@ function SubbysPlushiesPageMain() {
       const HOVER_DELAY_MS = 220;
       const MAX_PREVIEW_CACHE = 4;
       const hoverPreviewCache = new Map();
+      // A 10-second read-only registry cache reduces repeated AssetGroup scans
+      // while keeping runtime-loaded addon groups discoverable.
+      const quietGroupCache = {array:null,length:-1,family:'',body:null,expires:0,groups:null};
       let hoverTimer = null;
       let hoverPopup = null;
       let activeWearButton = null;
@@ -21565,10 +21952,23 @@ function SubbysPlushiesPageMain() {
       const groupId = g => String(g?.Name || '');
       function registryGroups(C = player()) {
         if (!C) return new Map();
-        const out = new Map();
-        for (const g of (Array.isArray(window.AssetGroup) ? window.AssetGroup : [])) {
-          if (g?.Family && g.Family !== C.AssetFamily) continue;
-          if (g?.Name && isEligible(g)) out.set(g.Name, g);
+        const source = Array.isArray(window.AssetGroup) ? window.AssetGroup : [];
+        const now = Date.now();
+        const echo = perfAddonAdapters().some(a => a.name === 'Echo' && a.applied);
+        const reuse = (quietPerfEnabled() || echo) && perfEnabled('assetCache') && quietGroupCache.groups &&
+          quietGroupCache.array === source && quietGroupCache.length === source.length &&
+          quietGroupCache.family === C.AssetFamily && quietGroupCache.body === state.body &&
+          quietGroupCache.expires > now;
+        const out = reuse ? new Map(quietGroupCache.groups) : new Map();
+        if (reuse) quietPerfData.groupCacheHits++;
+        else {
+          if (quietPerfEnabled()) quietPerfData.groupCacheMisses++;
+          for (const g of source) {
+            if (g?.Family && g.Family !== C.AssetFamily) continue;
+            if (g?.Name && isEligible(g)) out.set(g.Name, g);
+          }
+          if (perfEnabled('assetCache')) Object.assign(quietGroupCache, {array:source,length:source.length,
+            family:C.AssetFamily,body:state.body,expires:now+10000,groups:new Map(out)});
         }
         for (const item of C.Appearance) {
           const g = item?.Asset?.Group;
@@ -21832,6 +22232,12 @@ function SubbysPlushiesPageMain() {
         return true;
       }
       function monitor() {
+        return perfMeasure('outfit:monitor', () => monitorCore());
+      }
+      function monitorCore() {
+        // Browser background tabs don't need repeated appearance serializing.
+        // Resumes immediately on visibilitychange, preserving the latest look.
+        if (quietPerfEnabled() && document.hidden) { quietPerfData.outfitScansSkipped++; return; }
         if (state.restoring || !loadAccount()) return;
         const snap = collect(); if (!snap) return;
         const sig = fingerprint(snap);
@@ -22603,9 +23009,42 @@ function SubbysPlushiesPageMain() {
       }
       function togglePanel() { if(!sheetMounted)mount();loadAccount();state.show=!state.show;sheet?.classList.toggle('open',state.show);
         if(state.show){clampPanelToViewport();render();}else {clearWearPreview();sheet.dispatchEvent(new Event('otm-closed'));} }
+      let outfitMonitorTimer = null;
+      function scheduleOutfitMonitor(reason='appearance') {
+          if (outfitMonitorTimer != null) window.clearTimeout(outfitMonitorTimer);
+          outfitMonitorTimer = window.setTimeout(() => {
+              outfitMonitorTimer = null;
+              perfCount('outfitEventChecks');monitor();
+              // SETTLE_MS is used for the normal record threshold; confirm
+              // after it elapses even if no further BC event arrives.
+              window.setTimeout(monitor, Math.max(SETTLE_MS,1750)+100);
+          }, 180);
+      }
+      function installOutfitEvents() {
+          if (!perfEnabled('outfitEvents') || !modApi?.hookFunction) return 0;
+          let installed = 0;
+          for (const name of ['InventoryWear','InventoryRemove','CharacterAppearanceSetItem',
+              'CharacterAppearanceSetColor','CharacterAppearanceSetHeight','ChatRoomSyncItem']) {
+              if (typeof window[name] !== 'function') continue;
+              try {
+                  modApi.hookFunction(name, -101, (args,next) => {
+                      const result=next(args);
+                      const candidate=args?.[0];
+                      const packetTarget = Number(args?.[0]?.Item?.Target);
+                      const localPacket = name === 'ChatRoomSyncItem' && Number.isFinite(packetTarget) &&
+                          packetTarget > 0 && packetTarget === Number(window.Player?.MemberNumber);
+                      if (perfEnabled('outfitEvents') && (candidate === window.Player || localPacket)) scheduleOutfitMonitor(name);
+                      return result;
+                  }); installed++;
+              } catch (_) {}
+          }
+          perfCount('outfitHooksInstalled',installed);
+          return installed;
+      }
       function init() { if(window.__BCOutfitTimeMachine)return;window.__BCOutfitTimeMachine=Object.freeze({
         version:VERSION,open:()=>{if(!state.show)togglePanel();},close:()=>{if(state.show)togglePanel();},
         capture:(label='Manual checkpoint')=>recordSnapshot(label,true),save:makeSaved,
+        notifyChange:()=>scheduleOutfitMonitor('internal'),
         xrayPreview:(hiddenGroups)=>{
           const snap=collect();if(!snap||!Array.isArray(hiddenGroups))return null;
           const groups=new Set(hiddenGroups.filter(name=>typeof name==='string'&&name.length<100));
@@ -22616,12 +23055,29 @@ function SubbysPlushiesPageMain() {
         undo:()=>navigate(-1),redo:()=>navigate(1),
         favoriteHistory:(index)=>{if(!loadAccount())return false;return toggleFavoriteOutfit(state.history[index],false);},
         favoriteSaved:(index)=>{if(!loadAccount())return false;return toggleFavoriteOutfit(state.saved[index],false);},
+        releasePreviews:()=>{hoverPreviewCache.clear();previewPending.clear();return true;},
         diagnose:()=>{loadAccount();return {account:state.account, history:state.history.length,cursor:state.cursor,
           appearanceSlots:collect()?.scope||[],saved:state.saved.length,favorites:state.favorites.length,storageOK:state.storageOK};}
       });
-      if(document.body)mount();else document.addEventListener('DOMContentLoaded',mount,{once:true});
-      setInterval(monitor,POLL_MS);
+      // UI construction is deferred until the user opens the Time Machine.
+      // Outfit capture is independent of the UI and continues to work.
+      const eventHooks = installOutfitEvents();
+      // Still scan periodically for addons that directly edit Appearance or when
+      // ModSDK is missing; never rely on unverified third-party events alone.
+      let lastWatchCheck = 0;
+      window.setInterval(() => {
+          const now = Date.now();
+          // A single recovery clock. Turning off event hooks immediately restores
+          // the faster polling fallback, without requiring a page reload.
+          if (!eventHooks || !perfEnabled('outfitEvents') || now-lastWatchCheck >= POLL_MS) {
+              lastWatchCheck = now;
+              monitor();
+          }
+      },3000);
       setTimeout(monitor,1000);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && quietPerfEnabled()) monitor();
+      }, {passive:true});
       window.addEventListener('keydown',e=>{
         if(e.key==='Escape'&&state.show){togglePanel();return;}
         if(editableTarget(e.target))return;
@@ -23758,10 +24214,13 @@ function SubbysPlushiesPageMain() {
             if (!document.body) return;
             document.body.append(dock);
         }
-        const safeRefreshDock = () => { try { refreshDock(); }
+        const safeRefreshDock = () => {
+            if (quietPerfEnabled() && document.hidden) return;
+            try { refreshDock(); }
             catch (e) { console.warn("[Subby] Optional Outfit Harmonizer dock:", e); }
         };
-        const watcher=window.setInterval(safeRefreshDock,1500);safeRefreshDock();
+        const stopUiWatch = perfUIBus.watch(safeRefreshDock,'harmonizer');
+        safeRefreshDock();
         const api=Object.freeze({version:VERSION,open:openDialog,apply:applyColor,undo:undoColor,
             inspect:inspectMaterials,paletteSources:()=>wornPaletteSources(),suggestPalette:suggestedPalette,
             preview:(primary=chosen,secondary=accent,jewelry=metal)=>
@@ -23774,7 +24233,7 @@ function SubbysPlushiesPageMain() {
             status:()=>({version:VERSION,chosen,accent,metal,
                 categories:Object.fromEntries(CATEGORY_DEFS.map(d=>[d.id,{...categorySettings[d.id]}])),
                 ruleCount:Object.keys(layerRules).length,eligible:eligibleItems().length,canUndo:!!previous,screen:window.CurrentScreen,message:details}),
-            destroy:()=>{window.clearInterval(watcher);dock?.remove();closeDialog();if(window.SubbysOutfitHarmonizer===api)delete window.SubbysOutfitHarmonizer;},
+            destroy:()=>{stopUiWatch();dock?.remove();closeDialog();if(window.SubbysOutfitHarmonizer===api)delete window.SubbysOutfitHarmonizer;},
             _test:{safeHex,hexToHsl,hslToHex,outfitColors,colorZoneNames,isJewelryItem,isMetalZone,
                 categoryForZone,categoryForItem,categoryColor,isLatexZone,isRubberZone,
                 isPlasticZone,isSilkZone,isFurZone,isButtonZone,inspectMaterials,
@@ -24135,16 +24594,28 @@ function SubbysPlushiesPageMain() {
   }
   // Text-only chat transmission; users of this expansion decorate known tokens locally.
   // Never modifies outgoing network packets or overwrites BC/BCX functions.
-  function decorateMessage(message){
-    if(!(message instanceof Element)||!message.matches('.ChatMessage')||message.closest('#subby-extras-modal'))return;
-    // Use a strict whitelist so unrelated colon text cannot become an image.
-    const matcher=/:([A-Za-z][A-Za-z0-9_]{0,24}):/g;
-    // Render older :subbyhappy:-style messages too, while sending only :happy: in new chats.
+  // A chat flood previously rebuilt the same token lookup for every row.
+  let cachedEmoteSource=null, cachedEmoteTokens=null;
+  function emoteTokens(){
+    if(quietPerfEnabled() && cachedEmoteTokens && cachedEmoteSource===state.emotes)return cachedEmoteTokens;
     const available=new Map(state.emotes.flatMap(e => {
       const entries=[[emoteCode(e),e]];
       if(!e.code && String(e.file || '').toLowerCase().endsWith('.svg'))entries.push([`:subby${e.id}:`,e]);
       return entries;
     }));
+    if(quietPerfEnabled()){cachedEmoteSource=state.emotes;cachedEmoteTokens=available;quietPerfData.emoteCacheRebuilds++;}
+    return available;
+  }
+  function decorateMessage(message){
+    if(!(message instanceof Element)||!message.matches('.ChatMessage')||message.closest('#subby-extras-modal'))return;
+    // Cheap text test skips a TreeWalker for ordinary chat without an emote.
+    if(quietPerfEnabled() && !/:([A-Za-z][A-Za-z0-9_]{0,24}):/.test(message.textContent||'')){
+      quietPerfEnhanceChatNode(message);return;
+    }
+    // Use a strict whitelist so unrelated colon text cannot become an image.
+    const matcher=/:([A-Za-z][A-Za-z0-9_]{0,24}):/g;
+    // Render older :subbyhappy:-style messages too, while sending only :happy: in new chats.
+    const available=emoteTokens();
     const walker=document.createTreeWalker(message,NodeFilter.SHOW_TEXT,{acceptNode(node){
       if(!node.nodeValue||!node.nodeValue.includes(':'))return NodeFilter.FILTER_REJECT;
       if(node.parentElement?.closest('script,style,textarea,input,button,.sxe-inline-emote,[contenteditable]'))return NodeFilter.FILTER_REJECT;
@@ -24162,6 +24633,8 @@ function SubbysPlushiesPageMain() {
       }
       if(changed){if(last<text.length)fragment.append(document.createTextNode(text.slice(last)));node.replaceWith(fragment);}
     }
+    // Catch addon-supplied emoji created after BC appended the original row.
+    quietPerfEnhanceChatNode(message);
   }
   function enhanceChatMessages(root){if(!root)return;const msgs=root.matches?.('.ChatMessage')?[root]:[...root.querySelectorAll('.ChatMessage')];
     for(const msg of msgs.slice(-150))decorateMessage(msg);
@@ -24196,8 +24669,9 @@ function SubbysPlushiesPageMain() {
   },true);
   const style=$('style');style.textContent=css;(document.head||document.documentElement).append(style);
   const tick=()=>{ensureAccount();setupChatButton();installLogObserver();};
-  // Three-second polling avoids a global mutation watcher against BC's constantly animated DOM.
-  const watcher=setInterval(tick,3000);tick();loadCatalog();
+  // Screen/UI events plus one shared slow watchdog; no extra 3-second timer.
+  const stopUiWatch = perfUIBus.watch(() => perfMeasure('chat:ui',tick),'emoticon-ui');
+  tick();loadCatalog();
   window.SubbysEssentialsExtras=Object.freeze({
     version:VERSION,
     colorStudio:()=>openModal('colors'),
@@ -24207,7 +24681,7 @@ function SubbysPlushiesPageMain() {
     chatButtonVisible:()=>!!getFeatureSettings().showEmoticonButton,
     catalog:()=>({source:state.catalogSource,count:state.emotes.length,error:state.catalogError}),
     status:()=>({version:VERSION,baseAddon:VERSION,chatLog:!!state.chatLog,accountKey:activeStorageKey,storedPalettes:data.palettes.length,floatingEmoticonButton:getFeatureSettings().showEmoticonButton}),
-    destroy:()=>{clearInterval(watcher);state.logObserver?.disconnect();state.chatButton?.remove();clearModal();style.remove();delete window.SubbysEssentialsExtras;},
+    destroy:()=>{stopUiWatch();state.logObserver?.disconnect();state.chatButton?.remove();clearModal();style.remove();delete window.SubbysEssentialsExtras;},
     _test:{safeHex,cleanEmotes,harmony}
   });
   console.info(TAG, 'Color Studio and Chat Emoticons enabled.');
@@ -24467,6 +24941,8 @@ function SubbysPlushiesPageMain() {
         }
         checkDuplicateAsset();
         initHookBackend();
+        optionalStartupStep("performance-engine-api", perfExposeEngine);
+        optionalStartupStep("performance-ui-watch", () => perfUIBus.start());
         if (!installPetBedRemovalGuard()) {
             for (const delay of [1500, 5000, 12000])
                 window.setTimeout(() => { if (!installedHooks.has("ChatRoomSyncItem")) installPetBedRemovalGuard(); }, delay);
@@ -24552,10 +25028,23 @@ function SubbysPlushiesPageMain() {
             for (const delay of [1200, 4800]) window.setTimeout(() => optionalStartupStep("appearance-shield-late-hooks", appearanceShieldInstall), delay);
         // Optional feature setup runs only AFTER ready; an unsupported BC UI,
         // unavailable DOM node, or timer failure can no longer abort plugin loading.
-        window.setTimeout(() => {
-            try { installSmartOutfitColorHarmonizer(); }
-            catch (e) { warn("Optional Outfit Harmonizer unavailable:", e); }
-        }, 350);
+        // Defer the Harmonizer UI and its observers until Appearance/Wardrobe
+        // is visited, or the user opens it from Extensions. Core recoloring and
+        // all existing menu entrypoints continue to work on demand.
+        const maybeStartHarmonizer = (screen) => {
+            if (!perfEnabled('lazyPanels') || screen === 'Appearance' || screen === 'Wardrobe') {
+                try { installSmartOutfitColorHarmonizer(); }
+                catch (e) { warn('Optional Outfit Harmonizer unavailable:',e); }
+            }
+        };
+        optionalStartupStep('lazy-harmonizer',() => {
+            const unsubscribe=perfUIBus.watch((screen) => {
+                maybeStartHarmonizer(screen);
+                if (window.SubbysOutfitHarmonizer) unsubscribe();
+            },'lazy-harmonizer');
+            maybeStartHarmonizer(window.CurrentScreen);
+            if (window.SubbysOutfitHarmonizer) unsubscribe();
+        });
     }
     main().catch(e => {
         startupError = e;
@@ -24571,7 +25060,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.76";
+    const VERSION = "3.5.83";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
