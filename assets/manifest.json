@@ -1,0 +1,79 @@
+{
+  "addon": "Subby's Plushies & Essentials",
+  "version": "3.5.94",
+  "theme": "Kitten Frame UI",
+  "inline_art": true,
+  "source": "User-selected kitten interface mockup + previously generated independent asset pack",
+  "asset_map": [
+    {
+      "key": "frame",
+      "original": "gothic_kawaii_cat_frame_overlay.png",
+      "optimized": "frame.webp",
+      "role": "Main transparent silhouette"
+    },
+    {
+      "key": "logo",
+      "original": "kawaii_gothic_plush_kitty_logo.png",
+      "optimized": "logo.webp",
+      "role": "Cropped header lettering"
+    },
+    {
+      "key": "sleeping",
+      "original": "sleeping_pink_ribbon_kitten_sticker.png",
+      "optimized": "sleeping.webp",
+      "role": "Sleeping kitten ornament"
+    },
+    {
+      "key": "kitten",
+      "original": "gothic_kawaii_kitten_in_pink_paw_throne.png",
+      "optimized": "kitten.webp",
+      "role": "Sidebar kitten plush"
+    },
+    {
+      "key": "pawA",
+      "original": "kawaii_gothic_plush_paw_charm.png",
+      "optimized": "pawA.webp",
+      "role": "Optional paw charm"
+    },
+    {
+      "key": "pawB",
+      "original": "plush_pink_paw_charm_with_bow.png",
+      "optimized": "pawB.webp",
+      "role": "Optional alternate paw charm"
+    },
+    {
+      "key": "bow",
+      "original": "glossy_gothic_heart_bow_emblem.png",
+      "optimized": "bow.webp",
+      "role": "Optional bow accent"
+    },
+    {
+      "key": "tab",
+      "original": "gothic_kawaii_plush_tab_button.png",
+      "optimized": "tab.webp",
+      "role": "Optional tab/button skin"
+    },
+    {
+      "key": "button",
+      "original": "neon_gothic_bow_button_frame.png",
+      "optimized": "button.webp",
+      "role": "Optional pink button skin"
+    },
+    {
+      "key": "wide",
+      "original": "kawaii_gothic_cat_ui_frame.png",
+      "optimized": "wide.webp",
+      "role": "Optional landscape frame"
+    }
+  ],
+  "installation": [
+    "Publish SubbysPlushies.user.js as the main script in your GitHub repository or load it directly as a userscript.",
+    "The theme art used by the script is embedded, so you do not need to upload image files.",
+    "Switch to Classic from the menu header if needed.",
+    "For a fresh size reset run SubbysCatUI.resetSize() in the developer console."
+  ],
+  "known_limitations": [
+    "Actual BC R133 runtime and physical phone behavior have not been tested in this environment.",
+    "The original artwork is raster; very large resizes can soften details."
+  ]
+}
