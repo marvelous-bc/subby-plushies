@@ -1,0 +1,34 @@
+{
+  "release": "3.5.96",
+  "base": "3.5.95",
+  "date": "2026-10-25",
+  "script_sha256": "83b6465d4089013174a05b61098f5a75a93c76e3d55898917a5eceb997b1720d",
+  "pose_modes": [
+    "native",
+    "local-only"
+  ],
+  "asset_files": [
+    "kawaii_gothic_cat_ear_frame_overlay.png",
+    "subby_s_plushies_essentials_logo.png",
+    "sleeping_tuxedo_kitten_with_heart_bow.png",
+    "gothic_kawaii_neon_bow_button.png",
+    "gothic_pink_heart_bow_emblem.png",
+    "glossy_neon_pink_ui_button.png",
+    "glossy_pink_stitched_leather_ui_panel.png",
+    "glossy_neon_pink_dropdown_bar.png",
+    "glossy_neon_cat_paw_slider.png",
+    "neon_pink_kawaii_on_toggle_switch.png",
+    "gothic_pink_toggle_switch.png",
+    "kawaii_gothic_cat_ear_overlay_frame.png",
+    "gothic_kawaii_plush_settings_chest.png",
+    "gothic_kawaii_plush_tab_button.png",
+    "kawaii_gothic_plush_paw_charm.png",
+    "glossy_neon_pink_gothic_ui_button.png",
+    "gothic_plush_neon_ui_button.png",
+    "neon_gothic_heart_close_button.png",
+    "glossy_neon_pink_ui_panel.png",
+    "sleeping_tuxedo_kitten_on_a_ledge.png"
+  ],
+  "launcher_modified": false,
+  "ui_theme_embedded": true
+}
