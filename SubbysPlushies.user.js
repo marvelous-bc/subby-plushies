@@ -2,9 +2,9 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.103
-// @description  R133 posture bridge: device-free local Unsuspected pose fallback, recovery diagnostics, kitten UI
-// @released     2026-10-25
+// @version      3.6
+// @description  Plushie companions, expressive actions, wardrobe tools, and customizable Essentials for Bondage Club.
+// @released     2026-10-26
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.103";
+    const VERSION = "3.6";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -500,7 +500,7 @@ function SubbysPlushiesPageMain() {
     }
     // === End Targeted Performance Engine ===
 
-    const BUILD_DATE = "2026-10-19";
+    const BUILD_DATE = "2026-10-26";
     const TAG = "[Subby's Plushies & Essentials]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -1833,8 +1833,6 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushiedrag [on|off]", description: "Toggle Easy Drag, or explicitly turn it on/off." }),
                 Object.freeze({ command: "/plushiebalance", description: "Open the progressive Balance on Head minigame (8–20 seconds)." }),
                 Object.freeze({ command: "/plushieposes", description: "Open the Plushies tab at the saved-pose controls." }),
-                Object.freeze({ command: "/unsuspectedpose", description: "Use Unsuspected standing posture without equipping the device (native if accepted; otherwise local display)." }),
-                Object.freeze({ command: "/unsuspectedreset", description: "Restore your posture before the Unsuspected native-pose shortcut." }),
                 Object.freeze({ command: "/plushiesnap <hands|shoulder|chest|lap|beside>", description: "Snap your selected plushie to an anchor; each point remembers its custom placement." }),
                 Object.freeze({ command: "/plushiesnaps", description: "Open Progress → Plushies → Snap Points." }),
                 Object.freeze({ command: "/plushieposesave <1|2|3>", description: "Save the current plushie's X/Y position, scale, and rotation to a pose slot." }),
@@ -1896,14 +1894,13 @@ function SubbysPlushiesPageMain() {
             ]),
         }),
         Object.freeze({
-            title: "Updates & Diagnostics",
+            title: "Updates & Help",
             commands: Object.freeze([
-                Object.freeze({ command: "/plushieupdate", description: "Check the GitHub version manifest for an update." }),
+                Object.freeze({ command: "/plushieupdate", description: "Check whether a newer version is available." }),
                 Object.freeze({ command: "/plushieupdateopen", description: "Open the latest update / download page." }),
-                Object.freeze({ command: "/plushiedata", description: "Show Git-backed data source and cache status." }),
-                Object.freeze({ command: "/plushiedatareload", description: "Force-refresh validated data files from GitHub." }),
-                Object.freeze({ command: "/plushieversion", description: "Show the currently running addon version and pose-safety status." }),
-                Object.freeze({ command: "/plushiedebug", description: "Print detailed addon diagnostics to the browser console." }),
+                Object.freeze({ command: "/plushiedata", description: "Show content update information." }),
+                Object.freeze({ command: "/plushiedatareload", description: "Refresh addon content." }),
+                Object.freeze({ command: "/plushieversion", description: "Show the installed version and compatibility information." }),
             ]),
         }),
     ]);
@@ -3246,6 +3243,11 @@ function SubbysPlushiesPageMain() {
                 featureSettings: cloneBackupValue(getFeatureSettings()),
                 nicknames: cloneBackupValue(readLocalJSON(NICKNAME_STORAGE_KEY, {})),
                 savedPoses: cloneBackupValue(getSavedPosesStore()),
+                essentialsQoL: (() => {
+                    const q=essentialsConfig();
+                    return {hand:q.hand,dockSize:q.dockSize,dockOpacity:q.dockOpacity,dockGap:q.dockGap,
+                        dockCollapsed:q.dockCollapsed,chatColors:cloneBackupValue(q.chatColors),budget:q.budget};
+                })(),
             },
         };
     }
@@ -3294,9 +3296,24 @@ function SubbysPlushiesPageMain() {
                 [RELATIONSHIP_STORAGE_KEY, safeObject(progress.relationships)]
             );
         }
+        const restoredEssentials=safeObject(data.essentialsQoL);
+        if(restoredEssentials){
+            const q=essentialsConfig();
+            const number=(value,min,max,fallback)=>Number.isFinite(Number(value))?Math.min(max,Math.max(min,Number(value))):fallback;
+            const safeColors=Object.fromEntries(Object.entries(safeObject(restoredEssentials.chatColors)||{})
+                .filter(([member,color])=>/^[1-9]\d{0,9}$/.test(member)&&/^#[0-9a-f]{6}$/i.test(color)).slice(0,500));
+            writes.push([ESSENTIALS_QOL_KEY,{...q,hand:['auto','left','right'].includes(restoredEssentials.hand)?restoredEssentials.hand:q.hand,
+                dockSize:number(restoredEssentials.dockSize,72,136,q.dockSize),
+                dockOpacity:number(restoredEssentials.dockOpacity,.45,1,q.dockOpacity),
+                dockGap:number(restoredEssentials.dockGap,2,22,q.dockGap),
+                dockCollapsed:restoredEssentials.dockCollapsed===true,chatColors:safeColors,
+                budget:restoredEssentials.budget==='automatic'?'automatic':'off'}]);
+        }
         for (const [key, value] of writes) {
             if (value) writeLocalJSON(key, value);
         }
+        if(restoredEssentials){essentialsState=null;essentialsRefreshChatColors();}
+        
         const battle = safeObject(data.accountBattle);
         const backupBattleMember = Number(battle?.memberNumber ?? payload.account?.memberNumber);
         const currentMember = currentAccountMemberNumber();
@@ -3336,6 +3353,54 @@ function SubbysPlushiesPageMain() {
             backupBattleMember: Number.isFinite(backupBattleMember) ? backupBattleMember : null,
             currentMember,
         };
+    }
+    // Marvelous cross-addon bridge: account-bound structured exports and explicit imports.
+    function marvelousBackupPreview(payload) {
+        if (!payload || typeof payload !== 'object' || Number(payload.schemaVersion) !== BACKUP_SCHEMA_VERSION || !payload.data || typeof payload.data !== 'object')
+            throw new Error('Unsupported backup format.');
+        const account = Number(payload.account?.memberNumber);
+        const current = currentAccountMemberNumber();
+        if (!Number.isSafeInteger(account) || account <= 0 || !Number.isSafeInteger(current) || current <= 0 || account !== current)
+            throw new Error('Backup BC MemberNumber does not match the signed-in character.');
+        const bytes = JSON.stringify(payload).length;
+        if (bytes > 1024 * 1024) throw new Error('Backup exceeds the 1 MB safety limit.');
+        return Object.freeze({memberNumber: current, exportedAt: String(payload.exportedAt || '').slice(0,40),
+            sourceVersion: String(payload.version || ''), bytes, schemaVersion: BACKUP_SCHEMA_VERSION,
+            sections: Object.keys(payload.data).slice(0,20)});
+    }
+    async function marvelousRestoreBackup(payload) {
+        const preview = marvelousBackupPreview(payload);
+        if (typeof window.confirm !== 'function' || !window.confirm(
+            `Restore all Plushies & Essentials data for BC #${preview.memberNumber} from ${preview.exportedAt || 'this backup'}?\n\nThis replaces local preferences and progress; export your current data first.`))
+            return Object.freeze({cancelled: true});
+        const result = await restorePlushBackup(payload);
+        return Object.freeze({cancelled: false, progressVerified: result.progressVerified,
+            battleRestored: result.battleRestored, memberNumber: result.currentMember});
+    }
+    const marvelousExternalFocus = { enabled: false, style: null };
+    function marvelousSetExternalFocus(enabled) {
+        if (!marvelousExternalFocus.style?.isConnected) {
+            const style = document.createElement('style');
+            style.id = 'subbys-marvelous-focus-style';
+            style.textContent = `body.subbys-marvelous-focus .SubbysPlushiesMoodVisual,
+              body.subbys-marvelous-focus .SubbysPlushiesSpeechBubble,
+              body.subbys-marvelous-focus .SubbysPlushiesMobileDockFallback,
+              body.subbys-marvelous-focus .SubbysPlushiesDragToggle,
+              body.subbys-marvelous-focus .SubbysPlushiesRoomMascot,
+              body.subbys-marvelous-focus .SubbysPlushiesPresenceBadge {
+                opacity: 0 !important; pointer-events: none !important;
+              }`;
+            (document.head || document.documentElement).appendChild(style);
+            marvelousExternalFocus.style = style;
+        }
+        marvelousExternalFocus.enabled = Boolean(enabled);
+        document.body?.classList.toggle('subbys-marvelous-focus', marvelousExternalFocus.enabled);
+        return marvelousExternalFocus.enabled;
+    }
+    function marvelousEssentialsState() {
+        const essentials = essentialsConfig();
+        return Object.freeze({lowCpu: isLowCpuMode(), safeMode: essentials.safeMode === true,
+            automaticBudget: essentials.budget === 'automatic', fps: essentialsBudgetLastFps});
     }
     function importPlushBackupFromFile() {
         if (!backupImportInput?.isConnected) {
@@ -10959,7 +11024,7 @@ function SubbysPlushiesPageMain() {
             const controls = document.createElement("div");
             Object.assign(controls.style, { display: "flex", gap: "8px", flexWrap: "wrap" });
             const wear = makeExtensionsButton("Wear", () => {
-                if (!wardrobeWearByName(entry.name)) appendLocalInfoBox("Wardrobe", [`Could not equip ${entry.title}. Inspect SubbysWardrobeCurated.diagnose() in console.`]);
+                if (!wardrobeWearByName(entry.name)) appendLocalInfoBox("Wardrobe", [`Could not equip ${entry.title}. Try refreshing addon content or reloading the room.`]);
             });
             wear.disabled = !state.found;
             controls.appendChild(wear);
@@ -11029,7 +11094,7 @@ function SubbysPlushiesPageMain() {
         }
         if (wardrobeState.errors.length) {
             const problems = document.createElement("div");
-            problems.textContent = `Diagnostics: ${wardrobeState.errors.slice(-4).join(" | ")}`;
+            problems.textContent = "Some wardrobe items could not load. Try refreshing addon content.";
             Object.assign(problems.style, { color: getExtensionsStyle().muted, fontSize: "12px" });
             section.appendChild(problems);
         }
@@ -11039,8 +11104,8 @@ function SubbysPlushiesPageMain() {
         const status = extensionsStatusSnapshot();
         const section = makeExtensionsSection("Addon status");
         appendExtensionsKeyValue(section, "Version", status.version);
-        appendExtensionsKeyValue(section, "Build date", status.buildDate);
-        appendExtensionsKeyValue(section, "Native Pet Bed padlocks", petBedLockingDiagnostics().allowLock ? "Enabled (on this client)" : "Not available");
+        appendExtensionsKeyValue(section, "Released", status.buildDate);
+        appendExtensionsKeyValue(section, "Pet Bed padlocks", petBedLockingDiagnostics().allowLock ? "Available on this device" : "Not available");
         appendExtensionsKeyValue(section, "State", status.state);
         appendExtensionsKeyValue(section, "Held plushie", status.held);
         appendExtensionsKeyValue(section, "Current mood", status.mood);
@@ -11070,7 +11135,7 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(wardrobePanel, "Registered", wardrobe?.registered?.join(", ") || "Not registered");
         if (wardrobe?.errors?.length) appendExtensionsKeyValue(wardrobePanel, "Diagnostics", wardrobe.errors.join("; "));
         const wardrobeHelp = document.createElement("div");
-        wardrobeHelp.textContent = "Open the Wardrobe tab to preview and equip both accessories, even if BC filters them from the native Appearance picker. Multiplayer persistence is unverified.";
+        wardrobeHelp.textContent = "Open the Wardrobe tab to preview and equip both accessories, even if BC filters them from the native Appearance picker. Some custom items may only appear on your screen.";
         Object.assign(wardrobeHelp.style, { color: getExtensionsStyle().muted, fontSize: "12px", marginTop: "8px", lineHeight: "1.4" });
         wardrobePanel.appendChild(wardrobeHelp);
         container.appendChild(wardrobePanel);
@@ -11096,147 +11161,10 @@ function SubbysPlushiesPageMain() {
         actions.append(
             makeExtensionsButton("Check for update", () => { void checkForUpdates({ silent: false }).finally(renderExtensionsPanel); }),
             makeExtensionsButton("Open Move / Resize", () => { closeExtensionsPanel(); void openNativeLayering(); }),
-            makeExtensionsButton("Reload Git data", () => { void refreshGitDataFromGitHub({ force: true, silent: false, includeLore: true }).finally(renderExtensionsPanel); }),
-            makeExtensionsButton("Print debug to console", () => debug())
+            makeExtensionsButton("Refresh addon content", () => { void refreshGitDataFromGitHub({ force: true, silent: false, includeLore: true }).finally(renderExtensionsPanel); })
         );
         container.appendChild(actions);
     }
-    // === Unsuspected posture — device-free native + local visual fallback (v3.5.98) ===
-    // OneBarGirl supplies pose identifiers, NOT an item to equip here. We first
-    // request BC's normal supported pose update; if BC rejects it, a player-local
-    // ActivePose override may still use the game's existing pose artwork.
-    // The fallback NEVER edits C.Appearance, inventory, permission/lock checks,
-    // or syncs unsupported pose data to the server. Other players may not see it.
-    const UNSUSPECTED_DEVICE_GROUP = "ItemDevices";
-    const UNSUSPECTED_DEVICE_ASSET = "OneBarGirl";
-    let unsuspectedSavedPose = null;
-    let unsuspectedAppliedPose = null;
-    let unsuspectedMode = "off"; // "native", "local", or "off"
-    let unsuspectedLastResult = "Not used";
-    function unsuspectedNativePoseNames() {
-        let asset = null;
-        try { asset = window.AssetGet?.(FAMILY, UNSUSPECTED_DEVICE_GROUP, UNSUSPECTED_DEVICE_ASSET); }
-        catch (_) { return []; }
-        const direct = asset?.SetPose;
-        const values = Array.isArray(direct) ? direct : typeof direct === "string" ? [direct] : [];
-        const blocked = /kneel|hogtie|crawl|allfours|fetal|suspend|lying|laydown|onbed|sitting|onallfours/i;
-        return [...new Set(values.filter(name => typeof name === "string" && /^[A-Za-z0-9_]{1,40}$/.test(name) && !blocked.test(name)))];
-    }
-    function unsuspectedCanUseNativePose(C, poses = unsuspectedNativePoseNames()) {
-        if (!C || C !== window.Player) return { ok: false, reason: "Only your own character may use this posture." };
-        if (!poses.length) return { ok: false, reason: "OneBarGirl has no compatible standing SetPose values in this BC build. No changes were made." };
-        try {
-            const device = window.InventoryGet?.(C, UNSUSPECTED_DEVICE_GROUP);
-            if (device?.Asset?.Name === UNSUSPECTED_DEVICE_ASSET)
-                return { ok: false, reason: "Remove the actual OneBarGirl device normally first; locked items cannot be removed by this shortcut." };
-            const check = window.CharacterCanChangeToPose;
-            if (typeof check !== "function") return { ok: false, reason: "BC's native pose permission check is unavailable." };
-            for (const pose of poses) {
-                if (check(C, pose) !== true) return { ok: false, reason: `BC currently forbids changing to ${pose}.` };
-                if (typeof window.PoseCanChangeUnaided === "function" && window.PoseCanChangeUnaided(C, pose) === false)
-                    return { ok: false, reason: `Changing to ${pose} requires assistance.` };
-            }
-        } catch (e) { return { ok: false, reason: `Pose precondition check failed: ${String(e?.message || e)}` }; }
-        return { ok: true, reason: "BC's standing-pose conditions permit a pose change." };
-    }
-    function unsuspectedRefresh(C) {
-        // No special renderer is needed: BC owns the existing pose image files.
-        // Refresh only on user action; no background observer/polling.
-        return refreshExtraActionPose(C);
-    }
-    function unsuspectedApplyNativePose() {
-        const C = window.Player;
-        const target = unsuspectedNativePoseNames();
-        const permission = unsuspectedCanUseNativePose(C, target);
-        if (!permission.ok) { unsuspectedLastResult = permission.reason; return permission; }
-        const previous = activePoseSnapshot(C);
-        if (unsuspectedMode !== "off" && unsuspectedAppliedPose && activePosesExactlyMatch(previous, unsuspectedAppliedPose)) {
-            return { ok: true, reason: unsuspectedLastResult, mode: unsuspectedMode };
-        }
-        if (typeof window.CharacterSetActivePose === "function") {
-            try {
-                window.CharacterSetActivePose(C, [...target]);
-                if (!activePosesExactlyMatch(activePoseSnapshot(C), target) && target.length === 1)
-                    window.CharacterSetActivePose(C, target[0]);
-                if (activePosesExactlyMatch(activePoseSnapshot(C), target)) {
-                    unsuspectedSavedPose = previous;
-                    unsuspectedAppliedPose = [...target];
-                    unsuspectedMode = "native";
-                    unsuspectedRefresh(C);
-                    if (window.CurrentScreen === "ChatRoom") window.ChatRoomCharacterUpdate?.(C);
-                    unsuspectedLastResult = `Applied BC-native ${target.join(" + ")} posture without an item.`;
-                    return { ok: true, reason: unsuspectedLastResult, mode: unsuspectedMode };
-                }
-            } catch (_) { /* Try the deliberately local alternative below. */ }
-        }
-        // Some BC builds expose the pose's artwork but reject it through the
-        // normal pose setter because the pose is primarily used by an item.
-        // Never bypass the permission checks above, and never send to server.
-        try {
-            C.ActivePose = [...target];
-            unsuspectedRefresh(C);
-            if (activePosesExactlyMatch(activePoseSnapshot(C), target)) {
-                unsuspectedSavedPose = previous;
-                unsuspectedAppliedPose = [...target];
-                unsuspectedMode = "local";
-                unsuspectedLastResult = `Applied ${target.join(" + ")} as a LOCAL display pose without wearing an item. Other players may not see it; artwork compatibility depends on R133.`;
-                return { ok: true, reason: unsuspectedLastResult, mode: unsuspectedMode };
-            }
-        } catch (_) {}
-        try { C.ActivePose = [...previous]; unsuspectedRefresh(C); } catch (_) {}
-        unsuspectedMode = "off";
-        unsuspectedAppliedPose = null;
-        unsuspectedLastResult = "R133 removed the item-only posture during refresh. It cannot be used as an independent pose in this build without additional character artwork/mappings; no item was equipped.";
-        return { ok: false, reason: unsuspectedLastResult };
-    }
-    function unsuspectedRestorePose() {
-        const C = window.Player;
-        if (!C || !Array.isArray(unsuspectedSavedPose)) return { ok: false, reason: "No prior pose was saved." };
-        // Don't overwrite a pose the player (or another addon) chose afterwards.
-        if (unsuspectedAppliedPose && !activePosesExactlyMatch(activePoseSnapshot(C), unsuspectedAppliedPose)) {
-            unsuspectedSavedPose = null;
-            unsuspectedAppliedPose = null;
-            unsuspectedMode = "off";
-            return { ok: false, reason: "Your pose has already changed; nothing was overwritten." };
-        }
-        const restore = [...unsuspectedSavedPose];
-        try {
-            if (typeof window.CharacterSetActivePose === "function") {
-                try { window.CharacterSetActivePose(C, restore); } catch (_) {}
-            }
-            if (!activePosesExactlyMatch(activePoseSnapshot(C), restore)) C.ActivePose = restore;
-            unsuspectedRefresh(C);
-            if (!activePosesExactlyMatch(activePoseSnapshot(C), restore)) return { ok: false, reason: "BC did not accept the restored pose." };
-            const wasNative = unsuspectedMode === "native";
-            unsuspectedSavedPose = null;
-            unsuspectedAppliedPose = null;
-            unsuspectedMode = "off";
-            if (wasNative && window.CurrentScreen === "ChatRoom") window.ChatRoomCharacterUpdate?.(C);
-            unsuspectedLastResult = "Previous pose restored.";
-            return { ok: true, reason: unsuspectedLastResult };
-        } catch (e) { return { ok: false, reason: String(e?.message || e) }; }
-    }
-    Object.defineProperty(window, "SubbysUnsuspectedPose", {
-        configurable: true,
-        value: Object.freeze({
-            status: () => ({
-                installedVersion: VERSION,
-                deviceAsset: UNSUSPECTED_DEVICE_ASSET,
-                nativeStandingPoseIds: unsuspectedNativePoseNames(),
-                available: unsuspectedCanUseNativePose(window.Player),
-                currentPose: activePoseSnapshot(window.Player),
-                savedPose: unsuspectedSavedPose ? [...unsuspectedSavedPose] : null,
-                mode: unsuspectedMode,
-                visuallyActive: !!(unsuspectedAppliedPose && activePosesExactlyMatch(activePoseSnapshot(window.Player), unsuspectedAppliedPose)),
-                networkVisible: unsuspectedMode === "native",
-                hasDevice: !!(window.Player && window.InventoryGet?.(window.Player, UNSUSPECTED_DEVICE_GROUP)?.Asset?.Name === UNSUSPECTED_DEVICE_ASSET),
-                lastResult: unsuspectedLastResult,
-                note: "Normal BC pose if accepted; otherwise local-only ActivePose display. No device is equipped and other users may not see local-only results."
-            }),
-            apply: unsuspectedApplyNativePose,
-            restore: unsuspectedRestorePose,
-        }),
-    });
     function renderExtensionsSettingsGeneral(container) {
         renderAppearanceShieldSettings(container);
         const settings = getFeatureSettings();
@@ -11249,34 +11177,12 @@ function SubbysPlushiesPageMain() {
                 () => toggleFeatureSetting("ignorePoseChangingEmotes")
             )
         );
-        const unexpectedInfo = document.createElement("div");
-        unexpectedInfo.textContent = "Unsuspected posture without the OneBarGirl device: first try BC's native standing pose, then a local visual-only fallback if BC rejects it. The local fallback does not sync to other players, cannot bypass pose permissions, and may be limited by R133 artwork.";
-        Object.assign(unexpectedInfo.style, { color: getExtensionsStyle().muted, fontSize: "12px", lineHeight: "1.4", margin: "7px 0" });
-        const unsuspectedButtons = document.createElement("div");
-        Object.assign(unsuspectedButtons.style, { display: "flex", flexWrap: "wrap", gap: "8px" });
-        for (const [label, fn] of [
-            ["Use Unsuspected Pose (No Item)", unsuspectedApplyNativePose],
-            ["Restore Previous Pose", unsuspectedRestorePose],
-        ]) {
-            unsuspectedButtons.appendChild(makeExtensionsButton(label, () => {
-                const outcome = fn();
-                appendLocalInfoBox(outcome.ok ? "Unsuspected posture" : "Unsuspected posture unavailable", [outcome.reason], { compact: true });
-                renderExtensionsPanel();
-            }));
-        }
-        const unsuspectedAvailability = unsuspectedCanUseNativePose(window.Player);
-        const unsuspectedHint = document.createElement("div");
-        unsuspectedHint.textContent = unsuspectedAvailability.ok
-            ? `Standing mapping found: ${unsuspectedNativePoseNames().join(" + ")}. Native mode is attempted first, then local-only display.`
-            : unsuspectedAvailability.reason;
-        Object.assign(unsuspectedHint.style, { color: getExtensionsStyle().muted, fontSize: "12px", margin: "7px 0" });
-        poseSafety.append(unexpectedInfo, unsuspectedButtons, unsuspectedHint);
         container.appendChild(poseSafety);
         const petBed = makeExtensionsSection("Native Pet Bed Locking");
         const petBedNote = document.createElement("div");
         petBedNote.textContent = petBedLockingDiagnostics().allowLock
             ? "Enabled: place the normal Pet Bed (ItemDevices), then apply a padlock through BC's regular item controls. BC permissions, keys, and unlock rules are unchanged. Players without Essentials may not recognize this client-side compatibility change."
-            : "Waiting for BC's Pet Bed asset; use the diagnostic button to check support.";
+            : "Pet Bed locking will become available when your game version supports it.";
         Object.assign(petBedNote.style, { color: getExtensionsStyle().muted, fontSize: "12px", lineHeight: "1.45", marginBottom: "8px" });
         petBed.append(extensionsSettingRow(
             "Auto-Restore My Locked Pet Bed",
@@ -12811,6 +12717,7 @@ function SubbysPlushiesPageMain() {
             if(backup?.performanceMode)setPerformanceMode(backup.performanceMode);
         }
         essentialsRefreshChatColors();
+        emitPluginApiEvent('essentials', {safeMode: config.safeMode, budget: config.budget});
         if(extensionsPanelElement?.isConnected)renderExtensionsPanel();
     }
     function essentialsSetHand(hand) {
@@ -13057,7 +12964,7 @@ function SubbysPlushiesPageMain() {
         } catch (e) {
             warn("Essentials tab failed (other tabs remain accessible):", e);
             const message = document.createElement("p");
-            message.textContent = `This Essentials tab encountered an error. Try another tab or check the console: ${String(e?.message || e)}`;
+            message.textContent = `This Essentials page could not open. Please try another tab or reload Bondage Club.`;
             Object.assign(message.style, {padding:"12px",border:"1px solid #a66",borderRadius:"8px",lineHeight:"1.5"});
             extensionsPanelContent.append(message);
         }
@@ -14683,13 +14590,6 @@ function SubbysPlushiesPageMain() {
                 `Running v${VERSION} (${BUILD_DATE}).`,
                 `Pose-changing emotes: ${getFeatureSettings().ignorePoseChangingEmotes ? "IGNORED" : "allowed"}.`
             ], { compact: true });
-            return true;
-        }
-        if (command === "/unsuspectedpose" || command === "/unsuspectedreset") {
-            requireReady(() => {
-                const outcome = command === "/unsuspectedreset" ? unsuspectedRestorePose() : unsuspectedApplyNativePose();
-                appendLocalInfoBox(outcome.ok ? "Unsuspected posture" : "Unsuspected posture unavailable", [outcome.reason], { compact: true });
-            });
             return true;
         }
         if (command === "/plushieignoreposes") {
@@ -23000,6 +22900,11 @@ function SubbysPlushiesPageMain() {
         clearPose: clearSavedPose,
         exportBackup: exportPlushBackup,
         importBackup: importPlushBackupFromFile,
+        getBackupPayload: createBackupPayload, // structured API; no file-download side effect
+        previewBackupPayload: marvelousBackupPreview,
+        restoreBackupPayload: marvelousRestoreBackup, // requires explicit user confirmation
+        getEssentialsStatus: marvelousEssentialsState,
+        setExternalFocus: marvelousSetExternalFocus,
         mascot: setCurrentPlushAsRoomMascot,
         pickMascot: openRoomMascotPicker,
         setMascot: setRoomMascotByName,
@@ -24452,7 +24357,7 @@ function SubbysPlushiesPageMain() {
         if (!window.__BCOutfitTimeMachine) installSubbysOutfitTimeMachine();
         const api = window.__BCOutfitTimeMachine;
         if (typeof api?.open === "function") api.open();
-        else warn("Outfit Time Machine could not be opened; check browser console.");
+        else warn("Outfit Time Machine could not be opened. Please try again after reloading the game.");
     }
     function openOutfitTimeMachineFromUseMenu() {
         closeCustomPlushMenu();
@@ -26552,7 +26457,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.103";
+    const VERSION = "3.6";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
