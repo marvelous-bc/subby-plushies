@@ -2,7 +2,7 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.6
+// @version      3.7.1
 // @description  Plushie companions, expressive actions, wardrobe tools, and customizable Essentials for Bondage Club.
 // @released     2026-10-26
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.6";
+    const VERSION = "3.7.1";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -39,6 +39,154 @@ function SubbysPlushiesPageMain() {
     // any third-party mod. Keep only our own DOM text/overlays sized consistently.
     // On the first installation, the current browser zoom becomes the reference;
     // SubbysUiScale.calibrate() can be used at browser zoom 100% to reset it.
+    // v3.7.0: large local records are stored in IndexedDB, not the shared
+    // per-origin localStorage quota. Each write must COMMIT before legacy data
+    // is eligible for removal. Encrypted Paw Notes, BCX and WCE are untouched.
+    const subbyBulkStore = (() => {
+        let opening=null, saved=0, failed=0, lastError='';
+        function database(){
+            if(opening)return opening;
+            opening=new Promise((resolve,reject)=>{
+                if(!window.indexedDB)return reject(Error('IndexedDB unavailable'));
+                const req=window.indexedDB.open('Subbys-Essentials-Bulk-v1',1);
+                req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('records'))
+                    req.result.createObjectStore('records',{keyPath:'key'});};
+                req.onsuccess=()=>{const db=req.result;db.onversionchange=()=>{db.close();opening=null;};resolve(db);};
+                req.onerror=()=>reject(req.error||Error('Cannot open bulk storage'));
+                req.onblocked=()=>reject(Error('Bulk storage blocked by another tab'));
+            }).catch(e=>{opening=null;lastError=String(e.message||e);failed++;throw e;});
+            return opening;
+        }
+        async function get(key){
+            const db=await database();
+            return new Promise((resolve,reject)=>{
+                const tx=db.transaction('records','readonly');
+                const request=tx.objectStore('records').get(key);
+                request.onsuccess=()=>resolve(request.result?.value??null);
+                request.onerror=()=>reject(request.error||Error('Read failed'));
+                tx.onerror=()=>reject(tx.error||Error('Read transaction failed'));
+            });
+        }
+        async function put(key,value){
+            const db=await database();
+            await new Promise((resolve,reject)=>{
+                const tx=db.transaction('records','readwrite');
+                tx.objectStore('records').put({key,value,updated:Date.now()});
+                tx.oncomplete=resolve;
+                tx.onerror=()=>reject(tx.error||Error('Write failed'));
+                tx.onabort=()=>reject(tx.error||Error('Write aborted'));
+            });
+            saved++;lastError='';return true;
+        }
+        async function remove(key){
+            const db=await database();
+            await new Promise((resolve,reject)=>{
+                const tx=db.transaction('records','readwrite');
+                tx.objectStore('records').delete(key);
+                tx.oncomplete=resolve;
+                tx.onerror=()=>reject(tx.error||Error('Delete failed'));
+                tx.onabort=()=>reject(tx.error||Error('Delete aborted'));
+            });
+        }
+        try{Object.defineProperty(window,'SubbysBulkStorageDiag',{configurable:true,
+            value:()=>({version:'3.7.1',saved,failed,lastError,note:'Only aggregate write status; no stored data is displayed.'})});}catch(_){}
+        return {get,put,remove};
+    })();
+    // Local-only account personal snapshots. Never upload automatically and
+    // never save foreign players' rendered appearances or room-presence cache.
+    // Does not change legacy preference keys; those need a separate consented
+    // migration because older installs didn't record the owning MemberNumber.
+    const subbyBoundaries={lastAccount:0,lastSnapshot:0,lastError:'',pending:false,
+        timer:null,saved:0,peerCacheTTL:7*86400000};
+    async function subbyCaptureMyData(){
+        const account=Number(window.Player?.MemberNumber);
+        if(!Number.isSafeInteger(account)||account<=0)return {ok:false,reason:'Not logged in'};
+        if(subbyBoundaries.pending)return {ok:false,reason:'A personal snapshot is already being saved'};
+        subbyBoundaries.pending=true;
+        try{
+            const payload=await createBackupPayload();
+            if(Number(payload?.account?.memberNumber)!==account)throw Error('BC account switched while snapshot was created');
+            await subbyBulkStore.put('personal:v1:'+account,{memberNumber:account,payload,at:Date.now()});
+            subbyBoundaries.saved++;subbyBoundaries.lastAccount=account;
+            subbyBoundaries.lastSnapshot=Date.now();subbyBoundaries.lastError='';
+            return {ok:true,account,category:'mine',stored:'IndexedDB',
+                note:'Your personal data only. Never uploaded automatically.'};
+        }catch(e){subbyBoundaries.lastError=String(e?.message||e);return {ok:false,account,error:subbyBoundaries.lastError};}
+        finally{subbyBoundaries.pending=false;}
+    }
+    function subbyOwnDataSnapshotLater(){
+        if(subbyBoundaries.timer)return;
+        subbyBoundaries.timer=window.setTimeout(()=>{
+            subbyBoundaries.timer=null;
+            if(Number(window.Player?.MemberNumber)!==subbyBoundaries.lastAccount ||
+               Date.now()-subbyBoundaries.lastSnapshot>=10*60000)
+                void subbyCaptureMyData();
+        },15000);
+    }
+    function subbyRemoteCacheReport(){
+        // Room-only caches are intentionally transient and already pruned by
+        // the core addon on room transitions; they must not enter backups.
+        return {rememberedPlushStates:typeof plushStateByCharacter!=='undefined'?plushStateByCharacter.size:0,
+            remoteEmotes:typeof remotePlushEmotes!=='undefined'?remotePlushEmotes.size:0,
+            addonPresence:typeof addonPresenceMembers!=='undefined'?addonPresenceMembers.size:0};
+    }
+    try{Object.defineProperty(window,'SubbysDataBoundaries',{configurable:true,value:Object.freeze({
+        status:()=>({account:Number(window.Player?.MemberNumber)||0,personalSnapshots:subbyBoundaries.saved,
+            lastSnapshot:subbyBoundaries.lastSnapshot,lastError:subbyBoundaries.lastError,
+            personalIsolationActive:!!localStorage.getItem(SUBBY_PERSONAL_LEGACY_OWNER),
+            legacyClaimedBy:Number(localStorage.getItem(SUBBY_PERSONAL_LEGACY_OWNER))||0,
+            otherPlayers:subbyRemoteCacheReport(),
+            note:'My private snapshots are account-specific in IndexedDB. Other-player rendering data is transient. No automatic cloud upload.'}),
+        saveMine:subbyCaptureMyData,
+        claimLegacyForCurrentAccount:async()=>{
+            const account=Number(window.Player?.MemberNumber)||0;
+            if(!Number.isSafeInteger(account)||account<=0)throw Error('Log in to your BC account first.');
+            const owner=Number(localStorage.getItem(SUBBY_PERSONAL_LEGACY_OWNER))||0;
+            if(owner && owner!==account)throw Error('Legacy progress already belongs to BC #'+owner+'. No cross-account claim allowed.');
+            if(owner===account)return {ok:true,account,alreadyClaimed:true};
+            if(!window.confirm('Assign this browser’s older, unscoped Plushies progress to BC #'+account+'?\n\nOnly do this on the account that originally owned the saved progress. No data will be deleted. Reload BC after completing.'))return {ok:false,cancelled:true};
+            const legacy={};
+            for(const key of SUBBY_PERSONAL_KEYS){const value=localStorage.getItem(key);if(value!==null)legacy[key]=value;}
+            // An IndexedDB backup precedes any account ownership marker change.
+            await subbyBulkStore.put('legacy-preclaim:v1:'+account,{memberNumber:account,raw:legacy,at:Date.now()});
+            const written=[];
+            try{
+                for(const [key,value] of Object.entries(legacy)){
+                    const scoped='SubbysPlushies:personal:v1:'+account+':'+key;
+                    localStorage.setItem(scoped,value);
+                    if(localStorage.getItem(scoped)!==value)throw Error('Verification failed for '+key);
+                    written.push(scoped);
+                }
+                localStorage.setItem(SUBBY_PERSONAL_LEGACY_OWNER,String(account));
+                if(localStorage.getItem(SUBBY_PERSONAL_LEGACY_OWNER)!==String(account))throw Error('Ownership marker not saved');
+            }catch(e){ // Preserve original unscoped values; marker is written last.
+                for(const key of written)try{localStorage.removeItem(key);}catch(_){ }
+                throw Error('Not enough localStorage space to activate isolation. Originals and the IndexedDB backup were retained: '+String(e?.message||e));
+            }
+            return {ok:true,account,migratedKeys:written.length,reloadRequired:true,
+                note:'Legacy records remain intact for rollback. New personal writes use account-specific keys.'};
+        },
+        exportMine:async()=>{
+            const account=Number(window.Player?.MemberNumber);
+            if(!Number.isSafeInteger(account)||account<=0)throw Error('Log into BC first.');
+            const record=await subbyBulkStore.get('personal:v1:'+account);
+            if(!record||Number(record.memberNumber)!==account)throw Error('No saved personal snapshot for this account. Run saveMine() first.');
+            const blob=new Blob([JSON.stringify(record)],{type:'application/json'});
+            const url=URL.createObjectURL(blob),a=document.createElement('a');
+            a.href=url;a.download='Subbys-Private-'+account+'-'+new Date().toISOString().slice(0,10)+'.json';
+            document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+            return {ok:true,account,exportStarted:true};
+        },
+        trimRoomCache:()=>{
+            // Keep only characters actually still in the room. Never touch
+            // favorites, relationships, personal achievements, or cloud data.
+            if(typeof pruneRememberedPlushStates==='function')pruneRememberedPlushStates(true);
+            if(typeof pruneAddonPresence==='function')pruneAddonPresence();
+            if(typeof pruneRemotePlushEmotes==='function')pruneRemotePlushEmotes();
+            return subbyRemoteCacheReport();
+        }
+    })});}catch(_){ }
+
     const SUBBY_UI_METRICS_KEY = 'SubbysPlushies:responsive-ui:v1';
     const subbyUiMetrics = (() => {
         let saved = {};
@@ -2437,9 +2585,41 @@ function SubbysPlushiesPageMain() {
             equipped,
         };
     }
+    // Legacy progress had no owner ID. The owner must explicitly claim it;
+    // no script will guess that another BC character owns this progress.
+    const SUBBY_PERSONAL_LEGACY_OWNER='SubbysPlushies:personal-legacy-owner:v1';
+    const SUBBY_PERSONAL_KEYS=new Set([
+        FEATURE_SETTINGS_STORAGE_KEY,LAYOUT_SETTINGS_STORAGE_KEY,MOOD_STORAGE_KEY,
+        STATS_STORAGE_KEY,RELATIONSHIP_STORAGE_KEY,FAVORITES_STORAGE_KEY,
+        SAVED_POSES_STORAGE_KEY,NICKNAME_STORAGE_KEY
+    ]);
+    function subbyScopedOwnKey(key){
+        if(!SUBBY_PERSONAL_KEYS.has(key))return key;
+        const member=Number(window.Player?.MemberNumber)||0;
+        const claimed=Number(localStorage.getItem(SUBBY_PERSONAL_LEGACY_OWNER))||0;
+        if(!claimed)return key; // Original data remains readable until claimed.
+        if(!Number.isSafeInteger(member)||member<=0)
+            return 'SubbysPlushies:personal:unbound:'+key; // Never read another account's legacy data before login.
+        return 'SubbysPlushies:personal:v1:'+member+':'+key;
+    }
+    let subbyLoadedPersonalAccount=0;
+    function subbyEnsurePersonalAccount(){
+        if(!localStorage.getItem(SUBBY_PERSONAL_LEGACY_OWNER))return;
+        const member=Number(window.Player?.MemberNumber)||0;
+        if(!Number.isSafeInteger(member)||member<=0)return;
+        if(member===subbyLoadedPersonalAccount)return;
+        subbyLoadedPersonalAccount=member;
+        // Only reinitialize the addon’s OWN per-account cached stores.
+        // No other-player overlays, progress records or encryption vaults are modified.
+        featureSettingsState=null;layoutSettingsState=null;moodState=null;
+        relationshipState=null;favoritesState=null;savedPosesState=null;statsState=null;
+        if(typeof moodStoreSaveTimer!=='undefined' && moodStoreSaveTimer!=null){clearTimeout(moodStoreSaveTimer);moodStoreSaveTimer=null;}
+        if(typeof relationshipStoreSaveTimer!=='undefined' && relationshipStoreSaveTimer!=null){clearTimeout(relationshipStoreSaveTimer);relationshipStoreSaveTimer=null;}
+        if(typeof generalStatsSaveTimer!=='undefined' && generalStatsSaveTimer!=null){clearTimeout(generalStatsSaveTimer);generalStatsSaveTimer=null;}
+    }
     function readLocalJSON(key, fallback) {
         try {
-            const raw = window.localStorage?.getItem(key);
+            const raw = window.localStorage?.getItem(subbyScopedOwnKey(key));
             if (!raw) return fallback;
             const parsed = JSON.parse(raw);
             return parsed && typeof parsed === "object" ? parsed : fallback;
@@ -2447,15 +2627,42 @@ function SubbysPlushiesPageMain() {
             return fallback;
         }
     }
+    // Small-store optimization: avoid writing identical progress / configuration
+    // on recurring timers. Quota failures must not erase previous saved values.
+    const subbyStorageHealth={failed:0,lastError:'',lastWarning:0,skipped:0};
     function writeLocalJSON(key, value) {
         try {
-            window.localStorage?.setItem(key, JSON.stringify(value));
+            const serialized=JSON.stringify(value);
+            const accountKey=subbyScopedOwnKey(key);
+            if(window.localStorage?.getItem(accountKey)===serialized){subbyStorageHealth.skipped++;return true;}
+            window.localStorage?.setItem(accountKey,serialized);
             return true;
-        } catch (_) {
+        } catch (e) {
+            subbyStorageHealth.failed++;
+            subbyStorageHealth.lastError=String(e?.name||e?.message||e);
+            if(Date.now()-subbyStorageHealth.lastWarning>60000){
+                subbyStorageHealth.lastWarning=Date.now();
+                console.warn('[Subby’s Plushies] Cannot persist this setting; browser storage may be full. Existing data was not removed.');
+            }
             return false;
         }
     }
+    // Read-only health report: shows sizes, not stored content.
+    window.SubbysStorageDiag=()=>{
+        let bytes=0,entries=0;
+        try{for(let i=0;i<localStorage.length;i++){
+            const k=localStorage.key(i);
+            if(/subby|plush|essentials/i.test(k||'')){
+                bytes+=((k||'').length+(localStorage.getItem(k)||'').length)*2;
+                entries++;
+            }
+        }}catch{}
+        return {estimatedMB:Number((bytes/1048576).toFixed(2)),entries,
+            writeFailures:subbyStorageHealth.failed,unchangedWritesSkipped:subbyStorageHealth.skipped,
+            lastError:subbyStorageHealth.lastError};
+    };
     function getFeatureSettings() {
+        subbyEnsurePersonalAccount();
         if (featureSettingsState) return featureSettingsState;
         const stored = readLocalJSON(FEATURE_SETTINGS_STORAGE_KEY, {});
         const storedBoolean = key => Object.prototype.hasOwnProperty.call(stored, key)
@@ -2576,6 +2783,7 @@ function SubbysPlushiesPageMain() {
         return palette;
     }
     function getLayoutSettings() {
+        subbyEnsurePersonalAccount();
         if (layoutSettingsState) return layoutSettingsState;
         const stored = readLocalJSON(LAYOUT_SETTINGS_STORAGE_KEY, {});
         layoutSettingsState = {
@@ -2824,6 +3032,7 @@ function SubbysPlushiesPageMain() {
         return { ...normalized };
     }
     function getRelationshipStore() {
+        subbyEnsurePersonalAccount();
         if (relationshipState) return relationshipState;
         const stored = readLocalJSON(RELATIONSHIP_STORAGE_KEY, {});
         relationshipState = stored && typeof stored === "object" ? stored : {};
@@ -2907,6 +3116,7 @@ function SubbysPlushiesPageMain() {
         return Date.now() - (Number(record.lastInteractionAt) || Date.now()) >= SLEEPY_AFTER_MS;
     }
     function getFavoritesStore() {
+        subbyEnsurePersonalAccount();
         if (favoritesState) return favoritesState;
         const stored = readLocalJSON(FAVORITES_STORAGE_KEY, {});
         const raw = Array.isArray(stored?.names) ? stored.names : [];
@@ -2961,6 +3171,7 @@ function SubbysPlushiesPageMain() {
         };
     }
     function getSavedPosesStore() {
+        subbyEnsurePersonalAccount();
         if (savedPosesState) return savedPosesState;
         const stored = readLocalJSON(SAVED_POSES_STORAGE_KEY, {});
         savedPosesState = stored && typeof stored === "object" ? stored : {};
@@ -3378,6 +3589,9 @@ function SubbysPlushiesPageMain() {
             battleRestored: result.battleRestored, memberNumber: result.currentMember});
     }
     const marvelousExternalFocus = { enabled: false, style: null };
+    // Previous SPA sessions may leave a focus class behind after PawLounge exits.
+    // A fresh Plushies runtime starts unfocused; PawLounge reapplies focus if enabled.
+    document.body?.classList.remove('subbys-marvelous-focus');
     function marvelousSetExternalFocus(enabled) {
         if (!marvelousExternalFocus.style?.isConnected) {
             const style = document.createElement('style');
@@ -3436,6 +3650,7 @@ function SubbysPlushiesPageMain() {
         return true;
     }
     function getMoodStore() {
+        subbyEnsurePersonalAccount();
         if (moodState) return moodState;
         const stored = readLocalJSON(MOOD_STORAGE_KEY, {});
         moodState = stored && typeof stored === "object" ? stored : {};
@@ -3561,6 +3776,7 @@ function SubbysPlushiesPageMain() {
         }
     }
     function getStatsStore() {
+        subbyEnsurePersonalAccount();
         if (!statsState) {
             const stored = readLocalJSON(STATS_STORAGE_KEY, {});
             statsState = {
@@ -3586,7 +3802,9 @@ function SubbysPlushiesPageMain() {
         const stats = getStatsStore();
         const portable = { ...stats };
         delete portable.battles;
-        return writeLocalJSON(STATS_STORAGE_KEY, portable);
+        const ok=writeLocalJSON(STATS_STORAGE_KEY, portable);
+        if(ok)subbyOwnDataSnapshotLater();
+        return ok;
     }
     function flushMoodStoreSave() {
         if (moodStoreSaveTimer != null) { window.clearTimeout(moodStoreSaveTimer); moodStoreSaveTimer = null; }
@@ -7506,12 +7724,8 @@ function SubbysPlushiesPageMain() {
             refreshRoomMascotOverlay();
             return { source: "room", state: { ...shared } };
         }
-        if (roomLoaded) {
-            cacheRoomMascotState(null);
-            roomMascotState = null;
-            removeRoomMascotOverlay();
-            return { source: "room-none", state: null };
-        }
+        // ChatRoomSync often arrives before the room's Custom data does. Keep the
+        // last room-scoped mascot during that gap rather than erasing its cache.
         const key = currentRoomMascotCacheKey();
         const cached = allowCache && key ? getRoomMascotCache()?.[key] : null;
         if (cached?.name && mascotRenderIndex(cached.name) >= 0) {
@@ -7519,9 +7733,10 @@ function SubbysPlushiesPageMain() {
             refreshRoomMascotOverlay();
             return { source: "cache", state: { ...roomMascotState } };
         }
+        if (roomLoaded && !allowCache) cacheRoomMascotState(null);
         roomMascotState = null;
         removeRoomMascotOverlay();
-        return { source: "none", state: null };
+        return { source: roomLoaded ? "room-none" : "none", state: null };
     }
     function buildRoomUpdatePayloadWithCustom(custom) {
         const data = window.ChatRoomData;
@@ -7638,11 +7853,11 @@ function SubbysPlushiesPageMain() {
         '#SubbysWardrobeAssetPainter', '#SubbysWardrobeZoneEditor',
         '[id*="lianchat" i]', '[class*="lianchat" i]',
         '[id*="lian-chat" i]', '[class*="lian-chat" i]',
-        '[id*="profile" i]', '[class*="profile-panel" i]',
+        '[id*="profile-modal" i]', '[class*="profile-panel" i]',
         '[class*="profile-modal" i]', '[class*="profile-window" i]',
         '[id*="modal" i]', '[class~="modal"]',
         '[class*="-modal" i]', '[class*="_modal" i]',
-        '[id*="popup" i]', '[class~="popup"]',
+        '[id*="open-popup" i]', '[class~="popup"]',
         '[class*="-popup" i]', '[class*="_popup" i]',
     ].join(',');
     let roomMascotUiObserver = null;
@@ -7664,7 +7879,8 @@ function SubbysPlushiesPageMain() {
         return true;
     }
     function roomMascotBlockingInterface() {
-        if (nativeLayeringVisible()) return 'native-move-resize';
+        const layeringRoot = nativeLayeringRoot();
+        if (layeringRoot && roomMascotVisibleModal(layeringRoot)) return 'native-move-resize';
         if (window.DialogFocusItem || window.DialogFocusCharacter) return 'native-item-or-character-dialog';
         // BC can draw alternate room views on the main canvas with no HTML popup.
         const views = window.ChatRoomViews;
@@ -7675,8 +7891,7 @@ function SubbysPlushiesPageMain() {
                 if (views[name] && view === views[name]) return `room-${name.toLowerCase()}`;
             }
         }
-        const hiddenIconState = Number(window.ChatRoomHideIconState);
-        if (Number.isFinite(hiddenIconState) && hiddenIconState !== 0) return 'native-icons-hidden';
+        // Hiding the game's action icons must not permanently hide the mascot.
         // Use a single inexpensive selector query only when visibility is evaluated;
         // do not inspect the live chat tree continuously.
         try {
@@ -7693,7 +7908,13 @@ function SubbysPlushiesPageMain() {
         if (roomMascotUiRefreshFrame) return;
         roomMascotUiRefreshFrame = window.requestAnimationFrame(() => {
             roomMascotUiRefreshFrame = 0;
-            refreshRoomMascotOverlay();
+            // Restore a previously received mascot after a transient room sync.
+            // Never resurrect a mascot that an admin explicitly cleared.
+            if (!marvelousExternalFocus.enabled) document.body?.classList.remove('subbys-marvelous-focus');
+            const key = currentRoomMascotCacheKey();
+            if (window.CurrentScreen === 'ChatRoom' && !roomMascotState?.name && key && getRoomMascotCache()?.[key]?.name)
+                recoverRoomMascotState({ allowCache: true });
+            else refreshRoomMascotOverlay();
             syncPlushIndicatorInterfaceVisibility();
             refreshDragToggleButton();
             refreshRoomMascotAdminButton();
@@ -7764,10 +7985,23 @@ function SubbysPlushiesPageMain() {
             screen: window.CurrentScreen,
             activeView: window.ChatRoomActiveView ?? null,
             blocker: roomMascotBlockingInterface(),
-            shown: !!roomMascotOverlay?.isConnected && roomMascotOverlay.style.display !== 'none',
+            showSetting: getFeatureSettings().showRoomMascot,
+            focusActive: marvelousExternalFocus.enabled,
+            focusClass: !!document.body?.classList.contains('subbys-marvelous-focus'),
+            shown: !!roomMascotOverlay?.isConnected && roomMascotOverlay.style.display !== 'none' &&
+                (!roomMascotOverlay || Number(window.getComputedStyle(roomMascotOverlay).opacity) > .03),
+            overlayPresent: !!roomMascotOverlay?.isConnected,
             hasMascot: !!roomMascotState?.name,
+            mascot: roomMascotState?.name || null,
+            cacheAvailable: !!getRoomMascotCache()?.[currentRoomMascotCacheKey()]?.name,
             observer: !!roomMascotUiObserver,
         });
+        window.SubbysMascotRepair = () => {
+            if (!marvelousExternalFocus.enabled) document.body?.classList.remove('subbys-marvelous-focus');
+            recoverRoomMascotState({ allowCache: true });
+            scheduleRoomMascotUiRefresh();
+            return window.SubbysMascotVisibilityDiag();
+        };
         window.SubbysPlushIndicatorDiag = () => ({
             version: VERSION,
             screen: window.CurrentScreen,
@@ -11269,6 +11503,42 @@ function SubbysPlushiesPageMain() {
         }
         emotes.append(emoteHint, emoteButtons);
         container.appendChild(emotes);
+        const storagePanel = makeExtensionsSection("🗃 My Data & Other Players");
+        const storageText = document.createElement('p');
+        const storageInfo=window.SubbysDataBoundaries?.status?.()||{};
+        storageText.textContent=`My snapshots: ${storageInfo.personalSnapshots||0} · Other-player caches: temporary · ${storageInfo.personalIsolationActive?'Personal account separation active':'Old progress needs one-time account assignment'}`;
+        Object.assign(storageText.style,{color:getExtensionsStyle().muted,fontSize:'12px',lineHeight:'1.45'});
+        storagePanel.append(storageText);
+        const ownBackup=makeExtensionsButton('Save My Data',()=>{
+            void window.SubbysDataBoundaries.saveMine().then(r=>{
+                appendLocalInfoBox('Personal storage', [r.ok?`Private snapshot saved for BC #${r.account}`:String(r.error||r.reason)],{compact:true});
+                renderExtensionsPanel();
+            });
+        });
+        const claim=makeExtensionsButton('Separate My Account',()=>{
+            void window.SubbysDataBoundaries.claimLegacyForCurrentAccount().then(r=>{
+                if(r.ok)appendLocalInfoBox('Personal storage',[`BC #${r.account}: account data separated. Reload BC to use the account-specific saves.`],{compact:true});
+                renderExtensionsPanel();
+            }).catch(err=>appendLocalInfoBox('Personal storage',[String(err?.message||err)],{compact:true}));
+        });
+        const purgeRemote=makeExtensionsButton('Clean Other-Player Cache',()=>{
+            const r=window.SubbysDataBoundaries.trimRoomCache();
+            appendLocalInfoBox('Temporary room cache',[`Remembered poses: ${r.rememberedPlushStates} · Emotes: ${r.remoteEmotes} · Presence: ${r.addonPresence}`],{compact:true});
+        });
+        const exportMine=makeExtensionsButton('Export My Snapshot',()=>{
+            void window.SubbysDataBoundaries.exportMine().then(()=>{
+                appendLocalInfoBox('Private export',['Saved to Downloads. Keep this personal file private.'],{compact:true});
+            }).catch(err=>appendLocalInfoBox('Private export',[String(err?.message||err)],{compact:true}));
+        });
+        const storageButtons=document.createElement('div');
+        Object.assign(storageButtons.style,{display:'flex',flexWrap:'wrap',gap:'8px'});
+        storageButtons.append(ownBackup,claim,purgeRemote,exportMine);
+        storagePanel.append(storageButtons);
+        const storageNote=document.createElement('p');
+        storageNote.textContent='Your progress is never auto-deleted or uploaded. Old unscoped saves are copied only after you approve ownership. Messages and third-party storage are not touched.';
+        Object.assign(storageNote.style,{color:getExtensionsStyle().muted,fontSize:'12px',lineHeight:'1.45'});
+        storagePanel.append(storageNote);
+        container.append(storagePanel);
         const utility = makeExtensionsSection("Utilities");
         const buttons = document.createElement("div");
         Object.assign(buttons.style, { display: "flex", flexWrap: "wrap", gap: "10px" });
@@ -13767,11 +14037,31 @@ function SubbysPlushiesPageMain() {
             }
             state.library = null; state.incoming = null; state.previous = null; state.mergeReview = null;
             state.selection = -1; state.source = -1; state.page = 0;
+            const key=storageKey();
+            let legacy=null;
             try {
-                const saved = localStorage.getItem(storageKey());
-                const value = saved ? JSON.parse(saved) : null;
-                if (valid(value)) state.library = clone(value);
-            } catch (_) {}
+                const saved=localStorage.getItem(key);
+                const value=saved?JSON.parse(saved):null;
+                if(valid(value)){state.library=clone(value);legacy=value;}
+            }catch(_){}
+            const expectedAccount=next;
+            // Migration is only completed after the IndexedDB transaction
+            // succeeds AND the record is read back. Never erase on failure.
+            void (async()=>{
+                try {
+                    if(legacy){
+                        await subbyBulkStore.put(key,legacy);
+                        const check=await subbyBulkStore.get(key);
+                        if(!valid(check)||JSON.stringify(check)!==JSON.stringify(legacy))
+                            throw Error('Library migration read-back mismatch');
+                        if(localStorage.getItem(key)===JSON.stringify(legacy))localStorage.removeItem(key);
+                    }else{
+                        const stored=await subbyBulkStore.get(key);
+                        if(loadedAccount!==expectedAccount||state.library)return;
+                        if(valid(stored)){state.library=clone(stored);state.feedback='Saved library restored from device storage.';render();}
+                    }
+                }catch(e){console.warn("[Subby's Plushies] Crafting library migration deferred:",e);}
+            })();
         }
         function importJson(text, source = false) {
             checkAccount();
@@ -14004,8 +14294,9 @@ function SubbysPlushiesPageMain() {
             if (prepared.error) throw new Error(prepared.error);
             const data = clone(prepared.before);
             const member = prepared.member;
-            try { localStorage.setItem(STORAGE_PREFIX + 'live-backup:' + member, JSON.stringify(data)); }
-            catch (_) {}
+            // Backup is downloaded and retained in memory for the confirmation step;
+            // avoid duplicating a potentially multi-megabyte crafting export in localStorage.
+
             if (!download(data, `BC-crafting-BACKUP-${member}-${Date.now()}.json`))
                 throw new Error('The crafting backup download did not start.');
             live.backup = data;
@@ -14247,17 +14538,32 @@ function SubbysPlushiesPageMain() {
                 {...small, lineHeight:'1.45'},liveBar);
             const rememberBar = toolbar(root);
             button('Save Library On This Device', () => {
-                try {
-                    if (!state.library) return;
-                    localStorage.setItem(storageKey(), JSON.stringify(state.library));
-                    state.feedback = 'Saved locally to this account/browser. Your library is not uploaded by Essentials.';
-                } catch (e) { state.feedback = `Could not save locally: ${e.message}`; }
-                render();
+                void (async()=>{
+                    const key=storageKey(),accountAtSave=loadedAccount;
+                    try{
+                        if(!state.library)return;
+                        const snapshot=clone(state.library);
+                        await subbyBulkStore.put(key,snapshot);
+                        const verify=await subbyBulkStore.get(key);
+                        if(!valid(verify)||JSON.stringify(verify)!==JSON.stringify(snapshot))
+                            throw Error('Saved-library verification failed');
+                        // A successful read-back makes the old quota-heavy key expendable.
+                        localStorage.removeItem(key);
+                        if(loadedAccount===accountAtSave)state.feedback='Library saved on this device.';
+                    }catch(e){if(loadedAccount===accountAtSave)state.feedback=`Library was not saved: ${e.message}`;}
+                    if(loadedAccount===accountAtSave)render();
+                })();
             }, rememberBar, !state.library);
             button('Forget Saved Library', () => {
-                try { localStorage.removeItem(storageKey()); state.feedback = 'Saved local copy removed (loaded library remains open).'; }
-                catch (_) { state.feedback = 'Could not clear saved library.'; }
-                render();
+                void (async()=>{
+                    const key=storageKey(),accountAtSave=loadedAccount;
+                    try {
+                        await subbyBulkStore.remove(key);
+                        localStorage.removeItem(key);
+                        if(loadedAccount===accountAtSave)state.feedback='Saved local library removed (the loaded editor remains open).';
+                    }catch(e){if(loadedAccount===accountAtSave)state.feedback='Could not remove saved library: '+e.message;}
+                    if(loadedAccount===accountAtSave)render();
+                })();
             }, rememberBar);
             create('p', 'BC crafting export format • version 1 • 800 slots maximum. Select a slot, load a replacement source JSON, and replace just that slot. Export the finished customitems.json for BC’s normal crafting import, or use the separate two-step guarded in-game replacement controls.', {...small, lineHeight: '1.45'}, root);
             if (state.feedback) create('p', state.feedback, {...small, color: '#d8c079'}, root);
@@ -18827,7 +19133,9 @@ function SubbysPlushiesPageMain() {
         if (installHook("ChatRoomSyncRoomProperties", 10000, (args, next) => {
             const result = next(args);
             window.setTimeout(() => {
-                recoverRoomMascotState({ allowCache: false });
+                // Room properties may arrive before Custom is populated in R133.
+                // Do not destroy a previously received mascot on an incomplete sync.
+                recoverRoomMascotState({ allowCache: !window.ChatRoomData || !Object.prototype.hasOwnProperty.call(window.ChatRoomData, 'Custom') });
                 trackRoomAchievements();
                 if (queuedRoomMascotPublish && !roomMascotMapPublishUnsafe()) flushQueuedRoomMascotPublish();
             }, 0);
@@ -23421,29 +23729,40 @@ function SubbysPlushiesPageMain() {
         const {image, ...rest}=e;return rest;
       };
       const cleanEntries = items => (Array.isArray(items)?items:[]).filter(validEntry).map(withoutPortrait);
+      let outfitWrite=Promise.resolve(), outfitChange=0, outfitLastError='', outfitHydrating=false, outfitSavePending=false;
+      function outfitSmallPayload(doc){
+        // Full outfits and complete history are in IndexedDB. Never discard
+        // these copies before a confirmed transaction commit.
+        return {...doc,saved:doc.saved.slice(-6),favorites:doc.favorites.slice(-6),
+          history:doc.history.slice(-4),cursor:Math.min(3,doc.history.length-1),bulk:true};
+      }
       function flush() {
         if (!state.account) return;
-        const payload = { version: 1, saved: state.saved.map(withoutPortrait), favorites: state.favorites.map(withoutPortrait),
-          history: state.history.map(withoutPortrait), cursor: state.cursor,
-          options: { body: state.body, record: state.record } };
-        const write = () => { localStorage.setItem(storageKey(), JSON.stringify(payload)); state.storageOK = true; };
-        try { write(); return; } catch (err) {
-          state.storageOK = false;
-          if (err?.name !== 'QuotaExceededError') return;
-        }
-        for (const entry of state.history) entry.image = null;
-        try { write(); return; } catch (_) {}
-        for (const entry of state.saved) entry.image = null;
-        for (const entry of state.favorites) entry.image = null;
-        try { write(); return; } catch (_) {}
-        while (state.history.length > 1) {
-          state.history.shift();
-          state.cursor = Math.max(0, state.cursor - 1);
-          try { write(); return; } catch (_) {}
-        }
-        state.storageOK = false;
-        state.message = 'Browser storage is full: favorites remain available for this session, but could not be saved. Export your saved looks and favorites to avoid losing them.';
-        console.warn(`[${NAME}] ${state.message}`);
+        if(outfitHydrating){outfitSavePending=true;return;}
+        const accountAtSave=state.account,key=storageKey(),rev=++outfitChange;
+        const payload={version:1,saved:state.saved.map(withoutPortrait),favorites:state.favorites.map(withoutPortrait),
+          history:state.history.map(withoutPortrait),cursor:state.cursor,
+          options:{body:state.body,record:state.record}};
+        outfitWrite=outfitWrite.catch(()=>{}).then(async()=>{
+          // Avoid stale queued saves after newer changes to the same account.
+          if(state.account===accountAtSave&&rev!==outfitChange)return;
+          await subbyBulkStore.put('outfit:'+key,payload);
+          if(accountAtSave!==state.account||rev!==outfitChange)return;
+          try{localStorage.setItem(key,JSON.stringify(outfitSmallPayload(payload)));state.storageOK=true;outfitLastError='';}
+          catch(e){
+            // The full verified record is in IndexedDB. A minimal bootstrap
+            // record is safe and may fit when localStorage is nearly full.
+            try{localStorage.setItem(key,JSON.stringify({version:1,bulk:true,saved:[],favorites:[],history:[],
+              cursor:-1,options:payload.options}));state.storageOK=true;outfitLastError='';}
+            catch(_){state.storageOK=false;outfitLastError='Outfits archived but localStorage is still full.';}
+          }
+        }).catch(err=>{
+          outfitLastError=String(err.message||err);state.storageOK=false;
+          // Do not truncate in-memory history or overwrite the old local copy
+          // if IndexedDB failed. Provide an export instead.
+          try{localStorage.setItem(key,JSON.stringify(payload));state.storageOK=true;}
+          catch(_){state.message='Device storage full; export your saved outfits. Existing data was not deleted.';}
+        });
       }
       function loadAccount() {
         const id = memberKey();
@@ -23478,11 +23797,31 @@ function SubbysPlushiesPageMain() {
         } catch (_) {}
         state.loaded = true;
         state.watchSignature = null; state.watchPending = null;
-        if (state.history.length || state.saved.length || state.favorites.length) flush();
+        const loadingAccount=state.account,revision=outfitChange;
+        let legacyFull=false;
+        try{const doc=JSON.parse(localStorage.getItem(storageKey())||'null');
+          legacyFull=!!doc?.version&&!doc.bulk;}catch(_){}
+        outfitHydrating=true;outfitSavePending=false;
+        void subbyBulkStore.get('outfit:'+storageKey()).then(doc=>{
+          if(!doc||doc.version!==1||loadingAccount!==state.account||outfitChange!==revision)return;
+          // A legacy full local record may contain newer changes than IndexedDB.
+          if(legacyFull)return;
+          state.saved=cleanEntries(doc.saved);state.favorites=cleanEntries(doc.favorites);
+          state.history=cleanEntries(doc.history).slice(-MAX_HISTORY);
+          state.cursor=state.history.length?Math.max(0,Math.min(state.history.length-1,Number(doc.cursor??state.history.length-1))):-1;
+          state.body=doc.options?.body!==false;state.record=doc.options?.record!==false;
+          state.watchSignature=null;state.watchPending=null;
+          render();
+        }).catch(e=>{outfitLastError=String(e?.message||e);}).finally(()=>{
+          if(state.account!==loadingAccount)return;
+          outfitHydrating=false;
+          const edited=outfitSavePending;outfitSavePending=false;
+          if(edited||legacyFull)flush();
+        });
         return true;
       }
       function recordSnapshot(label = 'Outfit change', explicit = false) {
-        if (!loadAccount() || state.restoring) return false;
+        if (!loadAccount() || state.restoring || outfitHydrating) return false;
         const snap = collect(); if (!snap) return false;
         const sig = fingerprint(snap);
         const current = state.history[state.cursor];
@@ -23503,7 +23842,7 @@ function SubbysPlushiesPageMain() {
         // Browser background tabs don't need repeated appearance serializing.
         // Resumes immediately on visibilitychange, preserving the latest look.
         if (quietPerfEnabled() && document.hidden) { quietPerfData.outfitScansSkipped++; return; }
-        if (state.restoring || !loadAccount()) return;
+        if (state.restoring || !loadAccount() || outfitHydrating) return;
         const snap = collect(); if (!snap) return;
         const sig = fingerprint(snap);
         // Piggyback on Time Machine's signature; avoid re-scanning stable outfits.
@@ -26457,7 +26796,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.6";
+    const VERSION = "3.7.1";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
