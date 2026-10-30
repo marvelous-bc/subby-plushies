@@ -2,7 +2,7 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.7.8
+// @version      3.7.9
 // @description  Plushie companions, expressive actions, wardrobe tools, and customizable Essentials for Bondage Club.
 // @released     2026-10-26
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.7.8";
+    const VERSION = "3.7.9";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -26847,48 +26847,105 @@ function SubbysPlushiesPageMain() {
         const PREFIX='SubbysDrawingBoard:v3:';
         const room=()=>window.CurrentScreen==='ChatRoom'?(window.ChatRoomData?.ID||window.ChatRoomData?.Name||'room'):null;
         const seen=new Set(), strokesByRoom=new Map();
-        // Room drawings are stored separately from the current visible canvas.
-        // Restore and persist are serialized: an unloaded image must never overwrite a good save.
+        // Durable per-room storage: IndexedDB avoids localStorage's tiny image quota.
+        // A stroke journal is written immediately; snapshots are an optimization.
         const roomImages=(()=>{try{const v=JSON.parse(localStorage.getItem(ROOMS_KEY)||'{}');return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}catch{return {}}})();
         let displayedRoom=null, roomEpoch=0, restoring=false, dirty=false, restoreImage=null;
-        const blank=()=>{ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);history=[];redo=[];strokePoints=[];drawing=false;last=null;activePointer=null};
-        const saveRoom=()=>{
-          if(!displayedRoom||restoring||!dirty)return false;
+        let revision=0, persistedRevision=0, saving=false, saveQueued=false, storeError='', restoredFrom='';
+        let roomJournal=[], saveTimer=0;
+        const DB_NAME='SubbysPlushiesDrawingBoard',DB_VERSION=1;
+        const database=new Promise(resolve=>{
+          if(!('indexedDB' in window)){resolve(null);return}
           try {
-            const png=canvas.toDataURL('image/png');
-            const next={...roomImages,[displayedRoom]:png};
-            const keys=Object.keys(next);while(keys.length>12)delete next[keys.shift()];
-            // Commit only after storage succeeds; retain the previous snapshot if quota is exhausted.
-            localStorage.setItem(ROOMS_KEY,JSON.stringify(next));
-            Object.keys(roomImages).forEach(k=>delete roomImages[k]);Object.assign(roomImages,next);
-            dirty=false;return true;
-          }catch(e){console.warn('[Drawing Board] Room save failed; existing save retained',e);return false}
+            const req=indexedDB.open(DB_NAME,DB_VERSION);
+            req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('rooms'))db.createObjectStore('rooms')};
+            req.onsuccess=()=>resolve(req.result);
+            req.onerror=()=>{console.warn('[Drawing Board] IndexedDB unavailable',req.error);resolve(null)};
+            req.onblocked=()=>{console.warn('[Drawing Board] IndexedDB blocked');resolve(null)};
+          }catch(e){console.warn('[Drawing Board] IndexedDB open failed',e);resolve(null)}
+        });
+        const dbRead=async key=>{
+          const db=await database;if(!db)return null;
+          return new Promise(resolve=>{try{
+            const tx=db.transaction('rooms','readonly'),req=tx.objectStore('rooms').get(key);
+            req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>resolve(null);
+            tx.onabort=()=>resolve(null);
+          }catch{resolve(null)}});
         };
-        const markChanged=()=>{dirty=true;saveRoom()};
-        const changeRoom=()=>{
+        const dbWrite=async(key,value)=>{
+          const db=await database;if(!db)throw Error('IndexedDB unavailable');
+          return new Promise((resolve,reject)=>{try{
+            const tx=db.transaction('rooms','readwrite');
+            tx.objectStore('rooms').put(value,key);
+            tx.oncomplete=()=>resolve(true);
+            tx.onerror=()=>reject(tx.error||Error('IndexedDB write failed'));
+            tx.onabort=()=>reject(tx.error||Error('IndexedDB write aborted'));
+          }catch(e){reject(e)}});
+        };
+        const blank=()=>{ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);history=[];redo=[];strokePoints=[];drawing=false;last=null;activePointer=null};
+        // Save jobs are immutable snapshots. A slow write cannot commit a different room's drawing.
+        let pendingWrite=Promise.resolve();
+        const queueRecord=(key,record)=>{
+          pendingWrite=pendingWrite.catch(()=>{}).then(()=>dbWrite(key,record));
+          pendingWrite.catch(e=>{storeError=String(e?.message||e);console.warn('[Drawing Board] Persistent save failed',e)});
+          return pendingWrite;
+        };
+        const saveRoom=()=>{
+          if(!displayedRoom||restoring||!dirty)return pendingWrite;
+          const key=displayedRoom,rev=revision,events=roomJournal.map(e=>({...e}));
+          let png;
+          try{png=canvas.toDataURL('image/png')}catch(e){storeError=String(e);return pendingWrite}
+          dirty=false;
+          const record={schema:1,png,events,rev,updated:Date.now()};
+          const job=queueRecord(key,record);
+          job.then(()=>{if(displayedRoom===key)persistedRevision=Math.max(persistedRevision,rev);storeError=''})
+            .catch(()=>{if(displayedRoom===key)dirty=true});
+          return job;
+        };
+        const markChanged=()=>{
+          if(!displayedRoom||restoring)return;
+          dirty=true;revision++;
+          // Immediate durable journal/snapshot after each completed stroke or edit.
+          saveRoom();
+        };
+        const loadImage=(png,epoch,key)=>new Promise(resolve=>{
+          if(typeof png!=='string'||!png.startsWith('data:image/png;base64,')){resolve(false);return}
+          const img=new Image();restoreImage=img;
+          img.onload=()=>{if(epoch===roomEpoch&&displayedRoom===key){blank();ctx.drawImage(img,0,0,canvas.width,canvas.height);resolve(true)}else resolve(false)};
+          img.onerror=()=>resolve(false);img.src=png;
+        });
+        const changeRoom=async()=>{
           const current=room()?String(room()):null;
           if(current===displayedRoom)return;
-          saveRoom();displayedRoom=current;const epoch=++roomEpoch;
-          restoring=false;dirty=false;restoreImage=null;blank();panel.hidden=true;
+          // Snapshot before changing room; keep an independent copy of the prior room.
+          saveRoom();
+          displayedRoom=current;const epoch=++roomEpoch;
+          restoring=!!current;dirty=false;restoreImage=null;blank();panel.hidden=true;
+          roomJournal=[];revision=0;persistedRevision=0;restoredFrom='';
           if(!current)return;
-          const saved=roomImages[current];
-          if(typeof saved==='string'&&saved.startsWith('data:image/png;base64,')){
-            restoring=true;
-            const img=new Image();restoreImage=img;
-            img.onload=()=>{
-              if(epoch!==roomEpoch||displayedRoom!==current)return;
-              blank();ctx.drawImage(img,0,0,canvas.width,canvas.height);
+          try{
+            // Wait for queued writes from the previous visit before loading the new state.
+            await pendingWrite.catch(()=>{});
+            const saved=await dbRead(current);
+            if(epoch!==roomEpoch||displayedRoom!==current)return;
+            let ok=false;
+            if(saved?.png){ok=await loadImage(saved.png,epoch,current);if(ok){roomJournal=Array.isArray(saved.events)?saved.events:[];revision=saved.rev||0;persistedRevision=revision;restoredFrom='indexeddb'}}
+            if(!ok&&roomImages[current]){
+              ok=await loadImage(roomImages[current],epoch,current);
+              if(ok){restoredFrom='legacy';dirty=true;revision++;/* migrated legacy drawing */}
+            }
+            if(!ok)restoredFrom='blank';
+          }catch(e){storeError=String(e?.message||e);console.warn('[Drawing Board] Restore failed',e)}
+          finally{
+            if(epoch===roomEpoch&&displayedRoom===current){
               restoring=false;restoreImage=null;
-              // No automatic writeback: the original saved image stays authoritative.
-            };
-            img.onerror=()=>{if(epoch!==roomEpoch)return;restoring=false;restoreImage=null;console.warn('[Drawing Board] Saved room image failed to decode; preserved original snapshot')};
-            img.src=saved;
-          }else if(sharing)queueMicrotask(()=>{if(epoch===roomEpoch)send('request',{})});
+              if(restoredFrom==='legacy')saveRoom();
+              if(sharing)send('request',{});
+            }
+          }
         };
-        // Detect room exits before the visible canvas is reused for another room.
-        window.setInterval(changeRoom,250);
-        changeRoom();
-
+        window.setInterval(()=>{void changeRoom()},250);
+        void changeRoom();
         let lastSync=0, txCount=0;
         const roomStrokes=()=>{const r=String(room());if(!strokesByRoom.has(r))strokesByRoom.set(r,[]);return strokesByRoom.get(r)};
         const remember=s=>{const list=roomStrokes();if(list.some(x=>x.id===s.id))return;list.push(s);if(list.length>80)list.shift()};
@@ -26906,10 +26963,11 @@ function SubbysPlushiesPageMain() {
           // Each segment includes its predecessor to avoid gaps at packet boundaries.
           chunks.forEach((pts,index)=>send('part',{id:s.id,c:s.c,s:s.s,n:index,t:chunks.length,p:pts}));
         };
-        const end=()=>{if(!drawing)return;drawing=false;activePointer=null;last=null;saveDraft();
-          if(sharing&&strokePoints.length){const stroke={c:erasing?'#ffffff':color.value,s:Number(size.value),p:strokePoints.map(p=>[Math.round(p.x),Math.round(p.y),Math.round(p.p*100)]),id:String(Date.now())+'-'+Math.random().toString(36).slice(2,9)};
-            remember(stroke);transmit(stroke)}
-          strokePoints=[]};
+        const end=()=>{if(!drawing)return;drawing=false;activePointer=null;last=null;
+          if(strokePoints.length){const stroke={c:erasing?'#ffffff':color.value,s:Number(size.value),p:strokePoints.map(p=>[Math.round(p.x),Math.round(p.y),Math.round(p.p*100)]),id:String(Date.now())+'-'+Math.random().toString(36).slice(2,9)};
+            roomJournal.push(stroke);if(roomJournal.length>1500)roomJournal.shift();
+            if(sharing){remember(stroke);transmit(stroke)}}
+          saveDraft();strokePoints=[]};
         canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);canvas.addEventListener('lostpointercapture',end);
         const incoming=new Map();
         const onMessage=msg=>{if(!sharing||!enabled||!room()||msg?.Type!=='Hidden'||!String(msg.Content||'').startsWith(PREFIX))return;
@@ -26921,7 +26979,7 @@ function SubbysPlushiesPageMain() {
             const item=incoming.get(key);if(item.total!==d.t)return;item.parts.set(d.n,d.p);
             if(item.parts.size===item.total){const points=[];for(let i=0;i<item.total;i++){const part=item.parts.get(i);if(!part)return;points.push(...(i===0?part:part.slice(1)))}
               const stroke={id:d.id,c:item.c,s:item.s,p:points};incoming.delete(key);seen.add(key);if(seen.size>500)seen.clear();
-              if(restoring){const epoch=roomEpoch;const awaitRestore=()=>{if(epoch!==roomEpoch)return;if(restoring){setTimeout(awaitRestore,30);return}renderStroke(stroke);remember(stroke);saveDraft()};awaitRestore()}else{renderStroke(stroke);remember(stroke);saveDraft()}}
+              if(restoring){const epoch=roomEpoch;const awaitRestore=()=>{if(epoch!==roomEpoch)return;if(restoring){setTimeout(awaitRestore,30);return}renderStroke(stroke);remember(stroke);roomJournal.push(stroke);saveDraft()};awaitRestore()}else{renderStroke(stroke);remember(stroke);roomJournal.push(stroke);saveDraft()}}
             if(incoming.size>80)for(const [k,v] of incoming){if(Date.now()-v.time>30000)incoming.delete(k)}
           }else if(data.k==='request'&&Date.now()-lastSync>15000){lastSync=Date.now();for(const stroke of roomStrokes().slice(-30))transmit(stroke)}
         };
@@ -26930,9 +26988,9 @@ function SubbysPlushiesPageMain() {
         const fit=()=>{const w=Math.max(160,innerWidth-16),h=Math.max(140,innerHeight-16);panel.style.maxWidth=w+'px';panel.style.maxHeight=h+'px';const rect=panel.getBoundingClientRect();if(rect.left<8||rect.right>innerWidth-8)panel.style.left=Math.max(8,innerWidth-Math.min(rect.width,w)-8)+'px';if(rect.top<8||rect.bottom>innerHeight-8)panel.style.top=Math.max(8,Math.min(rect.top,innerHeight-Math.min(rect.height,h)-8))+'px'};
         window.addEventListener('resize',fit,{passive:true});fit();
         window.addEventListener('pagehide',saveRoom);
-        undoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!history.length)return;redo.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(history.pop(),0,0);saveDraft()};
-        redoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!redo.length)return;history.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(redo.pop(),0,0);saveDraft()};
-        clear.onclick=()=>{if(restoring||!displayedRoom)return;if(!confirm('Clear drawing? You can undo this.'))return;snapshot();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);saveDraft()};
+        undoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!history.length)return;redo.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(history.pop(),0,0);roomJournal=[];saveDraft()};
+        redoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!redo.length)return;history.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(redo.pop(),0,0);roomJournal=[];saveDraft()};
+        clear.onclick=()=>{if(restoring||!displayedRoom)return;if(!confirm('Clear drawing? You can undo this.'))return;snapshot();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);roomJournal=[];saveDraft()};
         save.onclick=()=>{const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='subbys-drawing.png';a.click()};
         hide.onclick=()=>{shown=false;panel.hidden=true;refresh();persist()};
         toggle.onclick=()=>{panel.hidden=!panel.hidden;if(!panel.hidden){fit();if(sharing)send('request',{})}};
@@ -26946,7 +27004,7 @@ function SubbysPlushiesPageMain() {
             setEnabled(value){enabled=!!value;persist();refresh()},
             setButtonVisible(value){shown=!!value;persist();refresh()},
             open(){enabled=true;shown=true;persist();refresh();panel.hidden=false;fit();if(sharing)send("request",{})},
-            status(){return {enabled,shown,sharing,activeRoom:displayedRoom,savedRooms:Object.keys(roomImages).length,restoring,unsavedChanges:dirty,storedStrokes:room()?roomStrokes().length:0,receivedStrokes:seen.size,pendingStrokes:incoming.size,sentPackets:txCount}}
+            status(){return {enabled,shown,sharing,activeRoom:displayedRoom,savedRooms:Object.keys(roomImages).length,restoring,unsavedChanges:dirty,revision,persistedRevision,restoredFrom,storeError,storedStrokes:room()?roomStrokes().length:0,receivedStrokes:seen.size,pendingStrokes:incoming.size,sentPackets:txCount}}
         });
         // No independent floating settings icon: manage visibility in Essentials → Settings.
         let drag=null;head.addEventListener('pointerdown',e=>{if(e.target!==head&&e.target.tagName!=='STRONG')return;drag={x:e.clientX,y:e.clientY,left:panel.offsetLeft,top:panel.offsetTop};head.setPointerCapture(e.pointerId)});
@@ -26968,7 +27026,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.7.1";
+    const VERSION = "3.7.9";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
