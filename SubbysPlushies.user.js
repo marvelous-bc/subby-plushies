@@ -2,7 +2,7 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.7.1
+// @version      3.7.6
 // @description  Plushie companions, expressive actions, wardrobe tools, and customizable Essentials for Bondage Club.
 // @released     2026-10-26
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.7.1";
+    const VERSION = "3.7.6";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -89,7 +89,7 @@ function SubbysPlushiesPageMain() {
             });
         }
         try{Object.defineProperty(window,'SubbysBulkStorageDiag',{configurable:true,
-            value:()=>({version:'3.7.1',saved,failed,lastError,note:'Only aggregate write status; no stored data is displayed.'})});}catch(_){}
+            value:()=>({version:'3.7.3',saved,failed,lastError,note:'Only aggregate write status; no stored data is displayed.'})});}catch(_){}
         return {get,put,remove};
     })();
     // Local-only account personal snapshots. Never upload automatically and
@@ -3524,7 +3524,7 @@ function SubbysPlushiesPageMain() {
             if (value) writeLocalJSON(key, value);
         }
         if(restoredEssentials){essentialsState=null;essentialsRefreshChatColors();}
-        
+
         const battle = safeObject(data.accountBattle);
         const backupBattleMember = Number(battle?.memberNumber ?? payload.account?.memberNumber);
         const currentMember = currentAccountMemberNumber();
@@ -11451,6 +11451,31 @@ function SubbysPlushiesPageMain() {
             ], { compact: true });
         }));
         container.appendChild(petBed);
+        // Drawing Board controls belong in the existing Essentials Settings menu.
+        // Keep the drawing canvas and its saved artwork independent of launcher visibility.
+        const drawingState = (() => {
+            try { return JSON.parse(localStorage.getItem("SubbysPlushies:drawing-board:v1") || "{}"); }
+            catch { return {}; }
+        })();
+        const drawingEnabled = window.SubbysDrawingBoard?.status()?.enabled ?? drawingState.enabled === true;
+        const drawingButtonVisible = window.SubbysDrawingBoard?.status()?.shown ?? drawingState.shown !== false;
+        const drawingSettings = makeExtensionsSection("Drawing Board");
+        drawingSettings.append(
+            extensionsSettingRow(
+                "Enable Drawing Board",
+                "Off by default. Disabling hides the Drawing Board button and closes the canvas without deleting saved artwork.",
+                drawingEnabled,
+                () => window.SubbysDrawingBoard?.setEnabled(!drawingEnabled)
+            ),
+            extensionsSettingRow(
+                "Show Drawing Board Button",
+                "Show or hide the floating Drawing Board launcher. Your drawings remain saved.",
+                drawingEnabled && drawingButtonVisible,
+                () => window.SubbysDrawingBoard?.setButtonVisible(!drawingButtonVisible)
+            )
+        );
+        drawingSettings.append(makeExtensionsButton("Open Drawing Board", () => window.SubbysDrawingBoard?.open()));
+        container.appendChild(drawingSettings);
         const section = makeExtensionsSection("Settings");
         section.append(
             extensionsSettingRow("Protect Me", "The held plush reacts to selected incoming actions.", settings.protectMe, () => toggleFeatureSetting("protectMe")),
@@ -19571,6 +19596,7 @@ function SubbysPlushiesPageMain() {
         else startOfferChatObserverMonitor();
         const actionMessageHooked = installHook("ChatRoomMessage", 10000, (args, next) => {
             const data = args?.[0];
+            try { window.__SubbysDrawReceive?.(data); } catch {}
             if (processAddonPresencePacket(data)) return next(args);
             if (processSharedWaveChainPacket(data)) return next(args);
             if (processOfferDecisionSignal(data)) return next(args);
@@ -25869,7 +25895,7 @@ function SubbysPlushiesPageMain() {
             function updatePreview() {
                 const h=safeHex(primaryRow.hexInput.value),a=safeHex(accentRow.hexInput.value),m=safeHex(metalRow.hexInput.value);
                 previewBody.replaceChildren();preview.open=true;
-                if(!h||!a||!m){previewBody.append(elt('p','Enter three valid colors first.'));return [];} 
+                if(!h||!a||!m){previewBody.append(elt('p','Enter three valid colors first.'));return [];}
                 const plans=planColors(h,a,m);
                 previewHeader.textContent=`🔎 Preview Color Changes · ${plans.length} item(s)`;
                 if(!plans.length){previewBody.append(elt('p','No changes needed for the included outfit.'));return plans;}
@@ -26782,6 +26808,108 @@ function SubbysPlushiesPageMain() {
             if (window.SubbysOutfitHarmonizer) unsubscribe();
         });
     }
+
+    // Optional collaborative Drawing Board. Uses BC hidden room messages only when sharing is enabled.
+    function installSubbysDrawingBoard() {
+        const KEY='SubbysPlushies:drawing-board:v1';
+        const DRAW_KEY='SubbysPlushies:drawing-board-image:v1';
+        const state=(()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch{return {}}})();
+        let enabled=state.enabled===true, shown=state.shown!==false, drawing=false, last=null, history=[], redo=[], sharing=state.sharing===true, strokePoints=[], strokes=[], sessionRoom=null, activePointer=null;
+        const el=(tag,props={},parent)=>{const n=document.createElement(tag);Object.assign(n,props);if(parent)parent.append(n);return n};
+        const css=el('style',{textContent:`#sp-draw-toggle[hidden],#sp-draw-panel[hidden]{display:none!important}#sp-draw-toggle,#sp-draw-panel{position:fixed;z-index:2147483200;font:14px system-ui,sans-serif;color:#f8eaff}#sp-draw-toggle{bottom:100px;right:18px;background:#59346d;border:2px solid #d6a8ed;border-radius:14px;padding:10px;cursor:pointer;box-shadow:0 4px 16px #0008}#sp-draw-panel{top:clamp(16px,8vh,80px);left:clamp(16px,15vw,180px);width:min(760px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 16px);overflow:auto;resize:both;box-sizing:border-box;background:#24192e;border:2px solid #ad84c7;border-radius:14px;box-shadow:0 12px 40px #000b;padding:12px}#sp-draw-panel button,#sp-draw-panel input{margin:3px}#sp-draw-panel button{background:#67447e;color:white;border:1px solid #bd9acb;border-radius:7px;padding:6px;cursor:pointer}#sp-draw-panel canvas{width:100%;height:auto;display:block;background:white;touch-action:none;cursor:crosshair;border-radius:6px}#sp-draw-panel .sp-draw-controls{position:sticky;top:0;z-index:3;background:#24192e;padding:6px 0 8px;max-height:min(45dvh,230px);overflow-y:auto;overscroll-behavior:contain;box-shadow:0 3px 8px #24192e}#sp-draw-panel .sp-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:5px}#sp-draw-panel .sp-draw-controls header{min-height:30px}#sp-draw-panel .sp-draw-controls button{flex-shrink:0}#sp-draw-panel label{display:inline-flex;align-items:center;gap:4px}#sp-draw-panel header{display:flex;justify-content:space-between;align-items:center;cursor:move}`});document.head.append(css);
+        const toggle=el('button',{id:'sp-draw-toggle',textContent:'🎨 Drawing Board',title:'Open drawing board'},document.body);
+        const panel=el('section',{id:'sp-draw-panel'},document.body);panel.hidden=true;
+        const controls=el('div',{className:'sp-draw-controls'},panel);
+        const head=el('header',{},controls);el('strong',{textContent:'🎨 Essentials Drawing Board'},head);
+        const close=el('button',{textContent:'✕ Close'},head);close.onclick=()=>panel.hidden=true;
+        const bar=el('div',{className:'sp-toolbar'},controls);
+        const color=el('input',{type:'color',value:'#533275',title:'Brush color'},bar);
+        const size=el('input',{type:'range',min:'1',max:'64',value:'6',title:'Brush size'},bar);
+        const sizeText=el('span',{textContent:'6 px'},bar);size.oninput=()=>sizeText.textContent=size.value+' px';
+        const smooth=el('input',{type:'range',min:'0',max:'95',value:'65',title:'Stabilization'},bar);
+        const smoothText=el('span',{textContent:'Smooth 65%'},bar);smooth.oninput=()=>smoothText.textContent='Smooth '+smooth.value+'%';
+        const pressure=el('input',{type:'checkbox',checked:true,title:'Tablet pressure'},bar);el('span',{textContent:'Tablet pressure'},bar);const share=el('input',{type:'checkbox',checked:sharing,title:'Share drawings with other Essentials users in this room'},bar);el('span',{textContent:'Room collaboration'},bar);
+        const erase=el('button',{textContent:'Eraser: Off'},bar);let erasing=false;erase.onclick=()=>{erasing=!erasing;erase.textContent='Eraser: '+(erasing?'On':'Off')};
+        const undoBtn=el('button',{textContent:'Undo'},bar),redoBtn=el('button',{textContent:'Redo'},bar);
+        const clear=el('button',{textContent:'Clear'},bar),save=el('button',{textContent:'Save PNG'},bar),hide=el('button',{textContent:'Remove board'},bar);
+        const canvas=el('canvas',{width:1200,height:700},panel),ctx=canvas.getContext('2d',{willReadFrequently:true});
+        ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);
+        const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify({enabled,shown,sharing}))}catch{}};
+        const snapshot=()=>{try{history.push(ctx.getImageData(0,0,canvas.width,canvas.height));if(history.length>16)history.shift();redo=[]}catch{}};
+        const saveDraft=()=>{try{localStorage.setItem(DRAW_KEY,canvas.toDataURL('image/png'))}catch(e){console.warn('[Drawing Board] Draft could not be stored',e)}};
+        const saved=localStorage.getItem(DRAW_KEY);if(saved){const img=new Image();img.onload=()=>{ctx.drawImage(img,0,0)};img.src=saved}
+        const point=e=>{const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height,p:e.pointerType==='pen'&&pressure.checked?Math.max(.1,e.pressure||.5):1}};
+        const dab=(a,b)=>{ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=erasing?'#ffffff':color.value;ctx.lineWidth=Math.max(1,Number(size.value)*((a.p+b.p)/2));ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.restore()};
+        canvas.addEventListener('pointerdown',e=>{if(e.button!==0&&e.pointerType==='mouse')return;e.preventDefault();snapshot();drawing=true;activePointer=e.pointerId;last=point(e);strokePoints=[last];canvas.setPointerCapture(e.pointerId);dab(last,{...last,x:last.x+.01})});
+        canvas.addEventListener('pointermove',e=>{if(!drawing||activePointer!==e.pointerId)return;e.preventDefault();const samples=typeof e.getCoalescedEvents==='function'?e.getCoalescedEvents():[e];for(const sample of samples){const raw=point(sample),factor=1-Number(smooth.value)/110;const next={x:last.x+(raw.x-last.x)*factor,y:last.y+(raw.y-last.y)*factor,p:last.p+(raw.p-last.p)*factor};dab(last,next);last=next;if(strokePoints.length<12000)strokePoints.push(next)}});
+        // Share every point in bounded chunks instead of silently dropping long strokes.
+        const PREFIX='SubbysDrawingBoard:v3:';
+        const room=()=>window.CurrentScreen==='ChatRoom'?(window.ChatRoomData?.ID||window.ChatRoomData?.Name||'room'):null;
+        const seen=new Set(), strokesByRoom=new Map();
+        let lastSync=0, txCount=0;
+        const roomStrokes=()=>{const r=String(room());if(!strokesByRoom.has(r))strokesByRoom.set(r,[]);return strokesByRoom.get(r)};
+        const remember=s=>{const list=roomStrokes();if(list.some(x=>x.id===s.id))return;list.push(s);if(list.length>80)list.shift()};
+        const send=(kind,data)=>{if(!sharing||!enabled||!room()||typeof window.ServerSend!=='function')return false;
+          try{const body=JSON.stringify({v:3,k:kind,r:String(room()),d:data});if(body.length>2800)return false;
+            window.ServerSend('ChatRoomChat',{Content:PREFIX+kind,Type:'Hidden',Dictionary:[{Tag:'SubbysDrawingBoardData',Text:body}]});txCount++;return true;
+          }catch(e){console.warn('[Drawing Board] Sync send failed',e);return false}};
+        // Render remote strokes using the same pressure-width segments as the local brush.
+        const renderStroke=s=>{if(!s||!/^#[0-9a-f]{6}$/i.test(s.c)||!Number.isFinite(s.s)||s.s<1||s.s>64||!Array.isArray(s.p)||s.p.length>12000)return;
+          const pts=s.p;ctx.save();ctx.strokeStyle=s.c;ctx.lineCap='round';ctx.lineJoin='round';
+          for(let i=0;i<pts.length;i++){const v=pts[i],w=pts[Math.max(0,i-1)];if(!Array.isArray(v)||v.length!==3||v.some(n=>!Number.isFinite(n))||v[0]<0||v[0]>1200||v[1]<0||v[1]>700)continue;
+            ctx.lineWidth=Math.max(1,s.s*((Math.max(.1,Math.min(1,v[2]/100))+Math.max(.1,Math.min(1,w[2]/100)))/2));
+            ctx.beginPath();ctx.moveTo(w[0],w[1]);ctx.lineTo(v[0]+(i===0?.01:0),v[1]);ctx.stroke()}ctx.restore()};
+        const transmit=s=>{const chunks=[];for(let i=0;i<s.p.length;i+=32){const start=Math.max(0,i-1);chunks.push(s.p.slice(start,i+32))}
+          // Each segment includes its predecessor to avoid gaps at packet boundaries.
+          chunks.forEach((pts,index)=>send('part',{id:s.id,c:s.c,s:s.s,n:index,t:chunks.length,p:pts}));
+        };
+        const end=()=>{if(!drawing)return;drawing=false;activePointer=null;last=null;saveDraft();
+          if(sharing&&strokePoints.length){const stroke={c:erasing?'#ffffff':color.value,s:Number(size.value),p:strokePoints.map(p=>[Math.round(p.x),Math.round(p.y),Math.round(p.p*100)]),id:String(Date.now())+'-'+Math.random().toString(36).slice(2,9)};
+            remember(stroke);transmit(stroke)}
+          strokePoints=[]};
+        canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);canvas.addEventListener('lostpointercapture',end);
+        const incoming=new Map();
+        const onMessage=msg=>{if(!sharing||!enabled||!room()||msg?.Type!=='Hidden'||!String(msg.Content||'').startsWith(PREFIX))return;
+          const tag=msg.Dictionary?.find(x=>x.Tag==='SubbysDrawingBoardData');if(typeof tag?.Text!=='string'||tag.Text.length>3000)return;
+          let data;try{data=JSON.parse(tag.Text)}catch{return}if(data?.v!==3||data.r!==String(room()))return;
+          if(data.k==='part'){const d=data.d;if(!d||typeof d.id!=='string'||d.id.length>90||!Number.isInteger(d.n)||!Number.isInteger(d.t)||d.t<1||d.t>400||d.n<0||d.n>=d.t||!Array.isArray(d.p)||d.p.length>33)return;
+            const key=data.r+'|'+d.id;if(seen.has(key))return;
+            if(!incoming.has(key))incoming.set(key,{parts:new Map(),total:d.t,c:d.c,s:d.s,time:Date.now()});
+            const item=incoming.get(key);if(item.total!==d.t)return;item.parts.set(d.n,d.p);
+            if(item.parts.size===item.total){const points=[];for(let i=0;i<item.total;i++){const part=item.parts.get(i);if(!part)return;points.push(...(i===0?part:part.slice(1)))}
+              const stroke={id:d.id,c:item.c,s:item.s,p:points};incoming.delete(key);seen.add(key);if(seen.size>500)seen.clear();
+              renderStroke(stroke);remember(stroke);saveDraft()}
+            if(incoming.size>80)for(const [k,v] of incoming){if(Date.now()-v.time>30000)incoming.delete(k)}
+          }else if(data.k==='request'&&Date.now()-lastSync>15000){lastSync=Date.now();for(const stroke of roomStrokes().slice(-30))transmit(stroke)}
+        };
+        window.__SubbysDrawReceive=onMessage;
+        share.onchange=()=>{sharing=share.checked;persist();if(sharing)send('request',{})};
+        const fit=()=>{const w=Math.max(160,innerWidth-16),h=Math.max(140,innerHeight-16);panel.style.maxWidth=w+'px';panel.style.maxHeight=h+'px';const rect=panel.getBoundingClientRect();if(rect.left<8||rect.right>innerWidth-8)panel.style.left=Math.max(8,innerWidth-Math.min(rect.width,w)-8)+'px';if(rect.top<8||rect.bottom>innerHeight-8)panel.style.top=Math.max(8,Math.min(rect.top,innerHeight-Math.min(rect.height,h)-8))+'px'};
+        window.addEventListener('resize',fit,{passive:true});fit();
+        undoBtn.onclick=()=>{if(!history.length)return;redo.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(history.pop(),0,0);saveDraft()};
+        redoBtn.onclick=()=>{if(!redo.length)return;history.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(redo.pop(),0,0);saveDraft()};
+        clear.onclick=()=>{if(!confirm('Clear drawing? You can undo this.'))return;snapshot();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);saveDraft()};
+        save.onclick=()=>{const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='subbys-drawing.png';a.click()};
+        hide.onclick=()=>{shown=false;panel.hidden=true;refresh();persist()};
+        toggle.onclick=()=>{panel.hidden=!panel.hidden;if(!panel.hidden){fit();if(sharing)send('request',{})}};
+        function refresh(){toggle.hidden=!enabled||!shown;if(!enabled||!shown)panel.hidden=true}
+        refresh();
+        window.SubbysDrawingBoard=Object.freeze({
+            enable(){enabled=true;shown=true;persist();refresh()},
+            disable(){enabled=false;persist();refresh()},
+            show(){enabled=true;shown=true;persist();refresh()},
+            remove(){shown=false;persist();refresh()},
+            setEnabled(value){enabled=!!value;persist();refresh()},
+            setButtonVisible(value){shown=!!value;persist();refresh()},
+            open(){enabled=true;shown=true;persist();refresh();panel.hidden=false;fit();if(sharing)send("request",{})},
+            status(){return {enabled,shown,sharing,storedStrokes:room()?roomStrokes().length:0,receivedStrokes:seen.size,pendingStrokes:incoming.size,sentPackets:txCount}}
+        });
+        // No independent floating settings icon: manage visibility in Essentials → Settings.
+        let drag=null;head.addEventListener('pointerdown',e=>{if(e.target!==head&&e.target.tagName!=='STRONG')return;drag={x:e.clientX,y:e.clientY,left:panel.offsetLeft,top:panel.offsetTop};head.setPointerCapture(e.pointerId)});
+        head.addEventListener('pointermove',e=>{if(!drag)return;panel.style.left=Math.max(0,Math.min(innerWidth-panel.offsetWidth,drag.left+e.clientX-drag.x))+'px';panel.style.top=Math.max(0,Math.min(innerHeight-panel.offsetHeight,drag.top+e.clientY-drag.y))+'px'});head.addEventListener('pointerup',()=>drag=null);head.addEventListener('pointercancel',()=>drag=null);
+    }
+
+    try { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", installSubbysDrawingBoard, {once:true}); else installSubbysDrawingBoard(); } catch(e) { console.warn("Drawing Board unavailable",e); }
     main().catch(e => {
         startupError = e;
         setStartupStage("failed");
