@@ -2,7 +2,7 @@
 // @name         Subby's Plushies & Essentials Launcher
 // @namespace    subbycat.subbysplushies.launcher
 // @author       Marvelous
-// @version      2.4.0.0
+// @version      2.4.0.1
 // @description  Strict GitHub-verified launcher: no @require, no offline fallback, no stale startup
 // @homepageURL  https://github.com/marvelous-bc/subby-plushies
 // @supportURL   https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 (() => {
     'use strict';
-    const VERSION = '2.4.0.0';
+    const VERSION = '2.4.0.1';
     const TAG = '[Subbycat Strict Launcher]';
     const REPO = 'marvelous-bc/subby-plushies';
     const FILE = 'SubbysPlushies.user.js';
@@ -96,9 +96,43 @@
         }
         throw Error('BC APIs did not become available within 135 seconds.');
     }
+    // One-time migration: remove only obsolete, duplicate launcher source caches.
+    // Keep BCX, outfits, drawing data and all other localStorage entries untouched.
+    function cleanupLegacyScriptCaches(){
+        const keys=[
+            'SubbysPlushiesLauncher:script',
+            'SubbysPlushiesLauncher:v2:script',
+            'SubbysPlushiesLauncher:last-good:script'
+        ];
+        const marker='SubbysPlushiesLauncher:legacy-cache-cleanup:v1';
+        try {
+            if(localStorage.getItem(marker)==='done')return;
+            let removed=0,estimatedBytes=0;
+            for(const key of keys){
+                const value=localStorage.getItem(key);
+                if(value===null)continue;
+                localStorage.removeItem(key);
+                // Verify removal before recording the migration as complete.
+                if(localStorage.getItem(key)!==null)throw Error(`Could not remove ${key}`);
+                estimatedBytes+=2*(key.length+value.length);
+                removed++;
+            }
+            try{localStorage.setItem(marker,'done')}catch(e){
+                // Cleanup itself succeeded; if storage cannot record the marker,
+                // retrying the now-empty cleanup next launch is harmless.
+                console.warn(TAG,'Could not record cache cleanup marker',e);
+            }
+            STATE.legacyCleanup={removed,estimatedBytes};
+            note('legacy-cache-cleanup',`${removed} obsolete script caches removed; approx ${(estimatedBytes/1048576).toFixed(2)} MiB freed`);
+        } catch(e){
+            STATE.legacyCleanup={error:String(e)};
+            console.warn(TAG,'Legacy cache cleanup incomplete; no other data was touched',e);
+        }
+    }
     async function launch(){
         if(currentPlugin())throw Error('Essentials is already running from another script or @require; disable the old launcher/main userscript. Cannot guarantee its version.');
         const source=await getVerifiedSource();
+        cleanupLegacyScriptCaches();
         await waitForBC();
         // Recheck the branch immediately before injection in case GitHub changed while BC initialized.
         const latest=await fetchFresh(`${API}/commits/main`,true);
