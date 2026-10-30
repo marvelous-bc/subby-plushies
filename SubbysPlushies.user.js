@@ -2,7 +2,7 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.7.9
+// @version      3.8.0
 // @description  Plushie companions, expressive actions, wardrobe tools, and customizable Essentials for Bondage Club.
 // @released     2026-10-26
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -1919,6 +1919,8 @@ function SubbysPlushiesPageMain() {
         MascotVisible: Object.freeze({ x: 1040, y: 914, w: 280, h: 58 }),
         AutoUpdate: Object.freeze({ x: 1335, y: 914, w: 300, h: 58 }),
         Update: Object.freeze({ x: 1650, y: 914, w: 300, h: 58 }),
+        DrawingBoardToggle: Object.freeze({ x: 1040, y: 530, w: 430, h: 58 }),
+        DrawingBoardOpen: Object.freeze({ x: 1500, y: 530, w: 450, h: 58 }),
         HideEmoticonButton: Object.freeze({ x: 1040, y: 608, w: 430, h: 58 }),
         Idle: Object.freeze({ x: 1040, y: 690, w: 280, h: 58 }),
         Speech: Object.freeze({ x: 1335, y: 690, w: 300, h: 58 }),
@@ -11465,13 +11467,13 @@ function SubbysPlushiesPageMain() {
                 "Enable Drawing Board",
                 "Off by default. Disabling hides the Drawing Board button and closes the canvas without deleting saved artwork.",
                 drawingEnabled,
-                () => window.SubbysDrawingBoard?.setEnabled(!drawingEnabled)
+                () => { const api=window.SubbysDrawingBoard; if(api){api.setEnabled(!api.status().enabled);renderExtensionsPanel();} }
             ),
             extensionsSettingRow(
                 "Show Drawing Board Button",
                 "Show or hide the floating Drawing Board launcher. Your drawings remain saved.",
                 drawingEnabled && drawingButtonVisible,
-                () => window.SubbysDrawingBoard?.setButtonVisible(!drawingButtonVisible)
+                () => { const api=window.SubbysDrawingBoard; if(api){api.setButtonVisible(!api.status().shown);renderExtensionsPanel();} }
             )
         );
         drawingSettings.append(makeExtensionsButton("Open Drawing Board", () => window.SubbysDrawingBoard?.open()));
@@ -11640,6 +11642,21 @@ function SubbysPlushiesPageMain() {
         info.append(title, lines, controls);
         hero.append(image, info);
         heldSection.appendChild(hero);
+        // Handheld settings: drawing board can be enabled without opening the general settings tab.
+        const boardHandheldControls = document.createElement("div");
+        Object.assign(boardHandheldControls.style, { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px" });
+        const boardState = window.SubbysDrawingBoard?.status();
+        const boardEnabled = boardState?.enabled === true;
+        boardHandheldControls.append(
+            makeExtensionsButton(boardEnabled ? "🎨 Disable Drawing Board" : "🎨 Enable Drawing Board", () => {
+                const api = window.SubbysDrawingBoard;
+                if (!api) { console.warn("[Essentials] Drawing Board is not initialized yet."); return; }
+                api.setEnabled(!api.status().enabled);
+                renderExtensionsPanel();
+            }, { active: boardEnabled }),
+            makeExtensionsButton("🎨 Open Drawing Board", () => window.SubbysDrawingBoard?.open())
+        );
+        heldSection.appendChild(boardHandheldControls);
         container.appendChild(heldSection);
         const emotes = makeExtensionsSection("Plushie emotes");
         const emoteText = document.createElement("div");
@@ -22262,6 +22279,10 @@ function SubbysPlushiesPageMain() {
             drawButton(FEATURE_MENU.MascotVisible, `Mascot Picture: ${settings.showRoomMascot ? "ON" : "hidden"}`, settings.showRoomMascot);
             drawButton(FEATURE_MENU.AutoUpdate, `Auto Update Check: ${settings.autoUpdateChecks ? "ON" : "off"}`, settings.autoUpdateChecks);
             drawButton(FEATURE_MENU.Update, "Check Update Now");
+            const drawingApi = window.SubbysDrawingBoard;
+            const drawingOn = !!drawingApi?.status?.().enabled;
+            drawButton(FEATURE_MENU.DrawingBoardToggle, `Drawing Board: ${drawingOn ? "ON" : "off"}`, drawingOn);
+            drawButton(FEATURE_MENU.DrawingBoardOpen, "Open Drawing Board", drawingOn);
             drawButton(FEATURE_MENU.HideEmoticonButton,
                 `Hide Emoticon Button: ${settings.showEmoticonButton ? "OFF" : "ON"}`,
                 !settings.showEmoticonButton);
@@ -22364,6 +22385,20 @@ function SubbysPlushiesPageMain() {
             }
             if (mouseInRect(FEATURE_MENU.AutoUpdate)) { toggleFeatureSetting("autoUpdateChecks"); return true; }
             if (mouseInRect(FEATURE_MENU.Update)) { void checkForUpdates({ silent: false }); return true; }
+            if (mouseInRect(FEATURE_MENU.DrawingBoardToggle)) {
+                const api = window.SubbysDrawingBoard;
+                if (api) {
+                    const on = !!api.status?.().enabled;
+                    api.setEnabled(!on);
+                    if (!on) api.setButtonVisible(true);
+                }
+                return true;
+            }
+            if (mouseInRect(FEATURE_MENU.DrawingBoardOpen)) {
+                const api = window.SubbysDrawingBoard;
+                if (api?.status?.().enabled) api.open();
+                return true;
+            }
             if (mouseInRect(FEATURE_MENU.HideEmoticonButton)) {
                 toggleFeatureSetting("showEmoticonButton");
                 return true;
@@ -26846,7 +26881,6 @@ function SubbysPlushiesPageMain() {
         // Share every point in bounded chunks instead of silently dropping long strokes.
         const PREFIX='SubbysDrawingBoard:v3:';
         const room=()=>window.CurrentScreen==='ChatRoom'?(window.ChatRoomData?.ID||window.ChatRoomData?.Name||'room'):null;
-        const seen=new Set(), strokesByRoom=new Map();
         // Durable per-room storage: IndexedDB avoids localStorage's tiny image quota.
         // A stroke journal is written immediately; snapshots are an optimization.
         const roomImages=(()=>{try{const v=JSON.parse(localStorage.getItem(ROOMS_KEY)||'{}');return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}catch{return {}}})();
@@ -26906,7 +26940,7 @@ function SubbysPlushiesPageMain() {
           if(!displayedRoom||restoring)return;
           dirty=true;revision++;
           // Immediate durable journal/snapshot after each completed stroke or edit.
-          saveRoom();
+          clearTimeout(saveTimer);saveTimer=setTimeout(()=>saveRoom(),550);
         };
         const loadImage=(png,epoch,key)=>new Promise(resolve=>{
           if(typeof png!=='string'||!png.startsWith('data:image/png;base64,')){resolve(false);return}
@@ -26940,60 +26974,128 @@ function SubbysPlushiesPageMain() {
             if(epoch===roomEpoch&&displayedRoom===current){
               restoring=false;restoreImage=null;
               if(restoredFrom==='legacy')saveRoom();
-              if(sharing)send('request',{});
+              if(sharing)setTimeout(()=>requestSync(),1000);
             }
           }
         };
         window.setInterval(()=>{void changeRoom()},250);
         void changeRoom();
-        let lastSync=0, txCount=0;
-        const roomStrokes=()=>{const r=String(room());if(!strokesByRoom.has(r))strokesByRoom.set(r,[]);return strokesByRoom.get(r)};
-        const remember=s=>{const list=roomStrokes();if(list.some(x=>x.id===s.id))return;list.push(s);if(list.length>80)list.shift()};
-        const send=(kind,data)=>{if(!sharing||!enabled||!room()||typeof window.ServerSend!=='function')return false;
-          try{const body=JSON.stringify({v:3,k:kind,r:String(room()),d:data});if(body.length>2800)return false;
-            window.ServerSend('ChatRoomChat',{Content:PREFIX+kind,Type:'Hidden',Dictionary:[{Tag:'SubbysDrawingBoardData',Text:body}]});txCount++;return true;
-          }catch(e){console.warn('[Drawing Board] Sync send failed',e);return false}};
-        // Render remote strokes using the same pressure-width segments as the local brush.
+        // Sync v4: paced outbound queue, targeted missing-chunk repair, durable history.
+        // Existing v3 peers still receive compatible 'part' messages.
+        let txCount=0, droppedPackets=0, retries=0, syncRequests=0, syncResponses=0;
+        const TX_INTERVAL=420, MAX_QUEUE=2400, PART_POINTS=32;
+        const outbound=[], outgoingKeys=new Set(), incoming=new Map(), sentParts=new Map();
+        let lastTx=0, lastRequest=0, lastRespond=0, lastRepair=0;
+        const roomStrokes=()=>roomJournal;
+        const remember=stroke=>{if(!stroke?.id)return;if(!roomJournal.some(x=>x.id===stroke.id))roomJournal.push(stroke)};
+        const pack=(kind,data)=>JSON.stringify({v:3,k:kind,r:String(room()),d:data});
+        const enqueue=(kind,data,priority=false)=>{
+          if(!sharing||!enabled||!room())return false;
+          const body=pack(kind,data);
+          if(body.length>2800){droppedPackets++;return false}
+          const key=kind==='part'?`${data.id}:${data.n}`:null;
+          if(key&&outgoingKeys.has(key))return true;
+          if(outbound.length>=MAX_QUEUE){droppedPackets++;return false}
+          const item={kind,body,key,room:String(room())};
+          if(priority)outbound.unshift(item);else outbound.push(item);
+          if(key)outgoingKeys.add(key);
+          return true;
+        };
+        const send=(kind,data)=>enqueue(kind,data,kind==='request'||kind==='missing');
+        const flush=()=>{
+          if(!sharing||!enabled||!room()||typeof window.ServerSend!=='function')return;
+          if(Date.now()-lastTx<TX_INTERVAL)return;
+          while(outbound.length){
+            const item=outbound.shift();if(item.key)outgoingKeys.delete(item.key);
+            if(item.room!==String(room()))continue;
+            try{window.ServerSend('ChatRoomChat',{Content:PREFIX+item.kind,Type:'Hidden',Dictionary:[{Tag:'SubbysDrawingBoardData',Text:item.body}]});txCount++;lastTx=Date.now()}
+            catch(e){droppedPackets++;console.warn('[Drawing Board] Sync send failed',e)}
+            break;
+          }
+        };
         const renderStroke=s=>{if(!s||!/^#[0-9a-f]{6}$/i.test(s.c)||!Number.isFinite(s.s)||s.s<1||s.s>64||!Array.isArray(s.p)||s.p.length>12000)return;
           const pts=s.p;ctx.save();ctx.strokeStyle=s.c;ctx.lineCap='round';ctx.lineJoin='round';
           for(let i=0;i<pts.length;i++){const v=pts[i],w=pts[Math.max(0,i-1)];if(!Array.isArray(v)||v.length!==3||v.some(n=>!Number.isFinite(n))||v[0]<0||v[0]>1200||v[1]<0||v[1]>700)continue;
             ctx.lineWidth=Math.max(1,s.s*((Math.max(.1,Math.min(1,v[2]/100))+Math.max(.1,Math.min(1,w[2]/100)))/2));
             ctx.beginPath();ctx.moveTo(w[0],w[1]);ctx.lineTo(v[0]+(i===0?.01:0),v[1]);ctx.stroke()}ctx.restore()};
-        const transmit=s=>{const chunks=[];for(let i=0;i<s.p.length;i+=32){const start=Math.max(0,i-1);chunks.push(s.p.slice(start,i+32))}
-          // Each segment includes its predecessor to avoid gaps at packet boundaries.
-          chunks.forEach((pts,index)=>send('part',{id:s.id,c:s.c,s:s.s,n:index,t:chunks.length,p:pts}));
+        const transmit=(stroke,onlyParts=null)=>{
+          if(!stroke?.p?.length)return;
+          const total=Math.ceil(stroke.p.length/PART_POINTS);
+          if(total>400)return;
+          const parts=[];
+          for(let i=0;i<total;i++){
+            const start=i*PART_POINTS;
+            parts.push({id:stroke.id,c:stroke.c,s:stroke.s,n:i,t:total,p:stroke.p.slice(Math.max(0,start-1),start+PART_POINTS)});
+          }
+          sentParts.set(stroke.id,{parts,time:Date.now()});
+          if(sentParts.size>300)sentParts.delete(sentParts.keys().next().value);
+          for(const part of parts)if(!onlyParts||onlyParts.includes(part.n))enqueue('part',part);
         };
         const end=()=>{if(!drawing)return;drawing=false;activePointer=null;last=null;
           if(strokePoints.length){const stroke={c:erasing?'#ffffff':color.value,s:Number(size.value),p:strokePoints.map(p=>[Math.round(p.x),Math.round(p.y),Math.round(p.p*100)]),id:String(Date.now())+'-'+Math.random().toString(36).slice(2,9)};
-            roomJournal.push(stroke);if(roomJournal.length>1500)roomJournal.shift();
-            if(sharing){remember(stroke);transmit(stroke)}}
+            remember(stroke);if(sharing)transmit(stroke)}
           saveDraft();strokePoints=[]};
         canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);canvas.addEventListener('lostpointercapture',end);
-        const incoming=new Map();
+        const applyStroke=stroke=>{
+          if(roomJournal.some(s=>s.id===stroke.id))return;
+          if(restoring){const epoch=roomEpoch;const wait=()=>{if(epoch!==roomEpoch)return;if(restoring){setTimeout(wait,60);return}applyStroke(stroke)};wait();return}
+          renderStroke(stroke);remember(stroke);saveDraft();
+        };
         const onMessage=msg=>{if(!sharing||!enabled||!room()||msg?.Type!=='Hidden'||!String(msg.Content||'').startsWith(PREFIX))return;
           const tag=msg.Dictionary?.find(x=>x.Tag==='SubbysDrawingBoardData');if(typeof tag?.Text!=='string'||tag.Text.length>3000)return;
           let data;try{data=JSON.parse(tag.Text)}catch{return}if(data?.v!==3||data.r!==String(room()))return;
-          if(data.k==='part'){const d=data.d;if(!d||typeof d.id!=='string'||d.id.length>90||!Number.isInteger(d.n)||!Number.isInteger(d.t)||d.t<1||d.t>400||d.n<0||d.n>=d.t||!Array.isArray(d.p)||d.p.length>33)return;
-            const key=data.r+'|'+d.id;if(seen.has(key))return;
-            if(!incoming.has(key))incoming.set(key,{parts:new Map(),total:d.t,c:d.c,s:d.s,time:Date.now()});
+          if(data.k==='part'){
+            const d=data.d;if(!d||typeof d.id!=='string'||d.id.length>90||!Number.isInteger(d.n)||!Number.isInteger(d.t)||d.t<1||d.t>400||d.n<0||d.n>=d.t||!Array.isArray(d.p)||d.p.length>33)return;
+            if(roomJournal.some(x=>x.id===d.id))return;
+            const key=data.r+'|'+d.id;
+            if(!incoming.has(key))incoming.set(key,{parts:new Map(),total:d.t,c:d.c,s:d.s,time:Date.now(),lastRepair:0,attempts:0,id:d.id});
             const item=incoming.get(key);if(item.total!==d.t)return;item.parts.set(d.n,d.p);
             if(item.parts.size===item.total){const points=[];for(let i=0;i<item.total;i++){const part=item.parts.get(i);if(!part)return;points.push(...(i===0?part:part.slice(1)))}
-              const stroke={id:d.id,c:item.c,s:item.s,p:points};incoming.delete(key);seen.add(key);if(seen.size>500)seen.clear();
-              if(restoring){const epoch=roomEpoch;const awaitRestore=()=>{if(epoch!==roomEpoch)return;if(restoring){setTimeout(awaitRestore,30);return}renderStroke(stroke);remember(stroke);roomJournal.push(stroke);saveDraft()};awaitRestore()}else{renderStroke(stroke);remember(stroke);roomJournal.push(stroke);saveDraft()}}
-            if(incoming.size>80)for(const [k,v] of incoming){if(Date.now()-v.time>30000)incoming.delete(k)}
-          }else if(data.k==='request'&&Date.now()-lastSync>15000){lastSync=Date.now();for(const stroke of roomStrokes().slice(-30))transmit(stroke)}
+              incoming.delete(key);applyStroke({id:d.id,c:item.c,s:item.s,p:points})}
+          }else if(data.k==='request'){
+            // Reply with the entire durable journal, not just 30 recent strokes.
+            // Pace responses so multiple clients don't all flood the room.
+            if(Date.now()-lastRespond<30000)return;
+            lastRespond=Date.now();syncResponses++;
+            const list=roomJournal.slice();
+            const delay=1500+Math.floor(Math.random()*2000);
+            setTimeout(()=>{if(!sharing||!enabled||!room()||String(room())!==data.r)return;
+              for(const stroke of list)transmit(stroke);
+            },delay);
+          }else if(data.k==='missing'){
+            const d=data.d;
+            if(!d||typeof d.id!=='string'||!Array.isArray(d.parts)||d.parts.length>40)return;
+            const cached=sentParts.get(d.id);
+            if(cached){for(const n of d.parts)if(Number.isInteger(n)&&cached.parts[n])enqueue('part',cached.parts[n],true)}
+            else {const stroke=roomJournal.find(s=>s.id===d.id);if(stroke)transmit(stroke,d.parts)}
+          }
         };
         window.__SubbysDrawReceive=onMessage;
-        share.onchange=()=>{sharing=share.checked;persist();if(sharing)send('request',{})};
+        const syncTimer=setInterval(()=>{
+          flush();
+          if(!sharing||!enabled||!room())return;
+          const now=Date.now();
+          if(now-lastRepair>2500){lastRepair=now;
+            for(const [key,item] of incoming){
+              if(now-item.time>120000||item.attempts>=8){incoming.delete(key);continue}
+              if(now-item.time>3500&&now-item.lastRepair>5000){
+                const missing=[];for(let i=0;i<item.total&&missing.length<32;i++)if(!item.parts.has(i))missing.push(i);
+                if(missing.length){enqueue('missing',{id:item.id,parts:missing},true);item.lastRepair=now;item.attempts++;retries++}
+              }
+            }
+          }
+        },120);
+        const requestSync=()=>{if(!sharing||!enabled||!room()||Date.now()-lastRequest<12000)return;lastRequest=Date.now();syncRequests++;send('request',{count:roomJournal.length})};
+        share.onchange=()=>{sharing=share.checked;persist();if(sharing)requestSync()};
         const fit=()=>{const w=Math.max(160,innerWidth-16),h=Math.max(140,innerHeight-16);panel.style.maxWidth=w+'px';panel.style.maxHeight=h+'px';const rect=panel.getBoundingClientRect();if(rect.left<8||rect.right>innerWidth-8)panel.style.left=Math.max(8,innerWidth-Math.min(rect.width,w)-8)+'px';if(rect.top<8||rect.bottom>innerHeight-8)panel.style.top=Math.max(8,Math.min(rect.top,innerHeight-Math.min(rect.height,h)-8))+'px'};
         window.addEventListener('resize',fit,{passive:true});fit();
-        window.addEventListener('pagehide',saveRoom);
+        window.addEventListener('pagehide',()=>{clearTimeout(saveTimer);saveRoom()});
         undoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!history.length)return;redo.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(history.pop(),0,0);roomJournal=[];saveDraft()};
         redoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!redo.length)return;history.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(redo.pop(),0,0);roomJournal=[];saveDraft()};
         clear.onclick=()=>{if(restoring||!displayedRoom)return;if(!confirm('Clear drawing? You can undo this.'))return;snapshot();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);roomJournal=[];saveDraft()};
         save.onclick=()=>{const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='subbys-drawing.png';a.click()};
         hide.onclick=()=>{shown=false;panel.hidden=true;refresh();persist()};
-        toggle.onclick=()=>{panel.hidden=!panel.hidden;if(!panel.hidden){fit();if(sharing)send('request',{})}};
+        toggle.onclick=()=>{panel.hidden=!panel.hidden;if(!panel.hidden){fit();if(sharing)requestSync()}};
         function refresh(){toggle.hidden=!enabled||!shown;if(!enabled||!shown)panel.hidden=true}
         refresh();
         window.SubbysDrawingBoard=Object.freeze({
@@ -27003,8 +27105,8 @@ function SubbysPlushiesPageMain() {
             remove(){shown=false;persist();refresh()},
             setEnabled(value){enabled=!!value;persist();refresh()},
             setButtonVisible(value){shown=!!value;persist();refresh()},
-            open(){enabled=true;shown=true;persist();refresh();panel.hidden=false;fit();if(sharing)send("request",{})},
-            status(){return {enabled,shown,sharing,activeRoom:displayedRoom,savedRooms:Object.keys(roomImages).length,restoring,unsavedChanges:dirty,revision,persistedRevision,restoredFrom,storeError,storedStrokes:room()?roomStrokes().length:0,receivedStrokes:seen.size,pendingStrokes:incoming.size,sentPackets:txCount}}
+            open(){enabled=true;shown=true;persist();refresh();panel.hidden=false;fit();if(sharing)requestSync()},
+            status(){return {enabled,shown,sharing,activeRoom:displayedRoom,savedRooms:Object.keys(roomImages).length,restoring,unsavedChanges:dirty,revision,persistedRevision,restoredFrom,storeError,storedStrokes:roomJournal.length,pendingStrokes:incoming.size,sentPackets:txCount,queuedPackets:outbound.length,droppedPackets,retries,syncRequests,syncResponses}}
         });
         // No independent floating settings icon: manage visibility in Essentials → Settings.
         let drag=null;head.addEventListener('pointerdown',e=>{if(e.target!==head&&e.target.tagName!=='STRONG')return;drag={x:e.clientX,y:e.clientY,left:panel.offsetLeft,top:panel.offsetTop};head.setPointerCapture(e.pointerId)});
