@@ -2,13 +2,12 @@
 // @name         Subby's Plushies & Essentials Launcher
 // @namespace    subbycat.subbysplushies.launcher
 // @author       Marvelous
-// @version      2.3.8.0
-// @description  Browser + Electron-BC launcher with startup-aware EBC fallback, live download and verified offline cache
+// @version      2.4.0.0
+// @description  Strict GitHub-verified launcher: no @require, no offline fallback, no stale startup
 // @homepageURL  https://github.com/marvelous-bc/subby-plushies
 // @supportURL   https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL    https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js
 // @downloadURL  https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js
-// @require      https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js?launcher=2.3.8.0
 // @match        https://bondageprojects.elementfx.com/R*
 // @match        https://www.bondageprojects.elementfx.com/R*
 // @match        https://bondageeurope.com/*/BondageClub/*
@@ -25,182 +24,102 @@
 // ==/UserScript==
 (() => {
     'use strict';
-    const TAG = '[Subbycat Launcher]';
-    const VERSION = '2.3.8.0';
-    const PRIMARY = 'https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js';
-    const MIRROR = 'https://cdn.jsdelivr.net/gh/marvelous-bc/subby-plushies@main/SubbysPlushies.user.js';
-    const READY_WAIT_MS = 135000;
-    const REQUIRED_PROBE_MS = 1600;
-    const VERIFIED_CACHE = 'SubbysPlushiesLauncher:last-good:script';
-    const VERIFIED_VERSION = 'SubbysPlushiesLauncher:last-good:version';
-    const LEGACY_CACHE = 'SubbysPlushiesLauncher:script';
-    const LEGACY_OLD_CACHE = 'SubbysPlushiesLauncher:v2:script';
-    const STATE = { launcher: VERSION, phase: 'start', method: null, source: null, manager: null,
-        requiredSeen: false, pluginVersion: null, lastError: null, attempts: [], startedAt: Date.now() };
-    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-    const captureError = error => String(error?.stack || error?.message || error);
-    const trace = (phase, details) => {
-        STATE.phase = phase;
-        if (details) STATE.attempts.push({phase, details: String(details), at: Date.now()});
-        if (STATE.attempts.length > 32) STATE.attempts.shift();
-        console.info(TAG, phase, details || '');
-    };
-    const failure = (phase, error) => {
-        STATE.phase = phase;
-        STATE.lastError = captureError(error);
-        console.error(TAG, phase, error);
-    };
-    const storageGet = key => {try {return localStorage.getItem(key) || '';} catch (_) {return '';} };
-    const storageSet = (key, value) => {try {localStorage.setItem(key, value);return true;} catch (_) {return false;} };
-    function managerName() {
-        try {return String(GM_info?.scriptHandler || GM_info?.handler || '');} catch (_) {return '';}
-    }
-    function probe() {
-        let api = null, guard = null, bootstrap = false, attr = null;
-        try {api = window.SubbysPlushies || null;} catch (_) {}
-        try {guard = window.__SUBBYS_PLUSHIES_ACTIVE__ || null;} catch (_) {}
-        try {bootstrap = typeof window.SubbysPlushiesBootstrapDiag === 'function';} catch (_) {}
-        try {attr = document.documentElement?.getAttribute('data-subbys-plushies-runtime') || null;} catch (_) {}
-        return {api,guard,bootstrap,attr,started:!!(api||guard||bootstrap||attr)};
-    }
-    function publicState() {
-        const p=probe();
-        return { ...STATE, active:!!p.api, ready:p.api?.ready === true,
-            failed:p.api?.failed === true, guard:p.guard, bootstrap:p.bootstrap,
-            runtime:p.attr, url:PRIMARY };
-    }
-    try {window.SubbysPlushiesLauncherDiag=publicState;} catch (_) {}
-    function validSource(source) {
-        const code=String(source||'');
-        if(code.length < 1000 || !code.includes('__SUBBYS_PLUSHIES_ACTIVE__') || !code.includes('SubbysPlushies')) {
-            throw Error('Download was not a valid Subbycat plugin userscript.');
-        }
-        const version=code.match(/@version\s+([^\s]+)/i)?.[1] || code.match(/const\s+VERSION\s*=\s*["']([^"']+)/)?.[1];
-        if(!version)throw Error('Plugin version missing from source.');
-        return {code,version};
-    }
-    async function requestText(url) {
-        if(typeof fetch !== 'function') throw Error('fetch is unavailable in this client.');
-        const controller=typeof AbortController === 'function' ? new AbortController() : null;
-        const timeout=controller ? setTimeout(()=>controller.abort(),16000) : null;
+    const VERSION = '2.4.0.0';
+    const TAG = '[Subbycat Strict Launcher]';
+    const REPO = 'marvelous-bc/subby-plushies';
+    const FILE = 'SubbysPlushies.user.js';
+    const API = `https://api.github.com/repos/${REPO}`;
+    const STATE = {launcher:VERSION,phase:'initializing',source:null,commit:null,expectedBlob:null,
+        actualBlob:null,pluginVersion:null,verified:false,ready:false,error:null,attempts:[]};
+    const delay = ms => new Promise(r=>setTimeout(r,ms));
+    const diag = () => ({...STATE,attempts:[...STATE.attempts]});
+    window.SubbysPlushiesLauncherDiag = diag;
+    const note=(phase,details='')=>{STATE.phase=phase;STATE.attempts.push({phase,details:String(details),at:Date.now()});console.info(TAG,phase,details)};
+    async function fetchFresh(url, asJSON=false) {
+        const controller = new AbortController();
+        const timer = setTimeout(()=>controller.abort(),20000);
         try {
-            const separator=url.includes('?')?'&':'?';
-            const response=await fetch(`${url}${separator}_=${Date.now()}`,{
-                method:'GET',cache:'no-store',credentials:'omit',
-                ...(controller?{signal:controller.signal}:{})
+            const sep=url.includes('?')?'&':'?';
+            const response=await fetch(`${url}${sep}_=${Date.now()}-${Math.random().toString(36).slice(2)}`,{
+                cache:'no-store',credentials:'omit',signal:controller.signal,
+                headers:{'Accept':asJSON?'application/vnd.github+json':'text/plain'}
             });
-            if(!response.ok)throw Error(`HTTP ${response.status}: ${url}`);
-            return await response.text();
-        } finally {if(timeout!==null)clearTimeout(timeout);}
+            if(!response.ok)throw Error(`HTTP ${response.status} while fetching ${url}`);
+            return asJSON?response.json():response.text();
+        } finally {clearTimeout(timer)}
     }
-    async function download() {
-        const errors=[];
-        for(const url of [PRIMARY,MIRROR]) {
-            try {const result=validSource(await requestText(url));return {...result,url};}
-            catch(error) {errors.push(captureError(error));console.warn(TAG,'Download source failed:',url,error);}
-        }
-        throw Error('All download sources failed: '+errors.join(' | '));
+    async function gitBlobSha(source) {
+        if(!crypto?.subtle)throw Error('Web Crypto unavailable: cannot verify source.');
+        const data=new TextEncoder().encode(source);
+        const prefix=new TextEncoder().encode(`blob ${data.length}\0`);
+        const combined=new Uint8Array(prefix.length+data.length);
+        combined.set(prefix);combined.set(data,prefix.length);
+        const digest=await crypto.subtle.digest('SHA-1',combined);
+        return [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');
     }
-    function cached() {
-        for(const key of [VERIFIED_CACHE,LEGACY_CACHE,LEGACY_OLD_CACHE]) {
-            const code=storageGet(key);
-            if(!code)continue;
-            try {return {...validSource(code),url:`cache (${key})`,fromCache:true};}
-            catch (_) {}
-        }
-        return null;
+    function currentPlugin() {
+        return !!(window.__SUBBYS_PLUSHIES_ACTIVE__ || window.SubbysPlushies ||
+            typeof window.SubbysPlushiesBootstrapDiag==='function' ||
+            document.documentElement?.getAttribute('data-subbys-plushies-runtime'));
     }
-    function assertNoDuplicate() {
-        if(probe().started)throw Error('Main addon has already started; duplicate injection avoided.');
+    async function getVerifiedSource(){
+        note('checking-github-head');
+        const head=await fetchFresh(`${API}/commits/main`,true);
+        const commit=String(head?.sha||'');
+        if(!/^[a-f0-9]{40}$/i.test(commit))throw Error('GitHub did not return a valid commit SHA.');
+        STATE.commit=commit;
+        note('checking-github-file',commit.slice(0,12));
+        const meta=await fetchFresh(`${API}/contents/${FILE}?ref=${commit}`,true);
+        const expected=String(meta?.sha||'');
+        if(!/^[a-f0-9]{40}$/i.test(expected)||meta?.type!=='file')throw Error('GitHub did not return a valid file blob SHA.');
+        STATE.expectedBlob=expected;
+        const url=`https://raw.githubusercontent.com/${REPO}/${commit}/${FILE}`;
+        note('downloading-immutable-version',url);
+        const code=await fetchFresh(url);
+        if(code.length<1000||!code.includes('__SUBBYS_PLUSHIES_ACTIVE__')||!code.includes('SubbysPlushies'))
+            throw Error('Downloaded content is not the expected Essentials userscript.');
+        const actual=await gitBlobSha(code);
+        STATE.actualBlob=actual;
+        if(actual!==expected)throw Error(`Source verification mismatch: GitHub ${expected}, downloaded ${actual}.`);
+        const version=code.match(/@version\s+([^\s]+)/i)?.[1]||'unknown';
+        STATE.pluginVersion=version;
+        STATE.source=url;
+        STATE.verified=true;
+        return code;
     }
-    function execute(code,version) {
-        assertNoDuplicate();
-        const source=code+'\n//# sourceURL=SubbysPlushies-'+version+'-launcher.js';
-        const methods=[];
-        const canSeeBC=typeof window.AssetGet==='function' || typeof window.InventoryWear==='function';
-        const injectScript=()=>{
-            const host=document.head||document.documentElement;
-            if(!host)throw Error('No document element available yet.');
-            const script=document.createElement('script');
-            script.dataset.subbysPlushiesLoader='1';
-            script.textContent=source;
-            host.appendChild(script);
-            script.remove();
-        };
-        const choices=canSeeBC
-            ? [['eval',()=>window.eval(source)],['script',injectScript],['Function',()=>window.Function(source)()]]
-            : [['script',injectScript],['eval',()=>window.eval(source)],['Function',()=>window.Function(source)()]];
-        for(const [method,fn] of choices) {
-            if(probe().started)return methods[methods.length-1]||method;
-            try {fn();methods.push(method);} catch(error) {STATE.attempts.push({phase:'execute-'+method,details:captureError(error)});}
-            if(probe().started)return method;
+    async function waitForBC(){
+        note('waiting-for-bc');
+        const start=Date.now();
+        while(Date.now()-start<135000){
+            if(typeof window.AssetGet==='function'||typeof window.InventoryWear==='function')return;
+            await delay(250);
         }
-        throw Error('Source executed without creating a startup marker. Injection attempts: '+JSON.stringify(methods));
+        throw Error('BC APIs did not become available within 135 seconds.');
     }
-    async function waitReady(label) {
-        trace('waiting-for-ready',label);
-        const begin=Date.now();
-        let lastReport=0;
-        while(Date.now()-begin<READY_WAIT_MS) {
-            const p=probe();
-            if(p.api?.ready===true) {
-                STATE.pluginVersion=String(p.api.version||p.guard||'unknown');
-                trace('ready',`${label}: v${STATE.pluginVersion}`);
-                return true;
-            }
-            if(p.api?.failed===true)throw Error('Plugin initialization failed: '+(p.api.startupError||'unknown error'));
-            if(Date.now()-lastReport>12000) {
-                lastReport=Date.now();
-                console.info(TAG,'Awaiting startup', {bootstrap:p.bootstrap,runtime:p.attr,guard:p.guard,api:!!p.api});
-            }
-            await sleep(200);
+    async function launch(){
+        if(currentPlugin())throw Error('Essentials is already running from another script or @require; disable the old launcher/main userscript. Cannot guarantee its version.');
+        const source=await getVerifiedSource();
+        await waitForBC();
+        // Recheck the branch immediately before injection in case GitHub changed while BC initialized.
+        const latest=await fetchFresh(`${API}/commits/main`,true);
+        if(latest?.sha!==STATE.commit)throw Error('GitHub main changed during startup. Refresh to obtain the newest release.');
+        if(currentPlugin())throw Error('Another copy of Essentials started during verification; refusing duplicate injection.');
+        note('starting-verified-plugin',STATE.pluginVersion);
+        const script=document.createElement('script');
+        script.dataset.subbysPlushiesStrictLauncher='1';
+        script.textContent=source+`\n//# sourceURL=SubbysPlushies-verified-${STATE.commit.slice(0,12)}.js`;
+        (document.head||document.documentElement).appendChild(script);
+        script.remove();
+        const start=Date.now();
+        while(Date.now()-start<135000){
+            if(window.SubbysPlushies?.ready===true){STATE.ready=true;note('ready',STATE.pluginVersion);return;}
+            if(window.SubbysPlushies?.failed===true)throw Error('Essentials reported initialization failure.');
+            await delay(250);
         }
-        throw Error('Timed out waiting for plugin readiness ('+Math.round(READY_WAIT_MS/1000)+'s). '+JSON.stringify(publicState()));
+        throw Error('Verified Essentials was injected but did not report ready in time.');
     }
-    async function start() {
-        STATE.manager=managerName() || 'direct/EBC';
-        trace('launcher-start',`${VERSION} under ${STATE.manager}`);
-        // @require may already have started the addon but it can take time for BC APIs
-        // to become available. A bootstrap marker counts as started even without ready=true.
-        if(probe().started) {
-            STATE.requiredSeen=true;
-            trace('required-script-detected','Waiting instead of injecting a second copy.');
-            await waitReady('@require/already installed');
-            return;
-        }
-        await sleep(REQUIRED_PROBE_MS);
-        if(probe().started) {
-            STATE.requiredSeen=true;
-            trace('late-required-script-detected','Waiting for initialized plugin.');
-            await waitReady('@require');
-            return;
-        }
-        // EBC may expose GM_info even when its loader did NOT execute @require.
-        // Never return solely because GM_info exists.
-        trace('require-missing','Falling back to live loader.');
-        let downloaded;
-        try {downloaded=await download();}
-        catch(error) {
-            console.warn(TAG,'Online download failed; trying verified offline fallback.',error);
-            downloaded=cached();
-            if(!downloaded)throw error;
-        }
-        STATE.source=downloaded.url;
-        if(probe().started) {
-            // An independent @require bootstrap may have started during the download.
-            trace('startup-detected-after-download','Skipping duplicate injection.');
-            await waitReady('existing addon');
-            return;
-        }
-        trace('injecting',`v${downloaded.version} from ${downloaded.url}`);
-        STATE.method=execute(downloaded.code,downloaded.version);
-        await waitReady(downloaded.url);
-        if(!downloaded.fromCache) {
-            storageSet(VERIFIED_CACHE,downloaded.code);
-            storageSet(VERIFIED_VERSION,STATE.pluginVersion||downloaded.version);
-            storageSet(LEGACY_CACHE,downloaded.code);
-            storageSet(LEGACY_OLD_CACHE,downloaded.code);
-        }
-    }
-    void start().catch(error => failure('startup-failed',error));
+    launch().catch(error=>{
+        STATE.phase='blocked';STATE.error=String(error?.stack||error);
+        console.error(TAG,'Essentials blocked: cannot guarantee current GitHub version.',error);
+    });
 })();
