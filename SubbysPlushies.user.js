@@ -2,7 +2,7 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.8.0
+// @version      3.8.5
 // @description  Plushie companions, expressive actions, wardrobe tools, and customizable Essentials for Bondage Club.
 // @released     2026-10-26
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.7.9";
+    const VERSION = "3.8.5";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -22281,8 +22281,8 @@ function SubbysPlushiesPageMain() {
             drawButton(FEATURE_MENU.Update, "Check Update Now");
             const drawingApi = window.SubbysDrawingBoard;
             const drawingOn = !!drawingApi?.status?.().enabled;
-            drawButton(FEATURE_MENU.DrawingBoardToggle, `Drawing Board: ${drawingOn ? "ON" : "off"}`, drawingOn);
-            drawButton(FEATURE_MENU.DrawingBoardOpen, "Open Drawing Board", drawingOn);
+            drawButton(FEATURE_MENU.DrawingBoardToggle, `Doodles: ${drawingOn ? "ON" : "off"}`, drawingOn);
+            drawButton(FEATURE_MENU.DrawingBoardOpen, "Open Doodles", drawingOn);
             drawButton(FEATURE_MENU.HideEmoticonButton,
                 `Hide Emoticon Button: ${settings.showEmoticonButton ? "OFF" : "ON"}`,
                 !settings.showEmoticonButton);
@@ -26849,14 +26849,17 @@ function SubbysPlushiesPageMain() {
         const KEY='SubbysPlushies:drawing-board:v1';
         const DRAW_KEY='SubbysPlushies:drawing-board-image:v1';
         const ROOMS_KEY='SubbysPlushies:drawing-board-rooms:v2';
+        const WINDOW_KEY='SubbysPlushies:doodles-window:v1';
+        const LAUNCHER_KEY='SubbysPlushies:doodles-launcher:v1';
         const state=(()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch{return {}}})();
         let enabled=state.enabled===true, shown=state.shown!==false, drawing=false, last=null, history=[], redo=[], sharing=state.sharing===true, strokePoints=[], strokes=[], sessionRoom=null, activePointer=null;
         const el=(tag,props={},parent)=>{const n=document.createElement(tag);Object.assign(n,props);if(parent)parent.append(n);return n};
         const css=el('style',{textContent:`#sp-draw-toggle[hidden],#sp-draw-panel[hidden]{display:none!important}#sp-draw-toggle,#sp-draw-panel{position:fixed;z-index:2147483200;font:14px system-ui,sans-serif;color:#f8eaff}#sp-draw-toggle{bottom:100px;right:18px;background:#59346d;border:2px solid #d6a8ed;border-radius:14px;padding:10px;cursor:pointer;box-shadow:0 4px 16px #0008}#sp-draw-panel{top:clamp(16px,8vh,80px);left:clamp(16px,15vw,180px);width:min(760px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 16px);overflow:auto;resize:both;box-sizing:border-box;background:#24192e;border:2px solid #ad84c7;border-radius:14px;box-shadow:0 12px 40px #000b;padding:12px}#sp-draw-panel button,#sp-draw-panel input{margin:3px}#sp-draw-panel button{background:#67447e;color:white;border:1px solid #bd9acb;border-radius:7px;padding:6px;cursor:pointer}#sp-draw-panel canvas{width:100%;height:auto;display:block;background:white;touch-action:none;cursor:crosshair;border-radius:6px}#sp-draw-panel .sp-draw-controls{position:sticky;top:0;z-index:3;background:#24192e;padding:6px 0 8px;max-height:min(45dvh,230px);overflow-y:auto;overscroll-behavior:contain;box-shadow:0 3px 8px #24192e}#sp-draw-panel .sp-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:5px}#sp-draw-panel .sp-draw-controls header{min-height:30px}#sp-draw-panel .sp-draw-controls button{flex-shrink:0}#sp-draw-panel label{display:inline-flex;align-items:center;gap:4px}#sp-draw-panel header{display:flex;justify-content:space-between;align-items:center;cursor:move}`});document.head.append(css);
-        const toggle=el('button',{id:'sp-draw-toggle',textContent:'🎨 Drawing Board',title:'Open drawing board'},document.body);
+        css.textContent += `#sp-draw-toggle{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}#sp-draw-toggle:active{cursor:grabbing}#sp-draw-panel .sp-doodles-drag{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;flex:1;min-width:0;min-height:32px;display:flex;align-items:center;padding:0 8px;border:1px dashed #bd9acb80;border-radius:8px}#sp-draw-panel .sp-doodles-drag:active{cursor:grabbing}#sp-draw-panel .sp-draw-controls header{gap:8px}#sp-draw-panel .sp-draw-controls header button{flex-shrink:0}`;
+        const toggle=el('button',{id:'sp-draw-toggle' ,textContent:'🎨 Doodles',title:'Open Doodles'},document.body);
         const panel=el('section',{id:'sp-draw-panel'},document.body);panel.hidden=true;
         const controls=el('div',{className:'sp-draw-controls'},panel);
-        const head=el('header',{},controls);el('strong',{textContent:'🎨 Essentials Drawing Board'},head);
+        const head=el('header',{},controls);const dragHandle=el('strong',{className:'sp-doodles-drag',textContent:'⠿ 🎨 Doodles · drag here',title:'Drag to move Doodles'},head);
         const close=el('button',{textContent:'✕ Close'},head);close.onclick=()=>panel.hidden=true;
         const bar=el('div',{className:'sp-toolbar'},controls);
         const color=el('input',{type:'color',value:'#533275',title:'Brush color'},bar);
@@ -26894,9 +26897,9 @@ function SubbysPlushiesPageMain() {
             const req=indexedDB.open(DB_NAME,DB_VERSION);
             req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('rooms'))db.createObjectStore('rooms')};
             req.onsuccess=()=>resolve(req.result);
-            req.onerror=()=>{console.warn('[Drawing Board] IndexedDB unavailable',req.error);resolve(null)};
-            req.onblocked=()=>{console.warn('[Drawing Board] IndexedDB blocked');resolve(null)};
-          }catch(e){console.warn('[Drawing Board] IndexedDB open failed',e);resolve(null)}
+            req.onerror=()=>{console.warn('[Doodles] IndexedDB unavailable',req.error);resolve(null)};
+            req.onblocked=()=>{console.warn('[Doodles] IndexedDB blocked');resolve(null)};
+          }catch(e){console.warn('[Doodles] IndexedDB open failed',e);resolve(null)}
         });
         const dbRead=async key=>{
           const db=await database;if(!db)return null;
@@ -26921,7 +26924,7 @@ function SubbysPlushiesPageMain() {
         let pendingWrite=Promise.resolve();
         const queueRecord=(key,record)=>{
           pendingWrite=pendingWrite.catch(()=>{}).then(()=>dbWrite(key,record));
-          pendingWrite.catch(e=>{storeError=String(e?.message||e);console.warn('[Drawing Board] Persistent save failed',e)});
+          pendingWrite.catch(e=>{storeError=String(e?.message||e);console.warn('[Doodles] Persistent save failed',e)});
           return pendingWrite;
         };
         const saveRoom=()=>{
@@ -26969,7 +26972,7 @@ function SubbysPlushiesPageMain() {
               if(ok){restoredFrom='legacy';dirty=true;revision++;/* migrated legacy drawing */}
             }
             if(!ok)restoredFrom='blank';
-          }catch(e){storeError=String(e?.message||e);console.warn('[Drawing Board] Restore failed',e)}
+          }catch(e){storeError=String(e?.message||e);console.warn('[Doodles] Restore failed',e)}
           finally{
             if(epoch===roomEpoch&&displayedRoom===current){
               restoring=false;restoreImage=null;
@@ -27034,7 +27037,7 @@ function SubbysPlushiesPageMain() {
             }catch(e){
               item.attempts++;
               if(item.attempts<5){outbound.unshift(item);if(item.key)outgoingKeys.add(item.key)}
-              else{droppedPackets++;console.warn('[Drawing Board] Packet failed after retries',e)}
+              else{droppedPackets++;console.warn('[Doodles] Packet failed after retries',e)}
               lastTx=Date.now();
             }
             break;
@@ -27123,9 +27126,51 @@ function SubbysPlushiesPageMain() {
         undoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!history.length)return;redo.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(history.pop(),0,0);checkpoint()};
         redoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!redo.length)return;history.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(redo.pop(),0,0);checkpoint()};
         clear.onclick=()=>{if(restoring||!displayedRoom)return;if(!confirm('Clear drawing? You can undo this.'))return;snapshot();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);checkpoint()};
-        save.onclick=()=>{const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='subbys-drawing.png';a.click()};
+        save.onclick=()=>{const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='doodles.png';a.click()};
         hide.onclick=()=>{shown=false;panel.hidden=true;refresh();persist()};
-        toggle.onclick=()=>{panel.hidden=!panel.hidden;if(!panel.hidden){fit();if(sharing)requestSync()}};
+        // The floating 🎨 Doodles pill can be dragged independently of the canvas window.
+        // Save viewport coordinates; a short tap still opens the board.
+        const readLauncher=()=>{try{const p=JSON.parse(localStorage.getItem(LAUNCHER_KEY)||'null');return p&&Number.isFinite(p.x)&&Number.isFinite(p.y)?p:null}catch{return null}};
+        const clampLauncher=()=>{
+          const r=toggle.getBoundingClientRect();
+          const x=Math.max(0,Math.min(Math.max(0,innerWidth-r.width),Number.parseFloat(toggle.style.left)||0));
+          const y=Math.max(0,Math.min(Math.max(0,innerHeight-r.height),Number.parseFloat(toggle.style.top)||0));
+          Object.assign(toggle.style,{left:x+'px',top:y+'px',right:'auto',bottom:'auto'});
+          return {x,y};
+        };
+        const rememberLauncher=()=>{try{localStorage.setItem(LAUNCHER_KEY,JSON.stringify(clampLauncher()))}catch{}};
+        const previousLauncher=readLauncher();
+        if(previousLauncher){Object.assign(toggle.style,{left:previousLauncher.x+'px',top:previousLauncher.y+'px',right:'auto',bottom:'auto'});clampLauncher()}
+        let launcherDrag=null,ignoreLauncherClick=false;
+        toggle.addEventListener('pointerdown',e=>{
+          if(e.pointerType==='mouse'&&e.button!==0)return;
+          const r=toggle.getBoundingClientRect();
+          launcherDrag={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top,moved:false};
+          try{toggle.setPointerCapture(e.pointerId)}catch{}
+        });
+        toggle.addEventListener('pointermove',e=>{
+          if(!launcherDrag||launcherDrag.id!==e.pointerId)return;
+          const dx=e.clientX-launcherDrag.x,dy=e.clientY-launcherDrag.y;
+          if(!launcherDrag.moved&&Math.hypot(dx,dy)<6)return;
+          launcherDrag.moved=true;
+          Object.assign(toggle.style,{left:(launcherDrag.left+dx)+'px',top:(launcherDrag.top+dy)+'px',right:'auto',bottom:'auto'});
+          clampLauncher();e.preventDefault();
+        });
+        const finishLauncher=e=>{
+          if(!launcherDrag||launcherDrag.id!==e.pointerId)return;
+          const moved=launcherDrag.moved;
+          launcherDrag=null;
+          if(moved){ignoreLauncherClick=true;rememberLauncher()}
+          try{if(toggle.hasPointerCapture(e.pointerId))toggle.releasePointerCapture(e.pointerId)}catch{}
+        };
+        toggle.addEventListener('pointerup',finishLauncher);
+        toggle.addEventListener('pointercancel',finishLauncher);
+        toggle.addEventListener('lostpointercapture',()=>{if(launcherDrag){const moved=launcherDrag.moved;launcherDrag=null;if(moved){ignoreLauncherClick=true;rememberLauncher()}}});
+        toggle.onclick=e=>{
+          if(ignoreLauncherClick){ignoreLauncherClick=false;e.preventDefault();return}
+          panel.hidden=!panel.hidden;
+          if(!panel.hidden){fit();clampWindow();if(sharing)requestSync()}
+        };
         function refresh(){toggle.hidden=!enabled||!shown;if(!enabled||!shown)panel.hidden=true}
         refresh();
         window.SubbysDrawingBoard=Object.freeze({
@@ -27135,12 +27180,47 @@ function SubbysPlushiesPageMain() {
             remove(){shown=false;persist();refresh()},
             setEnabled(value){enabled=!!value;persist();refresh()},
             setButtonVisible(value){shown=!!value;persist();refresh()},
-            open(){enabled=true;shown=true;persist();refresh();panel.hidden=false;fit();if(sharing)requestSync()},
+            open(){enabled=true;shown=true;persist();refresh();panel.hidden=false;fit();clampWindow();if(sharing)requestSync()},
             status(){return {enabled,shown,sharing,activeRoom:displayedRoom,savedRooms:Object.keys(roomImages).length,restoring,unsavedChanges:dirty,revision,persistedRevision,restoredFrom,storeError,storedStrokes:roomJournal.length,pendingStrokes:incoming.size,sentPackets:txCount,queuedPackets:outbound.length,streamJobs:streamJobs.length,queuedJobs,syncDeferred,checkpointCount,checkpointRevision,lastCheckpoint,droppedPackets,retries,syncRequests,syncResponses}}
         });
         // No independent floating settings icon: manage visibility in Essentials → Settings.
-        let drag=null;head.addEventListener('pointerdown',e=>{if(e.target!==head&&e.target.tagName!=='STRONG')return;drag={x:e.clientX,y:e.clientY,left:panel.offsetLeft,top:panel.offsetTop};head.setPointerCapture(e.pointerId)});
-        head.addEventListener('pointermove',e=>{if(!drag)return;panel.style.left=Math.max(0,Math.min(innerWidth-panel.offsetWidth,drag.left+e.clientX-drag.x))+'px';panel.style.top=Math.max(0,Math.min(innerHeight-panel.offsetHeight,drag.top+e.clientY-drag.y))+'px'});head.addEventListener('pointerup',()=>drag=null);head.addEventListener('pointercancel',()=>drag=null);
+        // Drag by the dedicated title handle, with persistent position across relogs.
+        const readWindow=()=>{try{const p=JSON.parse(localStorage.getItem(WINDOW_KEY)||'null');return p&&Number.isFinite(p.x)&&Number.isFinite(p.y)?p:null}catch{return null}};
+        const clampWindow=()=>{
+          const width=panel.getBoundingClientRect().width||panel.offsetWidth;
+          const height=panel.getBoundingClientRect().height||panel.offsetHeight;
+          const x=Math.max(0,Math.min(Math.max(0,innerWidth-width),parseFloat(panel.style.left)||0));
+          const y=Math.max(0,Math.min(Math.max(0,innerHeight-Math.min(height,innerHeight)),parseFloat(panel.style.top)||0));
+          panel.style.left=x+'px';panel.style.top=y+'px';
+          return {x,y};
+        };
+        const savedWindow=readWindow();
+        if(savedWindow){panel.style.left=savedWindow.x+'px';panel.style.top=savedWindow.y+'px'}
+        const rememberWindow=()=>{try{localStorage.setItem(WINDOW_KEY,JSON.stringify(clampWindow()))}catch{}};
+        let windowDrag=null;
+        dragHandle.addEventListener('pointerdown',e=>{
+          if(e.button!==0&&e.pointerType==='mouse')return;
+          const r=panel.getBoundingClientRect();
+          panel.style.left=r.left+'px';panel.style.top=r.top+'px';
+          windowDrag={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top};
+          try{dragHandle.setPointerCapture(e.pointerId)}catch{}
+          e.preventDefault();e.stopPropagation();
+        });
+        dragHandle.addEventListener('pointermove',e=>{
+          if(!windowDrag||windowDrag.id!==e.pointerId)return;
+          panel.style.left=(windowDrag.left+e.clientX-windowDrag.x)+'px';
+          panel.style.top=(windowDrag.top+e.clientY-windowDrag.y)+'px';
+          clampWindow();e.preventDefault();
+        });
+        const finishWindowDrag=e=>{
+          if(!windowDrag||windowDrag.id!==e.pointerId)return;
+          windowDrag=null;rememberWindow();
+          try{if(dragHandle.hasPointerCapture(e.pointerId))dragHandle.releasePointerCapture(e.pointerId)}catch{}
+        };
+        dragHandle.addEventListener('pointerup',finishWindowDrag);
+        dragHandle.addEventListener('pointercancel',finishWindowDrag);
+        dragHandle.addEventListener('lostpointercapture',()=>{if(windowDrag){windowDrag=null;rememberWindow()}});
+        window.addEventListener('resize',()=>{if(!panel.hidden)clampWindow();if(readLauncher())clampLauncher()});
     }
 
     try { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", installSubbysDrawingBoard, {once:true}); else installSubbysDrawingBoard(); } catch(e) { console.warn("Drawing Board unavailable",e); }
@@ -27158,7 +27238,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.7.9";
+    const VERSION = "3.8.5";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
