@@ -26877,7 +26877,7 @@ function SubbysPlushiesPageMain() {
         const point=e=>{const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height,p:e.pointerType==='pen'&&pressure.checked?Math.max(.1,e.pressure||.5):1}};
         const dab=(a,b)=>{ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=erasing?'#ffffff':color.value;ctx.lineWidth=Math.max(1,Number(size.value)*((a.p+b.p)/2));ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.restore()};
         canvas.addEventListener('pointerdown',e=>{if(restoring||!displayedRoom)return;if(e.button!==0&&e.pointerType==='mouse')return;e.preventDefault();snapshot();drawing=true;activePointer=e.pointerId;last=point(e);strokePoints=[last];canvas.setPointerCapture(e.pointerId);dab(last,{...last,x:last.x+.01})});
-        canvas.addEventListener('pointermove',e=>{if(!drawing||activePointer!==e.pointerId)return;e.preventDefault();const samples=typeof e.getCoalescedEvents==='function'?e.getCoalescedEvents():[e];for(const sample of samples){const raw=point(sample),factor=1-Number(smooth.value)/110;const next={x:last.x+(raw.x-last.x)*factor,y:last.y+(raw.y-last.y)*factor,p:last.p+(raw.p-last.p)*factor};dab(last,next);last=next;if(strokePoints.length<12000)strokePoints.push(next)}});
+        canvas.addEventListener('pointermove',e=>{if(!drawing||activePointer!==e.pointerId)return;e.preventDefault();const samples=typeof e.getCoalescedEvents==='function'?e.getCoalescedEvents():[e];for(const sample of samples){const raw=point(sample),factor=1-Number(smooth.value)/110;const next={x:last.x+(raw.x-last.x)*factor,y:last.y+(raw.y-last.y)*factor,p:last.p+(raw.p-last.p)*factor};dab(last,next);last=next;strokePoints.push(next)}});
         // Share every point in bounded chunks instead of silently dropping long strokes.
         const PREFIX='SubbysDrawingBoard:v3:';
         const room=()=>window.CurrentScreen==='ChatRoom'?(window.ChatRoomData?.ID||window.ChatRoomData?.Name||'room'):null;
@@ -26886,7 +26886,7 @@ function SubbysPlushiesPageMain() {
         const roomImages=(()=>{try{const v=JSON.parse(localStorage.getItem(ROOMS_KEY)||'{}');return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}catch{return {}}})();
         let displayedRoom=null, roomEpoch=0, restoring=false, dirty=false, restoreImage=null;
         let revision=0, persistedRevision=0, saving=false, saveQueued=false, storeError='', restoredFrom='';
-        let roomJournal=[], saveTimer=0;
+        let roomJournal=[], saveTimer=0, checkpointPNG=null, checkpointRevision=0;
         const DB_NAME='SubbysPlushiesDrawingBoard',DB_VERSION=1;
         const database=new Promise(resolve=>{
           if(!('indexedDB' in window)){resolve(null);return}
@@ -26930,7 +26930,7 @@ function SubbysPlushiesPageMain() {
           let png;
           try{png=canvas.toDataURL('image/png')}catch(e){storeError=String(e);return pendingWrite}
           dirty=false;
-          const record={schema:1,png,events,rev,updated:Date.now()};
+          const record={schema:2,png,events,rev,checkpointPNG:checkpointPNG||png,checkpointRevision,updated:Date.now()};
           const job=queueRecord(key,record);
           job.then(()=>{if(displayedRoom===key)persistedRevision=Math.max(persistedRevision,rev);storeError=''})
             .catch(()=>{if(displayedRoom===key)dirty=true});
@@ -26955,7 +26955,7 @@ function SubbysPlushiesPageMain() {
           saveRoom();
           displayedRoom=current;const epoch=++roomEpoch;
           restoring=!!current;dirty=false;restoreImage=null;blank();panel.hidden=true;
-          roomJournal=[];revision=0;persistedRevision=0;restoredFrom='';
+          roomJournal=[];checkpointPNG=null;checkpointRevision=0;revision=0;persistedRevision=0;restoredFrom='';
           if(!current)return;
           try{
             // Wait for queued writes from the previous visit before loading the new state.
@@ -26963,7 +26963,7 @@ function SubbysPlushiesPageMain() {
             const saved=await dbRead(current);
             if(epoch!==roomEpoch||displayedRoom!==current)return;
             let ok=false;
-            if(saved?.png){ok=await loadImage(saved.png,epoch,current);if(ok){roomJournal=Array.isArray(saved.events)?saved.events:[];revision=saved.rev||0;persistedRevision=revision;restoredFrom='indexeddb'}}
+            if(saved?.png){ok=await loadImage(saved.png,epoch,current);if(ok){roomJournal=Array.isArray(saved.events)?saved.events:[];checkpointPNG=saved.checkpointPNG||saved.png;checkpointRevision=saved.checkpointRevision||0;revision=saved.rev||0;persistedRevision=revision;restoredFrom='indexeddb'}}
             if(!ok&&roomImages[current]){
               ok=await loadImage(roomImages[current],epoch,current);
               if(ok){restoredFrom='legacy';dirty=true;revision++;/* migrated legacy drawing */}
@@ -26983,8 +26983,9 @@ function SubbysPlushiesPageMain() {
         // Sync v4: paced outbound queue, targeted missing-chunk repair, durable history.
         // Existing v3 peers still receive compatible 'part' messages.
         let txCount=0, droppedPackets=0, retries=0, syncRequests=0, syncResponses=0;
-        const TX_INTERVAL=420, MAX_QUEUE=2400, PART_POINTS=32;
-        const outbound=[], outgoingKeys=new Set(), incoming=new Map(), sentParts=new Map();
+        const TX_INTERVAL=420, PART_POINTS=32;
+        const outbound=[], outgoingKeys=new Set(), incoming=new Map(), sentParts=new Map(), streamJobs=[];
+        let queuedJobs=0, syncDeferred=0, checkpointCount=0, lastCheckpoint=0;
         let lastTx=0, lastRequest=0, lastRespond=0, lastRepair=0;
         const roomStrokes=()=>roomJournal;
         const remember=stroke=>{if(!stroke?.id)return;if(!roomJournal.some(x=>x.id===stroke.id))roomJournal.push(stroke)};
@@ -26995,45 +26996,68 @@ function SubbysPlushiesPageMain() {
           if(body.length>2800){droppedPackets++;return false}
           const key=kind==='part'?`${data.id}:${data.n}`:null;
           if(key&&outgoingKeys.has(key))return true;
-          if(outbound.length>=MAX_QUEUE){droppedPackets++;return false}
-          const item={kind,body,key,room:String(room())};
+          const item={kind,body,key,room:String(room()),attempts:0};
           if(priority)outbound.unshift(item);else outbound.push(item);
           if(key)outgoingKeys.add(key);
           return true;
         };
         const send=(kind,data)=>enqueue(kind,data,kind==='request'||kind==='missing');
+        const queueStroke=(stroke,onlyParts=null)=>{
+          if(!stroke?.p?.length||!sharing||!enabled||!room())return;
+          streamJobs.push({stroke,parts:onlyParts?new Set(onlyParts):null,next:0,room:String(room())});
+          queuedJobs++;
+        };
+        const pumpJobs=()=>{
+          // Materialize a few packets at a time, regardless of how many strokes exist.
+          while(outbound.length<12&&streamJobs.length){
+            const job=streamJobs[0];
+            if(job.room!==String(room())){streamJobs.shift();continue}
+            const stroke=job.stroke,total=Math.ceil(stroke.p.length/PART_POINTS);
+            if(job.next>=total){streamJobs.shift();continue}
+            const i=job.next++;
+            if(job.parts&&!job.parts.has(i))continue;
+            const start=i*PART_POINTS;
+            enqueue('part',{id:stroke.id,c:stroke.c,s:stroke.s,n:i,t:total,
+              p:stroke.p.slice(Math.max(0,start-1),start+PART_POINTS)});
+          }
+        };
         const flush=()=>{
           if(!sharing||!enabled||!room()||typeof window.ServerSend!=='function')return;
           if(Date.now()-lastTx<TX_INTERVAL)return;
+          pumpJobs();
           while(outbound.length){
             const item=outbound.shift();if(item.key)outgoingKeys.delete(item.key);
             if(item.room!==String(room()))continue;
-            try{window.ServerSend('ChatRoomChat',{Content:PREFIX+item.kind,Type:'Hidden',Dictionary:[{Tag:'SubbysDrawingBoardData',Text:item.body}]});txCount++;lastTx=Date.now()}
-            catch(e){droppedPackets++;console.warn('[Drawing Board] Sync send failed',e)}
+            try{
+              window.ServerSend('ChatRoomChat',{Content:PREFIX+item.kind,Type:'Hidden',Dictionary:[{Tag:'SubbysDrawingBoardData',Text:item.body}]});
+              txCount++;lastTx=Date.now();
+            }catch(e){
+              item.attempts++;
+              if(item.attempts<5){outbound.unshift(item);if(item.key)outgoingKeys.add(item.key)}
+              else{droppedPackets++;console.warn('[Drawing Board] Packet failed after retries',e)}
+              lastTx=Date.now();
+            }
             break;
           }
         };
-        const renderStroke=s=>{if(!s||!/^#[0-9a-f]{6}$/i.test(s.c)||!Number.isFinite(s.s)||s.s<1||s.s>64||!Array.isArray(s.p)||s.p.length>12000)return;
+        const renderStroke=s=>{if(!s||!/^#[0-9a-f]{6}$/i.test(s.c)||!Number.isFinite(s.s)||s.s<1||s.s>64||!Array.isArray(s.p)||s.p.length>1000000)return;
           const pts=s.p;ctx.save();ctx.strokeStyle=s.c;ctx.lineCap='round';ctx.lineJoin='round';
           for(let i=0;i<pts.length;i++){const v=pts[i],w=pts[Math.max(0,i-1)];if(!Array.isArray(v)||v.length!==3||v.some(n=>!Number.isFinite(n))||v[0]<0||v[0]>1200||v[1]<0||v[1]>700)continue;
             ctx.lineWidth=Math.max(1,s.s*((Math.max(.1,Math.min(1,v[2]/100))+Math.max(.1,Math.min(1,w[2]/100)))/2));
             ctx.beginPath();ctx.moveTo(w[0],w[1]);ctx.lineTo(v[0]+(i===0?.01:0),v[1]);ctx.stroke()}ctx.restore()};
-        const transmit=(stroke,onlyParts=null)=>{
-          if(!stroke?.p?.length)return;
-          const total=Math.ceil(stroke.p.length/PART_POINTS);
-          if(total>400)return;
-          const parts=[];
-          for(let i=0;i<total;i++){
-            const start=i*PART_POINTS;
-            parts.push({id:stroke.id,c:stroke.c,s:stroke.s,n:i,t:total,p:stroke.p.slice(Math.max(0,start-1),start+PART_POINTS)});
-          }
-          sentParts.set(stroke.id,{parts,time:Date.now()});
-          if(sentParts.size>300)sentParts.delete(sentParts.keys().next().value);
-          for(const part of parts)if(!onlyParts||onlyParts.includes(part.n))enqueue('part',part);
-        };
+        const transmit=(stroke,onlyParts=null)=>queueStroke(stroke,onlyParts);
         const end=()=>{if(!drawing)return;drawing=false;activePointer=null;last=null;
-          if(strokePoints.length){const stroke={c:erasing?'#ffffff':color.value,s:Number(size.value),p:strokePoints.map(p=>[Math.round(p.x),Math.round(p.y),Math.round(p.p*100)]),id:String(Date.now())+'-'+Math.random().toString(36).slice(2,9)};
-            remember(stroke);if(sharing)transmit(stroke)}
+          if(strokePoints.length){
+            const all=strokePoints.map(p=>[Math.round(p.x),Math.round(p.y),Math.round(p.p*100)]);
+            const base=String(Date.now())+'-'+Math.random().toString(36).slice(2,9);
+            // Break long gestures into independent small strokes so peers can render
+            // completed sections without waiting for an enormous stroke to finish.
+            for(let i=0;i<all.length;i+=128){
+              const points=all.slice(Math.max(0,i-1),i+128);
+              const stroke={c:erasing?'#ffffff':color.value,s:Number(size.value),p:points,id:base+'-'+i};
+              remember(stroke);if(sharing)transmit(stroke);
+            }
+          }
           saveDraft();strokePoints=[]};
         canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);canvas.addEventListener('lostpointercapture',end);
         const applyStroke=stroke=>{
@@ -27065,9 +27089,7 @@ function SubbysPlushiesPageMain() {
           }else if(data.k==='missing'){
             const d=data.d;
             if(!d||typeof d.id!=='string'||!Array.isArray(d.parts)||d.parts.length>40)return;
-            const cached=sentParts.get(d.id);
-            if(cached){for(const n of d.parts)if(Number.isInteger(n)&&cached.parts[n])enqueue('part',cached.parts[n],true)}
-            else {const stroke=roomJournal.find(s=>s.id===d.id);if(stroke)transmit(stroke,d.parts)}
+            const stroke=roomJournal.find(s=>s.id===d.id);if(stroke)transmit(stroke,d.parts)
           }
         };
         window.__SubbysDrawReceive=onMessage;
@@ -27090,9 +27112,17 @@ function SubbysPlushiesPageMain() {
         const fit=()=>{const w=Math.max(160,innerWidth-16),h=Math.max(140,innerHeight-16);panel.style.maxWidth=w+'px';panel.style.maxHeight=h+'px';const rect=panel.getBoundingClientRect();if(rect.left<8||rect.right>innerWidth-8)panel.style.left=Math.max(8,innerWidth-Math.min(rect.width,w)-8)+'px';if(rect.top<8||rect.bottom>innerHeight-8)panel.style.top=Math.max(8,Math.min(rect.top,innerHeight-Math.min(rect.height,h)-8))+'px'};
         window.addEventListener('resize',fit,{passive:true});fit();
         window.addEventListener('pagehide',()=>{clearTimeout(saveTimer);saveRoom()});
-        undoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!history.length)return;redo.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(history.pop(),0,0);roomJournal=[];saveDraft()};
-        redoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!redo.length)return;history.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(redo.pop(),0,0);roomJournal=[];saveDraft()};
-        clear.onclick=()=>{if(restoring||!displayedRoom)return;if(!confirm('Clear drawing? You can undo this.'))return;snapshot();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);roomJournal=[];saveDraft()};
+        // A checkpoint represents the complete current canvas after a destructive edit.
+        // Earlier strokes remain in the local revision history but are not replayed over it.
+        const checkpoint=()=>{
+          checkpointPNG=canvas.toDataURL('image/png');
+          checkpointRevision=revision+1;
+          checkpointCount++;lastCheckpoint=Date.now();
+          roomJournal=[];saveDraft();
+        };
+        undoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!history.length)return;redo.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(history.pop(),0,0);checkpoint()};
+        redoBtn.onclick=()=>{if(restoring||!displayedRoom)return;if(!redo.length)return;history.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(redo.pop(),0,0);checkpoint()};
+        clear.onclick=()=>{if(restoring||!displayedRoom)return;if(!confirm('Clear drawing? You can undo this.'))return;snapshot();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);checkpoint()};
         save.onclick=()=>{const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='subbys-drawing.png';a.click()};
         hide.onclick=()=>{shown=false;panel.hidden=true;refresh();persist()};
         toggle.onclick=()=>{panel.hidden=!panel.hidden;if(!panel.hidden){fit();if(sharing)requestSync()}};
@@ -27106,7 +27136,7 @@ function SubbysPlushiesPageMain() {
             setEnabled(value){enabled=!!value;persist();refresh()},
             setButtonVisible(value){shown=!!value;persist();refresh()},
             open(){enabled=true;shown=true;persist();refresh();panel.hidden=false;fit();if(sharing)requestSync()},
-            status(){return {enabled,shown,sharing,activeRoom:displayedRoom,savedRooms:Object.keys(roomImages).length,restoring,unsavedChanges:dirty,revision,persistedRevision,restoredFrom,storeError,storedStrokes:roomJournal.length,pendingStrokes:incoming.size,sentPackets:txCount,queuedPackets:outbound.length,droppedPackets,retries,syncRequests,syncResponses}}
+            status(){return {enabled,shown,sharing,activeRoom:displayedRoom,savedRooms:Object.keys(roomImages).length,restoring,unsavedChanges:dirty,revision,persistedRevision,restoredFrom,storeError,storedStrokes:roomJournal.length,pendingStrokes:incoming.size,sentPackets:txCount,queuedPackets:outbound.length,streamJobs:streamJobs.length,queuedJobs,syncDeferred,checkpointCount,checkpointRevision,lastCheckpoint,droppedPackets,retries,syncRequests,syncResponses}}
         });
         // No independent floating settings icon: manage visibility in Essentials → Settings.
         let drag=null;head.addEventListener('pointerdown',e=>{if(e.target!==head&&e.target.tagName!=='STRONG')return;drag={x:e.clientX,y:e.clientY,left:panel.offsetLeft,top:panel.offsetTop};head.setPointerCapture(e.pointerId)});
