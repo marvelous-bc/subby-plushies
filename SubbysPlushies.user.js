@@ -2,7 +2,7 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.7.6
+// @version      3.7.7
 // @description  Plushie companions, expressive actions, wardrobe tools, and customizable Essentials for Bondage Club.
 // @released     2026-10-26
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.7.6";
+    const VERSION = "3.7.7";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -3524,7 +3524,7 @@ function SubbysPlushiesPageMain() {
             if (value) writeLocalJSON(key, value);
         }
         if(restoredEssentials){essentialsState=null;essentialsRefreshChatColors();}
-
+        
         const battle = safeObject(data.accountBattle);
         const backupBattleMember = Number(battle?.memberNumber ?? payload.account?.memberNumber);
         const currentMember = currentAccountMemberNumber();
@@ -25895,7 +25895,7 @@ function SubbysPlushiesPageMain() {
             function updatePreview() {
                 const h=safeHex(primaryRow.hexInput.value),a=safeHex(accentRow.hexInput.value),m=safeHex(metalRow.hexInput.value);
                 previewBody.replaceChildren();preview.open=true;
-                if(!h||!a||!m){previewBody.append(elt('p','Enter three valid colors first.'));return [];}
+                if(!h||!a||!m){previewBody.append(elt('p','Enter three valid colors first.'));return [];} 
                 const plans=planColors(h,a,m);
                 previewHeader.textContent=`🔎 Preview Color Changes · ${plans.length} item(s)`;
                 if(!plans.length){previewBody.append(elt('p','No changes needed for the included outfit.'));return plans;}
@@ -26813,6 +26813,7 @@ function SubbysPlushiesPageMain() {
     function installSubbysDrawingBoard() {
         const KEY='SubbysPlushies:drawing-board:v1';
         const DRAW_KEY='SubbysPlushies:drawing-board-image:v1';
+        const ROOMS_KEY='SubbysPlushies:drawing-board-rooms:v2';
         const state=(()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch{return {}}})();
         let enabled=state.enabled===true, shown=state.shown!==false, drawing=false, last=null, history=[], redo=[], sharing=state.sharing===true, strokePoints=[], strokes=[], sessionRoom=null, activePointer=null;
         const el=(tag,props={},parent)=>{const n=document.createElement(tag);Object.assign(n,props);if(parent)parent.append(n);return n};
@@ -26836,8 +26837,8 @@ function SubbysPlushiesPageMain() {
         ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);
         const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify({enabled,shown,sharing}))}catch{}};
         const snapshot=()=>{try{history.push(ctx.getImageData(0,0,canvas.width,canvas.height));if(history.length>16)history.shift();redo=[]}catch{}};
-        const saveDraft=()=>{try{localStorage.setItem(DRAW_KEY,canvas.toDataURL('image/png'))}catch(e){console.warn('[Drawing Board] Draft could not be stored',e)}};
-        const saved=localStorage.getItem(DRAW_KEY);if(saved){const img=new Image();img.onload=()=>{ctx.drawImage(img,0,0)};img.src=saved}
+        const saveDraft=()=>{if(typeof saveRoom==='function')saveRoom()};
+        // Never restore the old global image onto the login screen or another room.
         const point=e=>{const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height,p:e.pointerType==='pen'&&pressure.checked?Math.max(.1,e.pressure||.5):1}};
         const dab=(a,b)=>{ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=erasing?'#ffffff':color.value;ctx.lineWidth=Math.max(1,Number(size.value)*((a.p+b.p)/2));ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.restore()};
         canvas.addEventListener('pointerdown',e=>{if(e.button!==0&&e.pointerType==='mouse')return;e.preventDefault();snapshot();drawing=true;activePointer=e.pointerId;last=point(e);strokePoints=[last];canvas.setPointerCapture(e.pointerId);dab(last,{...last,x:last.x+.01})});
@@ -26846,6 +26847,26 @@ function SubbysPlushiesPageMain() {
         const PREFIX='SubbysDrawingBoard:v3:';
         const room=()=>window.CurrentScreen==='ChatRoom'?(window.ChatRoomData?.ID||window.ChatRoomData?.Name||'room'):null;
         const seen=new Set(), strokesByRoom=new Map();
+        // Room drawings are stored separately from the current visible canvas.
+        const roomImages=(()=>{try{return JSON.parse(localStorage.getItem(ROOMS_KEY)||'{}')}catch{return {}}})();
+        let displayedRoom=null, roomEpoch=0;
+        const blank=()=>{ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);history=[];redo=[];strokePoints=[];drawing=false;last=null;activePointer=null};
+        const saveRoom=()=>{if(!displayedRoom)return;try{
+          roomImages[displayedRoom]=canvas.toDataURL('image/png');
+          const keys=Object.keys(roomImages);while(keys.length>12)delete roomImages[keys.shift()];
+          localStorage.setItem(ROOMS_KEY,JSON.stringify(roomImages));
+        }catch(e){console.warn('[Drawing Board] Room save failed',e)}};
+        const changeRoom=()=>{const current=room()?String(room()):null;
+          if(current===displayedRoom)return;
+          saveRoom();displayedRoom=current;const epoch=++roomEpoch;blank();panel.hidden=true;
+          if(!current)return;
+          const saved=roomImages[current];if(saved){const img=new Image();img.onload=()=>{if(epoch!==roomEpoch||displayedRoom!==current)return;ctx.drawImage(img,0,0)};img.src=saved}
+          else if(sharing)send('request',{});
+        };
+        // Monitor BC's screen transition; leaving for login clears only the displayed canvas.
+        window.setInterval(changeRoom,350);
+        changeRoom();
+
         let lastSync=0, txCount=0;
         const roomStrokes=()=>{const r=String(room());if(!strokesByRoom.has(r))strokesByRoom.set(r,[]);return strokesByRoom.get(r)};
         const remember=s=>{const list=roomStrokes();if(list.some(x=>x.id===s.id))return;list.push(s);if(list.length>80)list.shift()};
@@ -26886,6 +26907,7 @@ function SubbysPlushiesPageMain() {
         share.onchange=()=>{sharing=share.checked;persist();if(sharing)send('request',{})};
         const fit=()=>{const w=Math.max(160,innerWidth-16),h=Math.max(140,innerHeight-16);panel.style.maxWidth=w+'px';panel.style.maxHeight=h+'px';const rect=panel.getBoundingClientRect();if(rect.left<8||rect.right>innerWidth-8)panel.style.left=Math.max(8,innerWidth-Math.min(rect.width,w)-8)+'px';if(rect.top<8||rect.bottom>innerHeight-8)panel.style.top=Math.max(8,Math.min(rect.top,innerHeight-Math.min(rect.height,h)-8))+'px'};
         window.addEventListener('resize',fit,{passive:true});fit();
+        window.addEventListener('pagehide',saveRoom);
         undoBtn.onclick=()=>{if(!history.length)return;redo.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(history.pop(),0,0);saveDraft()};
         redoBtn.onclick=()=>{if(!redo.length)return;history.push(ctx.getImageData(0,0,canvas.width,canvas.height));ctx.putImageData(redo.pop(),0,0);saveDraft()};
         clear.onclick=()=>{if(!confirm('Clear drawing? You can undo this.'))return;snapshot();ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);saveDraft()};
@@ -26902,7 +26924,7 @@ function SubbysPlushiesPageMain() {
             setEnabled(value){enabled=!!value;persist();refresh()},
             setButtonVisible(value){shown=!!value;persist();refresh()},
             open(){enabled=true;shown=true;persist();refresh();panel.hidden=false;fit();if(sharing)send("request",{})},
-            status(){return {enabled,shown,sharing,storedStrokes:room()?roomStrokes().length:0,receivedStrokes:seen.size,pendingStrokes:incoming.size,sentPackets:txCount}}
+            status(){return {enabled,shown,sharing,activeRoom:displayedRoom,savedRooms:Object.keys(roomImages).length,storedStrokes:room()?roomStrokes().length:0,receivedStrokes:seen.size,pendingStrokes:incoming.size,sentPackets:txCount}}
         });
         // No independent floating settings icon: manage visibility in Essentials → Settings.
         let drag=null;head.addEventListener('pointerdown',e=>{if(e.target!==head&&e.target.tagName!=='STRONG')return;drag={x:e.clientX,y:e.clientY,left:panel.offsetLeft,top:panel.offsetTop};head.setPointerCapture(e.pointerId)});
