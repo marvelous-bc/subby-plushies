@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.111
-// @description  R133 Cuddle Queen Royal Seal before nickname; personal chat styles
+// @version      3.5.112
+// @description  R133 chat style sender-label validation; prevent Cuddle Queen badge on presence notifications
 // @released     2026-10-31
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.111";
+    const VERSION = "3.5.112";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2705,13 +2705,16 @@ function SubbysPlushiesPageMain() {
         for(const row of root.querySelectorAll('.'+CHAT_STYLE_CLASS)) chatStyleClearRow(row);
     }
     function chatStyleLabel(row,member) {
-        const existing=row.querySelector('.ChatMessageName,.ChatMessageSender,.ChatMessageUsername');
-        if(existing) return existing;
         const person=getRoomCharacterByMember(member) ||
             (member===currentAccountMemberNumber()?window.Player:null);
         const names=[person?.Nickname,person?.Name].filter(Boolean)
             .map(x=>String(x).trim()).filter(Boolean);
+        // Sender metadata by itself is insufficient: BC and other addons can
+        // also attach sender attributes to join/leave/status notifications.
+        // Require the actual *visible author label* to match that sender.
         const matchesName=text=>names.some(name=>text===name || text===name+':');
+        const existing=row.querySelector('.ChatMessageName,.ChatMessageSender,.ChatMessageUsername');
+        if(existing) return matchesName((existing.textContent||'').trim()) ? existing : null;
         // Other BC builds display the author as a span rather than b/strong.
         // Only match the first few *direct* header children, never body text.
         for(const el of Array.from(row.children).slice(0,5)) {
@@ -2744,10 +2747,11 @@ function SubbysPlushiesPageMain() {
         if(!root || !(root===node || root.contains(node)))return;
         const rows=node.classList.contains('ChatMessage')?[node]:Array.from(node.querySelectorAll('.ChatMessage')).slice(-30);
         for(const row of rows) {
-            // Only messages BC actually rendered as ordinary public chat.
-            // Private whisper, action, beep, local and admin rows never qualify.
-            if(!row.classList.contains('ChatMessage') ||
-               row.matches('.ChatMessageWhisper,.ChatMessageAction,.ChatMessageNonDialogue,.ChatMessageLocalMessage,.ChatMessageBeep,.SubbysPlushiesOfferPrompt,.SubbysPlushiesBattleMessage')) {
+            // Positive public-chat check, not just the absence of whisper/action
+            // classes: presence notices may be wrapped in generic chat rows.
+            if(!row.classList.contains('ChatMessageChat') ||
+               row.matches('.ChatMessageWhisper,.ChatMessageAction,.ChatMessageNonDialogue,.ChatMessageLocalMessage,.ChatMessageBeep,.ChatMessageSystem,.ChatMessageStatus,.ChatMessageNotification,.ChatMessageInfo,.SubbysPlushiesOfferPrompt,.SubbysPlushiesBattleMessage') ||
+               /^(?:Now\s+(?:online|offline)\s*:)/i.test((row.textContent||'').trim())) {
                 if(row.classList.contains(CHAT_STYLE_CLASS))chatStyleClearRow(row);
                 continue;
             }
@@ -2769,10 +2773,21 @@ function SubbysPlushiesPageMain() {
             }
             if(!member)chatStyleMetrics.unmatchedRows++;
             const style=chatStyleViewAllowed() && member>0 ? chatStyleForMember(member) : null;
-            const signature=style?JSON.stringify(style):'';
+            if(!style){
+                if(row.classList.contains(CHAT_STYLE_CLASS))chatStyleClearRow(row);
+                continue;
+            }
+            // Never decorate a row without a verified visible sender label.
+            // This also cleans any wrongly styled historical notification rows
+            // left by earlier plugin versions on the next refresh.
+            const label=chatStyleLabel(row,member);
+            if(!label){
+                if(row.classList.contains(CHAT_STYLE_CLASS))chatStyleClearRow(row);
+                continue;
+            }
+            const signature=JSON.stringify(style);
             if((row.dataset.subbysChatStyle||'')===signature)continue;
             if(row.classList.contains(CHAT_STYLE_CLASS))chatStyleClearRow(row);
-            if(!style)continue;
             chatStyleEnsureCss();
             row.classList.add(CHAT_STYLE_CLASS);
             if(style.glow)row.classList.add('SubbysCustomChatGlow');
@@ -2783,8 +2798,8 @@ function SubbysPlushiesPageMain() {
             row.style.setProperty('--subbys-style-border',style.border);
             row.style.setProperty('--subbys-style-background',chatStyleHexRgb(style.accent,.14));
             row.style.setProperty('--subbys-style-shade',chatStyleHexRgb(style.accent,.25));
-            const label=chatStyleLabel(row,member);
-            if(label)label.classList.add(CHAT_STYLE_NAME_CLASS);
+            // label was positively matched to the trusted sender above.
+            label.classList.add(CHAT_STYLE_NAME_CLASS);
             if(member===ROYAL_SEAL_MEMBER && style.royalSeal===true) {
                 // Add the badge BEFORE the verified sender's name, never after.
                 // Identity is based on BC's sender, not message text.
@@ -2795,8 +2810,7 @@ function SubbysPlushiesPageMain() {
                 const icon=document.createElement('span');icon.className='SubbysRoyalSealIcon';icon.textContent='♛ ♡';
                 const title=document.createElement('span');title.className='SubbysRoyalSealTitle';title.textContent='CUDDLE QUEEN';
                 seal.append(icon,title);
-                if(label?.parentNode)label.before(seal);
-                else row.prepend(seal);
+                label.before(seal);
                 row.classList.add(ROYAL_CHAT_CLASS);
             }
             if(style.symbol!=='none') {
