@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.104
-// @description  R133 mascot window-visibility fix; retains posture bridge and kitten UI
+// @version      3.5.105
+// @description  R133 Subbycat Signature Chat style; mascot visibility and kitten UI fixes preserved
 // @released     2026-10-30
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.104";
+    const VERSION = "3.5.105";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -1034,6 +1034,7 @@ function SubbysPlushiesPageMain() {
         expressionReactions: true,
         ignorePoseChangingEmotes: false,
         highlightMyName: false,
+        subbycatSignatureStyle: true,
     });
     let IDLE_MIN_DELAY_MS = 60000;
     let IDLE_MAX_DELAY_MS = 120000;
@@ -2458,6 +2459,121 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
+    // v3.5.105: Subbycat Signature Style. Receive-side decoration only.
+    // No BC payload, account colors, native nicknames or chat history are modified.
+    // The numeric sender is the native BC chat row's sender, never text parsed from messages.
+    const SUBBY_SIGNATURE_MEMBER = CUDDLE_QUEEN_MEMBER_NUMBER;
+    const SUBBY_SIGNATURE_CLASS = "SubbysSignatureChat";
+    const SUBBY_SIGNATURE_NAME_CLASS = "SubbysSignatureChatName";
+    const SUBBY_SIGNATURE_HEART_CLASS = "SubbysSignatureChatHearts";
+    const SUBBY_SIGNATURE_STYLE_ID = "subbys-signature-chat-v1";
+    const SUBBY_SIGNATURE_CSS = `
+#TextAreaChatLog .${SUBBY_SIGNATURE_CLASS}{
+    position:relative!important; box-sizing:border-box;
+    border-left:3px solid #ff6ba8!important; border-radius:6px;
+    background:linear-gradient(100deg,rgba(141,21,74,.18),rgba(250,96,169,.055) 75%,rgba(90,20,52,.025));
+    box-shadow:inset 1px 0 5px rgba(255,95,160,.14),0 0 5px rgba(255,93,165,.18);
+    padding-left:7px!important; padding-right:6px;
+    margin-top:2px; margin-bottom:2px;
+}
+#TextAreaChatLog .${SUBBY_SIGNATURE_CLASS} .${SUBBY_SIGNATURE_NAME_CLASS}{
+    color:#ff8caf; background:linear-gradient(115deg,#ff477b 3%,#ffd5ed 42%,#ff76d9 73%,#ffc3d7 100%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 2px rgba(255,99,183,.75)); font-weight:700;
+}
+#TextAreaChatLog .${SUBBY_SIGNATURE_CLASS} .${SUBBY_SIGNATURE_HEART_CLASS}{
+    position:absolute; top:1px; right:5px; pointer-events:none; user-select:none;
+    color:#ffa8d2; text-shadow:0 0 6px #ff6cba; opacity:0;
+    font-size:11px; line-height:1; z-index:1;
+    animation:subbys-signature-hearts 2.4s ease-out both;
+}
+@keyframes subbys-signature-hearts{
+    0%{opacity:0;transform:translateY(4px) scale(.85)}
+    18%{opacity:.7;transform:translateY(0) scale(1)}
+    80%{opacity:.4;transform:translateY(-5px) scale(1.04)}
+    100%{opacity:0;transform:translateY(-8px) scale(.9)}
+}
+@media (prefers-reduced-motion:reduce){
+    #TextAreaChatLog .${SUBBY_SIGNATURE_CLASS} .${SUBBY_SIGNATURE_HEART_CLASS}{animation:none;opacity:0}
+}
+`;
+    const subbySignatureStats = { styled:0, ignored:0, nameStyled:0 };
+    function subbycatSignatureStyleNode() {
+        let sheet = document.getElementById(SUBBY_SIGNATURE_STYLE_ID);
+        if (!sheet && document.head) {
+            sheet = document.createElement('style');
+            sheet.id = SUBBY_SIGNATURE_STYLE_ID;
+            sheet.textContent = SUBBY_SIGNATURE_CSS;
+            document.head.appendChild(sheet);
+        }
+        return sheet;
+    }
+    function subbycatSignatureClear(root = document.getElementById('TextAreaChatLog')) {
+        if (!root) return;
+        for (const row of root.querySelectorAll('.' + SUBBY_SIGNATURE_CLASS)) {
+            row.classList.remove(SUBBY_SIGNATURE_CLASS);
+            for (const name of row.querySelectorAll('.' + SUBBY_SIGNATURE_NAME_CLASS)) name.classList.remove(SUBBY_SIGNATURE_NAME_CLASS);
+            for (const heart of row.querySelectorAll('.' + SUBBY_SIGNATURE_HEART_CLASS)) heart.remove();
+        }
+    }
+    function subbycatSignatureName(row) {
+        // Native BC or BCX name elements; never style the message body.
+        const existing = row.querySelector('.ChatMessageName,.ChatMessageSender,.ChatMessageUsername');
+        if (existing) return existing;
+        const person = getRoomCharacterByMember(SUBBY_SIGNATURE_MEMBER);
+        const names = [person?.Nickname, person?.Name, 'Subbycat'].filter(Boolean).map(s=>String(s).trim());
+        // Some BC revisions use a bold first-child label instead of a dedicated class.
+        // Exact equality (plus optional colon) stops arbitrary bold message text being styled.
+        for (const element of Array.from(row.querySelectorAll('b,strong')).slice(0,4)) {
+            if (element.closest('button,.ReplyButton,[contenteditable]')) continue;
+            const text = (element.textContent || '').trim().replace(/:\s*$/,'');
+            if (names.includes(text)) return element;
+        }
+        return null;
+    }
+    function subbycatSignatureDecorate(node) {
+        if (window.CurrentScreen !== 'ChatRoom' || !getFeatureSettings().subbycatSignatureStyle || !(node instanceof Element)) return;
+        const root = document.getElementById('TextAreaChatLog');
+        if (!root || !(root === node || root.contains(node))) return;
+        const rows = node.classList.contains('ChatMessage') ? [node] : Array.from(node.querySelectorAll('.ChatMessage')).slice(-25);
+        for (const row of rows) {
+            if (row.classList.contains(SUBBY_SIGNATURE_CLASS)) continue;
+            // Require native, unambiguous sender ID. Do not match by nickname or a sentence.
+            if (row.getAttribute('data-sender') !== String(SUBBY_SIGNATURE_MEMBER)) { subbySignatureStats.ignored++; continue; }
+            if (row.matches('.ChatMessageWhisper,.ChatMessageAction,.ChatMessageNonDialogue,.ChatMessageLocalMessage,.ChatMessageBeep,.SubbysPlushiesOfferPrompt') ||
+                row.classList.contains('SubbysPlushiesBattleMessage')) continue;
+            subbycatSignatureStyleNode();
+            row.classList.add(SUBBY_SIGNATURE_CLASS);
+            const label = subbycatSignatureName(row);
+            if (label) { label.classList.add(SUBBY_SIGNATURE_NAME_CLASS); subbySignatureStats.nameStyled++; }
+            const hearts = document.createElement('span');
+            hearts.className = SUBBY_SIGNATURE_HEART_CLASS;
+            hearts.textContent = '♡ ✧';
+            hearts.setAttribute('aria-hidden','true');
+            row.appendChild(hearts);
+            subbySignatureStats.styled++;
+        }
+    }
+    function subbycatSignatureRefresh() {
+        const root = document.getElementById('TextAreaChatLog');
+        if (!getFeatureSettings().subbycatSignatureStyle) {subbycatSignatureClear(root); return;}
+        subbycatSignatureStyleNode();
+        if (root) {
+            const rows = Array.from(root.querySelectorAll('.ChatMessage')).slice(-250);
+            for (const row of rows) subbycatSignatureDecorate(row);
+        }
+    }
+    Object.defineProperty(window,'SubbysSignatureStyle',{configurable:true, value:Object.freeze({
+        get enabled(){return getFeatureSettings().subbycatSignatureStyle;},
+        get member(){return SUBBY_SIGNATURE_MEMBER;},
+        toggle(){return setFeatureSetting('subbycatSignatureStyle',!getFeatureSettings().subbycatSignatureStyle);},
+        refresh:subbycatSignatureRefresh,
+        diagnostic(){return {version:VERSION,enabled:getFeatureSettings().subbycatSignatureStyle,
+            styledInRoom:document.querySelectorAll('#TextAreaChatLog .'+SUBBY_SIGNATURE_CLASS).length,
+            styledTotal:subbySignatureStats.styled,nameStyled:subbySignatureStats.nameStyled,
+            appendHook:installedHooks.has('ChatRoomAppendChat'),room:window.CurrentScreen === 'ChatRoom'};}
+    })});
+
     function getFeatureSettings() {
         if (featureSettingsState) return featureSettingsState;
         const stored = readLocalJSON(FEATURE_SETTINGS_STORAGE_KEY, {});
@@ -2480,6 +2596,7 @@ function SubbysPlushiesPageMain() {
             ignorePoseChangingEmotes: storedBoolean("ignorePoseChangingEmotes"),
             petBedAutoRestore: Object.prototype.hasOwnProperty.call(stored, "petBedAutoRestore") ? !!stored.petBedAutoRestore : true,
             highlightMyName: Object.prototype.hasOwnProperty.call(stored, "highlightMyName") ? !!stored.highlightMyName : false,
+            subbycatSignatureStyle: storedBoolean("subbycatSignatureStyle"),
             performanceMode: String(stored.performanceMode || "normal").toLowerCase() === "low" ? "low" : "normal",
         };
         return featureSettingsState;
@@ -2498,6 +2615,7 @@ function SubbysPlushiesPageMain() {
             if (settings[key]) highlightMyNameInVisibleChat();
             else clearMyNameHighlights();
         }
+        if (key === "subbycatSignatureStyle") subbycatSignatureRefresh();
         if (key === "quickReactions") quickReactionUpdateVisibility();
         if (key === "showDragButton") {
             if (settings[key]) refreshDragToggleButton();
@@ -7060,6 +7178,7 @@ function SubbysPlushiesPageMain() {
                     ? !!normalized.featureDefaults.ignorePoseChangingEmotes
                     : false,
                 highlightMyName: false,
+                subbycatSignatureStyle: true,
                 quickReactions: true,
             });
         } else if (fileName === "idle.json") {
@@ -11103,6 +11222,7 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(enabled, "Idle animations", status.idleAnimations ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Speech bubbles", status.speechBubbles ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Highlight my name", status.highlightMyName ? "ON" : "Off");
+        appendExtensionsKeyValue(enabled, "Subbycat signature", getFeatureSettings().subbycatSignatureStyle ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Extra Actions", status.extraActions ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Quick chat reactions", status.quickReactions ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Shared emote chains", status.sharedEmoteChains ? "ON" : "Off");
@@ -11342,6 +11462,7 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow("Idle Animation", "Occasional lightweight local plush wiggles.", settings.idleAnimations, () => toggleFeatureSetting("idleAnimations")),
             extensionsSettingRow("Speech Bubbles", "Allow local mood-based plush speech bubbles.", settings.speechBubbles, () => toggleFeatureSetting("speechBubbles")),
             extensionsSettingRow("Highlight My Name", "Locally highlight mentions of your character display name in chat (not your account name). Off by default.", settings.highlightMyName, () => toggleFeatureSetting("highlightMyName")),
+            extensionsSettingRow("Subbycat Signature Style", "Locally decorate Subbycat (#89413) public chat with a crimson-to-pink gradient nickname, soft glow, floating hearts and rose border. Only Essentials users see it; never changes BC messages or nicknames. Turn off any time.", settings.subbycatSignatureStyle, () => toggleFeatureSetting("subbycatSignatureStyle")),
             extensionsSettingRow("Extra Actions", "Adds optional non-plush social actions after all plushie actions. Disabled by default.", settings.extraActions, () => toggleFeatureSetting("extraActions")),
             extensionsSettingRow("Quick Chat Reactions", "Hover a public chat or emote message to show the reaction picker. Hover an emoji count to see who reacted. Sync is hidden from normal chat.", settings.quickReactions, () => toggleFeatureSetting("quickReactions")),
             extensionsSettingRow("Shared Emote Chains", "A Wave from an addon user can ripple left-to-right through addon users in the room.", settings.sharedEmoteChains, () => toggleFeatureSetting("sharedEmoteChains")),
@@ -12813,7 +12934,7 @@ function SubbysPlushiesPageMain() {
     function essentialsRefreshChatColors() {
         for(const record of quickReactionRecords)if(record.row?.isConnected)essentialsColorChatRow(record.row,record.sender);
     }
-    const ESSENTIALS_SAFE_FLAGS=['idleAnimations','speechBubbles','showRoomMascot','sharedEmoteChains','expressionReactions','quickReactions','extraActions'];
+    const ESSENTIALS_SAFE_FLAGS=['idleAnimations','speechBubbles','showRoomMascot','sharedEmoteChains','expressionReactions','quickReactions','extraActions','subbycatSignatureStyle'];
     function essentialsSetSafeMode(enabled) {
         const config=essentialsConfig();
         if(config.safeMode===enabled)return;
@@ -17474,6 +17595,7 @@ function SubbysPlushiesPageMain() {
                     for (const node of mutation.addedNodes) {
                         inspectOfferMutationNode(node, root);
                         if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
+                        subbycatSignatureDecorate(node);
                         // Fallback uses the already-installed offer observer.
                         quietPerfEnhanceChatNode(node);
                     }
@@ -19374,11 +19496,13 @@ function SubbysPlushiesPageMain() {
             if (node && window.CurrentScreen === "ChatRoom") {
                 inspectOfferMutationNode(node, getOfferChatRoot());
                 if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
+                subbycatSignatureDecorate(node);
                 // Existing native hook: no new chat observer or polling loop.
                 try { quietPerfEnhanceChatNode(node); } catch (_) {}
             }
             return result;
         });
+        subbycatSignatureRefresh();
         if (chatAppendHooked) stopOfferChatObserver();
         else startOfferChatObserverMonitor();
         const actionMessageHooked = installHook("ChatRoomMessage", 10000, (args, next) => {
@@ -26572,7 +26696,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.104";
+    const VERSION = "3.5.105";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
