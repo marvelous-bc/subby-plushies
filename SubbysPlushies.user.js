@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.109
-// @description  R133 Subbycat-exclusive
+// @version      3.5.110
+// @description  R133 Subbycat-exclusive Cuddle Queen Royal Seal with personal chat styles
 // @released     2026-10-31
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.109";
+    const VERSION = "3.5.110";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2630,7 +2630,7 @@ function SubbysPlushiesPageMain() {
 #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatGlow .${CHAT_STYLE_NAME_CLASS} {
     filter:drop-shadow(0 0 2px var(--subbys-style-accent,#ff6ba8));
 }
-/* The Velvet Heartreaper Royal Seal is exclusive to Subbycat's verified
+/* The Cuddle Queen Royal Seal is exclusive to Subbycat's verified
    native member number; it adds no text to outgoing BC messages. */
 #TextAreaChatLog .${ROYAL_CHAT_CLASS} {
     background:linear-gradient(104deg,rgba(89,7,45,.22),var(--subbys-style-background,transparent) 45%,transparent 95%)!important;
@@ -2790,10 +2790,10 @@ function SubbysPlushiesPageMain() {
                 // NEVER on matching a name inside the message content.
                 const seal=document.createElement('span');
                 seal.className=ROYAL_SEAL_CLASS+(style.animation?' SubbysRoyalSealAnimated':'');
-                seal.title='Subbycat · Velvet Heartreaper Royal Seal';
-                seal.setAttribute('aria-label','Subbycat: Velvet Heartreaper Royal Seal');
+                seal.title='Subbycat · Cuddle Queen Royal Seal';
+                seal.setAttribute('aria-label','Subbycat: Cuddle Queen Royal Seal');
                 const icon=document.createElement('span');icon.className='SubbysRoyalSealIcon';icon.textContent='♛ ♡';
-                const title=document.createElement('span');title.className='SubbysRoyalSealTitle';title.textContent='VELVET HEARTREAPER';
+                const title=document.createElement('span');title.className='SubbysRoyalSealTitle';title.textContent='CUDDLE QUEEN';
                 seal.append(icon,title);
                 if(label?.parentNode)label.after(seal);
                 else row.prepend(seal);
@@ -11820,8 +11820,8 @@ function SubbysPlushiesPageMain() {
             row.append(label);
             if(currentAccountMemberNumber()===ROYAL_SEAL_MEMBER && chosen.royalSeal===true) {
                 const seal=document.createElement('span');
-                seal.textContent='♛ ♡  VELVET HEARTREAPER';
-                seal.title='Your exclusive Velvet Heartreaper Royal Seal';
+                seal.textContent='♛ ♡  CUDDLE QUEEN';
+                seal.title='Your exclusive Cuddle Queen Royal Seal';
                 Object.assign(seal.style,{display:'inline-block',fontSize:'9px',fontWeight:'bold',letterSpacing:'.4px',
                     verticalAlign:'middle',margin:'0 5px 2px',padding:'3px 7px',color:'#FFE6EF',
                     background:'linear-gradient(120deg,#5C082B,#AA1B57,#E9639B)',
@@ -11962,12 +11962,12 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow('Floating decorations','Let your decorative symbol gently animate. Respects reduced-motion settings.',style.animation,()=>chatStyleSet({animation:!chatStyleMine().animation}))
         );
         if(currentAccountMemberNumber()===ROYAL_SEAL_MEMBER) {
-            const exclusive=makeExtensionsSection('Subbycat Exclusive · Velvet Heartreaper');
+            const exclusive=makeExtensionsSection('Subbycat Exclusive · Cuddle Queen');
             const description=document.createElement('p');
-            description.textContent='Royal Seal: a tiny crowned-heart insignia and animated Velvet Heartreaper title beside your name in public chat. Only your BC account can broadcast it to updated Essentials clients. Your chosen colors still work, and other players can hide every style with their master switch.';
+            description.textContent='Royal Seal: a tiny crowned-heart insignia and animated Cuddle Queen title beside your name in public chat. Only your BC account can broadcast it to updated Essentials clients. Your chosen colors still work, and other players can hide every style with their master switch.';
             Object.assign(description.style,{color:getExtensionsStyle().muted,fontSize:'12px',lineHeight:'1.5',margin:'5px 0'});
             exclusive.append(description,extensionsSettingRow(
-                'Velvet Heartreaper Royal Seal',
+                'Cuddle Queen Royal Seal',
                 'Exclusive to BC #89413. Requires your personal style enabled. No gameplay privileges or server-side authority.',
                 style.royalSeal===true,()=>chatStyleSet({royalSeal:!chatStyleMine().royalSeal})
             ));
