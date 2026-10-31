@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.106
-// @description  R133 customizable multiplayer chat styles; mascot visibility and kitten UI fixes preserved
+// @version      3.5.108
+// @description  R133 live custom chat style repair; HEX editor, mascot and kitten UI preserved
 // @released     2026-10-31
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.106";
+    const VERSION = "3.5.108";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2459,7 +2459,7 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-    // v3.5.106: per-account, opt-in chat styles. Only addon peers render custom CSS.
+    // v3.5.108: live-chat identity, opt-in state, and editor activation repair.
     // Native BC chat messages and identities remain unchanged. Style negotiation
     // piggybacks on existing hidden presence packets: sender identity is ALWAYS
     // the native BC packet Sender, not a user-provided nickname or JSON field.
@@ -2486,7 +2486,33 @@ function SubbysPlushiesPageMain() {
     const chatStyleRemote = new Map();
     let chatStyleAccount = 0;
     let chatStylePersonal = null;
-    const chatStyleMetrics = {rows:0,packets:0,rejected:0};
+    const chatStyleMetrics = {rows:0,packets:0,rejected:0,unmatchedRows:0,nativeContexts:0,contextRows:0};
+    // BC's ChatRoomMessage packet is authoritative for the sender. Some R133
+    // native chat rows have no data-sender attribute; keep the identity only
+    // while BC synchronously appends that packet's rendered Chat message.
+    // Never derive a sender from nickname or untrusted message contents.
+    let chatStyleNativeChatContext = null;
+    function chatStyleWithNativeSender(data, next) {
+        const member=Number(data?.Sender);
+        if(window.CurrentScreen!=='ChatRoom' || data?.Type!=='Chat' ||
+           (data.Target!=null && Number(data.Target)!==0) ||
+           !Number.isSafeInteger(member) || member<=0 ||
+           (member!==currentAccountMemberNumber() && !getRoomCharacterByMember(member))) return next();
+        const previous=chatStyleNativeChatContext;
+        chatStyleNativeChatContext={member};
+        chatStyleMetrics.nativeContexts++;
+        try { return next(); }
+        finally {
+            chatStyleNativeChatContext=previous;
+            // Fallback for BC builds that append synchronously without the
+            // native chat append hook. Avoid scanning 300 rows per message.
+            if(chatStyleViewAllowed()) {
+                const log=document.getElementById('TextAreaChatLog');
+                const last=log?.lastElementChild;
+                if(last) chatStyleDecorate(last);
+            }
+        }
+    }
     function chatStyleNormalize(raw) {
         const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
         const validHex = (value, fallback) => typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
@@ -2518,7 +2544,7 @@ function SubbysPlushiesPageMain() {
         const me=currentAccountMemberNumber();
         return me && chatStyleMine().enabled ? chatStyleMine() : null;
     }
-    function chatStyleSet(changes) {
+    function chatStyleSet(changes, redrawEditor=true) {
         const member=currentAccountMemberNumber();
         if (!member) return false;
         const updated = chatStyleNormalize({...chatStyleMine(),...changes});
@@ -2527,7 +2553,7 @@ function SubbysPlushiesPageMain() {
         chatStyleRefresh();
         // Announce both changes and opt-outs, but never leak chat text or passwords.
         if(window.CurrentScreen === 'ChatRoom') sendAddonPresence(true);
-        if(extensionsPanelElement?.isConnected) renderExtensionsPanel();
+        if(redrawEditor && extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return updated;
     }
     function chatStylePacket() {
@@ -2616,7 +2642,11 @@ function SubbysPlushiesPageMain() {
         delete row.dataset.subbysChatStyle;
         for(const key of ['primary','secondary','accent','background','shade','border'])
             row.style.removeProperty('--subbys-style-'+key);
-        for(const label of row.querySelectorAll('.'+CHAT_STYLE_NAME_CLASS)) label.classList.remove(CHAT_STYLE_NAME_CLASS);
+        for(const label of row.querySelectorAll('.'+CHAT_STYLE_NAME_CLASS)) {
+            if(label.classList.contains('SubbysCustomChatSyntheticName'))
+                label.replaceWith(document.createTextNode(label.textContent||''));
+            else label.classList.remove(CHAT_STYLE_NAME_CLASS);
+        }
         for(const node of row.querySelectorAll('.'+CHAT_STYLE_SYMBOL_CLASS)) node.remove();
     }
     function chatStyleClearAll(root=document.getElementById('TextAreaChatLog')) {
@@ -2625,28 +2655,69 @@ function SubbysPlushiesPageMain() {
     }
     function chatStyleLabel(row,member) {
         const existing=row.querySelector('.ChatMessageName,.ChatMessageSender,.ChatMessageUsername');
-        if(existing)return existing;
+        if(existing) return existing;
         const person=getRoomCharacterByMember(member) ||
-           (member===currentAccountMemberNumber()?window.Player:null);
-        const names=[person?.Nickname,person?.Name].filter(Boolean).map(x=>String(x).trim());
-        for(const el of Array.from(row.querySelectorAll('b,strong')).slice(0,4)) {
-            if(el.closest('button,.ReplyButton,[contenteditable]'))continue;
-            if(names.includes((el.textContent||'').trim().replace(/:\s*$/,'')))return el;
+            (member===currentAccountMemberNumber()?window.Player:null);
+        const names=[person?.Nickname,person?.Name].filter(Boolean)
+            .map(x=>String(x).trim()).filter(Boolean);
+        const matchesName=text=>names.some(name=>text===name || text===name+':');
+        // Other BC builds display the author as a span rather than b/strong.
+        // Only match the first few *direct* header children, never body text.
+        for(const el of Array.from(row.children).slice(0,5)) {
+            if(el.matches('button,.ReplyButton,[contenteditable],.ChatMessageTime,.ChatMessageTimestamp'))continue;
+            const value=(el.textContent||'').trim();
+            if(matchesName(value) && el.children.length===0)return el;
+        }
+        // The nickname can also be a plain text node. Wrap ONLY its prefix,
+        // preserving the message and enabling fully reversible styling.
+        for(const node of Array.from(row.childNodes).slice(0,5)) {
+            if(node.nodeType!==3)continue;
+            const text=node.textContent||'';
+            for(const name of names) {
+                const prefix=name+':';
+                const leading=text.match(/^\s*/)?.[0]||'';
+                if(!text.slice(leading.length).startsWith(prefix))continue;
+                const head=document.createElement('span');
+                head.className=CHAT_STYLE_NAME_CLASS+' SubbysCustomChatSyntheticName';
+                head.textContent=prefix;
+                const tail=text.slice(leading.length+prefix.length);
+                node.replaceWith(document.createTextNode(leading),head,document.createTextNode(tail));
+                return head;
+            }
         }
         return null;
     }
-    function chatStyleDecorate(node) {
+    function chatStyleDecorate(node, nativeContext=null) {
         if(window.CurrentScreen!=='ChatRoom' || !(node instanceof Element))return;
         const root=document.getElementById('TextAreaChatLog');
         if(!root || !(root===node || root.contains(node)))return;
         const rows=node.classList.contains('ChatMessage')?[node]:Array.from(node.querySelectorAll('.ChatMessage')).slice(-30);
         for(const row of rows) {
-            const member=Number(row.getAttribute('data-sender'));
-            // Never style by nickname, arbitrary message text, or untrusted data attributes
-            // supplied via a chat message. BC's native DOM sender ID is required.
-            const style=chatStyleViewAllowed() && Number.isSafeInteger(member) && member>0 &&
-                !(row.matches('.ChatMessageWhisper,.ChatMessageAction,.ChatMessageNonDialogue,.ChatMessageLocalMessage,.ChatMessageBeep,.SubbysPlushiesOfferPrompt') ||
-                  row.classList.contains('SubbysPlushiesBattleMessage')) ? chatStyleForMember(member) : null;
+            // Only messages BC actually rendered as ordinary public chat.
+            // Private whisper, action, beep, local and admin rows never qualify.
+            if(!row.classList.contains('ChatMessage') ||
+               row.matches('.ChatMessageWhisper,.ChatMessageAction,.ChatMessageNonDialogue,.ChatMessageLocalMessage,.ChatMessageBeep,.SubbysPlushiesOfferPrompt,.SubbysPlushiesBattleMessage')) {
+                if(row.classList.contains(CHAT_STYLE_CLASS))chatStyleClearRow(row);
+                continue;
+            }
+            const attr=Number(row.getAttribute('data-sender'));
+            const hasNativeSender=Number.isSafeInteger(attr)&&attr>0;
+            let member=hasNativeSender ? attr : 0;
+            const context=(nativeContext||chatStyleNativeChatContext);
+            if(!member && row.classList.contains('ChatMessageChat') && context &&
+               Number.isSafeInteger(context.member) && context.member>0) {
+                member=context.member;
+                // This is added by our trusted BC message hook, not sent by chat
+                // participants and not the same as BC's native data-sender.
+                row.dataset.subbysVerifiedChatSender=String(member);
+                chatStyleMetrics.contextRows++;
+            }
+            if(!member && row.classList.contains('ChatMessageChat')) {
+                const verified=Number(row.dataset.subbysVerifiedChatSender);
+                if(Number.isSafeInteger(verified)&&verified>0)member=verified;
+            }
+            if(!member)chatStyleMetrics.unmatchedRows++;
+            const style=chatStyleViewAllowed() && member>0 ? chatStyleForMember(member) : null;
             const signature=style?JSON.stringify(style):'';
             if((row.dataset.subbysChatStyle||'')===signature)continue;
             if(row.classList.contains(CHAT_STYLE_CLASS))chatStyleClearRow(row);
@@ -2688,7 +2759,14 @@ function SubbysPlushiesPageMain() {
         diagnostic(){return {version:VERSION,account:currentAccountMemberNumber(),
             showAll:chatStyleViewAllowed(),mine:{...chatStyleMine()},peers:chatStyleRemote.size,
             styledVisible:document.querySelectorAll('#TextAreaChatLog .'+CHAT_STYLE_CLASS).length,
-            packets:chatStyleMetrics.packets,rejected:chatStyleMetrics.rejected,rowsStyled:chatStyleMetrics.rows};}
+            packets:chatStyleMetrics.packets,rejected:chatStyleMetrics.rejected,rowsStyled:chatStyleMetrics.rows,
+            nativeContexts:chatStyleMetrics.nativeContexts,contextRows:chatStyleMetrics.contextRows,
+            unmatchedRows:chatStyleMetrics.unmatchedRows,
+            nativeHook:installedHooks.has('ChatRoomMessage'),appendHook:installedHooks.has('ChatRoomAppendChat'),
+            chatRows:document.querySelectorAll('#TextAreaChatLog .ChatMessageChat').length,
+            rowsWithNativeSender:document.querySelectorAll('#TextAreaChatLog .ChatMessageChat[data-sender]').length,
+            rowsWithVerifiedSender:document.querySelectorAll('#TextAreaChatLog .ChatMessageChat[data-subbys-verified-chat-sender]').length,
+            room:window.CurrentScreen==='ChatRoom'};}
     })});
 
     function getFeatureSettings() {
@@ -11681,30 +11759,110 @@ function SubbysPlushiesPageMain() {
         };
         buildPreview(style);
         section.appendChild(preview);
+        const activationHint=document.createElement('div');
+        activationHint.className='SubbysChatStyleActivationHint';
+        const updateActivationHint=()=>{
+            const current=chatStyleMine();
+            const showing=chatStyleViewAllowed();
+            activationHint.textContent=!current.enabled
+                ? 'Preview only — your style is OFF. Click Apply my style to chat below, or select a preset.'
+                : !showing
+                    ? 'Your style is ON, but Show custom styles from everyone is OFF (or Safe Mode is active).'
+                    : 'Your style is ON for public chat. Essentials users in your room can see it.';
+            activationHint.style.color=current.enabled&&showing?'#B0EDC3':'#FFD4A1';
+        };
+        Object.assign(activationHint.style,{fontSize:'12px',fontWeight:'bold',lineHeight:'1.4',margin:'0 0 9px'});
+        updateActivationHint();
+        section.appendChild(activationHint);
+        const activateButton=makeExtensionsButton('Apply my style to chat',()=>{
+            chatStyleSet({enabled:true});
+        });
+        activateButton.title='Enable and publish your current chat style to Essentials users';
+        section.appendChild(activateButton);
         const presetTitle=document.createElement('div');presetTitle.textContent='Color presets';
         Object.assign(presetTitle.style,{fontWeight:'bold',margin:'9px 0'});
         section.appendChild(presetTitle);
         const presetButtons=document.createElement('div');
         Object.assign(presetButtons.style,{display:'flex',gap:'6px',flexWrap:'wrap'});
         for(const preset of CHAT_STYLE_PRESETS) {
-            const button=makeExtensionsButton(preset.name,()=>chatStyleSet(preset));
+            const button=makeExtensionsButton(preset.name,()=>chatStyleSet({...preset,enabled:true}));
             button.style.borderLeft=`5px solid ${preset.accent}`;
             presetButtons.appendChild(button);
         }
         section.appendChild(presetButtons);
+        // v3.5.107: Provide editable HEX inputs alongside the visual picker. The
+        // browser's native color dialog may show RGB or HSL depending on the OS;
+        // the adjacent HEX field is always usable for exact copy/paste values.
+        const normalizeEnteredHex=value=>{
+            let raw=String(value||'').trim();
+            if(!raw.startsWith('#'))raw='#'+raw;
+            if(/^#[0-9a-f]{3}$/i.test(raw))raw='#'+[...raw.slice(1)].map(x=>x+x).join('');
+            return /^#[0-9a-f]{6}$/i.test(raw)?raw.toUpperCase():null;
+        };
         const colorContainer=document.createElement('div');
-        Object.assign(colorContainer.style,{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(125px,1fr))',gap:'10px',marginTop:'14px'});
+        Object.assign(colorContainer.style,{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'10px',marginTop:'14px'});
         for(const [key,title] of [['primary','Gradient start'],['secondary','Gradient end'],['accent','Border / glow']]) {
-            const group=document.createElement('label');
-            Object.assign(group.style,{display:'flex',flexDirection:'column',gap:'4px',color:getExtensionsStyle().text,fontSize:'12px'});
-            const text=document.createElement('span');text.textContent=title;
+            const group=document.createElement('div');
+            Object.assign(group.style,{display:'flex',flexDirection:'column',gap:'5px',minWidth:'0',color:getExtensionsStyle().text,fontSize:'12px'});
+            const text=document.createElement('label');text.textContent=title;
+            const controls=document.createElement('div');
+            Object.assign(controls.style,{display:'flex',gap:'6px',alignItems:'center',minWidth:'0'});
             const color=document.createElement('input');color.type='color';color.value=style[key];
-            color.title=title;
-            Object.assign(color.style,{width:'100%',height:'33px',cursor:'pointer',background:'transparent'});
-            color.addEventListener('input',()=>buildPreview({...chatStyleMine(),[key]:color.value}));
-            color.addEventListener('change',()=>chatStyleSet({[key]:color.value}));
-            group.append(text,color);
-            colorContainer.appendChild(group);
+            color.title=title+' — visual picker';color.setAttribute('aria-label',title+' color picker');
+            Object.assign(color.style,{width:'43px',height:'34px',minWidth:'43px',padding:'2px',cursor:'pointer',background:'transparent',border:`1px solid ${getExtensionsStyle().border}`,borderRadius:'5px'});
+            const hex=document.createElement('input');hex.type='text';hex.value=style[key];
+            hex.maxLength=7;hex.spellcheck=false;hex.autocomplete='off';
+            hex.setAttribute('aria-label',title+' HEX code');
+            hex.title='Enter a HEX color, e.g. #C91F54';hex.placeholder='#RRGGBB';
+            Object.assign(hex.style,{width:'100%',minWidth:'0',boxSizing:'border-box',height:'34px',padding:'6px 7px',fontFamily:'monospace',fontSize:'12px',color:getExtensionsStyle().text,background:getExtensionsStyle().surface,border:`1px solid ${getExtensionsStyle().border}`,borderRadius:'5px'});
+            const markValidity=valid=>{
+                hex.style.borderColor=valid?getExtensionsStyle().border:'#FF6B84';
+                hex.title=valid?'Enter a HEX color, e.g. #C91F54':'Invalid HEX. Use #RRGGBB or #RGB.';
+                hex.setAttribute('aria-invalid',String(!valid));
+            };
+            const commitHex=()=>{
+                const next=normalizeEnteredHex(hex.value);
+                if(!next){
+                    // No invalid value is sent to other users or stored.
+                    markValidity(false);
+                    return;
+                }
+                markValidity(true);hex.value=next;color.value=next;
+                if(next!==chatStyleMine()[key] || !chatStyleMine().enabled)
+                    chatStyleSet({[key]:next,enabled:true},false);
+                buildPreview({...chatStyleMine(),[key]:next});updateActivationHint();
+            };
+            color.addEventListener('input',()=>{
+                hex.value=color.value.toUpperCase();markValidity(true);
+                buildPreview({...chatStyleMine(),[key]:color.value});
+            });
+            color.addEventListener('change',()=>{
+                hex.value=color.value.toUpperCase();markValidity(true);
+                chatStyleSet({[key]:color.value,enabled:true},false);
+                buildPreview(chatStyleMine());
+            });
+            hex.addEventListener('input',()=>{
+                const entered=normalizeEnteredHex(hex.value);
+                // Keep partial HEX input editable until the field loses focus.
+                if(!entered)return;
+                markValidity(true);color.value=entered;
+                buildPreview({...chatStyleMine(),[key]:entered});
+            });
+            hex.addEventListener('change',commitHex);
+            hex.addEventListener('blur',()=>{
+                const entered=normalizeEnteredHex(hex.value);
+                if(entered){commitHex();return;}
+                hex.value=chatStyleMine()[key];color.value=hex.value;
+                markValidity(true);buildPreview(chatStyleMine());
+            });
+            hex.addEventListener('keydown',event=>{
+                if(event.key==='Enter'){event.preventDefault();hex.blur();}
+                else if(event.key==='Escape'){
+                    hex.value=chatStyleMine()[key];color.value=hex.value;
+                    markValidity(true);buildPreview(chatStyleMine());hex.blur();
+                }
+            });
+            controls.append(color,hex);group.append(text,controls);colorContainer.appendChild(group);
         }
         section.appendChild(colorContainer);
         const selectRow=(label,options,value,field)=>{
@@ -11715,7 +11873,7 @@ function SubbysPlushiesPageMain() {
             Object.assign(select.style,{minWidth:'130px',maxWidth:'100%',padding:'7px',borderRadius:'7px',background:getExtensionsStyle().surface,color:getExtensionsStyle().text,border:`1px solid ${getExtensionsStyle().border}`});
             for(const item of options) {const option=document.createElement('option');option.value=item;option.textContent=item==='none'?'None':item;select.appendChild(option);}
             select.value=value;
-            select.addEventListener('change',()=>chatStyleSet({[field]:select.value}));
+            select.addEventListener('change',()=>chatStyleSet({[field]:select.value,enabled:true}));
             wrap.append(title,select);section.appendChild(wrap);
         };
         selectRow('Decorative symbol',CHAT_STYLE_SYMBOLS,style.symbol,'symbol');
@@ -19728,7 +19886,7 @@ function SubbysPlushiesPageMain() {
             if (node && window.CurrentScreen === "ChatRoom") {
                 inspectOfferMutationNode(node, getOfferChatRoot());
                 if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
-                chatStyleDecorate(node);
+                chatStyleDecorate(node,chatStyleNativeChatContext);
                 // Existing native hook: no new chat observer or polling loop.
                 try { quietPerfEnhanceChatNode(node); } catch (_) {}
             }
@@ -19743,7 +19901,10 @@ function SubbysPlushiesPageMain() {
             if (processSharedWaveChainPacket(data)) return next(args);
             if (processOfferDecisionSignal(data)) return next(args);
             if (quickReactionReceive(data)) return next(args);
-            if (quickReactionEligible(data)) return quickReactionTrackIncoming(data, () => next(args));
+            // Keep the authoritative BC sender context throughout native chat
+            // rendering, even when quick reactions are enabled.
+            if (quickReactionEligible(data))
+                return chatStyleWithNativeSender(data,()=>quickReactionTrackIncoming(data, () => next(args)));
             const hiddenBattleData = data?.Type === "Hidden" ? battleDataFromAction(data) : null;
             if (hiddenBattleData) {
                 showBattleRoundSummary(hiddenBattleData);
@@ -19754,6 +19915,7 @@ function SubbysPlushiesPageMain() {
                 processSyncedPlushEmote(data);
                 return next(args);
             }
+            if (data?.Type==='Chat') return chatStyleWithNativeSender(data,()=>next(args));
             if (!isChatAction(data)) return next(args);
             const incomingCustomToken = getDictionaryText(data, CUSTOM_ACTIVITY_TOKEN_TAG);
             if (incomingCustomToken) {
@@ -26928,7 +27090,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.106";
+    const VERSION = "3.5.107";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
