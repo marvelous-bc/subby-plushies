@@ -2,9 +2,9 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.105
-// @description  R133 Subbycat Signature Chat style; mascot visibility and kitten UI fixes preserved
-// @released     2026-10-30
+// @version      3.5.106
+// @description  R133 customizable multiplayer chat styles; mascot visibility and kitten UI fixes preserved
+// @released     2026-10-31
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.105";
+    const VERSION = "3.5.106";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -1034,7 +1034,7 @@ function SubbysPlushiesPageMain() {
         expressionReactions: true,
         ignorePoseChangingEmotes: false,
         highlightMyName: false,
-        subbycatSignatureStyle: true,
+        chatStyleShowAll: true,
     });
     let IDLE_MIN_DELAY_MS = 60000;
     let IDLE_MAX_DELAY_MS = 120000;
@@ -2459,119 +2459,236 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
-    // v3.5.105: Subbycat Signature Style. Receive-side decoration only.
-    // No BC payload, account colors, native nicknames or chat history are modified.
-    // The numeric sender is the native BC chat row's sender, never text parsed from messages.
-    const SUBBY_SIGNATURE_MEMBER = CUDDLE_QUEEN_MEMBER_NUMBER;
-    const SUBBY_SIGNATURE_CLASS = "SubbysSignatureChat";
-    const SUBBY_SIGNATURE_NAME_CLASS = "SubbysSignatureChatName";
-    const SUBBY_SIGNATURE_HEART_CLASS = "SubbysSignatureChatHearts";
-    const SUBBY_SIGNATURE_STYLE_ID = "subbys-signature-chat-v1";
-    const SUBBY_SIGNATURE_CSS = `
-#TextAreaChatLog .${SUBBY_SIGNATURE_CLASS}{
+    // v3.5.106: per-account, opt-in chat styles. Only addon peers render custom CSS.
+    // Native BC chat messages and identities remain unchanged. Style negotiation
+    // piggybacks on existing hidden presence packets: sender identity is ALWAYS
+    // the native BC packet Sender, not a user-provided nickname or JSON field.
+    const CHAT_STYLE_STORAGE_PREFIX = "SubbysPlushies:chat-style:v1:";
+    const CHAT_STYLE_TAG = "SubbysPlushiesChatStyleV1";
+    const CHAT_STYLE_CLASS = "SubbysCustomChat";
+    const CHAT_STYLE_NAME_CLASS = "SubbysCustomChatName";
+    const CHAT_STYLE_SYMBOL_CLASS = "SubbysCustomChatSymbol";
+    const CHAT_STYLE_CSS_ID = "subbys-custom-chat-style-v2";
+    const CHAT_STYLE_DEFAULT = Object.freeze({
+        enabled:false, primary:'#FF477B',secondary:'#FF76D9',accent:'#FF6BA8',
+        symbol:'♡ ✧', border:'solid', glow:true, animation:true
+    });
+    const CHAT_STYLE_PRESETS = Object.freeze([
+        {name:'Rose',primary:'#FF477B',secondary:'#FF76D9',accent:'#FF6BA8',symbol:'♡ ✧'},
+        {name:'Royal',primary:'#A76BFF',secondary:'#FFB4E7',accent:'#A76BFF',symbol:'♛ ✦'},
+        {name:'Midnight',primary:'#70B5FF',secondary:'#C1A7FF',accent:'#7785E7',symbol:'☾ ✧'},
+        {name:'Emerald',primary:'#65DEB0',secondary:'#D2FFD9',accent:'#47B58B',symbol:'✦ ★'},
+        {name:'Inferno',primary:'#FF6857',secondary:'#FFD27C',accent:'#E96D40',symbol:'🔥 ✦'},
+        {name:'Kitten',primary:'#FF9DD4',secondary:'#FFDDEA',accent:'#F48DC5',symbol:'🐾 ♡'},
+    ]);
+    const CHAT_STYLE_SYMBOLS = Object.freeze(['♡ ✧','♛ ✦','☾ ✧','✦ ★','🔥 ✦','🐾 ♡','❀ ♡','★ ✦','none']);
+    const CHAT_STYLE_BORDERS = Object.freeze(['solid','dashed','double','none']);
+    const chatStyleRemote = new Map();
+    let chatStyleAccount = 0;
+    let chatStylePersonal = null;
+    const chatStyleMetrics = {rows:0,packets:0,rejected:0};
+    function chatStyleNormalize(raw) {
+        const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+        const validHex = (value, fallback) => typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
+            ? value.toUpperCase() : fallback;
+        return {
+            enabled:r.enabled === true,
+            primary:validHex(r.primary, CHAT_STYLE_DEFAULT.primary),
+            secondary:validHex(r.secondary, CHAT_STYLE_DEFAULT.secondary),
+            accent:validHex(r.accent, CHAT_STYLE_DEFAULT.accent),
+            symbol:CHAT_STYLE_SYMBOLS.includes(r.symbol) ? r.symbol : CHAT_STYLE_DEFAULT.symbol,
+            border:CHAT_STYLE_BORDERS.includes(r.border) ? r.border : CHAT_STYLE_DEFAULT.border,
+            glow:r.glow !== false,
+            animation:r.animation !== false,
+        };
+    }
+    function chatStyleMine() {
+        const member=currentAccountMemberNumber() || 0;
+        if (chatStylePersonal === null || chatStyleAccount !== member) {
+            chatStyleAccount = member;
+            const key=member ? CHAT_STYLE_STORAGE_PREFIX+member : '';
+            chatStylePersonal = chatStyleNormalize(key ? readLocalJSON(key,{}) : {});
+        }
+        return chatStylePersonal;
+    }
+    function chatStyleViewAllowed() {
+        return getFeatureSettings().chatStyleShowAll && !essentialsConfig().safeMode;
+    }
+    function chatStyleMineForRoom() {
+        const me=currentAccountMemberNumber();
+        return me && chatStyleMine().enabled ? chatStyleMine() : null;
+    }
+    function chatStyleSet(changes) {
+        const member=currentAccountMemberNumber();
+        if (!member) return false;
+        const updated = chatStyleNormalize({...chatStyleMine(),...changes});
+        chatStylePersonal=updated;
+        writeLocalJSON(CHAT_STYLE_STORAGE_PREFIX+member,updated);
+        chatStyleRefresh();
+        // Announce both changes and opt-outs, but never leak chat text or passwords.
+        if(window.CurrentScreen === 'ChatRoom') sendAddonPresence(true);
+        if(extensionsPanelElement?.isConnected) renderExtensionsPanel();
+        return updated;
+    }
+    function chatStylePacket() {
+        const style=chatStyleMineForRoom();
+        return style ? JSON.stringify({v:1,...style}) : JSON.stringify({v:1,enabled:false});
+    }
+    function chatStyleFromPresence(data, member) {
+        const sender=Number(member);
+        if(!Number.isSafeInteger(sender)||sender<=0) return;
+        const text=getDictionaryText(data,CHAT_STYLE_TAG);
+        let style=null;
+        if(typeof text==='string' && text.length<=500) {
+            try {
+                const raw=JSON.parse(text);
+                if(raw && raw.v===1 && raw.enabled===true &&
+                   typeof raw.primary==='string' && /^#[\da-fA-F]{6}$/.test(raw.primary) &&
+                   typeof raw.secondary==='string' && /^#[\da-fA-F]{6}$/.test(raw.secondary) &&
+                   typeof raw.accent==='string' && /^#[\da-fA-F]{6}$/.test(raw.accent) &&
+                   CHAT_STYLE_SYMBOLS.includes(raw.symbol) && CHAT_STYLE_BORDERS.includes(raw.border) &&
+                   typeof raw.glow==='boolean' && typeof raw.animation==='boolean') {
+                    style=chatStyleNormalize(raw);
+                } else if(raw?.enabled===true) chatStyleMetrics.rejected++;
+            } catch (_) { chatStyleMetrics.rejected++; }
+        }
+        const previous=chatStyleRemote.get(sender);
+        if(style) chatStyleRemote.set(sender,style);
+        else chatStyleRemote.delete(sender);
+        chatStyleMetrics.packets++;
+        if(JSON.stringify(previous||null)!==JSON.stringify(style||null)) chatStyleRefresh();
+    }
+    function chatStyleForMember(member) {
+        const id=Number(member);
+        if(id===currentAccountMemberNumber()) return chatStyleMineForRoom();
+        return chatStyleRemote.get(id)||null;
+    }
+    function chatStyleHexRgb(hex, opacity) {
+        const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+        return `rgba(${r},${g},${b},${opacity})`;
+    }
+    const CHAT_STYLE_CSS = `
+#TextAreaChatLog .${CHAT_STYLE_CLASS} {
     position:relative!important; box-sizing:border-box;
-    border-left:3px solid #ff6ba8!important; border-radius:6px;
-    background:linear-gradient(100deg,rgba(141,21,74,.18),rgba(250,96,169,.055) 75%,rgba(90,20,52,.025));
-    box-shadow:inset 1px 0 5px rgba(255,95,160,.14),0 0 5px rgba(255,93,165,.18);
-    padding-left:7px!important; padding-right:6px;
-    margin-top:2px; margin-bottom:2px;
+    border-left:3px var(--subbys-style-border,solid) var(--subbys-style-accent,#ff6ba8)!important;
+    border-radius:6px; background:linear-gradient(100deg,var(--subbys-style-background,transparent),transparent 90%)!important;
+    box-shadow:inset 1px 0 4px var(--subbys-style-shade,transparent);
+    padding-left:7px!important; padding-right:6px!important; margin-top:2px; margin-bottom:2px;
 }
-#TextAreaChatLog .${SUBBY_SIGNATURE_CLASS} .${SUBBY_SIGNATURE_NAME_CLASS}{
-    color:#ff8caf; background:linear-gradient(115deg,#ff477b 3%,#ffd5ed 42%,#ff76d9 73%,#ffc3d7 100%);
-    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
-    filter:drop-shadow(0 0 2px rgba(255,99,183,.75)); font-weight:700;
+#TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatGlow {
+    box-shadow:inset 1px 0 5px var(--subbys-style-shade,transparent),0 0 6px var(--subbys-style-shade,transparent);
 }
-#TextAreaChatLog .${SUBBY_SIGNATURE_CLASS} .${SUBBY_SIGNATURE_HEART_CLASS}{
-    position:absolute; top:1px; right:5px; pointer-events:none; user-select:none;
-    color:#ffa8d2; text-shadow:0 0 6px #ff6cba; opacity:0;
-    font-size:11px; line-height:1; z-index:1;
-    animation:subbys-signature-hearts 2.4s ease-out both;
+#TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_NAME_CLASS} {
+    background:linear-gradient(110deg,var(--subbys-style-primary,#ff477b) 5%,var(--subbys-style-secondary,#ff76d9) 90%);
+    color:var(--subbys-style-primary,#ff477b); background-clip:text; -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent; font-weight:700;
 }
-@keyframes subbys-signature-hearts{
-    0%{opacity:0;transform:translateY(4px) scale(.85)}
-    18%{opacity:.7;transform:translateY(0) scale(1)}
-    80%{opacity:.4;transform:translateY(-5px) scale(1.04)}
-    100%{opacity:0;transform:translateY(-8px) scale(.9)}
+#TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatGlow .${CHAT_STYLE_NAME_CLASS} {
+    filter:drop-shadow(0 0 2px var(--subbys-style-accent,#ff6ba8));
 }
-@media (prefers-reduced-motion:reduce){
-    #TextAreaChatLog .${SUBBY_SIGNATURE_CLASS} .${SUBBY_SIGNATURE_HEART_CLASS}{animation:none;opacity:0}
+#TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_SYMBOL_CLASS} {
+    position:absolute; top:1px; right:5px; color:var(--subbys-style-secondary,#ff76d9);
+    text-shadow:0 0 5px var(--subbys-style-accent,#ff6ba8); font-size:11px;
+    line-height:1; z-index:1; pointer-events:none; user-select:none;
 }
-`;
-    const subbySignatureStats = { styled:0, ignored:0, nameStyled:0 };
-    function subbycatSignatureStyleNode() {
-        let sheet = document.getElementById(SUBBY_SIGNATURE_STYLE_ID);
-        if (!sheet && document.head) {
-            sheet = document.createElement('style');
-            sheet.id = SUBBY_SIGNATURE_STYLE_ID;
-            sheet.textContent = SUBBY_SIGNATURE_CSS;
-            document.head.appendChild(sheet);
+#TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_SYMBOL_CLASS}.SubbysCustomChatAnimated {
+    animation:subbys-custom-chat-sparkle 2.3s ease-out both;
+}
+@keyframes subbys-custom-chat-sparkle {
+    0%{opacity:0;transform:translateY(4px) scale(.9)}
+    20%{opacity:.75;transform:translateY(0) scale(1)}
+    80%{opacity:.4;transform:translateY(-5px) scale(1.05)}
+    100%{opacity:0;transform:translateY(-9px) scale(.9)}
+}
+@media(prefers-reduced-motion:reduce) {
+    #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_SYMBOL_CLASS}.SubbysCustomChatAnimated {animation:none;opacity:.65}
+}`;
+    function chatStyleEnsureCss() {
+        let sheet=document.getElementById(CHAT_STYLE_CSS_ID);
+        if(!sheet && document.head) {
+            sheet=document.createElement('style'); sheet.id=CHAT_STYLE_CSS_ID;
+            sheet.textContent=CHAT_STYLE_CSS; document.head.appendChild(sheet);
         }
         return sheet;
     }
-    function subbycatSignatureClear(root = document.getElementById('TextAreaChatLog')) {
-        if (!root) return;
-        for (const row of root.querySelectorAll('.' + SUBBY_SIGNATURE_CLASS)) {
-            row.classList.remove(SUBBY_SIGNATURE_CLASS);
-            for (const name of row.querySelectorAll('.' + SUBBY_SIGNATURE_NAME_CLASS)) name.classList.remove(SUBBY_SIGNATURE_NAME_CLASS);
-            for (const heart of row.querySelectorAll('.' + SUBBY_SIGNATURE_HEART_CLASS)) heart.remove();
-        }
+    function chatStyleClearRow(row) {
+        row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatGlow');
+        delete row.dataset.subbysChatStyle;
+        for(const key of ['primary','secondary','accent','background','shade','border'])
+            row.style.removeProperty('--subbys-style-'+key);
+        for(const label of row.querySelectorAll('.'+CHAT_STYLE_NAME_CLASS)) label.classList.remove(CHAT_STYLE_NAME_CLASS);
+        for(const node of row.querySelectorAll('.'+CHAT_STYLE_SYMBOL_CLASS)) node.remove();
     }
-    function subbycatSignatureName(row) {
-        // Native BC or BCX name elements; never style the message body.
-        const existing = row.querySelector('.ChatMessageName,.ChatMessageSender,.ChatMessageUsername');
-        if (existing) return existing;
-        const person = getRoomCharacterByMember(SUBBY_SIGNATURE_MEMBER);
-        const names = [person?.Nickname, person?.Name, 'Subbycat'].filter(Boolean).map(s=>String(s).trim());
-        // Some BC revisions use a bold first-child label instead of a dedicated class.
-        // Exact equality (plus optional colon) stops arbitrary bold message text being styled.
-        for (const element of Array.from(row.querySelectorAll('b,strong')).slice(0,4)) {
-            if (element.closest('button,.ReplyButton,[contenteditable]')) continue;
-            const text = (element.textContent || '').trim().replace(/:\s*$/,'');
-            if (names.includes(text)) return element;
+    function chatStyleClearAll(root=document.getElementById('TextAreaChatLog')) {
+        if(!root)return;
+        for(const row of root.querySelectorAll('.'+CHAT_STYLE_CLASS)) chatStyleClearRow(row);
+    }
+    function chatStyleLabel(row,member) {
+        const existing=row.querySelector('.ChatMessageName,.ChatMessageSender,.ChatMessageUsername');
+        if(existing)return existing;
+        const person=getRoomCharacterByMember(member) ||
+           (member===currentAccountMemberNumber()?window.Player:null);
+        const names=[person?.Nickname,person?.Name].filter(Boolean).map(x=>String(x).trim());
+        for(const el of Array.from(row.querySelectorAll('b,strong')).slice(0,4)) {
+            if(el.closest('button,.ReplyButton,[contenteditable]'))continue;
+            if(names.includes((el.textContent||'').trim().replace(/:\s*$/,'')))return el;
         }
         return null;
     }
-    function subbycatSignatureDecorate(node) {
-        if (window.CurrentScreen !== 'ChatRoom' || !getFeatureSettings().subbycatSignatureStyle || !(node instanceof Element)) return;
-        const root = document.getElementById('TextAreaChatLog');
-        if (!root || !(root === node || root.contains(node))) return;
-        const rows = node.classList.contains('ChatMessage') ? [node] : Array.from(node.querySelectorAll('.ChatMessage')).slice(-25);
-        for (const row of rows) {
-            if (row.classList.contains(SUBBY_SIGNATURE_CLASS)) continue;
-            // Require native, unambiguous sender ID. Do not match by nickname or a sentence.
-            if (row.getAttribute('data-sender') !== String(SUBBY_SIGNATURE_MEMBER)) { subbySignatureStats.ignored++; continue; }
-            if (row.matches('.ChatMessageWhisper,.ChatMessageAction,.ChatMessageNonDialogue,.ChatMessageLocalMessage,.ChatMessageBeep,.SubbysPlushiesOfferPrompt') ||
-                row.classList.contains('SubbysPlushiesBattleMessage')) continue;
-            subbycatSignatureStyleNode();
-            row.classList.add(SUBBY_SIGNATURE_CLASS);
-            const label = subbycatSignatureName(row);
-            if (label) { label.classList.add(SUBBY_SIGNATURE_NAME_CLASS); subbySignatureStats.nameStyled++; }
-            const hearts = document.createElement('span');
-            hearts.className = SUBBY_SIGNATURE_HEART_CLASS;
-            hearts.textContent = '♡ ✧';
-            hearts.setAttribute('aria-hidden','true');
-            row.appendChild(hearts);
-            subbySignatureStats.styled++;
+    function chatStyleDecorate(node) {
+        if(window.CurrentScreen!=='ChatRoom' || !(node instanceof Element))return;
+        const root=document.getElementById('TextAreaChatLog');
+        if(!root || !(root===node || root.contains(node)))return;
+        const rows=node.classList.contains('ChatMessage')?[node]:Array.from(node.querySelectorAll('.ChatMessage')).slice(-30);
+        for(const row of rows) {
+            const member=Number(row.getAttribute('data-sender'));
+            // Never style by nickname, arbitrary message text, or untrusted data attributes
+            // supplied via a chat message. BC's native DOM sender ID is required.
+            const style=chatStyleViewAllowed() && Number.isSafeInteger(member) && member>0 &&
+                !(row.matches('.ChatMessageWhisper,.ChatMessageAction,.ChatMessageNonDialogue,.ChatMessageLocalMessage,.ChatMessageBeep,.SubbysPlushiesOfferPrompt') ||
+                  row.classList.contains('SubbysPlushiesBattleMessage')) ? chatStyleForMember(member) : null;
+            const signature=style?JSON.stringify(style):'';
+            if((row.dataset.subbysChatStyle||'')===signature)continue;
+            if(row.classList.contains(CHAT_STYLE_CLASS))chatStyleClearRow(row);
+            if(!style)continue;
+            chatStyleEnsureCss();
+            row.classList.add(CHAT_STYLE_CLASS);
+            if(style.glow)row.classList.add('SubbysCustomChatGlow');
+            row.dataset.subbysChatStyle=signature;
+            row.style.setProperty('--subbys-style-primary',style.primary);
+            row.style.setProperty('--subbys-style-secondary',style.secondary);
+            row.style.setProperty('--subbys-style-accent',style.accent);
+            row.style.setProperty('--subbys-style-border',style.border);
+            row.style.setProperty('--subbys-style-background',chatStyleHexRgb(style.accent,.14));
+            row.style.setProperty('--subbys-style-shade',chatStyleHexRgb(style.accent,.25));
+            const label=chatStyleLabel(row,member);
+            if(label)label.classList.add(CHAT_STYLE_NAME_CLASS);
+            if(style.symbol!=='none') {
+                const symbol=document.createElement('span');
+                symbol.className=CHAT_STYLE_SYMBOL_CLASS+(style.animation?' SubbysCustomChatAnimated':'');
+                symbol.textContent=style.symbol;
+                symbol.setAttribute('aria-hidden','true');
+                row.appendChild(symbol);
+            }
+            chatStyleMetrics.rows++;
         }
     }
-    function subbycatSignatureRefresh() {
-        const root = document.getElementById('TextAreaChatLog');
-        if (!getFeatureSettings().subbycatSignatureStyle) {subbycatSignatureClear(root); return;}
-        subbycatSignatureStyleNode();
-        if (root) {
-            const rows = Array.from(root.querySelectorAll('.ChatMessage')).slice(-250);
-            for (const row of rows) subbycatSignatureDecorate(row);
-        }
+    function chatStyleRefresh() {
+        const root=document.getElementById('TextAreaChatLog');
+        if(!root)return;
+        if(!chatStyleViewAllowed()){chatStyleClearAll(root);return;}
+        chatStyleEnsureCss();
+        for(const row of Array.from(root.querySelectorAll('.ChatMessage')).slice(-300))chatStyleDecorate(row);
     }
-    Object.defineProperty(window,'SubbysSignatureStyle',{configurable:true, value:Object.freeze({
-        get enabled(){return getFeatureSettings().subbycatSignatureStyle;},
-        get member(){return SUBBY_SIGNATURE_MEMBER;},
-        toggle(){return setFeatureSetting('subbycatSignatureStyle',!getFeatureSettings().subbycatSignatureStyle);},
-        refresh:subbycatSignatureRefresh,
-        diagnostic(){return {version:VERSION,enabled:getFeatureSettings().subbycatSignatureStyle,
-            styledInRoom:document.querySelectorAll('#TextAreaChatLog .'+SUBBY_SIGNATURE_CLASS).length,
-            styledTotal:subbySignatureStats.styled,nameStyled:subbySignatureStats.nameStyled,
-            appendHook:installedHooks.has('ChatRoomAppendChat'),room:window.CurrentScreen === 'ChatRoom'};}
+    Object.defineProperty(window,'SubbysChatStyles',{configurable:true,value:Object.freeze({
+        get showAll(){return chatStyleViewAllowed();},
+        get mine(){return {...chatStyleMine()};},
+        set:chatStyleSet,refresh:chatStyleRefresh,
+        toggleAll(){return setFeatureSetting('chatStyleShowAll',!getFeatureSettings().chatStyleShowAll);},
+        diagnostic(){return {version:VERSION,account:currentAccountMemberNumber(),
+            showAll:chatStyleViewAllowed(),mine:{...chatStyleMine()},peers:chatStyleRemote.size,
+            styledVisible:document.querySelectorAll('#TextAreaChatLog .'+CHAT_STYLE_CLASS).length,
+            packets:chatStyleMetrics.packets,rejected:chatStyleMetrics.rejected,rowsStyled:chatStyleMetrics.rows};}
     })});
 
     function getFeatureSettings() {
@@ -2596,7 +2713,7 @@ function SubbysPlushiesPageMain() {
             ignorePoseChangingEmotes: storedBoolean("ignorePoseChangingEmotes"),
             petBedAutoRestore: Object.prototype.hasOwnProperty.call(stored, "petBedAutoRestore") ? !!stored.petBedAutoRestore : true,
             highlightMyName: Object.prototype.hasOwnProperty.call(stored, "highlightMyName") ? !!stored.highlightMyName : false,
-            subbycatSignatureStyle: storedBoolean("subbycatSignatureStyle"),
+            chatStyleShowAll: Object.hasOwn(stored,"chatStyleShowAll") ? !!stored.chatStyleShowAll : (stored.subbycatSignatureStyle !== false),
             performanceMode: String(stored.performanceMode || "normal").toLowerCase() === "low" ? "low" : "normal",
         };
         return featureSettingsState;
@@ -2615,7 +2732,7 @@ function SubbysPlushiesPageMain() {
             if (settings[key]) highlightMyNameInVisibleChat();
             else clearMyNameHighlights();
         }
-        if (key === "subbycatSignatureStyle") subbycatSignatureRefresh();
+        if (key === "chatStyleShowAll") chatStyleRefresh();
         if (key === "quickReactions") quickReactionUpdateVisibility();
         if (key === "showDragButton") {
             if (settings[key]) refreshDragToggleButton();
@@ -3362,6 +3479,7 @@ function SubbysPlushiesPageMain() {
                     extensionsColors: cloneBackupValue(layout.extensionsColors || {}),
                 },
                 featureSettings: cloneBackupValue(getFeatureSettings()),
+                personalChatStyle: cloneBackupValue(chatStyleMine()),
                 nicknames: cloneBackupValue(readLocalJSON(NICKNAME_STORAGE_KEY, {})),
                 savedPoses: cloneBackupValue(getSavedPosesStore()),
             },
@@ -3414,6 +3532,10 @@ function SubbysPlushiesPageMain() {
         }
         for (const [key, value] of writes) {
             if (value) writeLocalJSON(key, value);
+        }
+        const backupStyle=safeObject(data.personalChatStyle);
+        if(backupStyle && Number(payload.account?.memberNumber)===currentAccountMemberNumber()) {
+            chatStyleSet(backupStyle);
         }
         const battle = safeObject(data.accountBattle);
         const backupBattleMember = Number(battle?.memberNumber ?? payload.account?.memberNumber);
@@ -5330,7 +5452,7 @@ function SubbysPlushiesPageMain() {
             window.ServerSend("ChatRoomChat", {
                 Content: ADDON_PRESENCE_CONTENT,
                 Type: "Hidden",
-                Dictionary: [{ Tag: ADDON_PRESENCE_TAG, Text: VERSION }],
+                Dictionary: [{ Tag: ADDON_PRESENCE_TAG, Text: VERSION }, { Tag: CHAT_STYLE_TAG, Text: chatStylePacket() }],
             });
             lastAddonPresenceBroadcastAt = now;
             return true;
@@ -5343,6 +5465,7 @@ function SubbysPlushiesPageMain() {
         const sender = Number(data.Sender);
         if (!Number.isFinite(sender)) return false;
         rememberAddonPresence(sender, getDictionaryText(data, ADDON_PRESENCE_TAG) || "");
+        chatStyleFromPresence(data,sender);
         return true;
     }
     function pruneAddonPresence() {
@@ -5354,6 +5477,7 @@ function SubbysPlushiesPageMain() {
         for (const member of [...addonPresenceMembers.keys()]) {
             if (!present.has(member)) addonPresenceMembers.delete(member);
         }
+        for (const member of [...chatStyleRemote.keys()]) if(!present.has(member)) chatStyleRemote.delete(member);
     }
     function characterHasAddonPresence(C) {
         if (!C) return false;
@@ -7178,7 +7302,7 @@ function SubbysPlushiesPageMain() {
                     ? !!normalized.featureDefaults.ignorePoseChangingEmotes
                     : false,
                 highlightMyName: false,
-                subbycatSignatureStyle: true,
+                chatStyleShowAll: true,
                 quickReactions: true,
             });
         } else if (fileName === "idle.json") {
@@ -11222,7 +11346,7 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(enabled, "Idle animations", status.idleAnimations ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Speech bubbles", status.speechBubbles ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Highlight my name", status.highlightMyName ? "ON" : "Off");
-        appendExtensionsKeyValue(enabled, "Subbycat signature", getFeatureSettings().subbycatSignatureStyle ? "ON" : "Off");
+        appendExtensionsKeyValue(enabled, "Custom chat styles", getFeatureSettings().chatStyleShowAll ? "Visible" : "Hidden locally");
         appendExtensionsKeyValue(enabled, "Extra Actions", status.extraActions ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Quick chat reactions", status.quickReactions ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Shared emote chains", status.sharedEmoteChains ? "ON" : "Off");
@@ -11462,7 +11586,6 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow("Idle Animation", "Occasional lightweight local plush wiggles.", settings.idleAnimations, () => toggleFeatureSetting("idleAnimations")),
             extensionsSettingRow("Speech Bubbles", "Allow local mood-based plush speech bubbles.", settings.speechBubbles, () => toggleFeatureSetting("speechBubbles")),
             extensionsSettingRow("Highlight My Name", "Locally highlight mentions of your character display name in chat (not your account name). Off by default.", settings.highlightMyName, () => toggleFeatureSetting("highlightMyName")),
-            extensionsSettingRow("Subbycat Signature Style", "Locally decorate Subbycat (#89413) public chat with a crimson-to-pink gradient nickname, soft glow, floating hearts and rose border. Only Essentials users see it; never changes BC messages or nicknames. Turn off any time.", settings.subbycatSignatureStyle, () => toggleFeatureSetting("subbycatSignatureStyle")),
             extensionsSettingRow("Extra Actions", "Adds optional non-plush social actions after all plushie actions. Disabled by default.", settings.extraActions, () => toggleFeatureSetting("extraActions")),
             extensionsSettingRow("Quick Chat Reactions", "Hover a public chat or emote message to show the reaction picker. Hover an emoji count to see who reacted. Sync is hidden from normal chat.", settings.quickReactions, () => toggleFeatureSetting("quickReactions")),
             extensionsSettingRow("Shared Emote Chains", "A Wave from an addon user can ripple left-to-right through addon users in the room.", settings.sharedEmoteChains, () => toggleFeatureSetting("sharedEmoteChains")),
@@ -11515,6 +11638,105 @@ function SubbysPlushiesPageMain() {
         utility.appendChild(buttons);
         container.appendChild(utility);
     }
+    function renderExtensionsChatStyles(container) {
+        const style=chatStyleMine();
+        const section=makeExtensionsSection('Personal Chat Style');
+        const hint=document.createElement('p');
+        hint.textContent='Make your public chat uniquely yours. Only people running Essentials see your decorations. People without it see regular BC chat. Colors are tied to your BC MemberNumber, never your nickname.';
+        Object.assign(hint.style,{color:getExtensionsStyle().muted,fontSize:'12px',lineHeight:'1.4',margin:'0 0 10px'});
+        section.appendChild(hint);
+        section.append(
+            extensionsSettingRow('Show custom styles from everyone',
+                'Master switch on your screen. OFF hides ALL custom borders, gradients and symbols, including your own.',
+                getFeatureSettings().chatStyleShowAll,()=>toggleFeatureSetting('chatStyleShowAll')),
+            extensionsSettingRow('Use my personal chat style',
+                'Send your chosen colors to Essentials users in your current room using the existing hidden presence signal. Does not change normal chat messages.',
+                style.enabled,()=>chatStyleSet({enabled:!chatStyleMine().enabled}))
+        );
+        const preview=document.createElement('div');
+        const buildPreview=chosen=>{
+            preview.replaceChildren();
+            const row=document.createElement('div');
+            Object.assign(row.style,{
+                position:'relative',overflow:'hidden',padding:'11px 15px',margin:'10px 0',borderRadius:'8px',
+                borderLeft:`${chosen.border==='none'?'0':`4px ${chosen.border} ${chosen.accent}`}`,
+                background:`linear-gradient(100deg,${chatStyleHexRgb(chosen.accent,.24)},transparent)`,
+                boxShadow:chosen.glow?`0 0 9px ${chatStyleHexRgb(chosen.accent,.34)}`:'none'
+            });
+            const label=document.createElement('strong');
+            const myName=String(window.Player?.Nickname||window.Player?.Name||'Your nickname').slice(0,65);
+            label.textContent=myName+': ';
+            Object.assign(label.style,{background:`linear-gradient(110deg,${chosen.primary},${chosen.secondary})`,
+                backgroundClip:'text',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',
+                filter:chosen.glow?`drop-shadow(0 0 2px ${chosen.accent})`:'none'});
+            const message=document.createElement('span');message.textContent='Mrrp~ Hello, everyone!';
+            message.style.color=getExtensionsStyle().text;
+            row.append(label,message);
+            if(chosen.symbol!=='none'){
+                const icon=document.createElement('span');icon.textContent='  '+chosen.symbol;
+                Object.assign(icon.style,{color:chosen.secondary,whiteSpace:'nowrap',fontSize:'12px'});
+                row.appendChild(icon);
+            }
+            preview.appendChild(row);
+        };
+        buildPreview(style);
+        section.appendChild(preview);
+        const presetTitle=document.createElement('div');presetTitle.textContent='Color presets';
+        Object.assign(presetTitle.style,{fontWeight:'bold',margin:'9px 0'});
+        section.appendChild(presetTitle);
+        const presetButtons=document.createElement('div');
+        Object.assign(presetButtons.style,{display:'flex',gap:'6px',flexWrap:'wrap'});
+        for(const preset of CHAT_STYLE_PRESETS) {
+            const button=makeExtensionsButton(preset.name,()=>chatStyleSet(preset));
+            button.style.borderLeft=`5px solid ${preset.accent}`;
+            presetButtons.appendChild(button);
+        }
+        section.appendChild(presetButtons);
+        const colorContainer=document.createElement('div');
+        Object.assign(colorContainer.style,{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(125px,1fr))',gap:'10px',marginTop:'14px'});
+        for(const [key,title] of [['primary','Gradient start'],['secondary','Gradient end'],['accent','Border / glow']]) {
+            const group=document.createElement('label');
+            Object.assign(group.style,{display:'flex',flexDirection:'column',gap:'4px',color:getExtensionsStyle().text,fontSize:'12px'});
+            const text=document.createElement('span');text.textContent=title;
+            const color=document.createElement('input');color.type='color';color.value=style[key];
+            color.title=title;
+            Object.assign(color.style,{width:'100%',height:'33px',cursor:'pointer',background:'transparent'});
+            color.addEventListener('input',()=>buildPreview({...chatStyleMine(),[key]:color.value}));
+            color.addEventListener('change',()=>chatStyleSet({[key]:color.value}));
+            group.append(text,color);
+            colorContainer.appendChild(group);
+        }
+        section.appendChild(colorContainer);
+        const selectRow=(label,options,value,field)=>{
+            const wrap=document.createElement('label');
+            Object.assign(wrap.style,{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',flexWrap:'wrap',margin:'12px 0',color:getExtensionsStyle().text});
+            const title=document.createElement('span');title.textContent=label;
+            const select=document.createElement('select');
+            Object.assign(select.style,{minWidth:'130px',maxWidth:'100%',padding:'7px',borderRadius:'7px',background:getExtensionsStyle().surface,color:getExtensionsStyle().text,border:`1px solid ${getExtensionsStyle().border}`});
+            for(const item of options) {const option=document.createElement('option');option.value=item;option.textContent=item==='none'?'None':item;select.appendChild(option);}
+            select.value=value;
+            select.addEventListener('change',()=>chatStyleSet({[field]:select.value}));
+            wrap.append(title,select);section.appendChild(wrap);
+        };
+        selectRow('Decorative symbol',CHAT_STYLE_SYMBOLS,style.symbol,'symbol');
+        selectRow('Border style',CHAT_STYLE_BORDERS,style.border,'border');
+        section.append(
+            extensionsSettingRow('Glow effect','Add a soft colored glow around your chat messages.',style.glow,()=>chatStyleSet({glow:!chatStyleMine().glow})),
+            extensionsSettingRow('Floating decorations','Let your decorative symbol gently animate. Respects reduced-motion settings.',style.animation,()=>chatStyleSet({animation:!chatStyleMine().animation}))
+        );
+        const footer=document.createElement('div');
+        Object.assign(footer.style,{display:'flex',flexWrap:'wrap',gap:'8px',marginTop:'12px'});
+        footer.append(
+            makeExtensionsButton('Reset my style',()=>chatStyleSet(CHAT_STYLE_DEFAULT)),
+            makeExtensionsButton('Re-share in room',()=>{sendAddonPresence(true); appendLocalInfoBox('Chat Styles',['Style availability announced to Essentials users in this room.']);})
+        );
+        section.appendChild(footer);
+        container.appendChild(section);
+        const footnote=document.createElement('p');
+        footnote.textContent='Privacy: Your palette and effect choices are shared with compatible Essentials users in the current room, not uploaded to Marvelous or Supabase. The style must be re-announced after joining a new room. All rendering is local; native BC messages are unchanged.';
+        Object.assign(footnote.style,{fontSize:'12px',lineHeight:'1.5',color:getExtensionsStyle().muted});
+        container.appendChild(footnote);
+    }
     function renderExtensionsSettings(container) {
         const nav = document.createElement("div");
         Object.assign(nav.style, {
@@ -11525,6 +11747,7 @@ function SubbysPlushiesPageMain() {
         });
         const options = [
             ["general", "General"],
+            ["chatstyles", "Chat Styles"],
             ["layout", "Layout"],
         ];
         for (const [key, label] of options) {
@@ -11535,6 +11758,7 @@ function SubbysPlushiesPageMain() {
         }
         container.appendChild(nav);
         if (extensionsSettingsTab === "layout") renderExtensionsLayout(container);
+        else if (extensionsSettingsTab === "chatstyles") renderExtensionsChatStyles(container);
         else renderExtensionsSettingsGeneral(container);
     }
     function renderExtensionsPlushies(container) {
@@ -12934,7 +13158,7 @@ function SubbysPlushiesPageMain() {
     function essentialsRefreshChatColors() {
         for(const record of quickReactionRecords)if(record.row?.isConnected)essentialsColorChatRow(record.row,record.sender);
     }
-    const ESSENTIALS_SAFE_FLAGS=['idleAnimations','speechBubbles','showRoomMascot','sharedEmoteChains','expressionReactions','quickReactions','extraActions','subbycatSignatureStyle'];
+    const ESSENTIALS_SAFE_FLAGS=['idleAnimations','speechBubbles','showRoomMascot','sharedEmoteChains','expressionReactions','quickReactions','extraActions','chatStyleShowAll'];
     function essentialsSetSafeMode(enabled) {
         const config=essentialsConfig();
         if(config.safeMode===enabled)return;
@@ -13213,7 +13437,7 @@ function SubbysPlushiesPageMain() {
         }
         const bookChapter = extensionsPanelElement.querySelector?.(".SubbysBookChapter");
         if (bookChapter) {
-            const chapterNames = { status: "Status", lore: "Plushie Lore", wardrobe: "Wardrobe", essentials: "Essentials Tools", settings: `Settings · ${extensionsSettingsTab === "layout" ? "Layout" : "General"}`, progress: "Progress", commands: "Commands" };
+            const chapterNames = { status: "Status", lore: "Plushie Lore", wardrobe: "Wardrobe", essentials: "Essentials Tools", settings: `Settings · ${extensionsSettingsTab === "layout" ? "Layout" : (extensionsSettingsTab === "chatstyles" ? "Chat Styles" : "General")}`, progress: "Progress", commands: "Commands" };
             bookChapter.textContent = extensionsMobileMoreOpen ? "More tools" : (chapterNames[extensionsActiveTab] || "Essentials");
         }
         if (extensionsPanelElement.dataset.subbysCat === 'true') subbysCatRefreshSections();
@@ -13469,6 +13693,9 @@ function SubbysPlushiesPageMain() {
         const requestedTab = String(tab || "status").toLowerCase();
         if (requestedTab === "layout") {
             extensionsSettingsTab = "layout";
+            extensionsActiveTab = "settings";
+        } else if (requestedTab === "chatstyles") {
+            extensionsSettingsTab = "chatstyles";
             extensionsActiveTab = "settings";
         } else if (requestedTab === "settings") {
             extensionsSettingsTab = "general";
@@ -14623,6 +14850,10 @@ function SubbysPlushiesPageMain() {
         }
         if (command === "/plushieextensions" || command === "/plushiesettings") {
             requireReady(() => openExtensionsPanel("settings"));
+            return true;
+        }
+        if (command === "/plushiechatstyle" || command === "/plushiestyle") {
+            requireReady(() => openExtensionsPanel("chatstyles"));
             return true;
         }
         if (command === "/plushiestatus") {
@@ -17595,7 +17826,7 @@ function SubbysPlushiesPageMain() {
                     for (const node of mutation.addedNodes) {
                         inspectOfferMutationNode(node, root);
                         if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
-                        subbycatSignatureDecorate(node);
+                        chatStyleDecorate(node);
                         // Fallback uses the already-installed offer observer.
                         quietPerfEnhanceChatNode(node);
                     }
@@ -19025,6 +19256,7 @@ function SubbysPlushiesPageMain() {
             clearRemotePlushEmotes();
             quickReactionReset();
             addonPresenceMembers.clear();
+            chatStyleRemote.clear();
             receivedCustomActionTokens.clear();
             locallyRenderedCustomActionTokens.clear();
             recentSelfCustomActionSend = null;
@@ -19496,13 +19728,13 @@ function SubbysPlushiesPageMain() {
             if (node && window.CurrentScreen === "ChatRoom") {
                 inspectOfferMutationNode(node, getOfferChatRoot());
                 if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
-                subbycatSignatureDecorate(node);
+                chatStyleDecorate(node);
                 // Existing native hook: no new chat observer or polling loop.
                 try { quietPerfEnhanceChatNode(node); } catch (_) {}
             }
             return result;
         });
-        subbycatSignatureRefresh();
+        chatStyleRefresh();
         if (chatAppendHooked) stopOfferChatObserver();
         else startOfferChatObserverMonitor();
         const actionMessageHooked = installHook("ChatRoomMessage", 10000, (args, next) => {
@@ -26696,7 +26928,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.105";
+    const VERSION = "3.5.106";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
