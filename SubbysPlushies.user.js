@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.108
-// @description  R133 live custom chat style repair; HEX editor, mascot and kitten UI preserved
+// @version      3.5.109
+// @description  R133 Subbycat-exclusive
 // @released     2026-10-31
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.108";
+    const VERSION = "3.5.109";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2468,7 +2468,13 @@ function SubbysPlushiesPageMain() {
     const CHAT_STYLE_CLASS = "SubbysCustomChat";
     const CHAT_STYLE_NAME_CLASS = "SubbysCustomChatName";
     const CHAT_STYLE_SYMBOL_CLASS = "SubbysCustomChatSymbol";
-    const CHAT_STYLE_CSS_ID = "subbys-custom-chat-style-v2";
+    const CHAT_STYLE_CSS_ID = "subbys-custom-chat-style-v3";
+    // This is a cosmetic visual identity, NOT a server-granted rank or permission.
+    // Only the native BC sender/member ID can qualify. Never trust names or user
+    // supplied style packets to grant the emblem to another member.
+    const ROYAL_SEAL_MEMBER = CUDDLE_QUEEN_MEMBER_NUMBER; // Subbycat #89413
+    const ROYAL_CHAT_CLASS = 'SubbysRoyalChat';
+    const ROYAL_SEAL_CLASS = 'SubbysRoyalSeal';
     const CHAT_STYLE_DEFAULT = Object.freeze({
         enabled:false, primary:'#FF477B',secondary:'#FF76D9',accent:'#FF6BA8',
         symbol:'♡ ✧', border:'solid', glow:true, animation:true
@@ -2526,6 +2532,9 @@ function SubbysPlushiesPageMain() {
             border:CHAT_STYLE_BORDERS.includes(r.border) ? r.border : CHAT_STYLE_DEFAULT.border,
             glow:r.glow !== false,
             animation:r.animation !== false,
+            // Only #89413 can enable and broadcast this exclusive effect. Existing
+            // accounts keep their colors and never gain a special owner toggle.
+            royalSeal:currentAccountMemberNumber()===ROYAL_SEAL_MEMBER && r.royalSeal!==false,
         };
     }
     function chatStyleMine() {
@@ -2558,7 +2567,13 @@ function SubbysPlushiesPageMain() {
     }
     function chatStylePacket() {
         const style=chatStyleMineForRoom();
-        return style ? JSON.stringify({v:1,...style}) : JSON.stringify({v:1,enabled:false});
+        if(!style) return JSON.stringify({v:1,enabled:false});
+        // Never expose the special option from accounts other than Subbycat.
+        const packet={v:1,enabled:true,primary:style.primary,secondary:style.secondary,
+            accent:style.accent,symbol:style.symbol,border:style.border,
+            glow:style.glow,animation:style.animation};
+        if(currentAccountMemberNumber()===ROYAL_SEAL_MEMBER) packet.royalSeal=style.royalSeal===true;
+        return JSON.stringify(packet);
     }
     function chatStyleFromPresence(data, member) {
         const sender=Number(member);
@@ -2575,6 +2590,9 @@ function SubbysPlushiesPageMain() {
                    CHAT_STYLE_SYMBOLS.includes(raw.symbol) && CHAT_STYLE_BORDERS.includes(raw.border) &&
                    typeof raw.glow==='boolean' && typeof raw.animation==='boolean') {
                     style=chatStyleNormalize(raw);
+                    // The BC packet sender is authoritative. Malicious peers
+                    // cannot claim this feature merely by adding royalSeal:true.
+                    style.royalSeal=sender===ROYAL_SEAL_MEMBER && raw.royalSeal===true;
                 } else if(raw?.enabled===true) chatStyleMetrics.rejected++;
             } catch (_) { chatStyleMetrics.rejected++; }
         }
@@ -2612,6 +2630,37 @@ function SubbysPlushiesPageMain() {
 #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatGlow .${CHAT_STYLE_NAME_CLASS} {
     filter:drop-shadow(0 0 2px var(--subbys-style-accent,#ff6ba8));
 }
+/* The Velvet Heartreaper Royal Seal is exclusive to Subbycat's verified
+   native member number; it adds no text to outgoing BC messages. */
+#TextAreaChatLog .${ROYAL_CHAT_CLASS} {
+    background:linear-gradient(104deg,rgba(89,7,45,.22),var(--subbys-style-background,transparent) 45%,transparent 95%)!important;
+}
+#TextAreaChatLog .${ROYAL_CHAT_CLASS} .${ROYAL_SEAL_CLASS} {
+    display:inline-flex; align-items:center; gap:4px; vertical-align:middle;
+    margin:0 6px 1px; padding:2px 7px; white-space:nowrap;
+    color:#ffe6ef; background:linear-gradient(120deg,#5c082b,#aa1b57 65%,#e9639b);
+    border:1px solid #f9a6cf; border-radius:999px;
+    box-shadow:0 0 5px rgba(234,70,135,.38),inset 0 0 3px rgba(255,255,255,.19);
+    font-size:10px; line-height:1.1; font-weight:700;
+    text-shadow:0 0 2px #ff5ba2; user-select:none; pointer-events:auto;
+}
+#TextAreaChatLog .${ROYAL_CHAT_CLASS} .SubbysRoyalSealIcon {
+    font-size:12px; color:#ffd5e7;
+}
+#TextAreaChatLog .${ROYAL_CHAT_CLASS} .SubbysRoyalSealTitle {
+    font-size:8px; letter-spacing:.7px; color:#ffe7f1;
+}
+#TextAreaChatLog .${ROYAL_CHAT_CLASS} .${ROYAL_SEAL_CLASS}.SubbysRoyalSealAnimated {
+    animation:subbys-royal-seal-bloom 1.25s ease-out 1 both;
+}
+@keyframes subbys-royal-seal-bloom {
+    0%{opacity:0; transform:translateY(3px) scale(.91);filter:brightness(1.65)}
+    45%{opacity:1;transform:translateY(0) scale(1.06);filter:brightness(1.35)}
+    100%{opacity:1;transform:translateY(0) scale(1);filter:brightness(1)}
+}
+@media (max-width:700px){
+    #TextAreaChatLog .${ROYAL_CHAT_CLASS} .SubbysRoyalSealTitle {display:none}
+}
 #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_SYMBOL_CLASS} {
     position:absolute; top:1px; right:5px; color:var(--subbys-style-secondary,#ff76d9);
     text-shadow:0 0 5px var(--subbys-style-accent,#ff6ba8); font-size:11px;
@@ -2628,6 +2677,7 @@ function SubbysPlushiesPageMain() {
 }
 @media(prefers-reduced-motion:reduce) {
     #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_SYMBOL_CLASS}.SubbysCustomChatAnimated {animation:none;opacity:.65}
+    #TextAreaChatLog .${ROYAL_CHAT_CLASS} .${ROYAL_SEAL_CLASS}.SubbysRoyalSealAnimated {animation:none;opacity:1;transform:none;filter:none}
 }`;
     function chatStyleEnsureCss() {
         let sheet=document.getElementById(CHAT_STYLE_CSS_ID);
@@ -2638,7 +2688,7 @@ function SubbysPlushiesPageMain() {
         return sheet;
     }
     function chatStyleClearRow(row) {
-        row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatGlow');
+        row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatGlow',ROYAL_CHAT_CLASS);
         delete row.dataset.subbysChatStyle;
         for(const key of ['primary','secondary','accent','background','shade','border'])
             row.style.removeProperty('--subbys-style-'+key);
@@ -2648,6 +2698,7 @@ function SubbysPlushiesPageMain() {
             else label.classList.remove(CHAT_STYLE_NAME_CLASS);
         }
         for(const node of row.querySelectorAll('.'+CHAT_STYLE_SYMBOL_CLASS)) node.remove();
+        for(const node of row.querySelectorAll('.'+ROYAL_SEAL_CLASS)) node.remove();
     }
     function chatStyleClearAll(root=document.getElementById('TextAreaChatLog')) {
         if(!root)return;
@@ -2734,6 +2785,20 @@ function SubbysPlushiesPageMain() {
             row.style.setProperty('--subbys-style-shade',chatStyleHexRgb(style.accent,.25));
             const label=chatStyleLabel(row,member);
             if(label)label.classList.add(CHAT_STYLE_NAME_CLASS);
+            if(member===ROYAL_SEAL_MEMBER && style.royalSeal===true) {
+                // This is appended only after a trusted BC sender lookup,
+                // NEVER on matching a name inside the message content.
+                const seal=document.createElement('span');
+                seal.className=ROYAL_SEAL_CLASS+(style.animation?' SubbysRoyalSealAnimated':'');
+                seal.title='Subbycat · Velvet Heartreaper Royal Seal';
+                seal.setAttribute('aria-label','Subbycat: Velvet Heartreaper Royal Seal');
+                const icon=document.createElement('span');icon.className='SubbysRoyalSealIcon';icon.textContent='♛ ♡';
+                const title=document.createElement('span');title.className='SubbysRoyalSealTitle';title.textContent='VELVET HEARTREAPER';
+                seal.append(icon,title);
+                if(label?.parentNode)label.after(seal);
+                else row.prepend(seal);
+                row.classList.add(ROYAL_CHAT_CLASS);
+            }
             if(style.symbol!=='none') {
                 const symbol=document.createElement('span');
                 symbol.className=CHAT_STYLE_SYMBOL_CLASS+(style.animation?' SubbysCustomChatAnimated':'');
@@ -2759,6 +2824,9 @@ function SubbysPlushiesPageMain() {
         diagnostic(){return {version:VERSION,account:currentAccountMemberNumber(),
             showAll:chatStyleViewAllowed(),mine:{...chatStyleMine()},peers:chatStyleRemote.size,
             styledVisible:document.querySelectorAll('#TextAreaChatLog .'+CHAT_STYLE_CLASS).length,
+            royalSealAvailable:currentAccountMemberNumber()===ROYAL_SEAL_MEMBER,
+            royalSealEnabled:chatStyleMine().royalSeal===true,
+            royalSealsVisible:document.querySelectorAll('#TextAreaChatLog .'+ROYAL_SEAL_CLASS).length,
             packets:chatStyleMetrics.packets,rejected:chatStyleMetrics.rejected,rowsStyled:chatStyleMetrics.rows,
             nativeContexts:chatStyleMetrics.nativeContexts,contextRows:chatStyleMetrics.contextRows,
             unmatchedRows:chatStyleMetrics.unmatchedRows,
@@ -11749,7 +11817,18 @@ function SubbysPlushiesPageMain() {
                 filter:chosen.glow?`drop-shadow(0 0 2px ${chosen.accent})`:'none'});
             const message=document.createElement('span');message.textContent='Mrrp~ Hello, everyone!';
             message.style.color=getExtensionsStyle().text;
-            row.append(label,message);
+            row.append(label);
+            if(currentAccountMemberNumber()===ROYAL_SEAL_MEMBER && chosen.royalSeal===true) {
+                const seal=document.createElement('span');
+                seal.textContent='♛ ♡  VELVET HEARTREAPER';
+                seal.title='Your exclusive Velvet Heartreaper Royal Seal';
+                Object.assign(seal.style,{display:'inline-block',fontSize:'9px',fontWeight:'bold',letterSpacing:'.4px',
+                    verticalAlign:'middle',margin:'0 5px 2px',padding:'3px 7px',color:'#FFE6EF',
+                    background:'linear-gradient(120deg,#5C082B,#AA1B57,#E9639B)',
+                    border:'1px solid #F9A6CF',borderRadius:'99px',textShadow:'0 0 2px #FF5BA2'});
+                row.append(seal);
+            }
+            row.append(message);
             if(chosen.symbol!=='none'){
                 const icon=document.createElement('span');icon.textContent='  '+chosen.symbol;
                 Object.assign(icon.style,{color:chosen.secondary,whiteSpace:'nowrap',fontSize:'12px'});
@@ -11882,6 +11961,18 @@ function SubbysPlushiesPageMain() {
             extensionsSettingRow('Glow effect','Add a soft colored glow around your chat messages.',style.glow,()=>chatStyleSet({glow:!chatStyleMine().glow})),
             extensionsSettingRow('Floating decorations','Let your decorative symbol gently animate. Respects reduced-motion settings.',style.animation,()=>chatStyleSet({animation:!chatStyleMine().animation}))
         );
+        if(currentAccountMemberNumber()===ROYAL_SEAL_MEMBER) {
+            const exclusive=makeExtensionsSection('Subbycat Exclusive · Velvet Heartreaper');
+            const description=document.createElement('p');
+            description.textContent='Royal Seal: a tiny crowned-heart insignia and animated Velvet Heartreaper title beside your name in public chat. Only your BC account can broadcast it to updated Essentials clients. Your chosen colors still work, and other players can hide every style with their master switch.';
+            Object.assign(description.style,{color:getExtensionsStyle().muted,fontSize:'12px',lineHeight:'1.5',margin:'5px 0'});
+            exclusive.append(description,extensionsSettingRow(
+                'Velvet Heartreaper Royal Seal',
+                'Exclusive to BC #89413. Requires your personal style enabled. No gameplay privileges or server-side authority.',
+                style.royalSeal===true,()=>chatStyleSet({royalSeal:!chatStyleMine().royalSeal})
+            ));
+            section.appendChild(exclusive);
+        }
         const footer=document.createElement('div');
         Object.assign(footer.style,{display:'flex',flexWrap:'wrap',gap:'8px',marginTop:'12px'});
         footer.append(
