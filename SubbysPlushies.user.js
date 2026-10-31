@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.110
-// @description  R133 Subbycat-exclusive Cuddle Queen Royal Seal with personal chat styles
+// @version      3.5.111
+// @description  R133 Cuddle Queen Royal Seal before nickname; personal chat styles
 // @released     2026-10-31
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.110";
+    const VERSION = "3.5.111";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2786,8 +2786,8 @@ function SubbysPlushiesPageMain() {
             const label=chatStyleLabel(row,member);
             if(label)label.classList.add(CHAT_STYLE_NAME_CLASS);
             if(member===ROYAL_SEAL_MEMBER && style.royalSeal===true) {
-                // This is appended only after a trusted BC sender lookup,
-                // NEVER on matching a name inside the message content.
+                // Add the badge BEFORE the verified sender's name, never after.
+                // Identity is based on BC's sender, not message text.
                 const seal=document.createElement('span');
                 seal.className=ROYAL_SEAL_CLASS+(style.animation?' SubbysRoyalSealAnimated':'');
                 seal.title='Subbycat · Cuddle Queen Royal Seal';
@@ -2795,7 +2795,7 @@ function SubbysPlushiesPageMain() {
                 const icon=document.createElement('span');icon.className='SubbysRoyalSealIcon';icon.textContent='♛ ♡';
                 const title=document.createElement('span');title.className='SubbysRoyalSealTitle';title.textContent='CUDDLE QUEEN';
                 seal.append(icon,title);
-                if(label?.parentNode)label.after(seal);
+                if(label?.parentNode)label.before(seal);
                 else row.prepend(seal);
                 row.classList.add(ROYAL_CHAT_CLASS);
             }
@@ -11826,7 +11826,7 @@ function SubbysPlushiesPageMain() {
                     verticalAlign:'middle',margin:'0 5px 2px',padding:'3px 7px',color:'#FFE6EF',
                     background:'linear-gradient(120deg,#5C082B,#AA1B57,#E9639B)',
                     border:'1px solid #F9A6CF',borderRadius:'99px',textShadow:'0 0 2px #FF5BA2'});
-                row.append(seal);
+                row.insertBefore(seal,label);
             }
             row.append(message);
             if(chosen.symbol!=='none'){
@@ -11964,7 +11964,7 @@ function SubbysPlushiesPageMain() {
         if(currentAccountMemberNumber()===ROYAL_SEAL_MEMBER) {
             const exclusive=makeExtensionsSection('Subbycat Exclusive · Cuddle Queen');
             const description=document.createElement('p');
-            description.textContent='Royal Seal: a tiny crowned-heart insignia and animated Cuddle Queen title beside your name in public chat. Only your BC account can broadcast it to updated Essentials clients. Your chosen colors still work, and other players can hide every style with their master switch.';
+            description.textContent='Royal Seal: a tiny crowned-heart insignia and animated Cuddle Queen title before your name in public chat. Only your BC account can broadcast it to updated Essentials clients. Your chosen colors still work, and other players can hide every style with their master switch.';
             Object.assign(description.style,{color:getExtensionsStyle().muted,fontSize:'12px',lineHeight:'1.5',margin:'5px 0'});
             exclusive.append(description,extensionsSettingRow(
                 'Cuddle Queen Royal Seal',
