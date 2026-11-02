@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.15
-// @description  v3.9.15: whisper-inspired lightweight public chat rows with custom name palettes; retains reliable auto-scroll
+// @version      3.9.16
+// @description  v3.9.16: whisper-soft fade only on public messages with visible custom name gradients; no added glow
 // @released     2026-11-02
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.15";
+    const VERSION = "3.9.16";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -3613,7 +3613,10 @@ function SubbysPlushiesPageMain() {
             '--subbys-style-secondary':palette.secondary,'--subbys-style-direction':CHAT_GRADIENT_ANGLES[palette.direction]||'90deg',
             '--subbys-style-intensity':String(palette.intensity/100),'--subbys-style-accent':palette.accent,
             '--subbys-style-border':palette.border,'--subbys-style-background':chatStyleHexRgb(palette.accent,.14),
-            '--subbys-style-shade':chatStyleHexRgb(palette.accent,.06+.004*palette.intensity)
+            '--subbys-style-shade':chatStyleHexRgb(palette.accent,.06+.004*palette.intensity),
+            '--subbys-public-wash-start':chatStyleHexRgb(palette.primary,.105),
+            '--subbys-public-wash-middle':chatStyleHexRgb(palette.middle,.052),
+            '--subbys-public-wash-end':chatStyleHexRgb(palette.secondary,.025)
         } : kind==='whisper' ? {
             '--sw-border':palette.border,'--sw-primary':palette.primary,
             '--sw-secondary-shade':chatStyleHexRgb(palette.secondary,.085),'--sw-accent':palette.accent,
@@ -3754,27 +3757,27 @@ function SubbysPlushiesPageMain() {
             if(old?.isConnected)old.classList.add('SubbysChatStyleCold');
         }
     }
-    // v3.9.15: Whisper-inspired presentation for ordinary public messages.
-    // One scoped CSS class on the chat log; no per-message observers, layout
-    // reads, animation or new network traffic. Native whispers and actions are
-    // deliberately excluded. Existing gradients and local color accents remain.
+    // v3.9.16: Apply the whisper-inspired *background* only to verified
+    // public messages whose sender actually has a visible custom name gradient.
+    // Unstyled regular chat, local solid-color accents, actions and whispers
+    // stay exactly as they were before the v3.9.15 public-row override.
+    // No new DOM observers, per-row inline styles, animations or extra packets.
     const PUBLIC_WHISPER_LOOK_CSS_ID='subbys-public-whisper-look-v1';
     const PUBLIC_WHISPER_LOOK_CSS=`
-#TextAreaChatLog.SubbysPublicWhisperLook .ChatMessage.ChatMessageChat:where(:not(.ChatMessageWhisper):not(.ChatMessageAction):not(.ChatMessageSystem)) {
-    position:relative!important;box-sizing:border-box!important;
-    margin:2px 0!important;padding:2px 7px 3px 8px!important;
-    border-radius:6px!important;
-    border-top:0!important;border-right:0!important;border-bottom:0!important;
-    border-left:3px solid var(--subbys-style-accent,var(--subbys-local-chat-accent,#827a96))!important;
-    background:var(--subbys-local-chat-tint,rgba(65,61,73,.52))!important;
-    background-image:none!important;box-shadow:none!important;
+#TextAreaChatLog.SubbysPublicWhisperLook .ChatMessage.ChatMessageChat.SubbysCustomChatPalette.SubbysPublicGradientNameRow:not(.ChatMessageWhisper) {
+    background-color:transparent!important;
+    background-image:linear-gradient(100deg,
+        var(--subbys-public-wash-start,rgba(255,106,160,.10)) 0%,
+        var(--subbys-public-wash-middle,rgba(255,152,190,.045)) 48%,
+        var(--subbys-public-wash-end,rgba(255,118,217,.025)) 74%,
+        transparent 96%)!important;
+    box-shadow:none!important;
 }
-#TextAreaChatLog.SubbysPublicWhisperLook .ChatMessage.ChatMessageChat.SubbysCustomChatPalette:not(.ChatMessageWhisper) {
-    background:var(--subbys-style-background,rgba(65,61,73,.38))!important;
-    background-image:none!important;
+/* A selected Glow option must not add a halo to public gradient names in
+   whisper-style mode. The underlying nickname gradient remains unchanged. */
+#TextAreaChatLog.SubbysPublicWhisperLook .ChatMessage.ChatMessageChat.SubbysPublicGradientNameRow.SubbysCustomChatGlow .SubbysCustomChatName {
+    text-shadow:none!important;filter:none!important;
 }
-/* Only row framing changes; chat text, links, emoji, name gradients, and
-   Whisper to/from headers retain their existing color and layout rules. */
 `;
     function chatPublicWhisperLookSync(log=document.getElementById('TextAreaChatLog')){
         if(!log)return;
@@ -3794,7 +3797,7 @@ function SubbysPlushiesPageMain() {
     function chatStyleClearRow(row) {
         const hot=chatStyleHotRows.indexOf(row);
         if(hot>=0)chatStyleHotRows.splice(hot,1);
-        row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatPalette','SubbysCustomChatGlow','SubbysChatStyleCold',ROYAL_CHAT_CLASS);
+        row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatPalette','SubbysCustomChatGlow','SubbysPublicGradientNameRow','SubbysChatStyleCold',ROYAL_CHAT_CLASS);
         delete row.dataset.subbysChatStyle;
         delete row.dataset.subbysPaletteMember;
         for(const key of ['primary','middle','secondary','accent','direction','intensity','background','shade','border'])
@@ -3952,7 +3955,10 @@ function SubbysPlushiesPageMain() {
                 }
             }
             // A badge-only message gets its royal seal but no forced palette.
-            if(showNames && style.enabled && label) label.classList.add(CHAT_STYLE_NAME_CLASS);
+            if(showNames && style.enabled && label){
+                label.classList.add(CHAT_STYLE_NAME_CLASS);
+                row.classList.add('SubbysPublicGradientNameRow');
+            }
             if(showTitles && member===ROYAL_SEAL_MEMBER && style.royalSeal===true) {
                 // Add the badge BEFORE the verified sender's name, never after.
                 // Identity is based on BC's sender, not message text.
@@ -13579,9 +13585,9 @@ function SubbysPlushiesPageMain() {
         const settings=getFeatureSettings(),section=makeExtensionsSection('Visibility & Name Badges');
         section.append(
             extensionsSettingRow('Whisper-style public chat',
-                'Use the subtle whisper-style background and colored left edge for regular chat. Names, gradients, message text, and native whispers stay unchanged. Local only.',
+                'Apply a soft fading background only to public messages with visible custom name gradients. No added glow; ordinary chat and native whispers stay unchanged. Local only.',
                 settings.chatStyleWhisperLikePublic,()=>toggleFeatureSetting('chatStyleWhisperLikePublic')),
-            extensionsSettingRow('Show shared custom styles','Hide shared player colors, name gradients and themed whispers; the separate local public-chat layout toggle stays independent.',
+            extensionsSettingRow('Show shared custom styles','Hide shared player colors, name gradients and themed whispers. Only gradient-styled public rows use the optional soft fade.',
                 settings.chatStyleShowAll,()=>toggleFeatureSetting('chatStyleShowAll')),
             extensionsSettingRow('Show name gradients','Show or hide other Essentials players’ name gradients locally.',
                 settings.chatStyleShowNameColors,()=>toggleFeatureSetting('chatStyleShowNameColors')),
@@ -28994,7 +29000,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.15";
+    const VERSION = "3.9.16";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {

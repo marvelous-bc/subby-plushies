@@ -1,6 +1,6 @@
 {
-  "version": "3.9.15",
+  "version": "3.9.16",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Whisper-inspired lightweight public chat appearance, with soft muted message rows and subtle colored left accents. Retains native name gradients, local character colors, whisper styling, efficient shared CSS, and v3.9.14 chat auto-scroll. Local toggle in Chat Styles > Visibility & Name Badges.",
+  "notes": "Public whisper-style fade is now restricted to regular chat messages with a visible verified custom name gradient. No glow for these gradient names, and unstyled regular chat is unchanged. No change to whispers, actions, chat scrolling or other features.",
   "released": "2026-11-02"
 }
