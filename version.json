@@ -1,6 +1,6 @@
 {
-  "version": "3.9.5",
+  "version": "3.9.7",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Sender-owned whisper themes shared through existing presence; fixes receiver-local whisper colors; retains Tools top row, shimmer and whisper auto-scroll. No auras.",
+  "notes": "3.9 performance pass: one viewport-aware name shimmer; batched targeted style refresh; cached gradient and whisper settings; avoid self-triggered DOM mutation scans; reusable overlapping purr audio; low CPU effects pause; plushie auras stay removed.",
   "released": "2026-11-01"
 }
