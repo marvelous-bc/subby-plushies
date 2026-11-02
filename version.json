@@ -1,6 +1,6 @@
 {
-  "version": "3.9.13",
+  "version": "3.9.14",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Character-render phase diagnostics: separately measure downstream BC/mod DrawCharacter time and Essentials synchronous hook time, sample 5-second deltas alongside FPS; reduce idle hover-badge RAF work and redundant display writes. Retains v3.9.12 gradient/whisper optimization and prior mascot fixes.",
+  "notes": "Reliable native chat auto-follow across public/whisper/action rows, delayed emotes and gradients, hidden-tab focus resume, and other-addon appends; respects deliberate chat scrollback. Uses coalesced frame/timer, direct-child mutation and resize observers without constant polling. Retains v3.9.13 rendering diagnostics.",
   "released": "2026-11-02"
 }

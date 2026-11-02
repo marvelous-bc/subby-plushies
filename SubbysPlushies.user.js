@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.13
-// @description  v3.9.13: draw-phase profiler, reduced idle badge hover work, retained v3.9.12 chat optimizations
+// @version      3.9.14
+// @description  v3.9.14: reliable chat auto-scroll during background tabs, whispers, and delayed styling; preserves reader scrollback
 // @released     2026-11-02
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.13";
+    const VERSION = "3.9.14";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -3036,58 +3036,233 @@ function SubbysPlushiesPageMain() {
             while(index<rows.length&&n<18&&performance.now()-start<5){
                 chatWhisperDecorate(rows[index++]);n++;
             }
+            if(n)chatScrollQueue('whisper-backfill');
             if(index<rows.length){chatStylePerfMetrics.queuedWhispers=rows.length-index;
                 window.requestAnimationFrame?.(flush)??window.setTimeout(flush,16);
             }else{chatStylePerfMetrics.queuedWhispers=0;chatStylePerfMetrics.whisperJobs++;}
         };
         flush();
     }
-    // Native BC usually scrolls during ChatRoomAppendChat. Our whisper icon,
-    // border and other addons can change the row's layout *after* that native
-    // scroll, causing an incoming/outgoing whisper to land below the viewport.
-    // Re-follow only if the reader was already at the bottom before append.
-    let chatWhisperScrollCorrections=0;
-    let whisperCachedRoot=null,whisperCachedScrollParent=null;
-    function chatWhisperScrollableRoot(){
-        const root=document.getElementById('TextAreaChatLog');
-        if(!root||window.CurrentScreen!=='ChatRoom')return null;
-        if(root===whisperCachedRoot&&whisperCachedScrollParent?.isConnected)return whisperCachedScrollParent;
-        whisperCachedRoot=root;whisperCachedScrollParent=root;
+    // v3.9.14: shared scroll-follow coordinator for every native chat row.
+    // Preserve explicit scrollback: scrolling upward pauses following until the
+    // reader scrolls to the bottom again. Background tabs retain that intent;
+    // requestAnimationFrame alone is insufficient while the window is hidden.
+    const chatScrollState={root:null,scroller:null,lastRow:null,observer:null,resize:null,
+        pinned:true,manualUntil:0,lastTop:0,hiddenPending:false,raf:0,timer:0,
+        appends:0,followRequests:0,corrections:0,skippedScrollback:0,
+        backgroundAppends:0,resumes:0,layoutChanges:0,rootChanges:0};
+    const CHAT_SCROLL_THRESHOLD=56;
+    function chatScrollDistance(scroller){
+        return Math.max(0,scroller.scrollHeight-scroller.clientHeight-scroller.scrollTop);
+    }
+    function chatScrollNearBottom(scroller,threshold=CHAT_SCROLL_THRESHOLD){
+        return !!scroller?.isConnected&&chatScrollDistance(scroller)<=threshold;
+    }
+    function chatScrollFindScroller(root){
+        if(!root)return null;
+        // BC normally scrolls #TextAreaChatLog. Some skins move overflow to an
+        // ancestor. Prefer a genuinely scrollable element, otherwise retain BC's
+        // log so empty rooms can become scrollable without rebinding listeners.
+        let firstScrollable=null;
         for(let el=root;el&&el!==document.body&&el!==document.documentElement;el=el.parentElement){
-            if(el.scrollHeight<=el.clientHeight+1)continue;
             const overflow=window.getComputedStyle?.(el)?.overflowY||'';
-            if(el===root||/auto|scroll|overlay/.test(overflow)){
-                whisperCachedScrollParent=el;break;
-            }
+            if(!/auto|scroll|overlay/.test(overflow))continue;
+            if(!firstScrollable)firstScrollable=el;
+            if(el===root||el.scrollHeight>el.clientHeight+1)return el;
         }
-        return whisperCachedScrollParent;
+        return firstScrollable||root;
     }
-    function chatWhisperNearBottom(el,extra=48){
-        if(!el||!el.isConnected)return false;
-        return el.scrollHeight-el.clientHeight-el.scrollTop <= extra;
+    function chatScrollCancelScheduled(){
+        if(chatScrollState.raf){window.cancelAnimationFrame?.(chatScrollState.raf);chatScrollState.raf=0;}
+        if(chatScrollState.timer){window.clearTimeout(chatScrollState.timer);chatScrollState.timer=0;}
     }
-    function chatWhisperFollowAfterAppend(scroller){
-        if(!scroller?.isConnected||window.CurrentScreen!=='ChatRoom')return;
-        scroller.scrollTop=scroller.scrollHeight;
-        chatWhisperScrollCorrections++;
-        // One post-layout correction only; if user manually scrolls up in the
-        // meantime, respect that choice rather than fighting the scroll.
-        if(typeof window.requestAnimationFrame==='function'){
-            const scrolledTo=scroller.scrollTop;
-            window.requestAnimationFrame(()=>{
-                if(scroller.isConnected&&window.CurrentScreen==='ChatRoom'&&
-                   scroller.scrollTop>=scrolledTo-12)scroller.scrollTop=scroller.scrollHeight;
+    function chatScrollDetach(){
+        chatScrollCancelScheduled();
+        chatScrollState.observer?.disconnect();chatScrollState.observer=null;
+        chatScrollState.resize?.disconnect();chatScrollState.resize=null;
+        if(chatScrollState.scroller){
+            const el=chatScrollState.scroller;
+            el.removeEventListener('scroll',chatScrollOnScroll);
+            el.removeEventListener('wheel',chatScrollOnWheel);
+            el.removeEventListener('touchstart',chatScrollOnGesture);
+            el.removeEventListener('touchmove',chatScrollOnGesture);
+            el.removeEventListener('pointerdown',chatScrollOnPointer);
+            el.removeEventListener('keydown',chatScrollOnKey);
+            el.removeEventListener('load',chatScrollOnImageLoad,true);
+        }
+        chatScrollState.root=null;chatScrollState.scroller=null;chatScrollState.lastRow=null;
+        chatScrollState.hiddenPending=false;
+    }
+    function chatScrollOnGesture(){chatScrollState.manualUntil=performance.now()+1200;}
+    function chatScrollOnPointer(event){
+        if(event.pointerType==='touch'){chatScrollOnGesture();return;}
+        // Ordinary clicks in message content are not scrollbar gestures. Treat
+        // a mouse-down at the scroll track as a potential scrollbar drag.
+        if(event.pointerType==='mouse'){
+            const rect=chatScrollState.scroller?.getBoundingClientRect();
+            if(rect && (event.clientX>rect.right-22||event.clientX<rect.left+16))chatScrollOnGesture();
+        }
+    }
+    function chatScrollOnWheel(event){
+        chatScrollOnGesture();
+        // Pause BEFORE the browser updates scrollTop so a pending follow frame
+        // cannot undo a wheel-up gesture (Firefox/Chrome both defer scrolling).
+        if(event.deltaY<0){chatScrollState.pinned=false;chatScrollCancelScheduled();}
+    }
+    function chatScrollOnKey(event){
+        if(event.target?.closest?.('input,textarea,[contenteditable="true"]'))return;
+        if(['PageUp','ArrowUp','Home'].includes(event.key)){
+            chatScrollOnGesture();chatScrollState.pinned=false;chatScrollCancelScheduled();
+        } else if(['PageDown','ArrowDown','End'].includes(event.key))chatScrollOnGesture();
+    }
+    function chatScrollOnScroll(){
+        // Reaching the bottom (including via BC's jump-to-latest controls)
+        // always re-enables follow. A scroll AWAY from it needs user intent:
+        // native appends and scroll anchoring must never disable auto-follow.
+        const el=chatScrollState.scroller;
+        if(!el)return;
+        const top=el.scrollTop;
+        const movedUp=top<chatScrollState.lastTop-2;
+        chatScrollState.lastTop=top;
+        if(chatScrollNearBottom(el)){chatScrollState.pinned=true;return;}
+        // A delayed native scroll event after new messages can arrive while a
+        // click/wheel gesture is still within our gesture window. Growing
+        // scrollHeight without an upward user scroll is NOT a scrollback choice.
+        if(performance.now()>chatScrollState.manualUntil||!movedUp)return;
+        chatScrollState.pinned=false;
+        chatScrollCancelScheduled();
+    }
+    function chatScrollOnImageLoad(event){
+        if(event.target?.tagName==='IMG'&&chatScrollState.pinned)chatScrollQueue('image-load');
+    }
+    function chatScrollObserveLastRow(){
+        if(!chatScrollState.resize||!chatScrollState.root)return;
+        const last=chatScrollState.root.lastElementChild;
+        if(last===chatScrollState.lastRow)return;
+        if(chatScrollState.lastRow)chatScrollState.resize.unobserve(chatScrollState.lastRow);
+        chatScrollState.lastRow=last;
+        if(last)chatScrollState.resize.observe(last);
+    }
+    function chatScrollAttach(){
+        const root=window.CurrentScreen==='ChatRoom'?document.getElementById('TextAreaChatLog'):null;
+        const scroller=chatScrollFindScroller(root);
+        if(root===chatScrollState.root&&scroller===chatScrollState.scroller&&root?.isConnected)return scroller;
+        chatScrollDetach();
+        if(!root||!scroller)return null;
+        chatScrollState.root=root;chatScrollState.scroller=scroller;
+        chatScrollState.rootChanges++;
+        // Hidden/zero-height chat panels have unreliable geometry. Until the
+        // first visible layout, retain the normal follow-to-latest intent.
+        chatScrollState.pinned=document.hidden||scroller.clientHeight<=0||chatScrollNearBottom(scroller);
+        chatScrollState.lastTop=scroller.scrollTop;
+        scroller.addEventListener('scroll',chatScrollOnScroll,{passive:true});
+        scroller.addEventListener('wheel',chatScrollOnWheel,{passive:true});
+        scroller.addEventListener('touchstart',chatScrollOnGesture,{passive:true});
+        scroller.addEventListener('touchmove',chatScrollOnGesture,{passive:true});
+        scroller.addEventListener('pointerdown',chatScrollOnPointer,{passive:true});
+        scroller.addEventListener('keydown',chatScrollOnKey,{passive:true});
+        scroller.addEventListener('load',chatScrollOnImageLoad,true);
+        // Direct children only: no costly full-chat subtree observer. This
+        // covers other addons inserting chat rows without the native hook.
+        if(typeof MutationObserver==='function'){
+            chatScrollState.observer=new MutationObserver(records=>{
+                let appended=false;
+                for(const record of records)if(record.addedNodes.length){
+                    for(const node of record.addedNodes)if(node.nodeType===1 &&
+                        (node.matches?.('.ChatMessage')||node.querySelector?.('.ChatMessage'))){appended=true;break;}
+                    if(appended)break;
+                }
+                if(appended){chatScrollObserveLastRow();chatScrollQueue('native-or-addon-append');}
+            });
+            chatScrollState.observer.observe(root,{childList:true});
+        }
+        if(typeof ResizeObserver==='function'){
+            chatScrollState.resize=new ResizeObserver(()=>{
+                chatScrollState.layoutChanges++;
+                if(chatScrollState.pinned)chatScrollQueue('layout-change');
+            });
+            chatScrollState.resize.observe(scroller);
+            if(root!==scroller)chatScrollState.resize.observe(root);
+            chatScrollObserveLastRow();
+        }
+        return scroller;
+    }
+    function chatScrollFlush(){
+        if(document.hidden){chatScrollState.hiddenPending=true;return;}
+        const root=chatScrollState.root,el=chatScrollState.scroller;
+        if(window.CurrentScreen!=='ChatRoom'||!root?.isConnected||!el?.isConnected||!chatScrollState.pinned){
+            if(!chatScrollState.pinned)chatScrollState.skippedScrollback++;
+            return;
+        }
+        if(el.clientHeight<=0){chatScrollState.hiddenPending=true;return;}
+        const distance=chatScrollDistance(el);
+        if(distance>1){el.scrollTop=el.scrollHeight;chatScrollState.corrections++;}
+        chatScrollState.lastTop=el.scrollTop;
+        chatScrollState.hiddenPending=false;
+    }
+    function chatScrollQueue(reason='update'){
+        if(!chatScrollState.root?.isConnected||window.CurrentScreen!=='ChatRoom')return;
+        if(!chatScrollState.pinned){chatScrollState.skippedScrollback++;return;}
+        chatScrollState.followRequests++;
+        if(document.hidden){chatScrollState.hiddenPending=true;return;}
+        // A single RAF + a shared delayed pass catches synchronous append and
+        // post-append restyling. Coalesce repeated incoming messages, never poll.
+        if(!chatScrollState.raf && typeof window.requestAnimationFrame==='function'){
+            chatScrollState.raf=window.requestAnimationFrame(()=>{
+                chatScrollState.raf=0;chatScrollFlush();
             });
         }
+        if(!chatScrollState.timer){
+            chatScrollState.timer=window.setTimeout(()=>{
+                chatScrollState.timer=0;chatScrollFlush();
+            },150);
+        }
     }
-    Object.defineProperty(window,'SubbysWhisperScrollDiag',{configurable:true,value:()=>{
-        const el=chatWhisperScrollableRoot();return {
-            version:VERSION,found:!!el,scrollTop:el?.scrollTop??null,
-            scrollHeight:el?.scrollHeight??null,viewportHeight:el?.clientHeight??null,
-            nearBottom:chatWhisperNearBottom(el),corrections:chatWhisperScrollCorrections,
-            appendHook:installedHooks.has('ChatRoomAppendChat')
-        };
-    }});
+    function chatScrollBeforeAppend(node){
+        if(window.CurrentScreen!=='ChatRoom'||!(node instanceof Element))return;
+        const scroller=chatScrollAttach();if(!scroller)return;
+        chatScrollState.appends++;
+        // When a previous append grew the log but no user scrolled, keep the
+        // existing pinned intent instead of judging a now-stale scroll offset.
+        if(document.hidden)chatScrollState.backgroundAppends++;
+    }
+    function chatScrollAfterAppend(node){
+        if(!(node instanceof Element)||window.CurrentScreen!=='ChatRoom')return;
+        chatScrollObserveLastRow();
+        chatScrollQueue('append');
+    }
+    function chatScrollResume(){
+        if(document.hidden||window.CurrentScreen!=='ChatRoom')return;
+        const el=chatScrollAttach();if(!el)return;
+        if(chatScrollState.pinned){
+            chatScrollState.resumes++;
+            chatScrollQueue('focus-resume');
+        }
+    }
+    document.addEventListener('visibilitychange',chatScrollResume,{passive:true});
+    window.addEventListener('focus',chatScrollResume,{passive:true});
+    window.addEventListener('pageshow',chatScrollResume,{passive:true});
+    perfUIBus.watch(()=>{if(window.CurrentScreen==='ChatRoom')chatScrollAttach();else if(chatScrollState.root)chatScrollDetach();},'chat-follow-root');
+    function chatScrollDiagnostic(){
+        const el=chatScrollAttach();return {version:VERSION,found:!!el,
+            pinned:chatScrollState.pinned,hidden:document.hidden,
+            hiddenPending:chatScrollState.hiddenPending,
+            scrollTop:el?.scrollTop??null,scrollHeight:el?.scrollHeight??null,
+            viewportHeight:el?.clientHeight??null,distance:el?chatScrollDistance(el):null,
+            nearBottom:chatScrollNearBottom(el),appends:chatScrollState.appends,
+            backgroundAppends:chatScrollState.backgroundAppends,
+            corrections:chatScrollState.corrections,followRequests:chatScrollState.followRequests,
+            skippedScrollback:chatScrollState.skippedScrollback,resumes:chatScrollState.resumes,
+            layoutChanges:chatScrollState.layoutChanges,rootChanges:chatScrollState.rootChanges,
+            appendHook:installedHooks.has('ChatRoomAppendChat')};
+    }
+    Object.defineProperty(window,'SubbysChatAutoScrollDiag',{
+        configurable:true,value:chatScrollDiagnostic
+    });
+    // Preserve the existing whisper diagnostic used in prior releases.
+    Object.defineProperty(window,'SubbysWhisperScrollDiag',{
+        configurable:true,value:()=>({...chatScrollDiagnostic(),corrections:chatScrollState.corrections})
+    });
     function chatSoundIsFavorite(member){
         const list=window.Player?.FriendList;
         if(!Array.isArray(list))return false;
@@ -3800,6 +3975,7 @@ function SubbysPlushiesPageMain() {
             while(index<rows.length&&n<18&&performance.now()-start<5){
                 chatStyleDecorate(rows[index++]);n++;
             }
+            if(n)chatScrollQueue('palette-backfill');
             if(index<rows.length){chatStylePerfMetrics.queuedPublic=rows.length-index;
                 window.requestAnimationFrame?.(flush)??window.setTimeout(flush,16);
             }else{
@@ -18872,19 +19048,11 @@ function SubbysPlushiesPageMain() {
         if (!getFeatureSettings().quickReactions) return false;
         const record = quickReactionMatch(packet);
         if (!record) return false;
-        const scroller = packet.emoji ? quickReactionChatScroller(record) : null;
-        const follow = scroller && quickReactionIsNearBottom(scroller);
+        const follow = !!chatScrollAttach() && chatScrollState.pinned;
         if (packet.emoji) record.reactions.set(actor, packet.emoji);
         else record.reactions.delete(actor);
         quickReactionRender(record);
-        if (follow) {
-            quickReactionScrollToBottom(record, scroller);
-            if (typeof window.requestAnimationFrame === "function") {
-                window.requestAnimationFrame(() => {
-                    if (quickReactionIsNearBottom(scroller)) quickReactionScrollToBottom(record, scroller);
-                });
-            }
-        }
+        if(follow)chatScrollQueue('remote-reaction');
         return true;
     }
     function quickReactionProcessPending() {
@@ -18920,30 +19088,6 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-    function quickReactionChatScroller(record) {
-        if (!record?.active || !record.row?.isConnected ||
-            window.CurrentScreen !== "ChatRoom" || record.room !== quickReactionRoomKey()) return null;
-        const root = getOfferChatRoot();
-        if (!root || !root.contains(record.row)) return null;
-        for (let node = root; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
-            if (Number(node.scrollHeight) > Number(node.clientHeight) + 1) return node;
-        }
-        return root;
-    }
-    function quickReactionIsNearBottom(scroller) {
-        if (!scroller?.isConnected) return false;
-        const top = Number(scroller.scrollTop);
-        const height = Number(scroller.scrollHeight);
-        const viewport = Number(scroller.clientHeight);
-        return Number.isFinite(top) && Number.isFinite(height) && Number.isFinite(viewport) &&
-            height - viewport - top <= 48;
-    }
-    function quickReactionScrollToBottom(record, expectedScroller = null) {
-        const target = quickReactionChatScroller(record);
-        if (!target || (expectedScroller && target !== expectedScroller)) return false;
-        target.scrollTop = target.scrollHeight;
-        return true;
-    }
     function quickReactionSend(record, emoji) {
         if (!getFeatureSettings().quickReactions || !record?.row?.isConnected ||
             window.CurrentScreen !== "ChatRoom" || typeof window.ServerSend !== "function" ||
@@ -18969,12 +19113,9 @@ function SubbysPlushiesPageMain() {
             if (value) record.reactions.set(me, value);
             else record.reactions.delete(me);
             quickReactionRender(record);
-            if (value) {
-                quickReactionScrollToBottom(record);
-                if (typeof window.requestAnimationFrame === "function") {
-                    window.requestAnimationFrame(() => quickReactionScrollToBottom(record));
-                }
-            }
+            // Reacting to an older message must never jump the reader away
+            // from scrollback. Follow only if the shared chat view is pinned.
+            if(chatScrollAttach() && chatScrollState.pinned)chatScrollQueue('local-reaction');
             return true;
         } catch (e) {
             warn("Quick Reaction sync failed:", e);
@@ -19564,12 +19705,11 @@ function SubbysPlushiesPageMain() {
                             if(getFeatureSettings().highlightMyName)highlightMyNameInAppendedChat(row);
                             chatStyleDecorate(row);
                             if(row.classList.contains('ChatMessageWhisper')){
-                                const scroller=chatWhisperScrollableRoot();
-                                const follow=scroller&&chatWhisperNearBottom(scroller,120);
                                 chatWhisperDecorate(row);
-                                if(follow)chatWhisperFollowAfterAppend(scroller);
                             }
                             quietPerfEnhanceChatNode(row);
+                            chatScrollAttach();
+                            chatScrollQueue('fallback-append');
                         }
                     }
                 }
@@ -21489,8 +21629,7 @@ function SubbysPlushiesPageMain() {
             }
             const isWhisperAppend=node instanceof Element &&
                 (node.matches('.ChatMessageWhisper')||!!node.querySelector('.ChatMessageWhisper'));
-            const whisperScroller=isWhisperAppend?chatWhisperScrollableRoot():null;
-            const followWhisper=!!whisperScroller&&chatWhisperNearBottom(whisperScroller);
+            chatScrollBeforeAppend(node);
             const result = next(args);
             quickReactionCaptureAppendedRow(node);
             if (node instanceof Element && window.CurrentScreen === "ChatRoom") {
@@ -21506,9 +21645,10 @@ function SubbysPlushiesPageMain() {
                 if (isPublic) {
                     try { window.SubbysEssentialsExtras?.onChatRow?.(node); } catch (_) {}
                 }
-                if(followWhisper)chatWhisperFollowAfterAppend(whisperScroller);
+
                 try { quietPerfEnhanceChatNode(node); } catch (_) {}
             }
+            chatScrollAfterAppend(node);
             return result;
         });
         chatStyleRefresh();
@@ -28794,7 +28934,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.13";
+    const VERSION = "3.9.14";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
