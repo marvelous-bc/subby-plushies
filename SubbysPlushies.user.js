@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.7.2
-// @description  R133 native name-color compatibility and two-way chat title synchronization
+// @version      3.7.3
+// @description  R133 chat sender reconciliation for local and peer nickname styles
 // @released     2026-11-01
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.7.2";
+    const VERSION = "3.7.3";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2496,13 +2496,67 @@ function SubbysPlushiesPageMain() {
     const CHAT_STYLE_SYMBOLS = Object.freeze(['♡ ✧','♛ ✦','☾ ✧','✦ ★','🔥 ✦','🐾 ♡','❀ ♡','★ ✦','none']);
     const CHAT_STYLE_BORDERS = Object.freeze(['solid','dashed','double','none']);
     const chatStyleRemote = new Map();
+    // BC may append our own chat to the DOM from a separate send/echo path.
+    // Track a short-lived, sender-verified message record so a native chat row
+    // can still be associated with the correct player after the hook returns.
+    // This queue never trusts an author name embedded inside chat content.
+    const chatStylePendingPackets = [];
+    const CHAT_STYLE_PENDING_LIFETIME_MS = 4500;
+    function chatStyleRememberPacket(member, content, direction) {
+        const id=Number(member);
+        if(window.CurrentScreen!=='ChatRoom' || !Number.isSafeInteger(id) || id<=0 ||
+           typeof content!=='string' || !content.length || content.length>8000 ||
+           (id!==currentAccountMemberNumber() && !getRoomCharacterByMember(id))) return false;
+        const now=Date.now();
+        for(let i=chatStylePendingPackets.length-1;i>=0;i--)
+            if(now-chatStylePendingPackets[i].time>CHAT_STYLE_PENDING_LIFETIME_MS) chatStylePendingPackets.splice(i,1);
+        chatStylePendingPackets.push({member:id,content,time:now,direction,
+            previousRow:document.querySelector('#TextAreaChatLog .ChatMessage:last-child')||
+                        document.querySelector('#TextAreaChatLog .ChatMessage:last-of-type')});
+        if(chatStylePendingPackets.length>32)chatStylePendingPackets.splice(0,chatStylePendingPackets.length-32);
+        return true;
+    }
+    function chatStyleMatchesNativeName(row,member) {
+        const person=getRoomCharacterByMember(member)||
+            (member===currentAccountMemberNumber()?window.Player:null);
+        if(!person) return false;
+        const names=[person.Nickname,person.Name,person.AccountName,getCharacterDisplayName(person)]
+            .filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim());
+        if(!names.length)return false;
+        // Require the native author's header, not an occurrence in the body.
+        const node=row.querySelector('.ChatMessageName,.ChatMessageSender,.ChatMessageUsername');
+        if(node){
+            const header=(node.textContent||'').trim().replace(/:$/,'').trim();
+            return names.includes(header);
+        }
+        const line=(row.textContent||'').trimStart();
+        return names.some(name=>line.startsWith(name+':'));
+    }
+    function chatStyleResolvePendingRow(row) {
+        if(!row?.classList?.contains('ChatMessageChat') ||
+           row.classList.contains('ChatMessageWhisper') ||
+           row.classList.contains('ChatMessageNonDialogue')) return 0;
+        const line=(row.textContent||'');
+        const now=Date.now();
+        for(let i=chatStylePendingPackets.length-1;i>=0;i--) {
+            const packet=chatStylePendingPackets[i];
+            if(now-packet.time>CHAT_STYLE_PENDING_LIFETIME_MS){chatStylePendingPackets.splice(i,1);continue;}
+            if(packet.previousRow?.isConnected && packet.previousRow!==row &&
+               !(packet.previousRow.compareDocumentPosition(row)&Node.DOCUMENT_POSITION_FOLLOWING))continue;
+            if(!line.includes(packet.content) || !chatStyleMatchesNativeName(row,packet.member))continue;
+            chatStylePendingPackets.splice(i,1);
+            chatStyleMetrics.pendingMatches++;
+            return packet.member;
+        }
+        return 0;
+    }
     // A room peer should receive our style even if they joined after the
     // first announcement. Answer each member's initial presence only once;
     // this cannot create an endless acknowledgement loop.
     const chatStylePresenceAcknowledged = new Set();
     let chatStyleAccount = 0;
     let chatStylePersonal = null;
-    const chatStyleMetrics = {rows:0,packets:0,rejected:0,unmatchedRows:0,unmatchedLabels:0,nativeContexts:0,contextRows:0};
+    const chatStyleMetrics = {rows:0,packets:0,rejected:0,unmatchedRows:0,unmatchedLabels:0,nativeContexts:0,contextRows:0,pendingMatches:0,outboundCaptured:0};
     // BC's ChatRoomMessage packet is authoritative for the sender. Some R133
     // native chat rows have no data-sender attribute; keep the identity only
     // while BC synchronously appends that packet's rendered Chat message.
@@ -2514,6 +2568,7 @@ function SubbysPlushiesPageMain() {
            (data.Target!=null && Number(data.Target)!==0) ||
            !Number.isSafeInteger(member) || member<=0 ||
            (member!==currentAccountMemberNumber() && !getRoomCharacterByMember(member))) return next();
+        chatStyleRememberPacket(member,data.Content,'incoming');
         const previous=chatStyleNativeChatContext;
         chatStyleNativeChatContext={member};
         chatStyleMetrics.nativeContexts++;
@@ -2737,47 +2792,48 @@ function SubbysPlushiesPageMain() {
         }
         for(const node of row.querySelectorAll('.'+CHAT_STYLE_SYMBOL_CLASS)) node.remove();
         for(const node of row.querySelectorAll('.'+ROYAL_SEAL_CLASS)) node.remove();
+        for(const node of row.querySelectorAll('.SubbysCustomChatFallbackAnchor')) node.remove();
     }
     function chatStyleClearAll(root=document.getElementById('TextAreaChatLog')) {
         if(!root)return;
         for(const row of root.querySelectorAll('.'+CHAT_STYLE_CLASS)) chatStyleClearRow(row);
     }
     function chatStyleLabel(row,member) {
-        const person=getRoomCharacterByMember(member) ||
-            (member===currentAccountMemberNumber()?window.Player:null);
-        const names=[person?.Nickname,person?.Name,person?.AccountName,getCharacterDisplayName(person)]
-            .filter(Boolean).map(x=>String(x).trim()).filter(Boolean);
-        const matchesName=text=>names.some(name=>text===name || text===name+':');
-        // Every candidate here is gated on a real public-chat sender number.
-        // Never promote an inferred name from the message text into an ID.
+        // Trust native BC's positive public-chat sender ID, not the visible
+        // nickname spelling. R133 and other mods can display aliases, symbols,
+        // account IDs, or label markup that doesn't equal Character.Nickname.
         const trusted=Number(row.dataset.sender)===member ||
             Number(row.dataset.subbysVerifiedChatSender)===member;
         if(!trusted || !row.classList.contains('ChatMessageChat')) return null;
-        const looksLikeHeader=text=>/^[^:\n\r]{1,90}:$/.test(text) &&
-            !/^(?:now\s+(?:online|offline)|system|notification)\s*:/i.test(text);
-        const headerValue=node=>(node.textContent||'').trim();
-        const knownOrHeader=text=>matchesName(text) || looksLikeHeader(text);
-        // Native chat label classes are authoritative once the message sender
-        // has been verified. Native BC can set a LabelColor inline on these.
-        const existing=row.querySelector('.ChatMessageName,.ChatMessageSender,.ChatMessageUsername');
-        if(existing && knownOrHeader(headerValue(existing)))return existing;
-        // R133 and custom chat renderers can use nested, colorized <span>s.
-        // Search only shallow header descendants. Never select an arbitrary
-        // mention of Subbycat in the message body.
-        for(const child of Array.from(row.children).slice(0,8)) {
+        const person=getRoomCharacterByMember(member) ||
+            (member===currentAccountMemberNumber()?window.Player:null);
+        const names=[person?.Nickname,person?.Name,person?.AccountName,getCharacterDisplayName(person)]
+            .filter(x=>typeof x==='string'&&x.trim()).map(x=>x.trim());
+        const trimmed=node=>(node.textContent||'').trim();
+        const headerLike=value=>value.length>0 && value.length<=110 &&
+            !/^(?:now\s+(?:online|offline)|system|notification)\s*:/i.test(value) &&
+            (names.some(name=>value===name || value===name+':' ||
+                value.startsWith(name+' (') || value.startsWith(name+' #')) ||
+                /^[^:\n\r]{1,100}:$/.test(value));
+        // Dedicated name classes represent the AUTHOR element. Match them
+        // directly even if BCX gives a nickname a different visible string.
+        // Never match arbitrary elements or the message body this way.
+        const nameNode=row.querySelector('.ChatMessageName,.ChatMessageSender,.ChatMessageUsername,.ChatRoomChatName');
+        if(nameNode && trimmed(nameNode).length<=140 && trimmed(nameNode).length>0 &&
+           !nameNode.closest('.ChatMessageContent,.ChatMessageBody,.ChatMessageText')) return nameNode;
+        // Some themes put the colored author in the first header wrapper.
+        // Do not descend through the body or select an author from an @mention.
+        const children=Array.from(row.children).slice(0,8);
+        for(const child of children) {
             if(child.matches('button,.ReplyButton,[contenteditable],.ChatMessageTime,.ChatMessageTimestamp,.ChatMessageContent,.ChatMessageBody,.ChatMessageText'))continue;
-            const candidates=[child,...Array.from(child.querySelectorAll('b,strong,span,a')).slice(0,20)];
-            // Prefer the outermost exact author label when its children split
-            // the nickname and ':' across differently colored spans.
+            const candidates=[child,...Array.from(child.querySelectorAll('b,strong,span,a')).slice(0,24)];
             for(const candidate of candidates) {
-                const value=headerValue(candidate);
-                if(value.length>0 && value.length<=92 && knownOrHeader(value))return candidate;
+                const value=trimmed(candidate);
+                if(headerLike(value))return candidate;
             }
         }
-        // When BC renders the author as plain text, isolate only the leading
-        // prefix. If a different addon changed the display name locally,
-        // a short colon-terminated prefix is still safe because this is a
-        // verified native Chat message, not a generic status notification.
+        // Plain-text author header. Wrap only the author prefix so gradients
+        // never recolor the actual user's message.
         for(const node of Array.from(row.childNodes).slice(0,8)) {
             if(node.nodeType!==3)continue;
             const original=node.textContent||'';
@@ -2785,8 +2841,8 @@ function SubbysPlushiesPageMain() {
             const text=original.slice(leading.length);
             let prefix=names.map(name=>name+':').find(name=>text.startsWith(name));
             if(!prefix) {
-                const match=text.match(/^([^:\n\r]{1,90}:)(?=\s|$)/);
-                if(match && looksLikeHeader(match[1]))prefix=match[1];
+                const match=text.match(/^([^:\n\r]{1,100}:)(?=\s|$)/);
+                if(match && headerLike(match[1]))prefix=match[1];
             }
             if(!prefix)continue;
             const head=document.createElement('span');
@@ -2797,6 +2853,18 @@ function SubbysPlushiesPageMain() {
             return head;
         }
         return null;
+    }
+    function chatStyleInsertAnchor(row,label) {
+        if(label?.isConnected && row.contains(label))return label;
+        // Styling an authenticated public-chat row should not depend on a
+        // particular nick label's markup. Use a row-start anchor as a LAST
+        // resort for the title only. This is never called for whispers,
+        // system rows, notification rows, or unverified sender rows.
+        const anchor=document.createElement('span');
+        anchor.className='SubbysCustomChatFallbackAnchor';
+        anchor.setAttribute('aria-hidden','true');
+        row.insertBefore(anchor,row.firstChild);
+        return anchor;
     }
     function chatStyleDecorate(node, nativeContext=null) {
         if(window.CurrentScreen!=='ChatRoom' || !(node instanceof Element))return;
@@ -2828,6 +2896,13 @@ function SubbysPlushiesPageMain() {
                 const verified=Number(row.dataset.subbysVerifiedChatSender);
                 if(Number.isSafeInteger(verified)&&verified>0)member=verified;
             }
+            if(!member) {
+                // In some BC builds self-sent messages are appended after the
+                // ChatRoomMessage hook has returned (or through a send-only path).
+                // Match recent native packet CONTENT AND its actual name header.
+                member=chatStyleResolvePendingRow(row);
+                if(member>0)row.dataset.subbysVerifiedChatSender=String(member);
+            }
             if(!member)chatStyleMetrics.unmatchedRows++;
             const style=chatStyleViewAllowed() && member>0 ? chatStyleForMember(member) : null;
             if(!style){
@@ -2844,9 +2919,11 @@ function SubbysPlushiesPageMain() {
             // A previously synthesized sender label is replaced during
             // cleanup. Find the label only AFTER clearing the old style.
             if(row.classList.contains(CHAT_STYLE_CLASS))chatStyleClearRow(row);
-            // Verified visible public-chat sender label is required.
+            // A themed label is optional; the native public-chat sender ID is
+            // authoritative for the ROW. Missing label markup must not suppress
+            // the border, symbol, or Cuddle Queen badge.
             const label=chatStyleLabel(row,member);
-            if(!label) { chatStyleMetrics.unmatchedLabels++; continue; }
+            if(!label) chatStyleMetrics.unmatchedLabels++;
             chatStyleEnsureCss();
             row.classList.add(CHAT_STYLE_CLASS);
             row.dataset.subbysChatStyle=signature;
@@ -2861,7 +2938,7 @@ function SubbysPlushiesPageMain() {
                 row.style.setProperty('--subbys-style-shade',chatStyleHexRgb(style.accent,.25));
             }
             // A badge-only message gets its royal seal but no forced palette.
-            if(showNames && style.enabled) label.classList.add(CHAT_STYLE_NAME_CLASS);
+            if(showNames && style.enabled && label) label.classList.add(CHAT_STYLE_NAME_CLASS);
             if(showTitles && member===ROYAL_SEAL_MEMBER && style.royalSeal===true) {
                 // Add the badge BEFORE the verified sender's name, never after.
                 // Identity is based on BC's sender, not message text.
@@ -2872,7 +2949,8 @@ function SubbysPlushiesPageMain() {
                 const icon=document.createElement('span');icon.className='SubbysRoyalSealIcon';icon.textContent='♛ ♡';
                 const title=document.createElement('span');title.className='SubbysRoyalSealTitle';title.textContent='CUDDLE QUEEN';
                 seal.append(icon,title);
-                label.before(seal);
+                const anchor=chatStyleInsertAnchor(row,label);
+                anchor.before(seal);
                 row.classList.add(ROYAL_CHAT_CLASS);
             }
             if(style.enabled && style.symbol!=='none') {
@@ -2901,12 +2979,34 @@ function SubbysPlushiesPageMain() {
         toggleNameTitles(){return toggleFeatureSetting('chatStyleShowNameTitles');},
         setCuddleQueenBroadcast:chatStyleSetRoyalSealBroadcast,
         reshare(){return sendAddonPresence(true);},
+        debugSelf(){
+            const id=currentAccountMemberNumber();
+            const rows=Array.from(document.querySelectorAll('#TextAreaChatLog .ChatMessageChat')).slice(-30);
+            return {account:id,mine:{...chatStyleMine()},roomStyle:chatStyleMineForRoom(),
+                settings:{showAll:chatStyleViewAllowed(),nameColors:getFeatureSettings().chatStyleShowNameColors,
+                    nameTitles:getFeatureSettings().chatStyleShowNameTitles},
+                recentRows:rows.slice(-8).map(r=>({sender:r.getAttribute('data-sender'),
+                    verifiedSender:r.dataset.subbysVerifiedChatSender||null,
+                    snippet:(r.textContent||'').slice(0,90),styled:r.classList.contains(CHAT_STYLE_CLASS),
+                    badge:!!r.querySelector('.'+ROYAL_SEAL_CLASS)})),
+                pendingMatches:chatStyleMetrics.pendingMatches,outboundCaptured:chatStyleMetrics.outboundCaptured,
+                pendingPackets:chatStylePendingPackets.length};
+        },
         peer(member){const id=Number(member);const style=chatStyleRemote.get(id)||null;
             const presence=addonPresenceMembers.get(id)||null;
             const rows=Array.from(document.querySelectorAll('#TextAreaChatLog .ChatMessageChat'))
                 .filter(row=>Number(row.dataset.sender)===id || Number(row.dataset.subbysVerifiedChatSender)===id);
             return {member:id,receivedPresence:!!presence,peerVersion:presence?.version||null,
                 receivedStyle:style?{...style}:null,rowsWithSender:rows.length,
+                showAll:chatStyleViewAllowed(),safeMode:essentialsConfig().safeMode===true,
+                showNameColors:getFeatureSettings().chatStyleShowNameColors!==false,
+                showNameTitles:getFeatureSettings().chatStyleShowNameTitles!==false,
+                rowSamples:rows.slice(-4).map(row=>({
+                    sender:row.getAttribute('data-sender'),classes:row.className,
+                    nameLabel:!!row.querySelector('.ChatMessageName,.ChatMessageSender,.ChatMessageUsername,.ChatRoomChatName'),
+                    textStart:(row.textContent||'').slice(0,75),
+                    styled:row.classList.contains(CHAT_STYLE_CLASS)
+                })),
                 styledRows:rows.filter(row=>row.classList.contains(CHAT_STYLE_CLASS)).length,
                 visibleBadges:rows.reduce((count,row)=>count+row.querySelectorAll('.'+ROYAL_SEAL_CLASS).length,0)};},
         diagnostic(){return {version:VERSION,account:currentAccountMemberNumber(),
@@ -2923,6 +3023,8 @@ function SubbysPlushiesPageMain() {
             royalSealEnabled:chatStyleMine().royalSeal===true,
             royalSealsVisible:document.querySelectorAll('#TextAreaChatLog .'+ROYAL_SEAL_CLASS).length,
             packets:chatStyleMetrics.packets,rejected:chatStyleMetrics.rejected,rowsStyled:chatStyleMetrics.rows,
+            pendingPackets:chatStylePendingPackets.length,pendingMatches:chatStyleMetrics.pendingMatches,
+            outboundCaptured:chatStyleMetrics.outboundCaptured,
             nativeContexts:chatStyleMetrics.nativeContexts,contextRows:chatStyleMetrics.contextRows,
             unmatchedRows:chatStyleMetrics.unmatchedRows,unmatchedLabels:chatStyleMetrics.unmatchedLabels,
             recentPublicRowStructure:Array.from(document.querySelectorAll('#TextAreaChatLog .ChatMessageChat')).slice(-5)
@@ -19647,6 +19749,7 @@ function SubbysPlushiesPageMain() {
             quickReactionReset();
             addonPresenceMembers.clear();
             chatStyleRemote.clear();
+            chatStylePendingPackets.length=0;
             chatStylePresenceAcknowledged.clear();
             receivedCustomActionTokens.clear();
             locallyRenderedCustomActionTokens.clear();
@@ -20101,6 +20204,18 @@ function SubbysPlushiesPageMain() {
                 refreshPlushStatusIcon();
             }
             return result;
+        });
+        // Source of truth for *outgoing* public chat. The server's sender ID
+        // is not needed to recognize our own outgoing packet: ServerSend is
+        // invoked locally by the logged-in player. Do not touch the packet.
+        installHook('ServerSend', 10000, (args,next)=>{
+            if(args?.[0]==='ChatRoomChat') {
+                const sent=args[1];
+                if(sent?.Type==='Chat' && (sent.Target==null || Number(sent.Target)===0) &&
+                   chatStyleRememberPacket(currentAccountMemberNumber(),sent.Content,'outgoing'))
+                    chatStyleMetrics.outboundCaptured++;
+            }
+            return next(args);
         });
         const chatAppendHooked = installHook("ChatRoomAppendChat", 10000, (args, next) => {
             const node = args?.[0];
@@ -27336,7 +27451,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.7.2";
+    const VERSION = "3.7.3";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
