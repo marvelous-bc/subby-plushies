@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.19
-// @description  v3.9.19: Chat badge alignment and subtle inline @mentions
+// @version      3.9.20
+// @description  v3.9.20: Targeted chat, UI and artwork performance optimization
 // @released     2026-11-02
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.19";
+    const VERSION = "3.9.20";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -68,10 +68,18 @@ function SubbysPlushiesPageMain() {
         return Math.max(minimum, Number((px * subbyUiFactor()).toFixed(2)));
     }
     const subbyUiFonts = new WeakMap();
+    const subbysOptimizationMetrics = {
+        fontCandidates: 0, fontWrites: 0, mentionAliasHits: 0, mentionAliasBuilds: 0,
+        mentionRegexHits: 0, mentionRegexBuilds: 0, imageIndexHits: 0,
+        scrollContainerFastPaths: 0, scrollContainerProbes: 0,
+    };
     function subbyUiAdjustFonts(root) {
         if (!root?.isConnected) return;
         const factor = subbyUiFactor();
-        const nodes = [root, ...root.querySelectorAll('*')];
+        // Only elements with an inline font-size can have a pixel base to rescale.
+        // Native game UI and CSS-inherited text are never rewritten.
+        const nodes = [root, ...root.querySelectorAll('[style*="font-size" i]')];
+        subbysOptimizationMetrics.fontCandidates += nodes.length;
         for (const el of nodes) {
             const value = String(el.style?.fontSize || '');
             let saved = subbyUiFonts.get(el);
@@ -83,7 +91,7 @@ function SubbysPlushiesPageMain() {
             }
             if (!saved) continue;
             const px = `${Math.round(saved.base * factor * 100) / 100}px`;
-            if (el.style.fontSize !== px) el.style.fontSize = px;
+            if (el.style.fontSize !== px) { el.style.fontSize = px; subbysOptimizationMetrics.fontWrites++; }
             saved.applied = px;
         }
     }
@@ -578,6 +586,15 @@ function SubbysPlushiesPageMain() {
         document.addEventListener('visibilitychange',
             () => sharedPerfSignal(document.hidden?'hidden':'visible'), { passive:true });
     }
+    // Minimal diagnostics only; no private messages, BC member numbers or keys.
+    Object.defineProperty(window,'SubbysOptimizationDiag',{configurable:true,value:()=>({
+        version:VERSION,optimizations:{...subbysOptimizationMetrics},
+        chatScroll:{appends:chatScrollState.appends,followRequests:chatScrollState.followRequests,
+            corrections:chatScrollState.corrections,skippedScrollback:chatScrollState.skippedScrollback},
+        messageStyles:{...chatStylePerfMetrics},
+        imageIndexCount:renderSourceIndexes.size,
+        note:'Performance counters are local and do not contain message text.'
+    })});
     // === End cooperative performance bus ===
 
     // === End Targeted Performance Engine ===
@@ -3056,7 +3073,7 @@ function SubbysPlushiesPageMain() {
     const chatScrollState={root:null,scroller:null,lastRow:null,observer:null,resize:null,
         pinned:true,manualUntil:0,lastTop:0,hiddenPending:false,raf:0,timer:0,
         appends:0,followRequests:0,corrections:0,skippedScrollback:0,
-        backgroundAppends:0,resumes:0,layoutChanges:0,rootChanges:0};
+        backgroundAppends:0,resumes:0,layoutChanges:0,rootChanges:0,lastContainerProbe:0};
     const CHAT_SCROLL_THRESHOLD=56;
     function chatScrollDistance(scroller){
         return Math.max(0,scroller.scrollHeight-scroller.clientHeight-scroller.scrollTop);
@@ -3097,7 +3114,7 @@ function SubbysPlushiesPageMain() {
             el.removeEventListener('load',chatScrollOnImageLoad,true);
         }
         chatScrollState.root=null;chatScrollState.scroller=null;chatScrollState.lastRow=null;
-        chatScrollState.hiddenPending=false;
+        chatScrollState.hiddenPending=false;chatScrollState.lastContainerProbe=0;
     }
     function chatScrollOnGesture(){chatScrollState.manualUntil=performance.now()+1200;}
     function chatScrollOnPointer(event){
@@ -3151,6 +3168,16 @@ function SubbysPlushiesPageMain() {
     }
     function chatScrollAttach(){
         const root=window.CurrentScreen==='ChatRoom'?document.getElementById('TextAreaChatLog'):null;
+        const now=performance.now();
+        // BC normally keeps the same chat scroller for hundreds of messages.
+        // Recheck at least once per second to detect a skin changing overflow.
+        if(root && root===chatScrollState.root && root.isConnected &&
+            chatScrollState.scroller?.isConnected && now-chatScrollState.lastContainerProbe<1000){
+            subbysOptimizationMetrics.scrollContainerFastPaths++;
+            return chatScrollState.scroller;
+        }
+        chatScrollState.lastContainerProbe=now;
+        subbysOptimizationMetrics.scrollContainerProbes++;
         const scroller=chatScrollFindScroller(root);
         if(root===chatScrollState.root&&scroller===chatScrollState.scroller&&root?.isConnected)return scroller;
         chatScrollDetach();
@@ -19534,25 +19561,48 @@ function SubbysPlushiesPageMain() {
         }
         return [...known];
     }
+    // Cache only derived names and regexes, never chat content or personal data.
+    // Short TTL handles in-place BC nickname changes; roster changes invalidate
+    // immediately when the roster array/length changes.
+    const textFxAliasCache={at:-Infinity,roster:null,length:-1,player:null,ownKey:'',names:[]};
+    const textFxRegexCache=new WeakMap();
     function textFxAliasesInRoom(){
-        const byName=new Map();
-        const all=[window.Player,...(Array.isArray(window.ChatRoomCharacter)?window.ChatRoomCharacter:[])];
-        for(const person of all.slice(0,65)){
+        const roster=Array.isArray(window.ChatRoomCharacter)?window.ChatRoomCharacter:[];
+        const player=window.Player;
+        const ownKey=[player?.MemberNumber,player?.Nickname,player?.Name,player?.AccountName].join('\u0001');
+        const now=performance.now();
+        if(textFxAliasCache.roster===roster && textFxAliasCache.length===roster.length &&
+            textFxAliasCache.player===player && textFxAliasCache.ownKey===ownKey &&
+            now-textFxAliasCache.at<900){
+            subbysOptimizationMetrics.mentionAliasHits++;
+            return textFxAliasCache.names;
+        }
+        const byName=new Map(),mineMember=currentAccountMemberNumber();
+        const all=[player,...roster.slice(0,64)];
+        for(const person of all){
             if(!person)continue;
-            const mine=person===window.Player || Number(person.MemberNumber)===currentAccountMemberNumber();
+            const mine=person===player || Number(person.MemberNumber)===mineMember;
             for(const alias of textFxAliases(person)){
                 const key=alias.toLocaleLowerCase();
                 if(!byName.has(key)||mine)byName.set(key,{name:alias,mine});
             }
         }
-        return [...byName.values()].sort((a,b)=>b.name.length-a.name.length).slice(0,120);
+        const names=[...byName.values()].sort((a,b)=>b.name.length-a.name.length).slice(0,120);
+        Object.assign(textFxAliasCache,{at:now,roster,length:roster.length,player,ownKey,names});
+        subbysOptimizationMetrics.mentionAliasBuilds++;
+        return names;
     }
     function textFxRegex(names){
         if(!names.length)return null;
+        const cached=textFxRegexCache.get(names);
+        if(cached){subbysOptimizationMetrics.mentionRegexHits++;return cached;}
         // Match complete @aliases, including spaces in BC nicknames; do not
         // alert for partial names (@Alex doesn't match @Alexander).
         const pattern=names.map(x=>textFxEscapeRegex(x.name)).join('|');
-        return new RegExp('(^|[^\\p{L}\\p{N}_@])(@(?:'+pattern+'))(?=$|[^\\p{L}\\p{N}_])','giu');
+        const regex=new RegExp('(^|[^\\p{L}\\p{N}_@])(@(?:'+pattern+'))(?=$|[^\\p{L}\\p{N}_])','giu');
+        textFxRegexCache.set(names,regex);
+        subbysOptimizationMetrics.mentionRegexBuilds++;
+        return regex;
     }
     function textFxHasOwnMention(content){
         if(typeof content!=='string'||content.length>8192||!content.includes('@'))return false;
@@ -19573,10 +19623,12 @@ function SubbysPlushiesPageMain() {
         return nodes;
     }
     function textFxClearMarks(row,selector){
+        const parents=new Set();
         for(const mark of row.querySelectorAll(selector)){
             const parent=mark.parentNode;
-            if(parent){mark.replaceWith(document.createTextNode(mark.textContent||''));parent.normalize();}
+            if(parent){mark.replaceWith(document.createTextNode(mark.textContent||''));parents.add(parent);}
         }
+        for(const parent of parents)parent.normalize();
     }
     function textFxMarkQuotes(row){
         for(const node of textFxNodeCandidates(row)){
@@ -19594,10 +19646,10 @@ function SubbysPlushiesPageMain() {
             if(hits){frag.append(document.createTextNode(text.slice(last)));node.replaceWith(frag);}
         }
     }
-    function textFxMarkAtMentions(row,names){
+    function textFxMarkAtMentions(row,names,own){
         const re=textFxRegex(names);
         if(!re)return;
-        const own=new Set(textFxAliases(window.Player).map(x=>x.toLocaleLowerCase()));
+        if(!own)own=new Set(textFxAliases(window.Player).map(x=>x.toLocaleLowerCase()));
         for(const node of textFxNodeCandidates(row)){
             const value=node.nodeValue||'';
             if(!value.includes('@'))continue;
@@ -19624,7 +19676,7 @@ function SubbysPlushiesPageMain() {
         const rows=node.matches('.ChatMessage')?[node]:Array.from(node.querySelectorAll('.ChatMessage')).slice(-40);
         if(!rows.length)return;
         textFxEnsureCss();
-        let names=null;
+        let names=null,own=null;
         for(const row of rows){
             if(!row.matches('.ChatMessageChat:not(.ChatMessageWhisper):not(.ChatMessageAction):not(.ChatMessageLocalMessage)'))continue;
             if(reset){
@@ -19635,12 +19687,13 @@ function SubbysPlushiesPageMain() {
             }
             if(row.dataset.subbysTextFxDone==='1')continue;
             row.dataset.subbysTextFxDone='1';
+            if(!settings.textQuoteStyle && !settings.textAtMentions && !(isNew&&settings.textEntranceAnimation))continue;
             const content=row.textContent||'';
             if(content.length>10000)continue;
             if(settings.textQuoteStyle&&(content.includes('>')||content.includes('“')||content.includes('"')))textFxMarkQuotes(row);
             if(settings.textAtMentions&&content.includes('@')){
-                if(!names)names=textFxAliasesInRoom();
-                textFxMarkAtMentions(row,names);
+                if(!names){names=textFxAliasesInRoom();own=new Set(textFxAliases(window.Player).map(x=>x.toLocaleLowerCase()));}
+                textFxMarkAtMentions(row,names,own);
             }
             if(isNew&&settings.textEntranceAnimation)row.classList.add('SubbysTextEntrance');
         }
@@ -19711,12 +19764,14 @@ function SubbysPlushiesPageMain() {
         const root = getOfferChatRoot();
         if (!root) return;
         const marks = root.querySelectorAll("." + MY_NAME_HIGHLIGHT_CLASS);
+        const parents = new Set();
         for (const mark of marks) {
             const parent = mark.parentNode;
             if (!parent) continue;
             mark.replaceWith(document.createTextNode(mark.textContent || ""));
-            parent.normalize();
+            parents.add(parent);
         }
+        for (const parent of parents) parent.normalize();
     }
     function highlightMyNameInRow(row, names, matcher) {
         if (!(row instanceof Element) || !names.length || !matcher) return 0;
@@ -19731,8 +19786,8 @@ function SubbysPlushiesPageMain() {
             if (!parent || parent.closest(MY_NAME_HIGHLIGHT_IGNORE_SELECTOR)) continue;
             const content = node.nodeValue || "";
             if (content.length > 8192) continue;
-            const lower = content.toLocaleLowerCase();
-            if (!names.some(name => lower.includes(name.toLocaleLowerCase()))) continue;
+            matcher.lastIndex = 0;
+            if (!matcher.test(content)) continue;
             nodes.push(node);
         }
         let highlighted = 0;
@@ -22925,10 +22980,15 @@ function SubbysPlushiesPageMain() {
         canvas.height = PLUSH_RENDER.Height;
         return canvas.toDataURL("image/png");
     }
+    const renderSourceIndexes = new Map();
+    for(let i=0;i<PLUSH_IMAGES.length;i++){
+        const src=PLUSH_IMAGES[i];
+        if(!renderSourceIndexes.has(src))renderSourceIndexes.set(src,[]);
+        renderSourceIndexes.get(src).push(i);
+    }
     function renderIndexesForSource(source) {
-        const indexes = [];
-        for (let i = 0; i < PLUSH_IMAGES.length; i++) if (PLUSH_IMAGES[i] === source) indexes.push(i);
-        return indexes;
+        subbysOptimizationMetrics.imageIndexHits++;
+        return renderSourceIndexes.get(source)||[];
     }
     const dirtyPlushCharacters = new Set();
     let dirtyPlushRenderFrame = 0;
@@ -29360,7 +29420,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.19";
+    const VERSION = "3.9.20";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {

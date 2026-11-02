@@ -1,6 +1,6 @@
 {
-  "version": "3.9.19",
+  "version": "3.9.20",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Fix overlapping decorative heart/crown chat symbols by placing them beside the verified author, not over native timestamp/member badges. Scope mentions and name highlighting to message text, reduce yellow highlight, preserve native font/line height and existing settings.",
+  "notes": "Targeted low-risk performance optimization: cache BC name/nickname mention matchers during chat bursts, cut repeated chat scroller geometry reads, scan only inline-font-size nodes on UI zoom, index immutable plush image sources, batch text-highlight cleanup. No features removed; settings, messages, chat gradients, badges and plushie behavior preserved.",
   "released": "2026-11-02"
 }
