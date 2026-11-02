@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.16
-// @description  v3.9.16: whisper-soft fade only on public messages with visible custom name gradients; no added glow
+// @version      3.9.18
+// @description  v3.9.18: Name and nickname highlighting enabled by default with @mentions
 // @released     2026-11-02
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.16";
+    const VERSION = "3.9.18";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -1115,10 +1115,16 @@ function SubbysPlushiesPageMain() {
         quickReactions: true,
         expressionReactions: true,
         ignorePoseChangingEmotes: false,
-        highlightMyName: false,
+        highlightMyName: true,
         chatStyleShowAll: true,
         chatStyleShowNameColors: true,
         chatStyleShowNameTitles: true,
+        textGradientDirection: false,
+        textGradientPresets: false,
+        textQuoteStyle: false,
+        textEntranceAnimation: false,
+        textAtMentions: true,
+        textAtMentionSound: true,
     });
     let IDLE_MIN_DELAY_MS = 60000;
     let IDLE_MAX_DELAY_MS = 120000;
@@ -3268,20 +3274,31 @@ function SubbysPlushiesPageMain() {
         if(!Array.isArray(list))return false;
         return list.some(item=>Number(typeof item==='object'?(item.MemberNumber??item.Member):item)===member);
     }
+    let textLastAtMentionSound=0;
     function chatSoundIncoming(data){
+        if(essentialsConfig().safeMode ||window.CurrentScreen!=='ChatRoom')return;
         const cfg=chatExpressionMine();
-        if(!cfg.soundEnabled||cfg.soundType==='none'||essentialsConfig().safeMode ||window.CurrentScreen!=='ChatRoom')return;
         if(cfg.soundMuteHidden && document.hidden)return;
         if(cfg.soundMuteBusy && Array.isArray(window.ChatRoomCharacter) && window.ChatRoomCharacter.length>8)return;
         const sender=Number(data?.Sender);
         if(!Number.isSafeInteger(sender)||sender<=0||sender===currentAccountMemberNumber())return;
         const type=String(data?.Type||'');
-        // The native packet type and sender are trusted. Never parse hidden messages.
-        if(type==='Hidden'||type==='Action')return;
-        const whisper=type==='Whisper';
-        const beep=type==='Beep'||(type==='Chat'&&data.Content==='Beep');
-        const chat=type==='Chat';
-        if(!whisper&&!beep&&!chat)return;
+        if(!['Chat','Whisper','Beep'].includes(type))return;
+        const chat=type==='Chat' && (data?.Target==null||Number(data.Target)===0);
+        const atMention=chat && typeof data.Content==='string' &&
+            getFeatureSettings().textAtMentions && textFxHasOwnMention(data.Content);
+        // @mention notifications are independent of optional whisper/beep sounds.
+        // Native sender and public packet only; never scan private messages.
+        if(atMention && getFeatureSettings().textAtMentionSound){
+            const now=Date.now();
+            if(now-textLastAtMentionSound>=1400){
+                textLastAtMentionSound=now;
+                void chatSoundPlay('chime',.28);
+            }
+            return; // Never play twice if normal mention sound is also enabled.
+        }
+        if(!cfg.soundEnabled||cfg.soundType==='none')return;
+        const whisper=type==='Whisper', beep=type==='Beep'||(chat&&data.Content==='Beep');
         const myName=String(window.Player?.Nickname||window.Player?.Name||'').trim();
         const mentioned=chat&&myName.length>=3&&typeof data.Content==='string'&&
             data.Content.toLocaleLowerCase().includes(myName.toLocaleLowerCase());
@@ -3524,7 +3541,7 @@ function SubbysPlushiesPageMain() {
         // released before v3.7 still understand the rest of this packet.
         const packet={v:1,enabled:true,paletteEnabled:style.enabled===true,
             primary:style.primary,secondary:style.secondary,
-            accent:style.accent,middle:style.middle,direction:style.direction,
+            accent:style.accent,middle:style.middle,direction:getFeatureSettings().textGradientDirection?style.direction:'right',
             intensity:style.intensity,
             symbol:style.symbol,border:style.border,
             glow:style.glow,animation:style.animation};
@@ -3594,10 +3611,14 @@ function SubbysPlushiesPageMain() {
     function chatSharedRule(kind,member,palette){
         const id=Number(member);
         if(!Number.isSafeInteger(id)||id<=0||!palette)return false;
+        // Include the effective local direction in the fingerprint so the
+        // bounded shared stylesheet updates immediately after a quick toggle.
+        const effectiveDirection=id===currentAccountMemberNumber() && !getFeatureSettings().textGradientDirection
+            ? 'right' : palette.direction;
         const fingerprint=kind==='public' ?
-            [palette.primary,palette.middle,palette.secondary,palette.direction,palette.intensity,palette.accent,palette.border].join('|') :
+            [palette.primary,palette.middle,palette.secondary,effectiveDirection,palette.intensity,palette.accent,palette.border].join('|') :
             kind==='whisper' ? [palette.primary,palette.secondary,palette.accent,palette.border].join('|') :
-            [palette.primary,palette.middle,palette.secondary,palette.direction].join('|');
+            [palette.primary,palette.middle,palette.secondary,effectiveDirection].join('|');
         const map=chatSharedRules[kind];
         const previous=map.get(id);
         if(previous?.fingerprint===fingerprint){chatSharedPaletteMetrics.avoided++;return true;}
@@ -3610,7 +3631,7 @@ function SubbysPlushiesPageMain() {
             `#TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors[data-subbys-name-palette-member="${id}"]`;
         const props=kind==='public' ? {
             '--subbys-style-primary':palette.primary,'--subbys-style-middle':palette.middle,
-            '--subbys-style-secondary':palette.secondary,'--subbys-style-direction':CHAT_GRADIENT_ANGLES[palette.direction]||'90deg',
+            '--subbys-style-secondary':palette.secondary,'--subbys-style-direction':CHAT_GRADIENT_ANGLES[effectiveDirection]||'90deg',
             '--subbys-style-intensity':String(palette.intensity/100),'--subbys-style-accent':palette.accent,
             '--subbys-style-border':palette.border,'--subbys-style-background':chatStyleHexRgb(palette.accent,.14),
             '--subbys-style-shade':chatStyleHexRgb(palette.accent,.06+.004*palette.intensity),
@@ -3623,7 +3644,7 @@ function SubbysPlushiesPageMain() {
             '--sw-background':chatStyleHexRgb(palette.accent,.12),'--sw-shade':chatStyleHexRgb(palette.accent,.22)
         } : {
             '--sw-name-primary':palette.primary,'--sw-name-middle':palette.middle,
-            '--sw-name-secondary':palette.secondary,'--sw-name-angle':CHAT_GRADIENT_ANGLES[palette.direction]||'90deg'
+            '--sw-name-secondary':palette.secondary,'--sw-name-angle':CHAT_GRADIENT_ANGLES[effectiveDirection]||'90deg'
         };
         const rule=`${selector}{${Object.entries(props).map(([k,v])=>`${k}:${v}`).join(';')}}`;
         map.set(id,{fingerprint,rule});
@@ -4118,10 +4139,16 @@ function SubbysPlushiesPageMain() {
             expressionReactions: storedBoolean("expressionReactions"),
             ignorePoseChangingEmotes: storedBoolean("ignorePoseChangingEmotes"),
             petBedAutoRestore: Object.prototype.hasOwnProperty.call(stored, "petBedAutoRestore") ? !!stored.petBedAutoRestore : true,
-            highlightMyName: Object.prototype.hasOwnProperty.call(stored, "highlightMyName") ? !!stored.highlightMyName : false,
+            highlightMyName: storedBoolean("highlightMyName"),
             chatStyleShowAll: storedBoolean("chatStyleShowAll"),
             chatStyleShowNameColors: storedBoolean("chatStyleShowNameColors"),
             chatStyleShowNameTitles: storedBoolean("chatStyleShowNameTitles"),
+            textGradientDirection: storedBoolean("textGradientDirection"),
+            textGradientPresets: storedBoolean("textGradientPresets"),
+            textQuoteStyle: storedBoolean("textQuoteStyle"),
+            textEntranceAnimation: storedBoolean("textEntranceAnimation"),
+            textAtMentions: storedBoolean("textAtMentions"),
+            textAtMentionSound: storedBoolean("textAtMentionSound"),
             chatStyleWhisperLikePublic: Object.prototype.hasOwnProperty.call(stored, "chatStyleWhisperLikePublic")
                 ? !!stored.chatStyleWhisperLikePublic : true,
             performanceMode: String(stored.performanceMode || "normal").toLowerCase() === "low" ? "low" : "normal",
@@ -4143,6 +4170,13 @@ function SubbysPlushiesPageMain() {
             else clearMyNameHighlights();
         }
         if (key === "chatStyleWhisperLikePublic") {chatPublicWhisperLookSync();}
+        if (key === "textGradientDirection") {
+            chatStyleRefresh();
+            if (window.CurrentScreen === "ChatRoom") sendAddonPresence(true);
+        }
+        if (["textQuoteStyle","textAtMentions","textEntranceAnimation"].includes(key)) {
+            textFxRefreshVisible();
+        }
         if (key === "chatStyleShowAll" || key === "chatStyleShowNameColors" || key === "chatStyleShowNameTitles") {chatStyleRefresh();}
         if (key === "quickReactions") quickReactionUpdateVisibility();
         if (key === "showDragButton") {
@@ -8831,11 +8865,17 @@ function SubbysPlushiesPageMain() {
                 ignorePoseChangingEmotes: Object.prototype.hasOwnProperty.call(normalized.featureDefaults, "ignorePoseChangingEmotes")
                     ? !!normalized.featureDefaults.ignorePoseChangingEmotes
                     : false,
-                highlightMyName: false,
+                highlightMyName: true,
                 chatStyleShowAll: true,
                 chatStyleShowNameColors: true,
                 chatStyleShowNameTitles: true,
                 chatStyleWhisperLikePublic: true,
+                textGradientDirection: false,
+                textGradientPresets: false,
+                textQuoteStyle: false,
+                textEntranceAnimation: false,
+                textAtMentions: true,
+                textAtMentionSound: true,
                 quickReactions: true,
             });
         } else if (fileName === "idle.json") {
@@ -12976,6 +13016,8 @@ function SubbysPlushiesPageMain() {
         appendExtensionsKeyValue(enabled, "Idle animations", status.idleAnimations ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Speech bubbles", status.speechBubbles ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Highlight my name", status.highlightMyName ? "ON" : "Off");
+        appendExtensionsKeyValue(enabled, "@mentions", getFeatureSettings().textAtMentions ? "ON" : "Off");
+        appendExtensionsKeyValue(enabled, "@mention sounds", getFeatureSettings().textAtMentionSound ? "ON" : "Off");
         appendExtensionsKeyValue(enabled, "Custom chat styles", getFeatureSettings().chatStyleShowAll ? "Visible" : "Hidden locally");
         appendExtensionsKeyValue(enabled, "Name gradients", getFeatureSettings().chatStyleShowNameColors ? "Visible" : "Hidden locally");
         appendExtensionsKeyValue(enabled, "Name titles", getFeatureSettings().chatStyleShowNameTitles ? "Visible" : "Hidden locally");
@@ -13137,6 +13179,11 @@ function SubbysPlushiesPageMain() {
     });
     function renderExtensionsSettingsGeneral(container) {
         renderAppearanceShieldSettings(container);
+        const textShortcut=makeExtensionsSection('Text appearance');
+        textShortcut.appendChild(makeExtensionsButton('Open Text Quick Panel · @mentions',()=>{
+            extensionsSettingsTab='text';renderExtensionsPanel();
+        }));
+        container.appendChild(textShortcut);
         const settings = getFeatureSettings();
         const poseSafety = makeExtensionsSection(`Pose Safety • v${VERSION}`);
         poseSafety.append(
@@ -13297,7 +13344,7 @@ function SubbysPlushiesPageMain() {
             const myName=String(window.Player?.Nickname||window.Player?.Name||'Your nickname').slice(0,65);
             label.textContent=myName+': ';
             if(getFeatureSettings().chatStyleShowNameColors) {
-                Object.assign(label.style,{background:`linear-gradient(${CHAT_GRADIENT_ANGLES[chosen.direction]||'90deg'},${chosen.primary},${chosen.middle},${chosen.secondary})`,
+                Object.assign(label.style,{background:`linear-gradient(${CHAT_GRADIENT_ANGLES[getFeatureSettings().textGradientDirection?chosen.direction:'right']||'90deg'},${chosen.primary},${chosen.middle},${chosen.secondary})`,
                     backgroundClip:'text',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',
                     filter:chosen.glow?`drop-shadow(0 0 ${1+Math.round(chosen.intensity*0.03)}px ${chosen.accent})`:'none'});
             }
@@ -13441,7 +13488,14 @@ function SubbysPlushiesPageMain() {
             select.addEventListener('change',()=>chatStyleSet({[field]:select.value,enabled:true}));
             wrap.append(title,select);section.appendChild(wrap);
         };
-        selectRow('Gradient direction',CHAT_GRADIENT_DIRECTIONS,style.direction,'direction');
+        if (getFeatureSettings().textGradientDirection)
+            selectRow('Gradient direction',CHAT_GRADIENT_DIRECTIONS,style.direction,'direction');
+        else {
+            const tip=document.createElement('p');
+            tip.textContent='Advanced gradient directions are off. Enable them in Settings → Text Quick Panel.';
+            tip.style.color=getExtensionsStyle().muted;
+            section.appendChild(tip);
+        }
         const intensityWrap=document.createElement('label');
         Object.assign(intensityWrap.style,{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap',margin:'8px 0',color:getExtensionsStyle().text});
         const intensityText=document.createElement('span');intensityText.textContent='Glow intensity: '+style.intensity+'%';
@@ -13593,7 +13647,7 @@ function SubbysPlushiesPageMain() {
                 settings.chatStyleShowNameColors,()=>toggleFeatureSetting('chatStyleShowNameColors')),
             extensionsSettingRow('Show name badges','Show or hide Cuddle Queen and other title badges locally.',
                 settings.chatStyleShowNameTitles,()=>toggleFeatureSetting('chatStyleShowNameTitles')),
-            extensionsSettingRow('Highlight my name','Highlight mentions of my name in public chat.',
+            extensionsSettingRow('Highlight my name and nickname','Highlight my BC name and nickname in public chat, even without @.',
                 settings.highlightMyName,()=>toggleFeatureSetting('highlightMyName'))
         );
         container.appendChild(section);
@@ -13628,10 +13682,76 @@ function SubbysPlushiesPageMain() {
         else if(extensionsChatStudioTab==='presets')renderExtensionsExpressionShare(container);
         else renderExtensionsChatStyles(container);
     }
+    function renderExtensionsTextQuickPanel(container){
+        const settings=getFeatureSettings();
+        const section=makeExtensionsSection('Text Quick Panel');
+        const intro=document.createElement('p');
+        intro.textContent='Local chat display only. Optional effects start OFF. @mentions and name/nickname highlighting start ON. No outgoing chat text is modified.';
+        Object.assign(intro.style,{fontSize:'12px',lineHeight:'1.5',color:getExtensionsStyle().muted});
+        section.appendChild(intro);
+        for(const [key,label,hint] of [
+            ['textGradientDirection','2 · Gradient direction editor','Choose horizontal, vertical, diagonal or upward nick gradients; off uses normal horizontal.'],
+            ['textGradientPresets','4 · Saved gradient presets','Save and load up to eight of your own palettes, locally for this BC account.'],
+            ['textQuoteStyle','9 · Quoted text styling','Softly mark > quoted lines and text inside quotation marks in regular chat.'],
+            ['textEntranceAnimation','16 · Gentle message entrances','Tiny 240ms fade for newly received public-chat lines, off by default; respects reduced motion.'],
+            ['textAtMentions','@Name / @Nickname highlighting','Highlight @mentions of people present in the chat room, including your real BC name or nickname. ON by default.'],
+            ['highlightMyName','Highlight my name and nickname','Highlight your BC name and nickname in public chat even without @. ON by default.'],
+            ['textAtMentionSound','Sound when I am @mentioned','Gentle chime when another player @mentions your BC name or nickname in public chat. ON by default.']
+        ]) section.appendChild(extensionsSettingRow(label,hint,settings[key],()=>toggleFeatureSetting(key)));
+        if(settings.textGradientDirection){
+            expressionSelect(section,'Gradient direction',CHAT_GRADIENT_DIRECTIONS,chatStyleMine().direction,
+                value=>chatStyleSet({direction:value}));
+        }
+        if(settings.textGradientPresets){
+            const group=document.createElement('div');
+            Object.assign(group.style,{display:'flex',flexWrap:'wrap',gap:'6px',margin:'10px 0'});
+            const title=document.createElement('strong');title.textContent='Built-in palettes';section.appendChild(title);
+            for(const p of CHAT_STYLE_PRESETS){
+                const b=makeExtensionsButton(p.name,()=>chatStyleSet({...p,enabled:true}));
+                b.style.borderLeft='4px solid '+p.accent;group.appendChild(b);
+            }
+            section.appendChild(group);
+            const saved=document.createElement('div');
+            Object.assign(saved.style,{display:'flex',gap:'6px',flexWrap:'wrap',margin:'10px 0'});
+            for(const p of textFxSavedPresets())saved.appendChild(makeExtensionsButton(p.name,()=>chatStyleSet({...p.style,enabled:true})));
+            section.appendChild(saved);
+            const save=document.createElement('div');
+            Object.assign(save.style,{display:'flex',gap:'6px',flexWrap:'wrap',margin:'8px 0'});
+            const name=document.createElement('input');name.type='text';name.maxLength=25;
+            name.placeholder='My palette name';name.setAttribute('aria-label','Gradient preset name');
+            Object.assign(name.style,{minWidth:'120px',flex:'1',padding:'7px',color:getExtensionsStyle().text,
+                background:getExtensionsStyle().surface,border:'1px solid '+getExtensionsStyle().border,borderRadius:'6px'});
+            save.append(name,makeExtensionsButton('Save current palette',()=>{
+                if(textFxSavePreset(name.value))renderExtensionsPanel();
+                else appendLocalInfoBox('Invalid preset name',['Use 1–25 letters, numbers, spaces, underscores or hyphens.']);
+            }));
+            section.appendChild(save);
+            const picker=document.createElement('select');
+            Object.assign(picker.style,{minWidth:'150px',maxWidth:'100%',padding:'7px',color:getExtensionsStyle().text,
+                background:getExtensionsStyle().surface,border:'1px solid '+getExtensionsStyle().border,borderRadius:'6px'});
+            for(const p of textFxSavedPresets()){
+                const option=document.createElement('option');option.value=p.name;option.textContent=p.name;picker.append(option);
+            }
+            if(picker.options.length){
+                section.append(picker,makeExtensionsButton('Delete selected saved palette',()=>{
+                    const member=currentAccountMemberNumber();
+                    writeLocalJSON(TEXT_FX_PRESETS_PREFIX+member,
+                        textFxSavedPresets().filter(p=>p.name!==picker.value));renderExtensionsPanel();
+                }));
+            }
+        }
+        const foot=document.createElement('div');
+        Object.assign(foot.style,{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'12px'});
+        foot.append(makeExtensionsButton('Open public style editor',()=>{
+            extensionsActiveTab='chatstyles';extensionsChatStudioTab='public';renderExtensionsPanel();
+        }),makeExtensionsButton('Test mention chime',()=>{void chatSoundPlay('chime',.28);}));
+        section.appendChild(foot);container.appendChild(section);
+    }
+
     function renderExtensionsSettings(container){
         const nav=document.createElement('div');
         Object.assign(nav.style,{display:'flex',gap:'8px',flexWrap:'wrap',marginBottom:'12px'});
-        for(const [key,label] of [['general','General'],['layout','Layout']]) {
+        for(const [key,label] of [['general','General'],['text','Text Quick Panel'],['layout','Layout']]) {
             nav.appendChild(makeExtensionsButton(label,()=>{extensionsSettingsTab=key;renderExtensionsPanel();},
                 {active:extensionsSettingsTab===key}));
         }
@@ -13640,6 +13760,7 @@ function SubbysPlushiesPageMain() {
         }));
         container.appendChild(nav);
         if(extensionsSettingsTab==='layout')renderExtensionsLayout(container);
+        else if(extensionsSettingsTab==='text')renderExtensionsTextQuickPanel(container);
         else renderExtensionsSettingsGeneral(container);
     }
     function renderExtensionsPlushies(container) {
@@ -19334,6 +19455,187 @@ function SubbysPlushiesPageMain() {
             toggle: () => toggleFeatureSetting("quickReactions"),
         }),
     });
+    // v3.9.17: public-text enhancements. Runs on existing ChatRoomAppendChat
+    // hook (or pre-existing emote observer fallback) without new observers/timers.
+    // This is local-only DOM decoration; no outgoing BC packet is rewritten.
+    const TEXT_FX_STYLE_ID='subbys-text-effects-v3917';
+    const TEXT_FX_PRESETS_PREFIX='SubbysPlushies:custom-name-gradients:v1:';
+    const TEXT_FX_MENTION_CLASS='SubbysTextAtMention';
+    const TEXT_FX_QUOTE_CLASS='SubbysTextQuote';
+    const TEXT_FX_SKIP='a,button,input,textarea,select,script,style,code,[contenteditable],'+
+        '.ChatMessageName,.ChatMessageSender,.ChatMessageUsername,.ChatMessageHeader,'+
+        '.ChatMessageTime,.ChatMessageTimestamp,.ReplyButton,.SubbysCustomChatName,'+
+        '.SubbysCustomChatSyntheticName,.SubbysPlushiesMyNameHighlight,.SubbysTextAtMention';
+    const TEXT_FX_CSS=`
+#TextAreaChatLog .SubbysTextAtMention{display:inline;border-radius:3px;padding:0 2px;
+  font-weight:650;color:#f7dcff!important;background:rgba(154,89,179,.20)!important;
+  box-decoration-break:clone;-webkit-box-decoration-break:clone}
+#TextAreaChatLog .SubbysTextAtMention.SubbysTextMentionMe{color:#281429!important;
+  background:rgba(255,210,135,.87)!important}
+#TextAreaChatLog .SubbysTextQuote{border-left:2px solid rgba(182,146,215,.65);
+  border-radius:2px;padding:0 4px;margin:0 2px;color:inherit;
+  background:rgba(171,133,205,.10);font-style:italic;box-decoration-break:clone;
+  -webkit-box-decoration-break:clone}
+@keyframes subbysTextEntrance3917{from{opacity:.52;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+#TextAreaChatLog .ChatMessageChat.SubbysTextEntrance{animation:subbysTextEntrance3917 .24s ease-out both}
+@media(prefers-reduced-motion:reduce){#TextAreaChatLog .ChatMessageChat.SubbysTextEntrance{animation:none!important}}
+`;
+    function textFxEnsureCss(){
+        if(document.head&&!document.getElementById(TEXT_FX_STYLE_ID)){
+            const el=document.createElement('style');el.id=TEXT_FX_STYLE_ID;
+            el.textContent=TEXT_FX_CSS;document.head.appendChild(el);
+        }
+    }
+    function textFxEscapeRegex(value){return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");}
+    function textFxAliases(character){
+        const values=[character?.Nickname,character?.Name,character?.AccountName];
+        const known=new Set();
+        for(const value of values){
+            if(typeof value!=='string')continue;
+            const v=value.trim();
+            if(v.length>=2&&v.length<=70)known.add(v);
+        }
+        return [...known];
+    }
+    function textFxAliasesInRoom(){
+        const byName=new Map();
+        const all=[window.Player,...(Array.isArray(window.ChatRoomCharacter)?window.ChatRoomCharacter:[])];
+        for(const person of all.slice(0,65)){
+            if(!person)continue;
+            const mine=person===window.Player || Number(person.MemberNumber)===currentAccountMemberNumber();
+            for(const alias of textFxAliases(person)){
+                const key=alias.toLocaleLowerCase();
+                if(!byName.has(key)||mine)byName.set(key,{name:alias,mine});
+            }
+        }
+        return [...byName.values()].sort((a,b)=>b.name.length-a.name.length).slice(0,120);
+    }
+    function textFxRegex(names){
+        if(!names.length)return null;
+        // Match complete @aliases, including spaces in BC nicknames; do not
+        // alert for partial names (@Alex doesn't match @Alexander).
+        const pattern=names.map(x=>textFxEscapeRegex(x.name)).join('|');
+        return new RegExp('(^|[^\\p{L}\\p{N}_@])(@(?:'+pattern+'))(?=$|[^\\p{L}\\p{N}_])','giu');
+    }
+    function textFxHasOwnMention(content){
+        if(typeof content!=='string'||content.length>8192||!content.includes('@'))return false;
+        const own=textFxAliases(window.Player).map(name=>({name}));
+        const re=textFxRegex(own);return !!(re&&re.test(content));
+    }
+    function textFxNodeCandidates(row){
+        const nodes=[];
+        const walker=document.createTreeWalker(row,NodeFilter.SHOW_TEXT);
+        while(walker.nextNode()&&nodes.length<90){
+            const node=walker.currentNode;
+            if(!node.nodeValue||node.nodeValue.length>8192||
+               node.parentElement?.closest(TEXT_FX_SKIP))continue;
+            nodes.push(node);
+        }
+        return nodes;
+    }
+    function textFxClearMarks(row,selector){
+        for(const mark of row.querySelectorAll(selector)){
+            const parent=mark.parentNode;
+            if(parent){mark.replaceWith(document.createTextNode(mark.textContent||''));parent.normalize();}
+        }
+    }
+    function textFxMarkQuotes(row){
+        for(const node of textFxNodeCandidates(row)){
+            const text=node.nodeValue||'';
+            if(!text.includes('>')&&!text.includes('“')&&!text.includes('"'))continue;
+            const re=/(^|\n|:\s)(>{1,2}\s?[^\n]{2,200})|([“"][^\n"”]{3,180}[”"])/g;
+            let m,last=0,hits=0,frag=document.createDocumentFragment();
+            while((m=re.exec(text))&&hits<15){
+                const quote=m[2]||m[3],start=m.index+(m[1]?.length||0),end=start+quote.length;
+                if(start<last)continue;
+                frag.append(document.createTextNode(text.slice(last,start)));
+                const span=document.createElement('span');span.className=TEXT_FX_QUOTE_CLASS;
+                span.textContent=quote;frag.append(span);last=end;hits++;
+            }
+            if(hits){frag.append(document.createTextNode(text.slice(last)));node.replaceWith(frag);}
+        }
+    }
+    function textFxMarkAtMentions(row,names){
+        const re=textFxRegex(names);
+        if(!re)return;
+        const own=new Set(textFxAliases(window.Player).map(x=>x.toLocaleLowerCase()));
+        for(const node of textFxNodeCandidates(row)){
+            const value=node.nodeValue||'';
+            if(!value.includes('@'))continue;
+            re.lastIndex=0;
+            let m,last=0,hits=0,frag=document.createDocumentFragment();
+            while((m=re.exec(value))&&hits<30){
+                const start=m.index+m[1].length,end=start+m[2].length;
+                if(start<last)continue;
+                const name=m[2].slice(1).toLocaleLowerCase();
+                frag.append(document.createTextNode(value.slice(last,start)));
+                const span=document.createElement('span');span.className=TEXT_FX_MENTION_CLASS;
+                if(own.has(name))span.classList.add('SubbysTextMentionMe');
+                span.textContent=m[2];span.title='BC name / nickname mention';
+                frag.append(span);last=end;hits++;
+            }
+            if(hits){frag.append(document.createTextNode(value.slice(last)));node.replaceWith(frag);}
+        }
+    }
+    function textFxDecorateNode(node,isNew=false,reset=false){
+        if(window.CurrentScreen!=='ChatRoom'||!(node instanceof Element)||essentialsConfig().safeMode)return;
+        const log=document.getElementById('TextAreaChatLog');
+        if(!log||!(log===node||log.contains(node)))return;
+        const settings=getFeatureSettings();
+        const rows=node.matches('.ChatMessage')?[node]:Array.from(node.querySelectorAll('.ChatMessage')).slice(-40);
+        if(!rows.length)return;
+        textFxEnsureCss();
+        let names=null;
+        for(const row of rows){
+            if(!row.matches('.ChatMessageChat:not(.ChatMessageWhisper):not(.ChatMessageAction):not(.ChatMessageLocalMessage)'))continue;
+            if(reset){
+                textFxClearMarks(row,'.'+TEXT_FX_MENTION_CLASS);
+                textFxClearMarks(row,'.'+TEXT_FX_QUOTE_CLASS);
+                row.classList.remove('SubbysTextEntrance');
+                delete row.dataset.subbysTextFxDone;
+            }
+            if(row.dataset.subbysTextFxDone==='1')continue;
+            row.dataset.subbysTextFxDone='1';
+            const content=row.textContent||'';
+            if(content.length>10000)continue;
+            if(settings.textQuoteStyle&&(content.includes('>')||content.includes('“')||content.includes('"')))textFxMarkQuotes(row);
+            if(settings.textAtMentions&&content.includes('@')){
+                if(!names)names=textFxAliasesInRoom();
+                textFxMarkAtMentions(row,names);
+            }
+            if(isNew&&settings.textEntranceAnimation)row.classList.add('SubbysTextEntrance');
+        }
+    }
+    function textFxRefreshVisible(){
+        const log=document.getElementById('TextAreaChatLog');
+        if(!log||window.CurrentScreen!=='ChatRoom')return;
+        for(const row of Array.from(log.querySelectorAll('.ChatMessageChat')).slice(-180))
+            textFxDecorateNode(row,false,true);
+    }
+    function textFxSavedPresets(){
+        const member=currentAccountMemberNumber();
+        if(!member)return [];
+        const raw=readLocalJSON(TEXT_FX_PRESETS_PREFIX+member,[]);
+        if(!Array.isArray(raw))return [];
+        return raw.slice(0,8).filter(p=>p&&typeof p.name==='string'&&/^[\p{L}\p{N} _-]{1,25}$/u.test(p.name))
+            .map(p=>({name:p.name,style:chatStyleNormalize(p.style)}));
+    }
+    function textFxSavePreset(name){
+        const member=currentAccountMemberNumber();
+        name=String(name||'').trim();
+        if(!member||!/^[\p{L}\p{N} _-]{1,25}$/u.test(name))return false;
+        const saved=textFxSavedPresets().filter(p=>p.name.toLocaleLowerCase()!==name.toLocaleLowerCase());
+        saved.push({name,style:chatStyleMine()});
+        writeLocalJSON(TEXT_FX_PRESETS_PREFIX+member,saved.slice(-8));return true;
+    }
+    Object.defineProperty(window,'SubbysTextFxDiag',{configurable:true,value:()=>({
+        version:VERSION,settings:Object.fromEntries(Object.entries(getFeatureSettings()).filter(([k])=>k.startsWith('text'))),
+        room:window.CurrentScreen==='ChatRoom',aliasesKnown:textFxAliasesInRoom().length,
+        mentionsVisible:document.querySelectorAll('#TextAreaChatLog .SubbysTextAtMention').length,
+        quotesVisible:document.querySelectorAll('#TextAreaChatLog .SubbysTextQuote').length,
+        savedPresets:textFxSavedPresets().length
+    })});
+
     const MY_NAME_HIGHLIGHT_CLASS = "SubbysPlushiesMyNameHighlight";
     const MY_NAME_HIGHLIGHT_IGNORE_SELECTOR = [
         "a", "button", "input", "textarea", "select", "script", "style", "code",
@@ -19341,18 +19643,28 @@ function SubbysPlushiesPageMain() {
         ".ChatMessageHeader", ".ChatMessageTime", ".ChatMessageTimestamp",
         ".ReplyButton", ".SubbysPlushiesOfferControls",
         ".SubbysPlushiesOfferPrompt", ".SubbysPlushiesQuickReactions", ".SubbysPlushiesReactionPicker", "." + MY_NAME_HIGHLIGHT_CLASS,
-        "[contenteditable]"
+        ".SubbysTextAtMention", "[contenteditable]"
     ].join(",");
-    function myCharacterMentionName() {
+    function myCharacterMentionNames() {
         const player = window.Player;
-        const nickname = typeof player?.Nickname === "string" ? player.Nickname.trim() : "";
-        const characterName = typeof player?.Name === "string" ? player.Name.trim() : "";
-        const name = nickname || characterName;
-        return name.length >= 2 && name.length <= 80 ? name : "";
+        const names = [player?.Nickname, player?.Name];
+        const seen = new Set();
+        const result = [];
+        for (const value of names) {
+            if (typeof value !== 'string') continue;
+            const name = value.trim();
+            if (name.length < 2 || name.length > 80) continue;
+            const folded = name.toLocaleLowerCase();
+            if (seen.has(folded)) continue;
+            seen.add(folded);
+            result.push(name);
+        }
+        return result.sort((a,b) => b.length - a.length);
     }
-    function myNameMentionPattern(name) {
-        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        return new RegExp("(^|[^\\p{L}\\p{N}_])(" + escaped + ")(?=$|[^\\p{L}\\p{N}_])", "giu");
+    function myNameMentionPattern(names) {
+        if (!Array.isArray(names) || !names.length) return null;
+        const escaped = names.map(textFxEscapeRegex);
+        return new RegExp("(^|[^\\p{L}\\p{N}_])(" + escaped.join("|") + ")(?=$|[^\\p{L}\\p{N}_])", "giu");
     }
     function clearMyNameHighlights() {
         const root = getOfferChatRoot();
@@ -19365,8 +19677,8 @@ function SubbysPlushiesPageMain() {
             parent.normalize();
         }
     }
-    function highlightMyNameInRow(row, name, matcher) {
-        if (!(row instanceof Element) || !name || !matcher) return 0;
+    function highlightMyNameInRow(row, names, matcher) {
+        if (!(row instanceof Element) || !names.length || !matcher) return 0;
         if (!row.classList.contains("ChatMessage") ||
             row.classList.contains("ChatMessageLocalMessage") ||
             row.classList.contains("SubbysPlushiesOfferPrompt")) return 0;
@@ -19377,7 +19689,9 @@ function SubbysPlushiesPageMain() {
             const parent = node.parentElement;
             if (!parent || parent.closest(MY_NAME_HIGHLIGHT_IGNORE_SELECTOR)) continue;
             const content = node.nodeValue || "";
-            if (content.length > 8192 || !content.toLocaleLowerCase().includes(name.toLocaleLowerCase())) continue;
+            if (content.length > 8192) continue;
+            const lower = content.toLocaleLowerCase();
+            if (!names.some(name => lower.includes(name.toLocaleLowerCase()))) continue;
             nodes.push(node);
         }
         let highlighted = 0;
@@ -19417,29 +19731,29 @@ function SubbysPlushiesPageMain() {
         if (!getFeatureSettings().highlightMyName || window.CurrentScreen !== "ChatRoom") return 0;
         const root = getOfferChatRoot();
         if (!root || !(node instanceof Element) || !root.contains(node)) return 0;
-        const name = myCharacterMentionName();
-        if (!name) return 0;
-        const matcher = myNameMentionPattern(name);
+        const names = myCharacterMentionNames();
+        if (!names.length) return 0;
+        const matcher = myNameMentionPattern(names);
         const rows = node.matches(".ChatMessage")
             ? [node]
             : Array.from(node.querySelectorAll(".ChatMessage"));
         const parentRow = node.closest(".ChatMessage");
         if (parentRow && !rows.includes(parentRow)) rows.unshift(parentRow);
         let matches = 0;
-        for (const row of rows.slice(0, 20)) matches += highlightMyNameInRow(row, name, matcher);
+        for (const row of rows.slice(0, 20)) matches += highlightMyNameInRow(row, names, matcher);
         return matches;
     }
     function highlightMyNameInVisibleChat() {
         if (!getFeatureSettings().highlightMyName || window.CurrentScreen !== "ChatRoom") return 0;
         const root = getOfferChatRoot();
-        const name = myCharacterMentionName();
-        if (!root || !name) return 0;
+        const names = myCharacterMentionNames();
+        if (!root || !names.length) return 0;
         clearMyNameHighlights();
         const rows = root.querySelectorAll(".ChatMessage");
-        const matcher = myNameMentionPattern(name);
+        const matcher = myNameMentionPattern(names);
         let matches = 0;
         for (const row of Array.from(rows).slice(-250)) {
-            matches += highlightMyNameInRow(row, name, matcher);
+            matches += highlightMyNameInRow(row, names, matcher);
         }
         return matches;
     }
@@ -21705,6 +22019,7 @@ function SubbysPlushiesPageMain() {
                 // Preserve all action/offer detection, but avoid unnecessary
                 // chat-root lookup for standard native ChatMessage rows.
                 inspectOfferMutationNode(node, node.matches('.ChatMessage') ? null : getOfferChatRoot());
+                if (isPublic) textFxDecorateNode(node,true);
                 if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
                 if (isPublic) chatStyleDecorate(node,chatStyleNativeChatContext);
                 if (isWhisper) chatWhisperDecorate(node,chatWhisperNativeContext);
@@ -28569,7 +28884,8 @@ function SubbysPlushiesPageMain() {
       for(const rec of records)for(const node of rec.addedNodes){if(node.nodeType!==1)continue;
         // A badge, gradient wrapper or whisper ornament is not a new chat row.
         if(node.closest?.('.ChatMessage')&&!node.matches?.('.ChatMessage'))continue;
-        if(node.matches?.('.ChatMessage'))decorateMessage(node);else if(node.querySelectorAll)enhanceChatMessages(node);
+        if(node.matches?.('.ChatMessage')){textFxDecorateNode(node,true);decorateMessage(node);}
+        else if(node.querySelectorAll){textFxDecorateNode(node,true);enhanceChatMessages(node);}
       }
     });observer.observe(log,{childList:true,subtree:true});state.logObserver=observer;
   }
@@ -29000,7 +29316,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.16";
+    const VERSION = "3.9.18";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {

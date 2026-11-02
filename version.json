@@ -1,6 +1,6 @@
 {
-  "version": "3.9.16",
+  "version": "3.9.18",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Public whisper-style fade is now restricted to regular chat messages with a visible verified custom name gradient. No glow for these gradient names, and unstyled regular chat is unchanged. No change to whispers, actions, chat scrolling or other features.",
+  "notes": "Enables regular-chat name and nickname highlighting by default alongside existing default-on @name/@nickname mentions and mention chime. Existing OFF preferences are preserved. Adds the name/nickname toggle to the Text Quick Panel; no changes to message delivery or whisper styling.",
   "released": "2026-11-02"
 }
