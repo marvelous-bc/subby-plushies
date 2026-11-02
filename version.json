@@ -1,12 +1,6 @@
-
-    
-  
 {
-  "version": "3.5.83",
+  "version": "3.7.0",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "launcherVersion": "2.3.8.0",
-  "launcherUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js",
-  "sha256": "b95e143b9cfcc7c94c480c09315f1d77db9c29ad59d2ff102bcb2795ab32cdaa",
-  "notes": "v3.5.83: Adjusted the Subbycat presence icon left, closer than v3.5.82. Includes the v3.5.79 performance engine, outfit forensics, Harmonizer palette extraction, and optimized plushie snap points."
+  "notes": "v3.7: Cuddle Queen shown by default to Essentials users when Subbycat is present; her badge broadcast works independently of personal palettes. Existing hide/broadcast-off preferences remain respected. Corrected bootstrap version metadata.",
+  "released": "2026-11-01"
 }
-

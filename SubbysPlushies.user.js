@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.5.113
-// @description  Separate name gradients, name badges and exclusive Cuddle Queen broadcast controls
+// @version      3.7.0
+// @description  Cuddle Queen badge broadcasts by default; independent chat palette and viewer controls
 // @released     2026-11-01
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.5.113";
+    const VERSION = "3.7.0";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2557,7 +2557,12 @@ function SubbysPlushiesPageMain() {
     }
     function chatStyleMineForRoom() {
         const me=currentAccountMemberNumber();
-        return me && chatStyleMine().enabled ? chatStyleMine() : null;
+        if (!me) return null;
+        const style=chatStyleMine();
+        // In v3.7 the Cuddle Queen broadcast is independent of the owner's
+        // personal gradient/border switch. A new owner account broadcasts its
+        // badge by default, but an explicit royalSeal:false remains respected.
+        return style.enabled || (me===ROYAL_SEAL_MEMBER && style.royalSeal===true) ? style : null;
     }
     // Owner-side broadcast toggle (distinct from local visibility). The
     // existing hidden presence packet carries royalSeal:false immediately,
@@ -2582,7 +2587,11 @@ function SubbysPlushiesPageMain() {
         const style=chatStyleMineForRoom();
         if(!style) return JSON.stringify({v:1,enabled:false});
         // Never expose the special option from accounts other than Subbycat.
-        const packet={v:1,enabled:true,primary:style.primary,secondary:style.secondary,
+        // enabled means there is something to show. paletteEnabled separates
+        // the personal chat palette from the owner's exclusive badge; clients
+        // released before v3.7 still understand the rest of this packet.
+        const packet={v:1,enabled:true,paletteEnabled:style.enabled===true,
+            primary:style.primary,secondary:style.secondary,
             accent:style.accent,symbol:style.symbol,border:style.border,
             glow:style.glow,animation:style.animation};
         if(currentAccountMemberNumber()===ROYAL_SEAL_MEMBER) packet.royalSeal=style.royalSeal===true;
@@ -2603,6 +2612,9 @@ function SubbysPlushiesPageMain() {
                    CHAT_STYLE_SYMBOLS.includes(raw.symbol) && CHAT_STYLE_BORDERS.includes(raw.border) &&
                    typeof raw.glow==='boolean' && typeof raw.animation==='boolean') {
                     style=chatStyleNormalize(raw);
+                    // Backward compatible: old senders with no paletteEnabled
+                    // field were always sending a fully enabled palette.
+                    style.enabled=raw.paletteEnabled!==false;
                     // The BC packet sender is authoritative. Malicious peers
                     // cannot claim this feature merely by adding royalSeal:true.
                     style.royalSeal=sender===ROYAL_SEAL_MEMBER && raw.royalSeal===true;
@@ -2625,7 +2637,7 @@ function SubbysPlushiesPageMain() {
         return `rgba(${r},${g},${b},${opacity})`;
     }
     const CHAT_STYLE_CSS = `
-#TextAreaChatLog .${CHAT_STYLE_CLASS} {
+#TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatPalette {
     position:relative!important; box-sizing:border-box;
     border-left:3px var(--subbys-style-border,solid) var(--subbys-style-accent,#ff6ba8)!important;
     border-radius:6px; background:linear-gradient(100deg,var(--subbys-style-background,transparent),transparent 90%)!important;
@@ -2701,7 +2713,7 @@ function SubbysPlushiesPageMain() {
         return sheet;
     }
     function chatStyleClearRow(row) {
-        row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatGlow',ROYAL_CHAT_CLASS);
+        row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatPalette','SubbysCustomChatGlow',ROYAL_CHAT_CLASS);
         delete row.dataset.subbysChatStyle;
         for(const key of ['primary','secondary','accent','background','shade','border'])
             row.style.removeProperty('--subbys-style-'+key);
@@ -2805,16 +2817,19 @@ function SubbysPlushiesPageMain() {
             if(!label)continue;
             chatStyleEnsureCss();
             row.classList.add(CHAT_STYLE_CLASS);
-            if(style.glow)row.classList.add('SubbysCustomChatGlow');
             row.dataset.subbysChatStyle=signature;
-            row.style.setProperty('--subbys-style-primary',style.primary);
-            row.style.setProperty('--subbys-style-secondary',style.secondary);
-            row.style.setProperty('--subbys-style-accent',style.accent);
-            row.style.setProperty('--subbys-style-border',style.border);
-            row.style.setProperty('--subbys-style-background',chatStyleHexRgb(style.accent,.14));
-            row.style.setProperty('--subbys-style-shade',chatStyleHexRgb(style.accent,.25));
-            // label was positively matched to the trusted sender above.
-            if(showNames) label.classList.add(CHAT_STYLE_NAME_CLASS);
+            if(style.enabled) {
+                row.classList.add('SubbysCustomChatPalette');
+                if(style.glow)row.classList.add('SubbysCustomChatGlow');
+                row.style.setProperty('--subbys-style-primary',style.primary);
+                row.style.setProperty('--subbys-style-secondary',style.secondary);
+                row.style.setProperty('--subbys-style-accent',style.accent);
+                row.style.setProperty('--subbys-style-border',style.border);
+                row.style.setProperty('--subbys-style-background',chatStyleHexRgb(style.accent,.14));
+                row.style.setProperty('--subbys-style-shade',chatStyleHexRgb(style.accent,.25));
+            }
+            // A badge-only message gets its royal seal but no forced palette.
+            if(showNames && style.enabled) label.classList.add(CHAT_STYLE_NAME_CLASS);
             if(showTitles && member===ROYAL_SEAL_MEMBER && style.royalSeal===true) {
                 // Add the badge BEFORE the verified sender's name, never after.
                 // Identity is based on BC's sender, not message text.
@@ -2828,7 +2843,7 @@ function SubbysPlushiesPageMain() {
                 label.before(seal);
                 row.classList.add(ROYAL_CHAT_CLASS);
             }
-            if(style.symbol!=='none') {
+            if(style.enabled && style.symbol!=='none') {
                 const symbol=document.createElement('span');
                 symbol.className=CHAT_STYLE_SYMBOL_CLASS+(style.animation?' SubbysCustomChatAnimated':'');
                 symbol.textContent=style.symbol;
@@ -2895,7 +2910,7 @@ function SubbysPlushiesPageMain() {
             ignorePoseChangingEmotes: storedBoolean("ignorePoseChangingEmotes"),
             petBedAutoRestore: Object.prototype.hasOwnProperty.call(stored, "petBedAutoRestore") ? !!stored.petBedAutoRestore : true,
             highlightMyName: Object.prototype.hasOwnProperty.call(stored, "highlightMyName") ? !!stored.highlightMyName : false,
-            chatStyleShowAll: Object.hasOwn(stored,"chatStyleShowAll") ? !!stored.chatStyleShowAll : (stored.subbycatSignatureStyle !== false),
+            chatStyleShowAll: storedBoolean("chatStyleShowAll"),
             chatStyleShowNameColors: storedBoolean("chatStyleShowNameColors"),
             chatStyleShowNameTitles: storedBoolean("chatStyleShowNameTitles"),
             performanceMode: String(stored.performanceMode || "normal").toLowerCase() === "low" ? "low" : "normal",
@@ -12027,11 +12042,11 @@ function SubbysPlushiesPageMain() {
         if(currentAccountMemberNumber()===ROYAL_SEAL_MEMBER) {
             const exclusive=makeExtensionsSection('Subbycat Exclusive · Cuddle Queen');
             const description=document.createElement('p');
-            description.textContent='Your crowned-heart Cuddle Queen title appears before your name to Essentials users. Turning Broadcast OFF removes the title for everyone using Essentials, while your personal gradients and chat effects stay active. Existing room members receive your updated preference immediately.';
+            description.textContent='Cuddle Queen is broadcast ON by default to Essentials users, even if your personal chat colors are OFF. Turning Broadcast OFF removes the title for other Essentials users while preserving gradients and effects. Existing room members receive the update immediately.';
             Object.assign(description.style,{color:getExtensionsStyle().muted,fontSize:'12px',lineHeight:'1.5',margin:'5px 0'});
             exclusive.append(description,extensionsSettingRow(
                 'Broadcast Cuddle Queen to others',
-                'Subbycat only. OFF removes your exclusive badge for EVERY Essentials viewer in this room (on next hidden presence delivery). Local badge visibility is controlled separately.',
+                'Subbycat only. ON by default, independent of your personal colors. OFF removes your exclusive badge for EVERY Essentials viewer in this room (on next hidden presence delivery). Local badge visibility is controlled separately.',
                 style.royalSeal===true,()=>chatStyleSetRoyalSealBroadcast(!chatStyleMine().royalSeal)
             ));
             section.appendChild(exclusive);
@@ -27257,7 +27272,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.5.107";
+    const VERSION = "3.7.0";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
