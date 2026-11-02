@@ -1,6 +1,6 @@
 {
-  "version": "3.9.18",
+  "version": "3.9.19",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Enables regular-chat name and nickname highlighting by default alongside existing default-on @name/@nickname mentions and mention chime. Existing OFF preferences are preserved. Adds the name/nickname toggle to the Text Quick Panel; no changes to message delivery or whisper styling.",
+  "notes": "Fix overlapping decorative heart/crown chat symbols by placing them beside the verified author, not over native timestamp/member badges. Scope mentions and name highlighting to message text, reduce yellow highlight, preserve native font/line height and existing settings.",
   "released": "2026-11-02"
 }

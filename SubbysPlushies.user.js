@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.18
-// @description  v3.9.18: Name and nickname highlighting enabled by default with @mentions
+// @version      3.9.19
+// @description  v3.9.19: Chat badge alignment and subtle inline @mentions
 // @released     2026-11-02
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.18";
+    const VERSION = "3.9.19";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -3730,10 +3730,18 @@ function SubbysPlushiesPageMain() {
 @media (max-width:700px){
     #TextAreaChatLog .${ROYAL_CHAT_CLASS} .SubbysRoyalSealTitle {display:none}
 }
+/* v3.9.19: Decorative symbols live in the author text flow, not over
+   the native top-right timestamp/member number and BC status icons. */
 #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_SYMBOL_CLASS} {
-    position:absolute; top:1px; right:5px; color:var(--subbys-style-secondary,#ff76d9);
-    text-shadow:none!important; font-size:11px;
-    line-height:1; z-index:1; pointer-events:none; user-select:none;
+    position:static!important; display:inline-block!important;
+    top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;
+    float:none!important; transform:none!important;
+    margin:0 0 0 .35em!important; padding:0!important;
+    vertical-align:baseline!important;white-space:nowrap!important;
+    color:var(--subbys-style-secondary,#ff76d9);
+    text-shadow:none!important; font-size:.78em!important;
+    font-weight:400!important;line-height:inherit!important;
+    z-index:auto!important;pointer-events:none;user-select:none;
 }
 #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_SYMBOL_CLASS}.SubbysCustomChatAnimated {
     animation:subbys-custom-chat-sparkle 2.3s ease-out both;
@@ -3999,7 +4007,11 @@ function SubbysPlushiesPageMain() {
                 symbol.className=CHAT_STYLE_SYMBOL_CLASS;
                 symbol.textContent=style.symbol;
                 symbol.setAttribute('aria-hidden','true');
-                row.appendChild(symbol);
+                // Anchor beside the verified author. Appending to the row's
+                // right edge used to cover BC's native time/member icons.
+                // If no author can be identified, omit this optional symbol;
+                // never place it into an unknown metadata container.
+                if(label?.isConnected && row.contains(label))label.after(symbol);
             }
             chatStyleMarkHot(row);
             chatStyleMetrics.rows++;
@@ -19462,16 +19474,41 @@ function SubbysPlushiesPageMain() {
     const TEXT_FX_PRESETS_PREFIX='SubbysPlushies:custom-name-gradients:v1:';
     const TEXT_FX_MENTION_CLASS='SubbysTextAtMention';
     const TEXT_FX_QUOTE_CLASS='SubbysTextQuote';
+    // Native BC stamps/member numbers and addon decorations aren't message
+    // content. Never wrap their text in a mark/span, even if it matches a name.
+    const TEXT_FX_NATIVE_META = [
+        '.ChatMessageTime','.ChatMessageTimestamp','.ChatMessageDate',
+        '.ChatMessageMemberNumber','.ChatMessageMeta','.ChatMessageMetadata',
+        '.ChatMessageInfo','.ChatMessageBadges','.ChatMessageBadge',
+        '.ChatMessageStatusIcons','.ChatMessageStatusIcon',
+        '.SubbysCustomChatSymbol','.SubbysRoyalSeal',
+        '[class*="ChatMessageTimestamp"]','[class*="ChatMessageTimeStamp"]',
+        '[class*="ChatMessageMemberNumber"]',
+        'time','small','sup','svg'
+    ].join(',');
     const TEXT_FX_SKIP='a,button,input,textarea,select,script,style,code,[contenteditable],'+
         '.ChatMessageName,.ChatMessageSender,.ChatMessageUsername,.ChatMessageHeader,'+
-        '.ChatMessageTime,.ChatMessageTimestamp,.ReplyButton,.SubbysCustomChatName,'+
-        '.SubbysCustomChatSyntheticName,.SubbysPlushiesMyNameHighlight,.SubbysTextAtMention';
+        '.ChatRoomChatName,.ReplyButton,.SubbysCustomChatName,'+
+        '.SubbysCustomChatSyntheticName,.SubbysPlushiesMyNameHighlight,'+
+        '.SubbysTextAtMention,'+TEXT_FX_NATIVE_META;
     const TEXT_FX_CSS=`
-#TextAreaChatLog .SubbysTextAtMention{display:inline;border-radius:3px;padding:0 2px;
-  font-weight:650;color:#f7dcff!important;background:rgba(154,89,179,.20)!important;
-  box-decoration-break:clone;-webkit-box-decoration-break:clone}
-#TextAreaChatLog .SubbysTextAtMention.SubbysTextMentionMe{color:#281429!important;
-  background:rgba(255,210,135,.87)!important}
+/* Keep the game's line height, font, and text contrast unchanged. */
+#TextAreaChatLog .ChatMessageChat .SubbysTextAtMention {
+  display:inline!important;position:static!important;
+  font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;
+  line-height:inherit!important;letter-spacing:inherit!important;
+  color:inherit!important;-webkit-text-fill-color:currentColor!important;
+  text-shadow:none!important;box-shadow:none!important;
+  border-radius:2px!important;padding:0 1px!important;margin:0!important;
+  vertical-align:baseline!important;background:rgba(154,89,179,.13)!important;
+  box-decoration-break:clone;-webkit-box-decoration-break:clone;
+}
+#TextAreaChatLog .ChatMessageChat .SubbysTextAtMention.SubbysTextMentionMe {
+  color:inherit!important;-webkit-text-fill-color:currentColor!important;
+  background:rgba(255,199,117,.20)!important;
+  text-decoration:underline!important;text-decoration-color:rgba(255,199,117,.70)!important;
+  text-underline-offset:2px!important;text-decoration-thickness:1px!important;
+}
 #TextAreaChatLog .SubbysTextQuote{border-left:2px solid rgba(182,146,215,.65);
   border-radius:2px;padding:0 4px;margin:0 2px;color:inherit;
   background:rgba(171,133,205,.10);font-style:italic;box-decoration-break:clone;
@@ -19524,8 +19561,10 @@ function SubbysPlushiesPageMain() {
     }
     function textFxNodeCandidates(row){
         const nodes=[];
-        const walker=document.createTreeWalker(row,NodeFilter.SHOW_TEXT);
-        while(walker.nextNode()&&nodes.length<90){
+        // Dedicated BC content wrappers take priority whenever available.
+        const body=row.querySelector('.ChatMessageContent,.ChatMessageBody,.ChatMessageText,.ChatMessageMessageText');
+        const walker=document.createTreeWalker(body||row,NodeFilter.SHOW_TEXT);
+        while(walker.nextNode()&&nodes.length<120){
             const node=walker.currentNode;
             if(!node.nodeValue||node.nodeValue.length>8192||
                node.parentElement?.closest(TEXT_FX_SKIP))continue;
@@ -19633,17 +19672,19 @@ function SubbysPlushiesPageMain() {
         room:window.CurrentScreen==='ChatRoom',aliasesKnown:textFxAliasesInRoom().length,
         mentionsVisible:document.querySelectorAll('#TextAreaChatLog .SubbysTextAtMention').length,
         quotesVisible:document.querySelectorAll('#TextAreaChatLog .SubbysTextQuote').length,
-        savedPresets:textFxSavedPresets().length
+        savedPresets:textFxSavedPresets().length,
+        symbolPlacement:'after-author',
+        rightSideDecorations:document.querySelectorAll('#TextAreaChatLog .SubbysCustomChatSymbol').length,
+        absoluteDecorations:[...document.querySelectorAll('#TextAreaChatLog .SubbysCustomChatSymbol')].filter(el=>getComputedStyle(el).position==='absolute').length,
+        mentionsInMetadata:[...document.querySelectorAll('#TextAreaChatLog .SubbysTextAtMention')].filter(el=>el.parentElement?.closest(TEXT_FX_NATIVE_META)).length
     })});
 
     const MY_NAME_HIGHLIGHT_CLASS = "SubbysPlushiesMyNameHighlight";
     const MY_NAME_HIGHLIGHT_IGNORE_SELECTOR = [
-        "a", "button", "input", "textarea", "select", "script", "style", "code",
-        ".ChatMessageName", ".ChatMessageSender", ".ChatMessageUsername",
-        ".ChatMessageHeader", ".ChatMessageTime", ".ChatMessageTimestamp",
-        ".ReplyButton", ".SubbysPlushiesOfferControls",
-        ".SubbysPlushiesOfferPrompt", ".SubbysPlushiesQuickReactions", ".SubbysPlushiesReactionPicker", "." + MY_NAME_HIGHLIGHT_CLASS,
-        ".SubbysTextAtMention", "[contenteditable]"
+        TEXT_FX_SKIP,
+        ".SubbysPlushiesOfferControls", ".SubbysPlushiesOfferPrompt",
+        ".SubbysPlushiesQuickReactions", ".SubbysPlushiesReactionPicker",
+        "." + MY_NAME_HIGHLIGHT_CLASS
     ].join(",");
     function myCharacterMentionNames() {
         const player = window.Player;
@@ -19683,9 +19724,9 @@ function SubbysPlushiesPageMain() {
             row.classList.contains("ChatMessageLocalMessage") ||
             row.classList.contains("SubbysPlushiesOfferPrompt")) return 0;
         const nodes = [];
-        const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
-        while (walker.nextNode() && nodes.length < 120) {
-            const node = walker.currentNode;
+        // Use the same body-first traversal as @mentions so names in the
+        // timestamp, status badges or member number are never highlighted.
+        for (const node of textFxNodeCandidates(row)) {
             const parent = node.parentElement;
             if (!parent || parent.closest(MY_NAME_HIGHLIGHT_IGNORE_SELECTOR)) continue;
             const content = node.nodeValue || "";
@@ -19710,11 +19751,14 @@ function SubbysPlushiesPageMain() {
                 highlight.className = MY_NAME_HIGHLIGHT_CLASS;
                 highlight.textContent = match[2];
                 Object.assign(highlight.style, {
-                    background: "rgba(255, 218, 85, 0.92)",
-                    color: "#241800",
-                    fontWeight: "bold",
-                    borderRadius: "3px",
-                    padding: "0 2px",
+                    background: "rgba(255, 209, 123, 0.20)",
+                    color: "inherit",
+                    fontWeight: "inherit",
+                    fontSize: "inherit",
+                    lineHeight: "inherit",
+                    borderRadius: "2px",
+                    padding: "0 1px",
+                    boxShadow: "none",
                 });
                 fragments.appendChild(highlight);
                 cursor = matchEnd;
@@ -29316,7 +29360,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.18";
+    const VERSION = "3.9.19";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
