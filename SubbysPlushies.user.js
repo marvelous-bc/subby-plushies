@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.14
-// @description  v3.9.14: reliable chat auto-scroll during background tabs, whispers, and delayed styling; preserves reader scrollback
+// @version      3.9.15
+// @description  v3.9.15: whisper-inspired lightweight public chat rows with custom name palettes; retains reliable auto-scroll
 // @released     2026-11-02
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.14";
+    const VERSION = "3.9.15";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -3754,9 +3754,42 @@ function SubbysPlushiesPageMain() {
             if(old?.isConnected)old.classList.add('SubbysChatStyleCold');
         }
     }
+    // v3.9.15: Whisper-inspired presentation for ordinary public messages.
+    // One scoped CSS class on the chat log; no per-message observers, layout
+    // reads, animation or new network traffic. Native whispers and actions are
+    // deliberately excluded. Existing gradients and local color accents remain.
+    const PUBLIC_WHISPER_LOOK_CSS_ID='subbys-public-whisper-look-v1';
+    const PUBLIC_WHISPER_LOOK_CSS=`
+#TextAreaChatLog.SubbysPublicWhisperLook .ChatMessage.ChatMessageChat:where(:not(.ChatMessageWhisper):not(.ChatMessageAction):not(.ChatMessageSystem)) {
+    position:relative!important;box-sizing:border-box!important;
+    margin:2px 0!important;padding:2px 7px 3px 8px!important;
+    border-radius:6px!important;
+    border-top:0!important;border-right:0!important;border-bottom:0!important;
+    border-left:3px solid var(--subbys-style-accent,var(--subbys-local-chat-accent,#827a96))!important;
+    background:var(--subbys-local-chat-tint,rgba(65,61,73,.52))!important;
+    background-image:none!important;box-shadow:none!important;
+}
+#TextAreaChatLog.SubbysPublicWhisperLook .ChatMessage.ChatMessageChat.SubbysCustomChatPalette:not(.ChatMessageWhisper) {
+    background:var(--subbys-style-background,rgba(65,61,73,.38))!important;
+    background-image:none!important;
+}
+/* Only row framing changes; chat text, links, emoji, name gradients, and
+   Whisper to/from headers retain their existing color and layout rules. */
+`;
+    function chatPublicWhisperLookSync(log=document.getElementById('TextAreaChatLog')){
+        if(!log)return;
+        const on=getFeatureSettings().chatStyleWhisperLikePublic===true && essentialsConfig().safeMode!==true;
+        if(on && !document.getElementById(PUBLIC_WHISPER_LOOK_CSS_ID) && document.head){
+            const sheet=document.createElement('style');sheet.id=PUBLIC_WHISPER_LOOK_CSS_ID;
+            sheet.textContent=PUBLIC_WHISPER_LOOK_CSS;document.head.appendChild(sheet);
+        }
+        // classList.toggle(force) avoids rewriting styles on every refresh.
+        log.classList.toggle('SubbysPublicWhisperLook',on);
+    }
     function chatStyleSyncPerformance(){
         const log=document.getElementById('TextAreaChatLog');
         log?.classList.toggle('SubbysChatLowCpu',isLowCpuMode());
+        chatPublicWhisperLookSync(log);
     }
     function chatStyleClearRow(row) {
         const hot=chatStyleHotRows.indexOf(row);
@@ -3992,6 +4025,8 @@ function SubbysPlushiesPageMain() {
         toggleAll(){return setFeatureSetting('chatStyleShowAll',!getFeatureSettings().chatStyleShowAll);},
         toggleNameColors(){return toggleFeatureSetting('chatStyleShowNameColors');},
         toggleNameTitles(){return toggleFeatureSetting('chatStyleShowNameTitles');},
+        get whisperLookPublic(){return getFeatureSettings().chatStyleWhisperLikePublic;},
+        toggleWhisperLook(){return toggleFeatureSetting('chatStyleWhisperLikePublic');},
         setCuddleQueenBroadcast:chatStyleSetRoyalSealBroadcast,
         reshare(){return sendAddonPresence(true);},
         debugSelf(){
@@ -4028,6 +4063,8 @@ function SubbysPlushiesPageMain() {
             showAll:chatStyleViewAllowed(),
             showNameColors:getFeatureSettings().chatStyleShowNameColors,
             showNameTitles:getFeatureSettings().chatStyleShowNameTitles,
+            whisperLookPublic:getFeatureSettings().chatStyleWhisperLikePublic,
+            whisperLookApplied:!!document.getElementById('TextAreaChatLog')?.classList.contains('SubbysPublicWhisperLook'),
             cuddleQueenBroadcast:currentAccountMemberNumber()===ROYAL_SEAL_MEMBER ? chatStyleMine().royalSeal===true : null,
             mine:{...chatStyleMine()},peers:chatStyleRemote.size,
             peerMembers:[...chatStyleRemote.keys()],
@@ -4079,6 +4116,8 @@ function SubbysPlushiesPageMain() {
             chatStyleShowAll: storedBoolean("chatStyleShowAll"),
             chatStyleShowNameColors: storedBoolean("chatStyleShowNameColors"),
             chatStyleShowNameTitles: storedBoolean("chatStyleShowNameTitles"),
+            chatStyleWhisperLikePublic: Object.prototype.hasOwnProperty.call(stored, "chatStyleWhisperLikePublic")
+                ? !!stored.chatStyleWhisperLikePublic : true,
             performanceMode: String(stored.performanceMode || "normal").toLowerCase() === "low" ? "low" : "normal",
         };
         return featureSettingsState;
@@ -4097,6 +4136,7 @@ function SubbysPlushiesPageMain() {
             if (settings[key]) highlightMyNameInVisibleChat();
             else clearMyNameHighlights();
         }
+        if (key === "chatStyleWhisperLikePublic") {chatPublicWhisperLookSync();}
         if (key === "chatStyleShowAll" || key === "chatStyleShowNameColors" || key === "chatStyleShowNameTitles") {chatStyleRefresh();}
         if (key === "quickReactions") quickReactionUpdateVisibility();
         if (key === "showDragButton") {
@@ -8789,6 +8829,7 @@ function SubbysPlushiesPageMain() {
                 chatStyleShowAll: true,
                 chatStyleShowNameColors: true,
                 chatStyleShowNameTitles: true,
+                chatStyleWhisperLikePublic: true,
                 quickReactions: true,
             });
         } else if (fileName === "idle.json") {
@@ -13537,7 +13578,10 @@ function SubbysPlushiesPageMain() {
     function renderExtensionsChatBadgeSettings(container){
         const settings=getFeatureSettings(),section=makeExtensionsSection('Visibility & Name Badges');
         section.append(
-            extensionsSettingRow('Show all custom styles','Hide all Essentials styles on your screen, including names and whispers.',
+            extensionsSettingRow('Whisper-style public chat',
+                'Use the subtle whisper-style background and colored left edge for regular chat. Names, gradients, message text, and native whispers stay unchanged. Local only.',
+                settings.chatStyleWhisperLikePublic,()=>toggleFeatureSetting('chatStyleWhisperLikePublic')),
+            extensionsSettingRow('Show shared custom styles','Hide shared player colors, name gradients and themed whispers; the separate local public-chat layout toggle stays independent.',
                 settings.chatStyleShowAll,()=>toggleFeatureSetting('chatStyleShowAll')),
             extensionsSettingRow('Show name gradients','Show or hide other Essentials players’ name gradients locally.',
                 settings.chatStyleShowNameColors,()=>toggleFeatureSetting('chatStyleShowNameColors')),
@@ -14995,6 +15039,13 @@ function SubbysPlushiesPageMain() {
         if(prev.last===next)return;
         row.style.borderLeft=valid?`4px solid ${next}`:prev.borderLeft;
         row.style.backgroundColor=valid?`${next}18`:prev.backgroundColor;
+        if(valid){
+            row.style.setProperty('--subbys-local-chat-accent',next);
+            row.style.setProperty('--subbys-local-chat-tint',`${next}22`);
+        }else{
+            row.style.removeProperty('--subbys-local-chat-accent');
+            row.style.removeProperty('--subbys-local-chat-tint');
+        }
         prev.last=next;
     }
     function essentialsRefreshChatColors() {
@@ -15018,6 +15069,7 @@ function SubbysPlushiesPageMain() {
             if(backup?.performanceMode)setPerformanceMode(backup.performanceMode);
         }
         essentialsRefreshChatColors();
+        chatPublicWhisperLookSync();
         essentialsStartBudget();
         if(extensionsPanelElement?.isConnected)renderExtensionsPanel();
     }
@@ -21631,6 +21683,14 @@ function SubbysPlushiesPageMain() {
                 (node.matches('.ChatMessageWhisper')||!!node.querySelector('.ChatMessageWhisper'));
             chatScrollBeforeAppend(node);
             const result = next(args);
+            // Native chat logs can be replaced during room transitions.
+            // A direct class check is cheap and avoids a watcher or timer.
+            if(window.CurrentScreen==='ChatRoom'){
+                const log=document.getElementById('TextAreaChatLog');
+                if(log && log.classList.contains('SubbysPublicWhisperLook')!==
+                   (getFeatureSettings().chatStyleWhisperLikePublic && !essentialsConfig().safeMode))
+                    chatPublicWhisperLookSync(log);
+            }
             quickReactionCaptureAppendedRow(node);
             if (node instanceof Element && window.CurrentScreen === "ChatRoom") {
                 const isPublic = node.matches('.ChatMessageChat') ||
@@ -28934,7 +28994,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.14";
+    const VERSION = "3.9.15";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {

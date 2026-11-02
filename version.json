@@ -1,6 +1,6 @@
 {
-  "version": "3.9.14",
+  "version": "3.9.15",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Reliable native chat auto-follow across public/whisper/action rows, delayed emotes and gradients, hidden-tab focus resume, and other-addon appends; respects deliberate chat scrollback. Uses coalesced frame/timer, direct-child mutation and resize observers without constant polling. Retains v3.9.13 rendering diagnostics.",
+  "notes": "Whisper-inspired lightweight public chat appearance, with soft muted message rows and subtle colored left accents. Retains native name gradients, local character colors, whisper styling, efficient shared CSS, and v3.9.14 chat auto-scroll. Local toggle in Chat Styles > Visibility & Name Badges.",
   "released": "2026-11-02"
 }
