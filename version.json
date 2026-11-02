@@ -1,6 +1,6 @@
 {
-  "version": "3.7.0",
+  "version": "3.7.3",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "v3.7: Cuddle Queen shown by default to Essentials users when Subbycat is present; her badge broadcast works independently of personal palettes. Existing hide/broadcast-off preferences remain respected. Corrected bootstrap version metadata.",
+  "notes": "Fix Cuddle Queen badge and custom chat styles on verified R133 chat rows even when custom nickname markup lacks a recognizable name header; improve owner self-chat reconciliation and per-peer diagnostics.",
   "released": "2026-11-01"
 }
