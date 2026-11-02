@@ -1,6 +1,6 @@
 {
-  "version": "3.9.12",
+  "version": "3.9.13",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Major chat performance pass: shared per-member CSS rules for public gradients, whisper themes and nickname colors; no per-message CSS variable fan-out; restricted whisper palette refreshes; delegated quick-reaction events; no-op local color fast path; faster outgoing row detection; gradient fallback, enhanced diagnostics. Keeps mascot/whisper fixes and prior optimizations.",
-  "released": "2026-11-01"
+  "notes": "Character-render phase diagnostics: separately measure downstream BC/mod DrawCharacter time and Essentials synchronous hook time, sample 5-second deltas alongside FPS; reduce idle hover-badge RAF work and redundant display writes. Retains v3.9.12 gradient/whisper optimization and prior mascot fixes.",
+  "released": "2026-11-02"
 }
