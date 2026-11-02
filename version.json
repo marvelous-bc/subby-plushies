@@ -1,6 +1,6 @@
 {
-  "version": "3.9.1",
+  "version": "3.9.2",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Performance fixes: batched plushie auras, no private settings broadcast, whisper visibility repair, dedicated Chat Styles menu tab.",
+  "notes": "Removed plushie auras entirely to reduce rendering overhead; preserves chat gradients, whisper appearance, chat sounds, name badges and Cuddle Queen.",
   "released": "2026-11-01"
 }

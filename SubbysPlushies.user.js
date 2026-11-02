@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.1
-// @description  Chat Styles tab, optimized auras, repaired whisper/sound controls
+// @version      3.9.2
+// @description  Chat Styles tab, whisper themes, chat sounds and improved performance (auras removed)
 // @released     2026-11-01
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.1";
+    const VERSION = "3.9.2";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2508,16 +2508,6 @@ function SubbysPlushiesPageMain() {
         'Secret Note':{primary:'#F7DDA5',secondary:'#FFF4D5',accent:'#C9A975',icon:'✉',border:'dashed'}
     });
     const CHAT_SOUND_TYPES = Object.freeze(['none','purr','chime','sparkle','squeak']);
-    const CHAT_AURA_TYPES = Object.freeze(['none','hearts','sparkles','paws','stars','moons','petals','bats','ghosts','crown']);
-    const CHAT_AURA_SYMBOLS = Object.freeze({hearts:'♡',sparkles:'✦',paws:'🐾',stars:'★',moons:'☾',petals:'❀',bats:'🦇',ghosts:'👻',crown:'♛'});
-    const CHAT_AURA_PRESETS = Object.freeze({
-        Rose:{type:'hearts',color:'#FF79B9',speed:50,strength:65,size:65},
-        Celestial:{type:'stars',color:'#B1A0FF',speed:35,strength:60,size:75},
-        Royal:{type:'crown',color:'#F4C77D',speed:30,strength:80,size:80},
-        Halloween:{type:'bats',color:'#E08EFA',speed:65,strength:65,size:75},
-        Winter:{type:'sparkles',color:'#A7E7FF',speed:30,strength:55,size:65}
-    });
-
     const CHAT_EXPRESSION_KEY = 'SubbysPlushies:expression-studio:v3:';
     const CHAT_EXPRESSION_DEFAULT = Object.freeze({
         whisperEnabled:false,whisperInherit:false,whisperPreset:'Soft Pink',
@@ -2525,25 +2515,20 @@ function SubbysPlushiesPageMain() {
         whisperIcon:'♡',whisperBorder:'solid',whisperGlow:true,
         soundEnabled:false,soundType:'purr',soundVolume:35,
         soundWhisper:true,soundBeep:false,soundFavorites:false,soundMentions:false,
-        soundMuteBusy:true,soundMuteHidden:true,
-        auraEnabled:false,auraShowSelf:true,auraShowOthers:true,auraType:'hearts',
-        auraColor:'#FF79B9',auraStrength:65,auraSize:65,auraSpeed:50,
-        auraAffection:false,auraMatchChat:false
+        soundMuteBusy:true,soundMuteHidden:true
     });
     let chatExpressionMember=0,chatExpressionValue=null;
     function chatExpressionNormalize(raw) {
         const r=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
         const out={...CHAT_EXPRESSION_DEFAULT};
         const bools=['whisperEnabled','whisperInherit','whisperGlow','soundEnabled','soundWhisper','soundBeep',
-            'soundFavorites','soundMentions','soundMuteBusy','soundMuteHidden','auraEnabled',
-            'auraShowSelf','auraShowOthers','auraAffection','auraMatchChat'];
+            'soundFavorites','soundMentions','soundMuteBusy','soundMuteHidden'];
         for(const k of bools)if(typeof r[k]==='boolean')out[k]=r[k];
-        for(const k of ['whisperPrimary','whisperSecondary','whisperAccent','auraColor'])
+        for(const k of ['whisperPrimary','whisperSecondary','whisperAccent'])
             if(typeof r[k]==='string'&&/^#[0-9A-Fa-f]{6}$/.test(r[k]))out[k]=r[k].toUpperCase();
-        for(const k of ['soundVolume','auraStrength','auraSize','auraSpeed'])
+        for(const k of ['soundVolume'])
             if(Number.isFinite(Number(r[k])))out[k]=Math.max(0,Math.min(100,Math.round(Number(r[k]))));
         if(CHAT_SOUND_TYPES.includes(r.soundType))out.soundType=r.soundType;
-        if(CHAT_AURA_TYPES.includes(r.auraType))out.auraType=r.auraType;
         if(CHAT_STYLE_BORDERS.includes(r.whisperBorder))out.whisperBorder=r.whisperBorder;
         if(['♡','☾','✦','✉','none'].includes(r.whisperIcon))out.whisperIcon=r.whisperIcon;
         if(Object.hasOwn(CHAT_WHISPER_PRESETS,r.whisperPreset))out.whisperPreset=r.whisperPreset;
@@ -2559,54 +2544,15 @@ function SubbysPlushiesPageMain() {
     }
     function chatExpressionSet(changes,redraw=true) {
         const member=currentAccountMemberNumber();if(!member)return false;
-        const priorAura=JSON.stringify(chatAuraPacket());
         chatExpressionValue=chatExpressionNormalize({...chatExpressionMine(),...changes});
         writeLocalJSON(CHAT_EXPRESSION_KEY+member,chatExpressionValue);
-        chatWhisperRefresh();chatAuraRefreshAll();
-        // Only the public aura needs room synchronization. Private whisper and
-        // audio settings never need a network packet.
-        if(window.CurrentScreen==='ChatRoom' && priorAura!==JSON.stringify(chatAuraPacket())) sendAddonPresence(true);
+        // Whisper appearance and audio preferences stay on this client.
+        chatWhisperRefresh();
         if(redraw&&extensionsPanelElement?.isConnected)renderExtensionsPanel();
         return {...chatExpressionValue};
     }
-    function chatAuraNormalize(raw){
-        const r=raw&&typeof raw==='object'?raw:{};
-        const enabled=r.enabled===true&&CHAT_AURA_TYPES.includes(r.type)&&r.type!=='none';
-        return {enabled,type:CHAT_AURA_TYPES.includes(r.type)?r.type:'none',
-            color:typeof r.color==='string'&&/^#[0-9a-fA-F]{6}$/.test(r.color)?r.color.toUpperCase():'#FF79B9',
-            strength:Number.isFinite(Number(r.strength))?Math.max(0,Math.min(100,Math.round(Number(r.strength)))):65,
-            size:Number.isFinite(Number(r.size))?Math.max(0,Math.min(100,Math.round(Number(r.size)))):65,
-            speed:Number.isFinite(Number(r.speed))?Math.max(0,Math.min(100,Math.round(Number(r.speed)))):50};
-    }
-    function chatAuraPacket(){
-        const a=chatExpressionMine();
-        return chatAuraNormalize({enabled:a.auraEnabled,type:a.auraType,
-            color:a.auraMatchChat?chatStyleMine().accent:a.auraColor,
-            strength:a.auraStrength,size:a.auraSize,speed:a.auraSpeed});
-    }
-    // === v3.9 Expression Studio: whisper themes, sound themes and plushie auras ===
+    // v3.9.2: Aura subsystem removed (no draw hook, overlays, timers, or presence traffic).
     const CHAT_EXPRESSION_CSS_ID='subbys-expression-studio-v39';
-    const chatAuraOverlays=new Map();
-    const chatAuraPending=new Set();
-    let chatAuraFlushTimer=null,chatAuraLastFlushAt=0,chatAuraComputed=0,chatAuraSkipped=0;
-    function chatAuraQueueMember(member){
-        const id=Number(member);
-        if(!Number.isSafeInteger(id)||id<=0||window.CurrentScreen!=='ChatRoom')return;
-        if(!chatAuraOverlays.has(id) && !chatAuraWantedMember(id))return;
-        chatAuraPending.add(id);
-        if(chatAuraFlushTimer!==null)return;
-        // Never compute layout inside character draw hooks. Use a bounded
-        // coalesced update, max ~8 Hz normal or ~4 Hz Low CPU.
-        const interval=getFeatureSettings().performanceMode==='low'?240:125;
-        const elapsed=Date.now()-chatAuraLastFlushAt;
-        chatAuraFlushTimer=window.setTimeout(()=>{
-            chatAuraFlushTimer=null;
-            chatAuraLastFlushAt=Date.now();
-            const members=Array.from(chatAuraPending);chatAuraPending.clear();
-            if(window.CurrentScreen!=='ChatRoom'){chatAuraClearAll();return;}
-            for(const peer of members)chatAuraRefreshMember(peer);
-        },Math.max(0,interval-elapsed));
-    }
     const CHAT_EXPRESSION_CSS=`
 #TextAreaChatLog .SubbysWhisperTheme {
     position:relative!important;box-sizing:border-box;border-left:3px var(--sw-border,solid) var(--sw-accent,#ff7eb7)!important;
@@ -2621,21 +2567,6 @@ function SubbysPlushiesPageMain() {
     display:inline-block;color:var(--sw-primary,#ff8abf);margin-right:5px;font-size:13px;
     pointer-events:none;user-select:none;
 }
-.SubbysPlushAura {position:fixed;pointer-events:none!important;user-select:none!important;
-    transform:translate(-50%,-50%);z-index:2147482870;box-sizing:border-box;
-    display:flex;align-items:center;justify-content:center;isolation:isolate;
-    color:var(--spa-color,#ff79b9);opacity:var(--spa-opacity,.7);}
-.SubbysPlushAura .spa-halo {position:absolute;inset:10%;border:2px solid currentColor;
-    border-radius:50%;box-shadow:0 0 12px currentColor,inset 0 0 8px currentColor;
-    opacity:.24;}
-.SubbysPlushAura .spa-orbit {position:absolute;inset:0;animation:spa-spin var(--spa-duration,8s) linear infinite;}
-.SubbysPlushAura .spa-symbol {position:absolute;left:50%;top:50%;font-size:var(--spa-font,15px);
-    text-shadow:0 0 7px currentColor,0 1px 2px rgba(0,0,0,.7);}
-.SubbysPlushAura .spa-symbol:nth-child(1) {transform:translate(-50%,-50%) rotate(0deg) translateY(calc(var(--spa-radius,36px)*-1)) rotate(0deg)}
-.SubbysPlushAura .spa-symbol:nth-child(2) {transform:translate(-50%,-50%) rotate(120deg) translateY(calc(var(--spa-radius,36px)*-1)) rotate(-120deg)}
-.SubbysPlushAura .spa-symbol:nth-child(3) {transform:translate(-50%,-50%) rotate(240deg) translateY(calc(var(--spa-radius,36px)*-1)) rotate(-240deg)}
-@keyframes spa-spin{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){.SubbysPlushAura .spa-orbit{animation:none!important}}
 `;
     function chatExpressionEnsureCss(){
         if(!document.getElementById(CHAT_EXPRESSION_CSS_ID) && document.head){
@@ -2750,105 +2681,12 @@ function SubbysPlushiesPageMain() {
             });return true;
         }catch(_){return false;}
     }
-    function chatAuraRemove(member){
-        const state=chatAuraOverlays.get(Number(member));if(!state)return;
-        try{state.element.remove();}catch(_){}
-        chatAuraOverlays.delete(Number(member));
-    }
-    function chatAuraClearAll(){
-        if(chatAuraFlushTimer!==null){clearTimeout(chatAuraFlushTimer);chatAuraFlushTimer=null;}
-        chatAuraPending.clear();
-        for(const member of [...chatAuraOverlays.keys()])chatAuraRemove(member);
-    }
-    function chatAuraWantedMember(member){
-        const id=Number(member),local=id===currentAccountMemberNumber(),cfg=chatExpressionMine();
-        if(!id||!cfg.auraEnabled&&local)return false;
-        if(!cfg.auraShowSelf&&local)return false;
-        if(!cfg.auraShowOthers&&!local)return false;
-        if(essentialsConfig().safeMode||!chatStyleViewAllowed())return false;
-        const aura=local?chatAuraPacket():chatStyleRemote.get(id)?.aura;
-        return !!(aura&&aura.enabled);
-    }
-    function chatAuraRefreshMember(member){
-        chatAuraComputed++;
-        const id=Number(member);if(!Number.isSafeInteger(id)||id<=0)return false;
-        const cfg=chatExpressionMine(),local=id===currentAccountMemberNumber();
-        if(window.CurrentScreen!=='ChatRoom'||!plushScreenVisible()||!chatAuraWantedMember(id)){
-            chatAuraRemove(id);return false;
-        }
-        const C=local?window.Player:getRoomCharacterByMember(id);
-        const item=local?statusOverlayTargetItem():getHeld(C);
-        if(!C||!isOurs(item)){chatAuraRemove(id);return false;}
-        const aura=local?chatAuraPacket():chatStyleRemote.get(id)?.aura;
-        if(!aura?.enabled){chatAuraRemove(id);return false;}
-        let centerX,centerY,width,height;
-        if(local){
-            const box=plushScreenBounds(C,item);if(!box)return false;
-            centerX=box.centerX;centerY=box.top+box.height*.5;
-            width=box.width;height=box.height;
-        }else{
-            const bounds=currentPlushCanvasBounds(item);
-            if(!bounds)return false;
-            const top=characterPointToScreen(C,bounds.centerX,bounds.visualTop);
-            const bottom=characterPointToScreen(C,bounds.centerX,bounds.visualBottom);
-            if(!top||!bottom)return false;
-            centerX=top.x;centerY=(top.y+bottom.y)/2;
-            height=Math.abs(bottom.y-top.y);width=height*.65;
-        }
-        if(![centerX,centerY,width,height].every(Number.isFinite)||height<=0)return false;
-        const size=Math.max(32,Math.min(260,Math.max(width,height)*(.7+aura.size/150)));
-        const effectStrength=local&&cfg.auraAffection?
-            Math.max(.1,Math.min(1,(Number(getPlushMoodRecord(plushNameForItem(item))?.score)||40)/100)) : 1;
-        let state=chatAuraOverlays.get(id);
-        if(!state){
-            chatExpressionEnsureCss();
-            const element=document.createElement('div');element.className='SubbysPlushAura';
-            element.setAttribute('aria-hidden','true');
-            const halo=document.createElement('div');halo.className='spa-halo';
-            const orbit=document.createElement('div');orbit.className='spa-orbit';
-            for(let i=0;i<3;i++){
-                const symbol=document.createElement('span');symbol.className='spa-symbol';orbit.appendChild(symbol);
-            }
-            element.append(halo,orbit);document.body.appendChild(element);
-            state={element,orbit,type:''};chatAuraOverlays.set(id,state);
-        }
-        if(state.type!==aura.type){
-            for(const el of state.orbit.children)el.textContent=CHAT_AURA_SYMBOLS[aura.type]||'✦';
-            state.type=aura.type;
-        }
-        const style=state.element.style;
-        const next={left:Math.round(centerX)+'px',top:Math.round(centerY)+'px',
-            width:Math.round(size)+'px',height:Math.round(size)+'px',
-            color:aura.color,opacity:String((.15+aura.strength*.0075)*effectStrength),
-            duration:(13-aura.speed*.09).toFixed(2)+'s',
-            font:Math.round(11+size*.05)+'px',radius:Math.round(size*.38)+'px',
-            display:plushOverlaysBlockedByInterface?'none':''};
-        const signature=JSON.stringify(next);
-        if(state.signature!==signature){
-            state.signature=signature;
-            style.left=next.left;style.top=next.top;
-            style.width=next.width;style.height=next.height;
-            style.setProperty('--spa-color',next.color);
-            style.setProperty('--spa-opacity',next.opacity);
-            style.setProperty('--spa-duration',next.duration);
-            style.setProperty('--spa-font',next.font);
-            style.setProperty('--spa-radius',next.radius);
-            style.display=next.display;
-        } else chatAuraSkipped++;
-        return true;
-    }
-    function chatAuraRefreshAll(){
-        for(const member of [...chatAuraOverlays.keys()])chatAuraRefreshMember(member);
-        chatAuraRefreshMember(currentAccountMemberNumber());
-        for(const member of chatStyleRemote.keys())chatAuraRefreshMember(member);
-    }
     Object.defineProperty(window,'SubbysExpressionStudio',{configurable:true,value:Object.freeze({
         get settings(){return {...chatExpressionMine()};},set:chatExpressionSet,
         playTestSound(){return chatSoundPlay(chatExpressionMine().soundType,chatExpressionMine().soundVolume/100);},
-        refresh(){chatWhisperRefresh();chatAuraRefreshAll();},
+        refresh(){chatWhisperRefresh();},
         diagnostic(){return {version:VERSION,settings:{...chatExpressionMine()},
-            visibleAuras:chatAuraOverlays.size,visibleWhispers:document.querySelectorAll('.SubbysWhisperTheme').length,
-            auraComputations:chatAuraComputed,auraUnchangedSkips:chatAuraSkipped,auraQueued:chatAuraPending.size,
+            visibleWhispers:document.querySelectorAll('.SubbysWhisperTheme').length,
             remoteStyles:chatStyleRemote.size};}
     })});
     const chatStyleRemote = new Map();
@@ -2981,7 +2819,7 @@ function SubbysPlushiesPageMain() {
         // In v3.7 the Cuddle Queen broadcast is independent of the owner's
         // personal gradient/border switch. A new owner account broadcasts its
         // badge by default, but an explicit royalSeal:false remains respected.
-        return style.enabled || chatExpressionMine().auraEnabled || (me===ROYAL_SEAL_MEMBER && style.royalSeal===true) ? style : null;
+        return style.enabled || (me===ROYAL_SEAL_MEMBER && style.royalSeal===true) ? style : null;
     }
     // Owner-side broadcast toggle (distinct from local visibility). The
     // existing hidden presence packet carries royalSeal:false immediately,
@@ -3014,7 +2852,7 @@ function SubbysPlushiesPageMain() {
             accent:style.accent,middle:style.middle,direction:style.direction,
             shimmer:style.shimmer,intensity:style.intensity,
             symbol:style.symbol,border:style.border,
-            glow:style.glow,animation:style.animation,aura:chatAuraPacket()};
+            glow:style.glow,animation:style.animation};
         if(currentAccountMemberNumber()===ROYAL_SEAL_MEMBER) packet.royalSeal=style.royalSeal===true;
         return JSON.stringify(packet);
     }
@@ -3041,7 +2879,6 @@ function SubbysPlushiesPageMain() {
                     style.direction=CHAT_GRADIENT_DIRECTIONS.includes(raw.direction)?raw.direction:'right';
                     style.shimmer=raw.shimmer===true;
                     style.intensity=Number.isFinite(Number(raw.intensity))?Math.min(100,Math.max(0,Number(raw.intensity))):60;
-                    style.aura=chatAuraNormalize(raw.aura);
                     // The BC packet sender is authoritative. Malicious peers
                     // cannot claim this feature merely by adding royalSeal:true.
                     style.royalSeal=sender===ROYAL_SEAL_MEMBER && raw.royalSeal===true;
@@ -3053,7 +2890,7 @@ function SubbysPlushiesPageMain() {
         else chatStyleRemote.delete(sender);
         chatStyleMetrics.packets++;
         if(JSON.stringify(previous||null)!==JSON.stringify(style||null)) {
-            chatStyleRefresh(); chatAuraRefreshMember(sender);
+            chatStyleRefresh();
         }
     }
     function chatStyleForMember(member) {
@@ -3466,7 +3303,7 @@ function SubbysPlushiesPageMain() {
             if (settings[key]) highlightMyNameInVisibleChat();
             else clearMyNameHighlights();
         }
-        if (key === "chatStyleShowAll" || key === "chatStyleShowNameColors" || key === "chatStyleShowNameTitles") {chatStyleRefresh();chatAuraRefreshAll();}
+        if (key === "chatStyleShowAll" || key === "chatStyleShowNameColors" || key === "chatStyleShowNameTitles") {chatStyleRefresh();}
         if (key === "quickReactions") quickReactionUpdateVisibility();
         if (key === "showDragButton") {
             if (settings[key]) refreshDragToggleButton();
@@ -5956,7 +5793,6 @@ function SubbysPlushiesPageMain() {
         const display = blocked ? "none" : "";
         if (plushStatusIconElement?.isConnected) plushStatusIconElement.style.display = display;
         if (speechBubbleElement?.isConnected) speechBubbleElement.style.display = display;
-        for(const aura of chatAuraOverlays.values())if(aura.element?.isConnected)aura.element.style.display=display;
         for (const state of remotePlushEmotes.values()) {
             if (state.icon?.isConnected) state.icon.style.display = display;
             if (state.bubble?.isConnected) state.bubble.style.display = display;
@@ -5970,7 +5806,6 @@ function SubbysPlushiesPageMain() {
             localOverlayRepositionFrame = null;
             if (speechBubbleElement?.isConnected) positionSpeechBubble();
             if (plushStatusIconElement?.isConnected) positionPlushStatusIcon();
-            chatAuraRefreshMember(currentAccountMemberNumber());
             if (dragToggleButton?.isConnected) refreshDragToggleButton();
             const item = statusOverlayTargetItem();
             if (isOurs(item)) localOverlayPositionSignature = plushOverlayPositionSignature(window.Player, item);
@@ -6094,7 +5929,6 @@ function SubbysPlushiesPageMain() {
     function clearRemotePlushEmotes() {
         for (const member of [...remotePlushEmotes.keys()]) removeRemotePlushEmote(member);
         clearPetSuitPlushOverlays();
-        chatAuraClearAll();
         lastCharacterChatRoomDraw.clear();
     }
     function positionRemotePlushEmote(memberNumber) {
@@ -6229,7 +6063,6 @@ function SubbysPlushiesPageMain() {
         }
         for (const member of [...chatStyleRemote.keys()]) if(!present.has(member)) chatStyleRemote.delete(member);
         for (const member of [...chatStylePresenceAcknowledged]) if(!present.has(member)) chatStylePresenceAcknowledged.delete(member);
-        for(const member of [...chatAuraOverlays.keys()])if(!present.has(member))chatAuraRemove(member);
     }
     function characterHasAddonPresence(C) {
         if (!C) return false;
@@ -6714,7 +6547,6 @@ function SubbysPlushiesPageMain() {
     function refreshCharacterPlushOverlaysFromNativeOverlay(C, placement) {
         if (!C || !placement || window.CurrentScreen !== "ChatRoom") return false;
         rememberVisibleOverlayPlacement(C, placement);
-        chatAuraQueueMember(Number(C.MemberNumber));
         const handheld = getHandheldItem(C);
         if (isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C))) {
             try { drawPetSuitPlushCanvasOverlay(C); } catch (_) {}
@@ -6798,7 +6630,6 @@ function SubbysPlushiesPageMain() {
                 }
                 const needsOverlay = !!nativePresenceHoverPointer || activeRestraintOverlay || newlyRestrained ||
                     (Number.isFinite(member) && remotePlushEmotes.has(member)) ||
-                    chatAuraWantedMember(member) ||
                     (local && (speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected));
                 const last = nativePresenceCaptureTimes.get(key) || 0;
                 if (needsOverlay && (placement.at - last >= 100 || !last)) {
@@ -12682,35 +12513,9 @@ function SubbysPlushiesPageMain() {
         hint.textContent='Purr reuses the same hosted sound as the Subbycat plushie hug. No Subbycat-specific notification trigger or cooldown is added.';
         hint.style.color=getExtensionsStyle().muted;section.appendChild(hint);container.appendChild(section);
     }
-    function renderExtensionsAuraStudio(container){
-        const c=chatExpressionMine(),section=makeExtensionsSection('Plushie Auras');
-        const hint=document.createElement('p');
-        hint.textContent='Throttled, lightweight animated halos around equipped Essentials plushies, shown locally. Other players need Essentials to see your shared aura. Nothing is drawn over BC clothing.';
-        hint.style.color=getExtensionsStyle().muted;section.appendChild(hint);
-        for(const [key,title,description] of [
-            ['auraEnabled','Enable my plushie aura','Publish your chosen aura to Essentials room members.'],
-            ['auraShowSelf','See my aura','Locally show the aura surrounding your equipped plushie.'],
-            ['auraShowOthers','See other players’ auras','Locally display compatible players’ equipped plushie auras.'],
-            ['auraAffection','Affection-based brightness','My plushie affection adjusts its aura brightness.'],
-            ['auraMatchChat','Match my chat accent','Use your personal chat style accent as the aura color.']])
-            section.appendChild(extensionsSettingRow(title,description,c[key],()=>chatExpressionSet({[key]:!chatExpressionMine()[key]})));
-        expressionSelect(section,'Aura type',CHAT_AURA_TYPES,c.auraType,value=>chatExpressionSet({auraType:value}));
-        if(!c.auraMatchChat)expressionHex(section,'Aura HEX',c.auraColor,value=>chatExpressionSet({auraColor:value}));
-        expressionSlider(section,'Glow strength',c.auraStrength,value=>chatExpressionSet({auraStrength:value}));
-        expressionSlider(section,'Aura size',c.auraSize,value=>chatExpressionSet({auraSize:value}));
-        expressionSlider(section,'Animation speed',c.auraSpeed,value=>chatExpressionSet({auraSpeed:value}));
-        const presets=document.createElement('div');
-        Object.assign(presets.style,{display:'flex',gap:'6px',flexWrap:'wrap',margin:'10px 0'});
-        for(const [name,values] of Object.entries(CHAT_AURA_PRESETS))
-            presets.appendChild(makeExtensionsButton(name,()=>chatExpressionSet({
-                auraEnabled:true,auraType:values.type,auraColor:values.color,
-                auraSpeed:values.speed,auraSize:values.size,auraStrength:values.strength,auraMatchChat:false})));
-        section.appendChild(presets);
-        container.appendChild(section);
-    }
     function renderExtensionsExpressionShare(container){
         const section=makeExtensionsSection('Expression Preset Codes');
-        const info=document.createElement('p');info.textContent='Export or import your public style, whisper appearance, sound choices and aura theme as JSON. Codes are not sent automatically.';
+        const info=document.createElement('p');info.textContent='Export or import your public style, whisper appearance and sound choices as JSON. Codes are not sent automatically.';
         info.style.color=getExtensionsStyle().muted;section.appendChild(info);
         const input=document.createElement('textarea');input.rows=3;
         input.placeholder='Paste a saved Expression Studio code here';
@@ -12735,7 +12540,7 @@ function SubbysPlushiesPageMain() {
     function renderExtensionsChatBadgeSettings(container){
         const settings=getFeatureSettings(),section=makeExtensionsSection('Visibility & Name Badges');
         section.append(
-            extensionsSettingRow('Show all custom styles','Hide all Essentials styles on your screen, including names, whispers and plushie auras.',
+            extensionsSettingRow('Show all custom styles','Hide all Essentials chat styles on your screen, including names and whispers.',
                 settings.chatStyleShowAll,()=>toggleFeatureSetting('chatStyleShowAll')),
             extensionsSettingRow('Show name gradients','Show or hide other Essentials players’ name gradients locally.',
                 settings.chatStyleShowNameColors,()=>toggleFeatureSetting('chatStyleShowNameColors')),
@@ -12762,7 +12567,7 @@ function SubbysPlushiesPageMain() {
         const nav=document.createElement('div');
         Object.assign(nav.style,{display:'flex',gap:'7px',flexWrap:'wrap',marginBottom:'12px'});
         for(const [key,label] of [['public','Public Style'],['whispers','Whispers'],['sounds','Sounds'],
-            ['badges','Badges & Visibility'],['presets','Preset Codes'],['auras','Plushie Auras']]) {
+            ['badges','Badges & Visibility'],['presets','Preset Codes']]) {
             nav.appendChild(makeExtensionsButton(label,()=>{
                 extensionsChatStudioTab=key;renderExtensionsPanel();
                 if(extensionsPanelContent)extensionsPanelContent.scrollTop=0;
@@ -12773,7 +12578,6 @@ function SubbysPlushiesPageMain() {
         else if(extensionsChatStudioTab==='sounds')renderExtensionsSoundThemes(container);
         else if(extensionsChatStudioTab==='badges')renderExtensionsChatBadgeSettings(container);
         else if(extensionsChatStudioTab==='presets')renderExtensionsExpressionShare(container);
-        else if(extensionsChatStudioTab==='auras')renderExtensionsAuraStudio(container);
         else renderExtensionsChatStyles(container);
     }
     function renderExtensionsSettings(container){
@@ -12792,11 +12596,6 @@ function SubbysPlushiesPageMain() {
     }
     function renderExtensionsPlushies(container) {
         const name = currentPlushName();
-        const auraAccess=makeExtensionsSection('Aura customization');
-        auraAccess.appendChild(makeExtensionsButton('Open Plushie Aura Settings',()=>{
-            extensionsActiveTab='chatstyles';extensionsChatStudioTab='auras';renderExtensionsPanel();
-        }));
-        container.appendChild(auraAccess);
         const mood = getPlushMoodRecord(name);
         const relationship = relationshipStatus(name);
         const heldSection = makeExtensionsSection("Held plushie");
@@ -14473,7 +14272,7 @@ function SubbysPlushiesPageMain() {
         }
         const bookChapter = extensionsPanelElement.querySelector?.(".SubbysBookChapter");
         if (bookChapter) {
-            const chapterNames = { status: "Status", lore: "Plushie Lore", wardrobe: "Wardrobe", essentials: "Essentials Tools", settings: `Settings · ${({layout:"Layout"})[extensionsSettingsTab]||"General"}`, chatstyles: "Chat Styles · "+({public:"Public",whispers:"Whispers",sounds:"Sounds",badges:"Badges",presets:"Presets",auras:"Auras"}[extensionsChatStudioTab]||"Public"), progress: "Progress", commands: "Commands" };
+            const chapterNames = { status: "Status", lore: "Plushie Lore", wardrobe: "Wardrobe", essentials: "Essentials Tools", settings: `Settings · ${({layout:"Layout"})[extensionsSettingsTab]||"General"}`, chatstyles: "Chat Styles · "+({public:"Public",whispers:"Whispers",sounds:"Sounds",badges:"Badges",presets:"Presets"}[extensionsChatStudioTab]||"Public"), progress: "Progress", commands: "Commands" };
             bookChapter.textContent = extensionsMobileMoreOpen ? "More tools" : (chapterNames[extensionsActiveTab] || "Essentials");
         }
         if (extensionsPanelElement.dataset.subbysCat === 'true') subbysCatRefreshSections();
@@ -28001,7 +27800,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.1";
+    const VERSION = "3.9.2";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
