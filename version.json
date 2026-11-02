@@ -1,6 +1,6 @@
 {
-  "version": "3.9.11",
+  "version": "3.9.12",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Room mascot recovery from last-known local room state, safer native layering visibility detection, retry for delayed canvas, prevents cache loss on room exit; native whisper nickname gradients now override default red, supports custom per-character colors and additional whisper header layouts. Retains all eight v3.9.10 performance optimizations.",
+  "notes": "Major chat performance pass: shared per-member CSS rules for public gradients, whisper themes and nickname colors; no per-message CSS variable fan-out; restricted whisper palette refreshes; delegated quick-reaction events; no-op local color fast path; faster outgoing row detection; gradient fallback, enhanced diagnostics. Keeps mascot/whisper fixes and prior optimizations.",
   "released": "2026-11-01"
 }

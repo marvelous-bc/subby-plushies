@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.11
-// @description  Performance + mascot/whisper fixes v3.9.11: reliable local mascot recovery and native whisper name-color overrides
+// @version      3.9.12
+// @description  v3.9.12: shared chat palette CSS, cheaper gradients and whispers, delegated reactions, tighter chat refresh and background work
 // @released     2026-11-01
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.11";
+    const VERSION = "3.9.12";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -416,6 +416,12 @@ function SubbysPlushiesPageMain() {
             const previous = perfEngineState.uiLastScreen;
             perfEngineState.uiLastScreen = screen;
             if (screen !== previous) perfCount('screenTransitions');
+            // A hidden browser tab still wakes a recovery timer, but none of
+            // its visual UI needs a nine-second full subscriber refresh.
+            // We perform the normal refresh on the visibility-change event.
+            if(document.hidden && screen===previous && reason==='recovery-check'){
+                perfCount('hiddenUiRecoverySkips');return;
+            }
             for (const cb of Array.from(perfEngineState.callbacks)) {
                 const key='ui:'+String(cb._perfLabel||'listener');
                 try { perfMeasure(key,() => cb(screen, previous, reason)); }
@@ -437,6 +443,7 @@ function SubbysPlushiesPageMain() {
             started = true;
             for (const name of ['focus','pageshow','hashchange','popstate'])
                 window.addEventListener(name, () => ping(name), {passive:true});
+            document.addEventListener('visibilitychange', () => ping('visibility-change'), {passive:true});
             // Catch screen switches after UI clicks even when BC exposes no
             // supported ModSDK screen hook. Same-screen clicks cost no work.
             window.addEventListener('click', () => {
@@ -2948,12 +2955,10 @@ function SubbysPlushiesPageMain() {
                 row.classList.toggle('SubbysWhisperGlow',!!theme?.glow);
                 if(theme){
                     row.dataset.subbysWhisperTheme=styleSign;
-                    row.style.setProperty('--sw-border',theme.border);
-                    row.style.setProperty('--sw-primary',theme.primary);
-                    row.style.setProperty('--sw-secondary-shade',chatStyleHexRgb(theme.secondary,.085));
-                    row.style.setProperty('--sw-accent',theme.accent);
-                    row.style.setProperty('--sw-background',chatStyleHexRgb(theme.accent,.12));
-                    row.style.setProperty('--sw-shade',chatStyleHexRgb(theme.accent,.22));
+                    if(chatSharedRule('whisper',sender,theme)){
+                        row.dataset.subbysWhisperPaletteMember=String(sender);
+                        chatSharedPaletteMetrics.whisperRows++;
+                    }
                     for(const n of row.querySelectorAll('.SubbysWhisperOrnament'))n.remove();
                     if(theme.icon!=='none'){
                         const icon=document.createElement('span');icon.className='SubbysWhisperOrnament';
@@ -2963,6 +2968,7 @@ function SubbysPlushiesPageMain() {
                     chatStyleMarkHot(row);
                 }else{
                     delete row.dataset.subbysWhisperTheme;
+                    delete row.dataset.subbysWhisperPaletteMember;
                     for(const key of ['border','primary','accent','background','shade','secondary-shade'])row.style.removeProperty('--sw-'+key);
                     for(const n of row.querySelectorAll('.SubbysWhisperOrnament'))n.remove();
                 }
@@ -2971,15 +2977,16 @@ function SubbysPlushiesPageMain() {
                 row.classList.toggle('SubbysWhisperNameColors',!!namePalette);
                 if(namePalette){
                     row.dataset.subbysWhisperNameStyle=nameSign;
-                    row.style.setProperty('--sw-name-primary',namePalette.primary);
-                    row.style.setProperty('--sw-name-middle',namePalette.middle);
-                    row.style.setProperty('--sw-name-secondary',namePalette.secondary);
-                    row.style.setProperty('--sw-name-angle',CHAT_GRADIENT_ANGLES[namePalette.direction]||'90deg');
+                    if(chatSharedRule('name',shownMember,namePalette)){
+                        row.dataset.subbysNamePaletteMember=String(shownMember);
+                        chatSharedPaletteMetrics.nameRows++;
+                    }
                     // Wrapping is necessary because native BC hardcodes whisper
                     // nickname red on a dedicated inline element.
                     if(!row.dataset.subbysWhisperNameAttempted)chatWhisperStyleName(row,shownMember);
                 }else{
                     delete row.dataset.subbysWhisperNameStyle;
+                    delete row.dataset.subbysNamePaletteMember;
                     for(const key of ['name-primary','name-middle','name-secondary','name-angle'])row.style.removeProperty('--sw-'+key);
                     chatWhisperClearName(row);
                 }
@@ -3017,7 +3024,9 @@ function SubbysPlushiesPageMain() {
         const token=++chatWhisperRefreshToken;
         const id=Number(member);
         const selector=id>0 ?
-            `.ChatMessageWhisper[data-sender="${id}"],.ChatMessageWhisper[data-subbys-verified-whisper-sender="${id}"]` :
+            `.ChatMessageWhisper[data-sender="${id}"],.ChatMessageWhisper[data-subbys-verified-whisper-sender="${id}"],`+
+            `.ChatMessageWhisper[data-target="${id}"],.ChatMessageWhisper[data-subbys-verified-whisper-target="${id}"],`+
+            `.ChatMessageWhisper[data-subbys-name-palette-member="${id}"]` :
             '.ChatMessageWhisper';
         const rows=Array.from(root.querySelectorAll(selector)).slice(-300);
         let index=0;
@@ -3157,6 +3166,8 @@ function SubbysPlushiesPageMain() {
             backfillPublicRuns:chatStylePerfMetrics.publicJobs,
             backfillWhisperRuns:chatStylePerfMetrics.whisperJobs,
             activeShimmer:false,
+            paletteRules:{public:chatSharedRules.public.size,whisper:chatSharedRules.whisper.size,name:chatSharedRules.name.size},
+            sharedPaletteCss:{...chatSharedPaletteMetrics},
             publicDecorateCalls:chatStylePerfMetrics.publicDecorateCalls,
             publicDecorateTotalMs:Math.round(chatStylePerfMetrics.publicDecorateMs*100)/100,
             publicDecorateMeanMs:Math.round(1000*chatStylePerfMetrics.publicDecorateMs/Math.max(1,chatStylePerfMetrics.publicDecorateCalls))/1000,
@@ -3195,8 +3206,7 @@ function SubbysPlushiesPageMain() {
         for(let i=chatStylePendingPackets.length-1;i>=0;i--)
             if(now-chatStylePendingPackets[i].time>CHAT_STYLE_PENDING_LIFETIME_MS) chatStylePendingPackets.splice(i,1);
         chatStylePendingPackets.push({member:id,content,time:now,direction,
-            previousRow:document.querySelector('#TextAreaChatLog .ChatMessage:last-child')||
-                        document.querySelector('#TextAreaChatLog .ChatMessage:last-of-type')});
+            previousRow:document.getElementById('TextAreaChatLog')?.lastElementChild||null});
         if(chatStylePendingPackets.length>32)chatStylePendingPackets.splice(0,chatStylePendingPackets.length-32);
         return true;
     }
@@ -3324,7 +3334,7 @@ function SubbysPlushiesPageMain() {
         chatStylePersonal=updated;
         writeLocalJSON(CHAT_STYLE_STORAGE_PREFIX+member,updated);
         chatStyleRefresh(member,false);
-        chatWhisperRefresh();
+        chatWhisperRefresh(member);
         // Announce both changes and opt-outs, but never leak chat text or passwords.
         if(window.CurrentScreen === 'ChatRoom') sendAddonPresence(true);
         if(redrawEditor && extensionsPanelElement?.isConnected) renderExtensionsPanel();
@@ -3380,7 +3390,7 @@ function SubbysPlushiesPageMain() {
         chatStyleMetrics.packets++;
         if(JSON.stringify(previous||null)!==JSON.stringify(style||null)) {
             chatStyleRefresh(sender,false);
-            chatWhisperRefresh();
+            chatWhisperRefresh(sender);
         }
     }
     function chatStyleForMember(member) {
@@ -3400,6 +3410,60 @@ function SubbysPlushiesPageMain() {
         const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
         return `rgba(${r},${g},${b},${opacity})`;
     }
+    // v3.9.12: palette CSS is shared by a verified member ID. A room can have
+    // hundreds of chat rows but each distinct palette is parsed and assigned
+    // only once, not on every append. All values have passed packet validation.
+    const chatSharedRules={public:new Map(),whisper:new Map(),name:new Map()};
+    let chatSharedCssText='',chatSharedCssNode=null;
+    const chatSharedPaletteMetrics={writes:0,avoided:0,evictions:0,publicRows:0,whisperRows:0,nameRows:0};
+    function chatSharedRule(kind,member,palette){
+        const id=Number(member);
+        if(!Number.isSafeInteger(id)||id<=0||!palette)return false;
+        const fingerprint=kind==='public' ?
+            [palette.primary,palette.middle,palette.secondary,palette.direction,palette.intensity,palette.accent,palette.border].join('|') :
+            kind==='whisper' ? [palette.primary,palette.secondary,palette.accent,palette.border].join('|') :
+            [palette.primary,palette.middle,palette.secondary,palette.direction].join('|');
+        const map=chatSharedRules[kind];
+        const previous=map.get(id);
+        if(previous?.fingerprint===fingerprint){chatSharedPaletteMetrics.avoided++;return true;}
+        // Each map is bounded for long sessions hopping among many rooms.
+        // Evict least-recently registered room entries only when necessary.
+        if(!previous && map.size>=256){map.delete(map.keys().next().value);chatSharedPaletteMetrics.evictions++;}
+        const selector=kind==='public' ?
+            `#TextAreaChatLog .SubbysCustomChat[data-subbys-palette-member="${id}"]` :
+            kind==='whisper' ? `#TextAreaChatLog .ChatMessageWhisper.SubbysWhisperTheme[data-subbys-whisper-palette-member="${id}"]` :
+            `#TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors[data-subbys-name-palette-member="${id}"]`;
+        const props=kind==='public' ? {
+            '--subbys-style-primary':palette.primary,'--subbys-style-middle':palette.middle,
+            '--subbys-style-secondary':palette.secondary,'--subbys-style-direction':CHAT_GRADIENT_ANGLES[palette.direction]||'90deg',
+            '--subbys-style-intensity':String(palette.intensity/100),'--subbys-style-accent':palette.accent,
+            '--subbys-style-border':palette.border,'--subbys-style-background':chatStyleHexRgb(palette.accent,.14),
+            '--subbys-style-shade':chatStyleHexRgb(palette.accent,.06+.004*palette.intensity)
+        } : kind==='whisper' ? {
+            '--sw-border':palette.border,'--sw-primary':palette.primary,
+            '--sw-secondary-shade':chatStyleHexRgb(palette.secondary,.085),'--sw-accent':palette.accent,
+            '--sw-background':chatStyleHexRgb(palette.accent,.12),'--sw-shade':chatStyleHexRgb(palette.accent,.22)
+        } : {
+            '--sw-name-primary':palette.primary,'--sw-name-middle':palette.middle,
+            '--sw-name-secondary':palette.secondary,'--sw-name-angle':CHAT_GRADIENT_ANGLES[palette.direction]||'90deg'
+        };
+        const rule=`${selector}{${Object.entries(props).map(([k,v])=>`${k}:${v}`).join(';')}}`;
+        map.set(id,{fingerprint,rule});
+        // One stylesheet update per actual member palette change, never per chat row.
+        chatSharedCssText=Object.values(chatSharedRules).flatMap(m=>Array.from(m.values(),v=>v.rule)).join('\n');
+        if(!chatSharedCssNode?.isConnected){
+            chatSharedCssNode=document.getElementById('subbys-chat-shared-palettes');
+            if(!chatSharedCssNode && document.head){
+                chatSharedCssNode=document.createElement('style');
+                chatSharedCssNode.id='subbys-chat-shared-palettes';document.head.appendChild(chatSharedCssNode);
+            }
+        }
+        if(chatSharedCssNode)chatSharedCssNode.textContent=chatSharedCssText;
+        chatSharedPaletteMetrics.writes++;
+        return true;
+    }
+    // Style specificity of these ID-verified rules stays below inline overrides
+    // from other addons. Only our validated cosmetic variables are shared.
     const CHAT_STYLE_CSS = `
 #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatPalette {
     position:relative!important; box-sizing:border-box;
@@ -3416,14 +3480,19 @@ function SubbysPlushiesPageMain() {
    color fallback, and override ONLY its own descendant foreground, not the
    surrounding chat text. This works even when the label has a nested span. */
 #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_NAME_CLASS} {
-    background:linear-gradient(var(--subbys-style-direction,90deg),var(--subbys-style-primary,#ff477b) 0%,var(--subbys-style-middle,#ff98bb) 50%,var(--subbys-style-secondary,#ff76d9) 100%)!important;
-    background-clip:text!important; -webkit-background-clip:text!important;
-    color:transparent!important; -webkit-text-fill-color:transparent!important;
-    font-weight:700!important; text-shadow:none!important;
+    color:var(--subbys-style-primary,#ff477b)!important;
+    -webkit-text-fill-color:var(--subbys-style-primary,#ff477b)!important;
+    font-weight:700!important;text-shadow:none!important;
 }
-#TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_NAME_CLASS} * {
-    color:transparent!important; -webkit-text-fill-color:transparent!important;
-    text-shadow:none!important;
+@supports ((-webkit-background-clip:text) or (background-clip:text)) {
+  #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_NAME_CLASS} {
+    background:linear-gradient(var(--subbys-style-direction,90deg),var(--subbys-style-primary,#ff477b) 0%,var(--subbys-style-middle,#ff98bb) 50%,var(--subbys-style-secondary,#ff76d9) 100%)!important;
+    background-clip:text!important;-webkit-background-clip:text!important;
+    color:transparent!important;-webkit-text-fill-color:transparent!important;
+  }
+  #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_NAME_CLASS} * {
+    color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important;
+  }
 }
 #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatGlow .${CHAT_STYLE_NAME_CLASS} {
     text-shadow:0 0 3px var(--subbys-style-accent,#ff6ba8)!important;
@@ -3519,6 +3588,7 @@ function SubbysPlushiesPageMain() {
         if(hot>=0)chatStyleHotRows.splice(hot,1);
         row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatPalette','SubbysCustomChatGlow','SubbysChatStyleCold',ROYAL_CHAT_CLASS);
         delete row.dataset.subbysChatStyle;
+        delete row.dataset.subbysPaletteMember;
         for(const key of ['primary','middle','secondary','accent','direction','intensity','background','shade','border'])
             row.style.removeProperty('--subbys-style-'+key);
         for(const label of row.querySelectorAll('.'+CHAT_STYLE_NAME_CLASS+',.SubbysCustomChatSyntheticName')) {
@@ -3668,15 +3738,10 @@ function SubbysPlushiesPageMain() {
             if(style.enabled) {
                 row.classList.add('SubbysCustomChatPalette');
                 if(style.glow)row.classList.add('SubbysCustomChatGlow');
-                row.style.setProperty('--subbys-style-primary',style.primary);
-                row.style.setProperty('--subbys-style-secondary',style.secondary);
-                row.style.setProperty('--subbys-style-middle',style.middle);
-                row.style.setProperty('--subbys-style-direction',CHAT_GRADIENT_ANGLES[style.direction]||'90deg');
-                row.style.setProperty('--subbys-style-intensity',String(style.intensity/100));
-                row.style.setProperty('--subbys-style-accent',style.accent);
-                row.style.setProperty('--subbys-style-border',style.border);
-                row.style.setProperty('--subbys-style-background',chatStyleHexRgb(style.accent,.14));
-                row.style.setProperty('--subbys-style-shade',chatStyleHexRgb(style.accent,.06+.004*style.intensity));
+                if(chatSharedRule('public',member,style)){
+                    row.dataset.subbysPaletteMember=String(member);
+                    chatSharedPaletteMetrics.publicRows++;
+                }
             }
             // A badge-only message gets its royal seal but no forced palette.
             if(showNames && style.enabled && label) label.classList.add(CHAT_STYLE_NAME_CLASS);
@@ -3739,7 +3804,7 @@ function SubbysPlushiesPageMain() {
                 window.requestAnimationFrame?.(flush)??window.setTimeout(flush,16);
             }else{
                 chatStylePerfMetrics.queuedPublic=0;chatStylePerfMetrics.publicJobs++;
-                if(refreshWhispers)chatWhisperRefresh();
+                if(refreshWhispers)chatWhisperRefresh(id>0?id:0);
             }
         };
         flush();
@@ -14703,12 +14768,18 @@ function SubbysPlushiesPageMain() {
         if(!Number.isInteger(num)||num<=0)return;
         const state=essentialsConfig();
         const color=state.safeMode?'':state.chatColors[String(num)];
-        if(!essentialsRowColors.has(row)) {
-            essentialsRowColors.set(row,{borderLeft:row.style.borderLeft,backgroundColor:row.style.backgroundColor});
+        const valid=typeof color==='string'&&/^#[\da-f]{6}$/i.test(color);
+        let prev=essentialsRowColors.get(row);
+        if(!valid&&!prev)return; // Most chat rows have no local override.
+        if(!prev){
+            prev={borderLeft:row.style.borderLeft,backgroundColor:row.style.backgroundColor,last:''};
+            essentialsRowColors.set(row,prev);
         }
-        const prev=essentialsRowColors.get(row);
-        row.style.borderLeft=/^#[\da-f]{6}$/i.test(color||'')?`4px solid ${color}`:prev.borderLeft;
-        row.style.backgroundColor=/^#[\da-f]{6}$/i.test(color||'')?`${color}18`:prev.backgroundColor;
+        const next=valid?color.toUpperCase():'';
+        if(prev.last===next)return;
+        row.style.borderLeft=valid?`4px solid ${next}`:prev.borderLeft;
+        row.style.backgroundColor=valid?`${next}18`:prev.backgroundColor;
+        prev.last=next;
     }
     function essentialsRefreshChatColors() {
         for(const record of quickReactionRecords)if(record.row?.isConnected)essentialsColorChatRow(record.row,record.sender);
@@ -14731,6 +14802,7 @@ function SubbysPlushiesPageMain() {
             if(backup?.performanceMode)setPerformanceMode(backup.performanceMode);
         }
         essentialsRefreshChatColors();
+        essentialsStartBudget();
         if(extensionsPanelElement?.isConnected)renderExtensionsPanel();
     }
     function essentialsSetHand(hand) {
@@ -14746,9 +14818,20 @@ function SubbysPlushiesPageMain() {
         const state=essentialsConfig();state.budget=value==='automatic'?'automatic':'off';essentialsSave();
         essentialsBudgetSlow=0;essentialsBudgetFast=0;
         if(state.budget==='off'&&(essentialsAutoOwnsLow||state.autoLow)){essentialsAutoOwnsLow=false;state.autoLow=false;essentialsSave();setPerformanceMode('normal');}
+        essentialsStartBudget();
         renderExtensionsPanel();
     }
+    let essentialsBudgetVisibilityListener=false;
     function essentialsStartBudget() {
+        if(!essentialsBudgetVisibilityListener){
+            essentialsBudgetVisibilityListener=true;
+            document.addEventListener('visibilitychange',essentialsStartBudget,{passive:true});
+        }
+        // Do not keep an 8-second timer running while disabled or hidden.
+        if(essentialsConfig().budget!=='automatic'||essentialsConfig().safeMode||document.hidden){
+            if(essentialsBudgetTimer!==null){window.clearInterval(essentialsBudgetTimer);essentialsBudgetTimer=null;}
+            return;
+        }
         if(essentialsBudgetTimer!==null)return;
         essentialsAutoOwnsLow=essentialsConfig().autoLow;
         const sample=()=>{
@@ -14793,7 +14876,7 @@ function SubbysPlushiesPageMain() {
         if(!Number.isInteger(+member)||+member<=0)return;
         if(/^#[a-f0-9]{6}$/i.test(color))config.chatColors[String(member)]=color;
         else delete config.chatColors[String(member)];
-        essentialsSave();essentialsRefreshChatColors();chatWhisperRefresh();
+        essentialsSave();essentialsRefreshChatColors();chatWhisperRefresh(Number(member));
     }
     function essentialsRenderXRay(section) {
         const character=window.Player;
@@ -18510,6 +18593,7 @@ function SubbysPlushiesPageMain() {
             quickReactionClosePicker(old);
             old.bar?.remove();
             old.active = false;
+            if(old.row)quickReactionByRow.delete(old.row);
             if (old.row?.style) old.row.style.position = old.priorPosition;
             if (old.row) old.row.tabIndex = old.priorTabIndex;
         }
@@ -18857,11 +18941,63 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
+    const quickReactionByRow=new WeakMap();
+    let quickReactionDelegateRoot=null,quickReactionDelegateAbort=null;
+    function quickReactionDelegatedRecord(event){
+        const target=event.target;
+        const row=target instanceof Element?target.closest('.ChatMessage'):null;
+        if(!row||!quickReactionDelegateRoot?.contains(row))return null;
+        const record=quickReactionByRow.get(row);
+        return record?.active?record:null;
+    }
+    function quickReactionEnsureDelegation(row){
+        // Delegate to the stable chat container; avoid 5 listeners x 180 rows.
+        const root=row.closest('#TextAreaChatLog')||getOfferChatRoot();
+        if(!root)return;
+        if(quickReactionDelegateRoot===root&&quickReactionDelegateAbort)return;
+        quickReactionDelegateAbort?.abort();
+        quickReactionDelegateRoot=root;
+        const controller=new AbortController();
+        quickReactionDelegateAbort=controller;
+        const signal=controller.signal;
+        root.addEventListener('mouseover',event=>{
+            const record=quickReactionDelegatedRecord(event);
+            if(record && !record.row.contains(event.relatedTarget))quickReactionShowPicker(record);
+        },{signal});
+        root.addEventListener('mouseout',event=>{
+            const record=quickReactionDelegatedRecord(event);
+            if(record && !record.row.contains(event.relatedTarget))quickReactionScheduleClose(record,event.relatedTarget);
+        },{signal});
+        root.addEventListener('pointerup',event=>{
+            const record=quickReactionDelegatedRecord(event);
+            if(record && event.pointerType!=='mouse' && !event.target?.closest?.('button, a, input, select, textarea')){
+                if(quickReactionOpenPicker?.record===record)quickReactionClosePicker(record);
+                else quickReactionShowPicker(record);
+            }
+        },{signal});
+        root.addEventListener('focusin',event=>{
+            const record=quickReactionDelegatedRecord(event);
+            if(record)quickReactionShowPicker(record);
+        },{signal});
+        root.addEventListener('keydown',event=>{
+            const record=quickReactionDelegatedRecord(event);
+            if(record&&['Enter',' ','ArrowDown'].includes(event.key)){
+                event.preventDefault();quickReactionShowPicker(record);
+                quickReactionOpenPicker?.panel?.querySelector('button')?.focus();
+            }
+        },{signal});
+        root.addEventListener('focusout',event=>{
+            const record=quickReactionDelegatedRecord(event);
+            if(record && (!event.relatedTarget ||
+                (!record.row.contains(event.relatedTarget)&&!quickReactionOpenPicker?.panel?.contains(event.relatedTarget))))
+                quickReactionScheduleClose(record,event.relatedTarget);
+        },{signal});
+    }
     function quickReactionAttachRow(row, context) {
         if (!(row instanceof Element) || !row.classList.contains("ChatMessage") ||
             row.classList.contains("ChatMessageLocalMessage") ||
             row.classList.contains("SubbysPlushiesOfferPrompt") || !row.isConnected || !context) return false;
-        if (quickReactionRecords.some(existing => existing.row === row)) return false;
+        if (quickReactionByRow.get(row)?.active) return false;
         const rowSender = Number(row.dataset?.sender);
         if (Number.isInteger(rowSender) && rowSender > 0 && rowSender !== context.sender) return false;
         const record = {
@@ -18871,28 +19007,8 @@ function SubbysPlushiesPageMain() {
         };
         if (!row.style.position) row.style.position = "relative";
         if (row.tabIndex < 0) row.tabIndex = 0;
-        row.addEventListener("mouseenter", () => quickReactionShowPicker(record));
-        row.addEventListener("pointerup", event => {
-            if (event.pointerType !== "mouse" && !event.target?.closest?.("button, a, input, select, textarea")) {
-                if (quickReactionOpenPicker?.record === record) quickReactionClosePicker(record);
-                else quickReactionShowPicker(record);
-            }
-        });
-        row.addEventListener("mouseleave", event => quickReactionScheduleClose(record, event.relatedTarget));
-        row.addEventListener("focusin", () => quickReactionShowPicker(record));
-        row.addEventListener("keydown", event => {
-            if (["Enter", " ", "ArrowDown"].includes(event.key)) {
-                event.preventDefault();
-                quickReactionShowPicker(record);
-                quickReactionOpenPicker?.panel?.querySelector("button")?.focus();
-            }
-        });
-        row.addEventListener("focusout", event => {
-            const next = event.relatedTarget;
-            if (!next || (!row.contains(next) && !quickReactionOpenPicker?.panel?.contains(next))) {
-                quickReactionScheduleClose(record, next);
-            }
-        });
+        quickReactionByRow.set(row,record);
+        quickReactionEnsureDelegation(row);
         quickReactionRecords.push(record);
         essentialsColorChatRow(row, context.sender);
         quickReactionPurge();
@@ -18961,6 +19077,7 @@ function SubbysPlushiesPageMain() {
             if (record.row) record.row.tabIndex = record.priorTabIndex;
         }
         quickReactionRecords.length = 0;
+        quickReactionDelegateAbort?.abort();quickReactionDelegateAbort=null;quickReactionDelegateRoot=null;
         quickReactionPending.length = 0;
         quickReactionSeenPackets.clear();
         quickReactionActorNames.clear();
@@ -28637,7 +28754,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.11";
+    const VERSION = "3.9.12";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
