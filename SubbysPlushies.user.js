@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.10
-// @description  Performance v3.9.10: targeted modal watches, event-driven UI, recovery scheduler, cheaper drawing/chat, bounded previews and cooperative bridge
+// @version      3.9.11
+// @description  Performance + mascot/whisper fixes v3.9.11: reliable local mascot recovery and native whisper name-color overrides
 // @released     2026-11-01
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.10";
+    const VERSION = "3.9.11";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -503,7 +503,7 @@ function SubbysPlushiesPageMain() {
             ping:() => perfUIBus.ping('manual')
         });
     }
-    // === Cooperative Essentials / PawLounge performance bus (v3.9.10) ===
+    // === Cooperative Essentials / PawLounge performance bus (v3.9.11) ===
     // Existing PawLounge versions may not emit these events. All Essentials
     // features continue independently, and no PawLounge internals are patched.
     const sharedPerfBridgeState = { frames: new Map(), observers: new Set(),
@@ -1956,6 +1956,7 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushiemascot picker", description: "Open the room mascot picker (room admin only; aliases: pick, open, choose)." }),
                 Object.freeze({ command: "/plushiemascot clear", description: "Clear the shared room mascot (room admin only; alias: remove)." }),
                 Object.freeze({ command: "/plushiemascot show", description: "Restore the mascot picture locally (alias: unhide)." }),
+                Object.freeze({ command: "/plushiemascot repair", description: "Recover a locally remembered mascot and diagnose its visibility." }),
                 Object.freeze({ command: "/plushiemascot hide", description: "Hide the mascot picture locally." }),
                 Object.freeze({ command: "/plushiemascotshow", description: "Shortcut for /plushiemascot show." }),
                 Object.freeze({ command: "/plushiemascothide", description: "Shortcut for /plushiemascot hide." }),
@@ -2656,6 +2657,7 @@ function SubbysPlushiesPageMain() {
     color:var(--sw-name-primary,#efddee)!important;
     -webkit-text-fill-color:var(--sw-name-primary,#efddee)!important;
     text-shadow:none!important;
+    display:inline!important;
 }
 @supports ((-webkit-background-clip:text) or (background-clip:text)) {
     #TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors .SubbysWhisperName {
@@ -2756,6 +2758,19 @@ function SubbysPlushiesPageMain() {
             row.dataset.subbysVerifiedWhisperSender=String(native);
             return native;
         }
+        // A native outgoing whisper can be rendered without data-sender in BC
+        // and BCX variants. A verified room target on an actual native whisper
+        // row is enough to identify the local account as the sender, without
+        // guessing sender identities from nickname text.
+        const target=Number(row.getAttribute('data-target'));
+        const mine=currentAccountMemberNumber();
+        if(Number.isSafeInteger(target)&&target>0&&target!==mine &&
+           getRoomCharacterByMember(target)&&Number.isSafeInteger(mine)&&mine>0&&
+           !/^\s*Whisper\s+from\b/i.test(row.textContent||'')){
+            row.dataset.subbysVerifiedWhisperSender=String(mine);
+            row.dataset.subbysVerifiedWhisperTarget=String(target);
+            return mine;
+        }
         // Fallback for a locally sent whisper rendered asynchronously. This
         // uses a recent native ServerSend, not the displayed nickname as proof.
         const pending=chatWhisperRecentOutbound;
@@ -2796,6 +2811,11 @@ function SubbysPlushiesPageMain() {
         const publicStyle=chatStyleForMember(member);
         if(publicStyle?.enabled)return {primary:publicStyle.primary,middle:publicStyle.middle,
             secondary:publicStyle.secondary,direction:publicStyle.direction||'right'};
+        // Essentials' per-character colors are also valid local name choices;
+        // previously they only colored the left edge of public chat rows.
+        const local=essentialsConfig().chatColors[String(member)];
+        if(typeof local==='string'&&/^#[0-9a-f]{6}$/i.test(local))
+            return {primary:local,middle:local,secondary:local,direction:'right'};
         if(whisperTheme)return {primary:whisperTheme.primary,middle:whisperTheme.primary,
             secondary:whisperTheme.secondary,direction:'right'};
         // For unthemed users use a legible neutral, rather than BC's default
@@ -2809,41 +2829,76 @@ function SubbysPlushiesPageMain() {
     // identified, never arbitrary visible text or an untrusted chat packet.
     function chatWhisperClearName(row){
         for(const node of row.querySelectorAll('.SubbysWhisperName')){
-            node.replaceWith(...Array.from(node.childNodes));
+            if(node.dataset.subbysWhisperNativeLabel==='1')node.classList.remove('SubbysWhisperName');
+            else node.replaceWith(...Array.from(node.childNodes));
         }
         delete row.dataset.subbysWhisperNameStyled;
+        delete row.dataset.subbysWhisperNameAttempted;
+        delete row.dataset.subbysWhisperNameResult;
     }
-    function chatWhisperStyleName(row){
+    function chatWhisperStyleName(row,member){
         chatWhisperClearName(row);
+        row.dataset.subbysWhisperNameAttempted='1';
+        // The identity is the native BC member/target ID. Never infer an ID
+        // from displayed text or recolor a message's body on nickname guesses.
+        if(!Number.isSafeInteger(Number(member))||Number(member)<=0){
+            row.dataset.subbysWhisperNameResult='missing-native-member';return false;
+        }
+        const person=getRoomCharacterByMember(member)||
+            (Number(member)===currentAccountMemberNumber()?window.Player:null);
+        const names=[person?.Nickname,person?.Name,person?.AccountName,getCharacterDisplayName(person)]
+            .filter(v=>typeof v==='string'&&v.trim()).map(v=>v.trim());
+        // Native BC, BCX and other room themes may have a dedicated nickname
+        // span rather than a literal 'Whisper from Name:' header.
+        const nativeLabel=row.querySelector('.ChatMessageWhisperName,.ChatMessageName,.ChatMessageSender,.ChatMessageUsername,.ChatRoomChatName');
+        if(nativeLabel&&!nativeLabel.closest('.ChatMessageContent,.ChatMessageBody,.ChatMessageText') &&
+           nativeLabel.textContent?.trim() && nativeLabel.textContent.trim().length<=110 &&
+           names.some(v=>nativeLabel.textContent.trim()===v||nativeLabel.textContent.trim()===v+':')){
+            nativeLabel.classList.add('SubbysWhisperName');
+            nativeLabel.dataset.subbysWhisperNativeLabel='1';
+            row.dataset.subbysWhisperNameStyled=nativeLabel.textContent.trim();
+            row.dataset.subbysWhisperNameResult='native-label';
+            return true;
+        }
         const parts=[];
         const walker=document.createTreeWalker(row,NodeFilter.SHOW_TEXT);
         let n,total=0;
-        while((n=walker.nextNode()) && total<300){
-            if(!n.nodeValue || n.parentElement?.closest('button,.ReplyButton,.SubbysWhisperOrnament,script,style'))continue;
+        while((n=walker.nextNode()) && total<350){
+            if(!n.nodeValue || n.parentElement?.closest('button,.ReplyButton,.SubbysWhisperOrnament,script,style,.ChatMessageContent,.ChatMessageBody,.ChatMessageText'))continue;
             parts.push({node:n,start:total,end:total+n.nodeValue.length});
             total+=n.nodeValue.length;
         }
-        const header=parts.map(p=>p.node.nodeValue).join('').slice(0,230);
-        // Whispers have the native to/from label; stop strictly at its first
-        // colon, so message content and @mentions are never recolored.
-        const match=/(?:^|[^\p{L}\p{N}])Whisper\s+(?:from|to)\s+([^:\r\n]{1,90}?)\s*:/iu.exec(header);
-        if(!match)return false;
-        const rawName=match[1];
+        const header=parts.map(p=>p.node.nodeValue).join('').slice(0,260);
+        // Restrict matching to the header BEFORE the first delimiter; otherwise
+        // a user could make their private message look like a name label.
+        let match=/(?:^|[^\p{L}\p{N}])Whisper\s+(?:from|to)\s+([^:\r\n：]{1,90}?)\s*[:：]/iu.exec(header);
+        let rawName=match?.[1]||'';
+        let start=match ? match.index+match[0].lastIndexOf(rawName) : -1;
+        if(start<0){
+            // Some skins omit 'Whisper from' entirely and render only the
+            // trusted member's name followed by ':'. Match its exact known
+            // name within the leading header, never arbitrary chat content.
+            const beforeColon=header.split(/[:：]/,1)[0]?.trim()||'';
+            const headerOnly=beforeColon && beforeColon.length<110 && /[:：]/.test(header);
+            const known=headerOnly?names.find(v=>beforeColon===v ||
+                beforeColon.toLowerCase()===('from '+v).toLowerCase()||
+                beforeColon.toLowerCase()===('to '+v).toLowerCase()):null;
+            if(known){rawName=known;start=header.indexOf(known);}
+        }
         const cleanName=rawName.trim();
-        if(!cleanName)return false;
-        const inMatch=match[0].lastIndexOf(rawName);
-        if(inMatch<0)return false;
-        const start=match.index+inMatch+rawName.indexOf(cleanName);
+        if(start<0||!cleanName || start>130){
+            row.dataset.subbysWhisperNameResult='unmatched-header';return false;
+        }
+        start+=rawName.indexOf(cleanName);
         const end=start+cleanName.length;
         let count=0;
-        // Keep wrappers leaf-level so nested native name elements remain
-        // clickable, and restoring the style never rewrites row.innerHTML.
+        // Wrap only text node fragments that correspond to the header's name.
+        // Preserve native clickable labels, reply controls and message content.
         for(const p of parts){
             const from=Math.max(start,p.start),to=Math.min(end,p.end);
             if(from>=to || !p.node.isConnected)continue;
             const local=from-p.start;
-            const text=p.node;
-            const middle=local ? text.splitText(local) : text;
+            const middle=local ? p.node.splitText(local) : p.node;
             if(to-from<middle.nodeValue.length)middle.splitText(to-from);
             const name=document.createElement('span');
             name.className='SubbysWhisperName';
@@ -2851,7 +2906,10 @@ function SubbysPlushiesPageMain() {
             name.appendChild(middle);
             count++;
         }
-        if(count)row.dataset.subbysWhisperNameStyled=cleanName;
+        if(count){
+            row.dataset.subbysWhisperNameStyled=cleanName;
+            row.dataset.subbysWhisperNameResult='wrapped-header';
+        }else row.dataset.subbysWhisperNameResult='header-dom-unavailable';
         return count>0;
     }
     const chatWhisperSignatureMemo=new WeakMap();
@@ -2883,7 +2941,7 @@ function SubbysPlushiesPageMain() {
                 row.classList.contains('SubbysWhisperTheme')!==!!theme;
             const nameChanged=(row.dataset.subbysWhisperNameStyle||'')!==nameSign ||
                 row.classList.contains('SubbysWhisperNameColors')!==!!namePalette;
-            if(!themeChanged&&!nameChanged && (!namePalette||row.querySelector('.SubbysWhisperName')))continue;
+            if(!themeChanged&&!nameChanged && (!namePalette||row.dataset.subbysWhisperNameAttempted==='1'))continue;
             if(theme||namePalette)chatExpressionEnsureCss();
             if(themeChanged){
                 row.classList.toggle('SubbysWhisperTheme',!!theme);
@@ -2909,7 +2967,7 @@ function SubbysPlushiesPageMain() {
                     for(const n of row.querySelectorAll('.SubbysWhisperOrnament'))n.remove();
                 }
             }
-            if(nameChanged || (namePalette&&!row.querySelector('.SubbysWhisperName'))){
+            if(nameChanged || (namePalette&&!row.dataset.subbysWhisperNameAttempted)){
                 row.classList.toggle('SubbysWhisperNameColors',!!namePalette);
                 if(namePalette){
                     row.dataset.subbysWhisperNameStyle=nameSign;
@@ -2919,7 +2977,7 @@ function SubbysPlushiesPageMain() {
                     row.style.setProperty('--sw-name-angle',CHAT_GRADIENT_ANGLES[namePalette.direction]||'90deg');
                     // Wrapping is necessary because native BC hardcodes whisper
                     // nickname red on a dedicated inline element.
-                    if(!row.querySelector('.SubbysWhisperName'))chatWhisperStyleName(row);
+                    if(!row.dataset.subbysWhisperNameAttempted)chatWhisperStyleName(row,shownMember);
                 }else{
                     delete row.dataset.subbysWhisperNameStyle;
                     for(const key of ['name-primary','name-middle','name-secondary','name-angle'])row.style.removeProperty('--sw-'+key);
@@ -2930,6 +2988,27 @@ function SubbysPlushiesPageMain() {
         chatStylePerfMetrics.whisperDecorateCalls++;
         chatStylePerfMetrics.whisperDecorateMs+=performance.now()-t0;
     }
+    // All information is structural; no whisper text or contents leave the client.
+    window.SubbysWhisperColorDiag=()=>{
+        const root=document.getElementById('TextAreaChatLog');
+        return {
+            version:VERSION,
+            screen:window.CurrentScreen,
+            nameColorsEnabled:getFeatureSettings().chatStyleShowNameColors!==false,
+            showAllStyles:chatStyleViewAllowed(),safeMode:essentialsConfig().safeMode===true,
+            whisperRows:root?.querySelectorAll('.ChatMessageWhisper').length||0,
+            coloredNames:root?.querySelectorAll('.ChatMessageWhisper.SubbysWhisperNameColors .SubbysWhisperName').length||0,
+            recent:[...(root?.querySelectorAll('.ChatMessageWhisper')||[])].slice(-8).map(r=>({
+                verifiedSender:!!chatWhisperVerifiedSender(r),
+                nativeSenderAttr:r.hasAttribute('data-sender'),
+                nativeTargetAttr:r.hasAttribute('data-target'),
+                paletteReady:r.classList.contains('SubbysWhisperNameColors'),
+                wrappedNames:r.querySelectorAll('.SubbysWhisperName').length,
+                result:r.dataset.subbysWhisperNameResult||'not-attempted'
+            })),
+            refresh(){chatWhisperRefresh();return 'Whisper refresh queued';}
+        };
+    };
     const chatStylePerfMetrics={queuedPublic:0,queuedWhispers:0,publicJobs:0,whisperJobs:0,
         whisperDecorateCalls:0,whisperDecorateMs:0,publicDecorateCalls:0,publicDecorateMs:0};
     let chatWhisperRefreshToken=0;
@@ -3096,7 +3175,9 @@ function SubbysPlushiesPageMain() {
                 styled:r.classList.contains('SubbysWhisperTheme'),nameStyled:r.dataset.subbysWhisperNameStyled||null,
                 nameMember:r.dataset.subbysVerifiedWhisperTarget||r.getAttribute('data-target')||null,
                 nameColorApplied:r.classList.contains('SubbysWhisperNameColors'),
-                nativeNameElements:r.querySelectorAll('.SubbysWhisperName').length}))};}
+                nativeNameElements:r.querySelectorAll('.SubbysWhisperName').length,
+                nameAttempted:r.dataset.subbysWhisperNameAttempted==='1',
+                nameResult:r.dataset.subbysWhisperNameResult||'not-attempted'}))};}
     })});
     const chatStyleRemote = new Map();
     // BC may append our own chat to the DOM from a separate send/echo path.
@@ -3396,7 +3477,7 @@ function SubbysPlushiesPageMain() {
     100%{opacity:0;transform:translateY(-9px) scale(.9)}
 }
 
-/* v3.9.10 Maximum Performance: no continuous or per-row cosmetic animations. */
+/* v3.9.11 Maximum Performance: no continuous or per-row cosmetic animations. */
 #TextAreaChatLog .SubbysRoyalSealAnimated,
 #TextAreaChatLog .SubbysCustomChatAnimated {animation:none!important;filter:none!important;}
 /* Older chat retains its colors but avoids extra glow layers. */
@@ -8808,22 +8889,33 @@ function SubbysPlushiesPageMain() {
             refreshRoomMascotOverlay();
             return { source: "room", state: { ...shared } };
         }
-        if (roomLoaded) {
+        // Some BC servers and room variants omit third-party Custom properties in
+        // subsequent room-sync packets. Missing is NOT equivalent to an admin
+        // clearing the mascot. Previous versions deleted the only local copy
+        // whenever this happened, making the picture disappear permanently.
+        const custom = window.ChatRoomData?.Custom;
+        const explicitInvalidState = !!roomLoaded && !!custom &&
+            typeof custom === 'object' &&
+            Object.prototype.hasOwnProperty.call(custom, ROOM_MASCOT_CUSTOM_KEY);
+        if (explicitInvalidState) {
             cacheRoomMascotState(null);
             roomMascotState = null;
             removeRoomMascotOverlay();
-            return { source: "room-none", state: null };
+            return { source: "room-invalid", state: null };
         }
         const key = currentRoomMascotCacheKey();
         const cached = allowCache && key ? getRoomMascotCache()?.[key] : null;
         if (cached?.name && mascotRenderIndex(cached.name) >= 0) {
-            roomMascotState = { ...cached, cached: true };
+            // The previous announcement remains visible to this client, but
+            // cannot be assumed to be current shared room data. Do not silently
+            // re-publish it while an admin edits unrelated room properties.
+            roomMascotState = { ...cached, cached: true, unconfirmed: true, shared: false };
             refreshRoomMascotOverlay();
-            return { source: "cache", state: { ...roomMascotState } };
+            return { source: "cache-unconfirmed", state: { ...roomMascotState } };
         }
         roomMascotState = null;
         removeRoomMascotOverlay();
-        return { source: "none", state: null };
+        return { source: roomLoaded ? "room-none" : "none", state: null };
     }
     function buildRoomUpdatePayloadWithCustom(custom) {
         const data = window.ChatRoomData;
@@ -8952,6 +9044,8 @@ function SubbysPlushiesPageMain() {
     let roomMascotUiObserver = null;
     let roomMascotUiRefreshFrame = 0;
     let roomMascotUiTrailingTimer = null;
+    let roomMascotCanvasRetryTimer = null;
+    let roomMascotCanvasRetryAttempts = 0;
     function roomMascotVisibleModal(element) {
         if (!(element instanceof Element) || !element.isConnected ||
             element === roomMascotOverlay || roomMascotOverlay?.contains(element) ||
@@ -9096,20 +9190,55 @@ function SubbysPlushiesPageMain() {
         window.addEventListener('resize', scheduleRoomMascotUiRefresh, { passive: true });
         // Also use the existing shared screen-change bus; no new polling.
         perfUIBus.watch(() => { roomMascotSyncTargetedObservers(); scheduleRoomMascotUiRefresh(); }, 'mascot-interface-visibility');
-        window.SubbysMascotVisibilityDiag = () => ({
-            version: VERSION,
-            screen: window.CurrentScreen,
-            activeView: window.ChatRoomActiveView ?? null,
-            blocker: roomMascotBlockingInterface(),
-            shown: !!roomMascotOverlay?.isConnected && roomMascotOverlay.style.display !== 'none',
-            hasMascot: !!roomMascotState?.name,
-            settingEnabled: !!getFeatureSettings().showRoomMascot,
-            overlayMounted: !!roomMascotOverlay?.isConnected,
-            overlayDisplay: roomMascotOverlay?.style?.display || null,
-            nativeFocusIsSet: !!(window.DialogFocusCharacter || window.DialogFocusItem),
-            // Native focus fields being populated no longer hide the mascot.
-            observer: !!roomMascotUiObserver, targetedModals: roomMascotWatchedModals.size,
-        });
+        window.SubbysMascotVisibilityDiag = () => {
+            const canvas = document.getElementById('MainCanvas') || document.querySelector('canvas');
+            const rect = canvas?.getBoundingClientRect?.();
+            const key = currentRoomMascotCacheKey();
+            const cached = key ? getRoomMascotCache()?.[key] : null;
+            const overlay = roomMascotOverlay;
+            const image = roomMascotOverlayImage;
+            const blocker = roomMascotBlockingInterface();
+            return {
+                version: VERSION,
+                screen: window.CurrentScreen,
+                room: window.ChatRoomData?.Name || null,
+                activeView: window.ChatRoomActiveView ?? null,
+                blocker,
+                shown: !!overlay?.isConnected && overlay.style.display !== 'none',
+                hasMascot: !!roomMascotState?.name,
+                mascotName: roomMascotState?.name || null,
+                unconfirmedRoomSync: !!roomMascotState?.unconfirmed,
+                storedMascotName: cached?.name || null,
+                roomCustomHasMascot: !!roomMascotFromSharedRoomData(),
+                settingEnabled: !!getFeatureSettings().showRoomMascot,
+                overlayMounted: !!overlay?.isConnected,
+                overlayDisplay: overlay?.style?.display || null,
+                overlayRect: overlay?.getBoundingClientRect?.()?.toJSON?.() || null,
+                imageReady: !!image?.complete && Number(image?.naturalWidth) > 0,
+                imageSourceSet: !!image?.getAttribute?.('src'),
+                canvasReady: !!rect && rect.width > 0 && rect.height > 0,
+                nativeLayeringRootPresent: !!nativeLayeringRoot(),
+                nativeLayeringActuallyVisible: nativeLayeringVisible(),
+                nativeFocusIsSet: !!(window.DialogFocusCharacter || window.DialogFocusItem),
+                observer: !!roomMascotUiObserver,
+                targetedModals: roomMascotWatchedModals.size,
+                diagnosis: !getFeatureSettings().showRoomMascot ? 'mascot-setting-disabled' :
+                    window.CurrentScreen !== 'ChatRoom' ? 'not-in-chatroom' :
+                    !roomMascotState?.name ? 'no-mascot-saved-or-announced' :
+                    blocker ? `blocked:${blocker}` :
+                    (!rect || rect.width <= 0 || rect.height <= 0) ? 'canvas-not-ready' :
+                    !overlay?.isConnected ? 'overlay-not-mounted' :
+                    overlay.style.display === 'none' ? 'overlay-hidden' :
+                    image && !image.complete ? 'image-loading' :
+                    image && Number(image.naturalWidth) === 0 ? 'image-failed-to-load' : 'visible',
+            };
+        };
+        window.SubbysMascotRepair = () => {
+            const recovery = recoverRoomMascotState({ allowCache: true });
+            if (getFeatureSettings().showRoomMascot) refreshRoomMascotOverlay();
+            scheduleRoomMascotUiRefresh();
+            return { recoverySource: recovery.source, ...window.SubbysMascotVisibilityDiag() };
+        };
         window.SubbysPlushIndicatorDiag = () => ({
             version: VERSION,
             screen: window.CurrentScreen,
@@ -9129,6 +9258,11 @@ function SubbysPlushiesPageMain() {
         const settings = getFeatureSettings();
         const inRoom = window.CurrentScreen === "ChatRoom";
         if (!settings.showRoomMascot || !inRoom || !roomMascotState?.name) {
+            if (roomMascotCanvasRetryTimer != null) {
+                window.clearTimeout(roomMascotCanvasRetryTimer);
+                roomMascotCanvasRetryTimer = null;
+            }
+            roomMascotCanvasRetryAttempts = 0;
             removeRoomMascotOverlay();
             return false;
         }
@@ -9140,7 +9274,19 @@ function SubbysPlushiesPageMain() {
         const rect = canvas?.getBoundingClientRect?.();
         if (!canvas || !rect || rect.width <= 0 || rect.height <= 0) {
             removeRoomMascotOverlay();
+            if (roomMascotCanvasRetryTimer == null && roomMascotCanvasRetryAttempts < 4) {
+                roomMascotCanvasRetryAttempts++;
+                roomMascotCanvasRetryTimer = window.setTimeout(() => {
+                    roomMascotCanvasRetryTimer = null;
+                    refreshRoomMascotOverlay();
+                }, 350);
+            }
             return false;
+        }
+        roomMascotCanvasRetryAttempts = 0;
+        if (roomMascotCanvasRetryTimer != null) {
+            window.clearTimeout(roomMascotCanvasRetryTimer);
+            roomMascotCanvasRetryTimer = null;
         }
         const mascotPosition = getLocalRoomMascotPosition();
         if (roomMascotOverlay?.isConnected && roomMascotOverlay.parentElement !== document.body) removeRoomMascotOverlay();
@@ -9261,8 +9407,11 @@ function SubbysPlushiesPageMain() {
     }
     function setRoomMascotOverlayVisible(visible) {
         const enabled = setFeatureSetting("showRoomMascot", !!visible);
-        if (enabled) refreshRoomMascotOverlay();
-        else removeRoomMascotOverlay();
+        if (enabled) {
+            if (!roomMascotState?.name && window.CurrentScreen === 'ChatRoom')
+                recoverRoomMascotState({ allowCache: true });
+            refreshRoomMascotOverlay();
+        } else removeRoomMascotOverlay();
         appendLocalInfoBox("Room mascot", [enabled
             ? "Room mascot picture is visible locally."
             : "Room mascot picture is hidden locally. Use /plushiemascot show to restore it."]);
@@ -9595,7 +9744,7 @@ function SubbysPlushiesPageMain() {
             return null;
         }
         appendLocalInfoBox("Room mascot", [
-            `${roomMascotState.name} • set by ${roomMascotState.setBy || "room admin"}${roomMascotState.cached ? " • cached" : ""}`,
+            `${roomMascotState.name} • set by ${roomMascotState.setBy || "room admin"}${roomMascotState.unconfirmed ? " • last seen locally (room sync unverified)" : (roomMascotState.cached ? " • cached" : "")}`,
             `Mascot affection modifier: +${Number(roomMascotState.affectionModifier ?? ROOM_MASCOT_AFFECTION_MODIFIER) || 0}`,
             `Picture: ${getFeatureSettings().showRoomMascot ? "visible" : "hidden locally"}`,
         ]);
@@ -9608,6 +9757,15 @@ function SubbysPlushiesPageMain() {
         if (arg === "clear" || arg === "remove") return clearRoomMascot();
         if (arg === "hide") return setRoomMascotOverlayVisible(false);
         if (arg === "show" || arg === "unhide") return setRoomMascotOverlayVisible(true);
+        if (arg === "repair") {
+            const result = window.SubbysMascotRepair?.();
+            appendLocalInfoBox('Room mascot', [
+                `Recovery: ${result?.recoverySource || 'not initialized'}`,
+                `Display: ${result?.diagnosis || 'unknown'}`,
+                `Stored mascot: ${result?.mascotName || result?.storedMascotName || 'none'}`,
+            ]);
+            return result;
+        }
         if (arg === "picker" || arg === "pick" || arg === "open" || arg === "choose") return openRoomMascotPicker();
         return showRoomMascot();
     }
@@ -14635,7 +14793,7 @@ function SubbysPlushiesPageMain() {
         if(!Number.isInteger(+member)||+member<=0)return;
         if(/^#[a-f0-9]{6}$/i.test(color))config.chatColors[String(member)]=color;
         else delete config.chatColors[String(member)];
-        essentialsSave();essentialsRefreshChatColors();
+        essentialsSave();essentialsRefreshChatColors();chatWhisperRefresh();
     }
     function essentialsRenderXRay(section) {
         const character=window.Player;
@@ -14675,7 +14833,7 @@ function SubbysPlushiesPageMain() {
         const section=makeExtensionsSection('Clothing X-Ray Mode');
         essentialsRenderXRay(section);container.append(section);
         const chat=makeExtensionsSection('Character Chat Colors');
-        chat.append(essentialsH('p','Choose a player in the current room and color-code their public messages locally. Whisper and system messages are not recolored.',{fontSize:'12px',color:getExtensionsStyle().muted}));
+        chat.append(essentialsH('p','Choose a player in the current room and color-code their public messages locally. Whisper nicknames use this color too (unless the player shares a custom name gradient); private message text remains unchanged.',{fontSize:'12px',color:getExtensionsStyle().muted}));
         const current=[window.Player,...(Array.isArray(window.ChatRoomCharacter)?window.ChatRoomCharacter:[])].filter(c=>Number(c?.MemberNumber)>0);
         const people=new Map(current.map(c=>[String(c.MemberNumber),c]));
         const line=essentialsH('div',null,{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'});
@@ -15430,7 +15588,7 @@ function SubbysPlushiesPageMain() {
             ["/plushieemote ", ["happy", "angry", "sleepy", "protective", "sulky"]],
             ["/plushieperformance ", ["normal", "low"]],
             ["/plushiedrag ", ["on", "off"]],
-            ["/plushiemascot ", ["info", "set", "random", "picker", "clear", "show", "hide"]],
+            ["/plushiemascot ", ["info", "set", "random", "picker", "clear", "show", "hide", "repair"]],
             ["/plushieposesave ", ["1", "2", "3"]],
             ["/plushieposeload ", ["1", "2", "3"]],
             ["/plushieposeclear ", ["1", "2", "3"]],
@@ -18755,7 +18913,7 @@ function SubbysPlushiesPageMain() {
             room: quickReactionRoomKey(), created: Date.now(), row: null,
         };
         const prior = quickReactionRendering;
-        // Before v3.9.10 this created a Set of EVERY historical chat row,
+        // Before v3.9.11 this created a Set of EVERY historical chat row,
         // then queried EVERY row again after every incoming message. Long room
         // histories made the cost grow linearly with time spent in the room.
         if (!getFeatureSettings().quickReactions) return next();
@@ -20677,7 +20835,9 @@ function SubbysPlushiesPageMain() {
             })) hooked++;
         }
         if (installHook("ChatRoomLeave", 10000, (args, next) => {
-            cacheRoomMascotState(roomMascotState);
+            // Leaving a room with no current mascot in memory is not an admin
+            // clear. Preserve its last-known local snapshot for room re-entry.
+            if (roomMascotState?.name) cacheRoomMascotState(roomMascotState);
             const result = next(args);
             roomRosterSignature = null;
             achievementSession.protectCountInRoom = 0;
@@ -20735,7 +20895,7 @@ function SubbysPlushiesPageMain() {
         if (installHook("ChatRoomSyncRoomProperties", 10000, (args, next) => {
             const result = next(args);
             window.setTimeout(() => {
-                recoverRoomMascotState({ allowCache: false });
+                recoverRoomMascotState({ allowCache: true });
                 trackRoomAchievements();
                 if (queuedRoomMascotPublish && !roomMascotMapPublishUnsafe()) flushQueuedRoomMascotPublish();
             }, 0);
@@ -21281,13 +21441,13 @@ function SubbysPlushiesPageMain() {
         const serverSendHooked = installHook("ServerSend", 10000, (args, next) => {
             const messageType = args?.[0];
             const originalData = args?.[1];
-            if (messageType === "ChatRoomAdmin" && originalData?.Action === "Update" && originalData?.Room && (roomMascotAdminDirty || roomMascotState?.name)) {
+            if (messageType === "ChatRoomAdmin" && originalData?.Action === "Update" && originalData?.Room && (roomMascotAdminDirty || (roomMascotState?.name && !roomMascotState.unconfirmed))) {
                 const nextArgs = args.slice();
                 const nextData = { ...originalData, Room: cloneTransferValue(originalData.Room) };
                 const custom = nextData.Room.Custom && typeof nextData.Room.Custom === "object"
                     ? cloneTransferValue(nextData.Room.Custom)
                     : {};
-                if (roomMascotState?.name) {
+                if (roomMascotState?.name && !roomMascotState.unconfirmed) {
                     custom[ROOM_MASCOT_CUSTOM_KEY] = {
                         name: roomMascotState.name,
                         setBy: roomMascotState.setBy || getCharacterDisplayName(window.Player) || "room admin",
@@ -21504,7 +21664,19 @@ function SubbysPlushiesPageMain() {
         return document.getElementById(rootID);
     }
     function nativeLayeringVisible() {
-        return !!nativeLayeringRoot();
+        const root = nativeLayeringRoot();
+        if (!root || !root.isConnected || root.hidden ||
+            root.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
+        const rect = root.getBoundingClientRect?.();
+        if (!rect || rect.width < 1 || rect.height < 1) return false;
+        // R133 and third-party layering interfaces may keep a dormant root
+        // mounted in the DOM. Mere existence does not mean move/resize is open.
+        for (let node = root; node && node !== document.documentElement; node = node.parentElement) {
+            const style = window.getComputedStyle(node);
+            if (style.display === 'none' || style.visibility === 'hidden' ||
+                style.visibility === 'collapse' || Number(style.opacity) < 0.03) return false;
+        }
+        return true;
     }
     function isPlushLayerName(value) {
         return typeof value === "string" && /^Plush\d+$/.test(value);
@@ -28465,7 +28637,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.10";
+    const VERSION = "3.9.11";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {

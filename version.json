@@ -1,6 +1,6 @@
 {
-  "version": "3.9.10",
+  "version": "3.9.11",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Performance v3.9.10: targeted mascot modal observers, event-driven search field layout, 12s outfit recovery checks with 3s fallback, cached room roster for character drawing, chat row type routing, serialized budgeted outfit thumbnails, parallel startup artwork and idle metadata refresh, and opt-in cooperative PawLounge performance event bridge. Compatibility and behavior preserved; no PawLounge source modified.",
+  "notes": "Room mascot recovery from last-known local room state, safer native layering visibility detection, retry for delayed canvas, prevents cache loss on room exit; native whisper nickname gradients now override default red, supports custom per-character colors and additional whisper header layouts. Retains all eight v3.9.10 performance optimizations.",
   "released": "2026-11-01"
 }
