@@ -2,9 +2,9 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.12
-// @description  v3.9.12: shared chat palette CSS, cheaper gradients and whispers, delegated reactions, tighter chat refresh and background work
-// @released     2026-11-01
+// @version      3.9.13
+// @description  v3.9.13: draw-phase profiler, reduced idle badge hover work, retained v3.9.12 chat optimizations
+// @released     2026-11-02
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.12";
+    const VERSION = "3.9.13";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -582,7 +582,7 @@ function SubbysPlushiesPageMain() {
 
     // === End Targeted Performance Engine ===
 
-    const BUILD_DATE = "2026-11-01";
+    const BUILD_DATE = "2026-11-02";
     const TAG = "[Subby's Plushies & Essentials]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -6955,7 +6955,8 @@ function SubbysPlushiesPageMain() {
         for (const [key, image] of nativePresenceDomBadges) {
             if (!image?.isConnected) continue;
             const age = now - (Number(image.dataset.lastSubbysDrawAt) || 0);
-            image.style.display = key === nativePresenceHoveredKey && age <= 1200 ? "block" : "none";
+            const nextDisplay = key === nativePresenceHoveredKey && age <= 1200 ? "block" : "none";
+            if (image.style.display !== nextDisplay) image.style.display = nextDisplay;
         }
     }
     function scheduleNativePresenceBadgeHoverRefresh() {
@@ -6973,7 +6974,10 @@ function SubbysPlushiesPageMain() {
             nativePresenceHoverPointer = event.target === canvas && event.pointerType !== "touch"
                 ? { x: event.clientX, y: event.clientY }
                 : null;
-            scheduleNativePresenceBadgeHoverRefresh();
+            // Ignore pointer movement outside the canvas when there is no
+            // hovered presence badge to hide. Do not schedule an RAF per move.
+            if (nativePresenceHoverPointer || nativePresenceHoveredKey)
+                scheduleNativePresenceBadgeHoverRefresh();
         }, { passive: true, capture: true });
         document.addEventListener("pointerout", event => {
             if (event.target === nativePresenceCanvasElement() && event.relatedTarget !== event.target) {
@@ -7110,7 +7114,8 @@ function SubbysPlushiesPageMain() {
                 warn("Deferred character-overlay plush rendering failed:", e);
             }
         }
-        refreshNativePresenceBadgeHover();
+        if (nativePresenceHoverPointer || nativePresenceHoveredKey)
+            refreshNativePresenceBadgeHover();
         const now = Date.now();
         if (now - (flushNativePresenceOverlayWork.lastPruneAt || 0) > 1200) {
             flushNativePresenceOverlayWork.lastPruneAt = now;
@@ -7212,7 +7217,14 @@ function SubbysPlushiesPageMain() {
         return true;
     }
     const nativePresenceDrawSampleAt=new WeakMap();
-    const nativePresenceDrawMetrics={calls:0,sampled:0,skipped:0,hiddenSkips:0,rosterRefreshes:0,totalMs:0};
+    // Times for the 10 Hz samples are CUMULATIVE since startup, not for the
+    // most recent FPS sample. downstreamMs is the time inside next(args):
+    // it includes BC's DrawCharacter AND all downstream mods, not just BC.
+    // hookMs is ONLY this plugin's synchronous work around next(args); deferred
+    // RAF/DOM work is separate and is intentionally not claimed here.
+    const nativePresenceDrawMetrics={calls:0,sampled:0,skipped:0,hiddenSkips:0,
+        rosterRefreshes:0,totalMs:0,downstreamMs:0,hookMs:0,
+        maxDownstreamMs:0,maxHookMs:0,queuedOverlays:0};
     let nativePresenceRosterExpires = 0;
     let nativePresenceRosterSource = null;
     let nativePresenceRoomMembers = new Set();
@@ -7270,7 +7282,11 @@ function SubbysPlushiesPageMain() {
                     }
                 }
             }
+            // Measure downstream drawing separately from our hook. The
+            // previous totalMs mistakenly appeared to measure addon CPU.
+            const downstreamStart = performance.now();
             const result = next(args);
+            const downstreamEnd = performance.now();
             if (placement) {
                 rememberVisibleOverlayPlacement(C, placement);
                 const key = nativePresenceBadgeKey(C);
@@ -7289,7 +7305,7 @@ function SubbysPlushiesPageMain() {
                 const last = nativePresenceCaptureTimes.get(key) || 0;
                 if (needsOverlay && (placement.at - last >= 100 || !last)) {
                     nativePresenceCaptureTimes.set(key, placement.at);
-                    queueNativePresenceOverlayWork(C, placement);
+                    if (queueNativePresenceOverlayWork(C, placement)) nativePresenceDrawMetrics.queuedOverlays++;
                 }
                 lastNativePresenceOverlayContext = {
                     member: Number(C.MemberNumber) || null,
@@ -7300,7 +7316,14 @@ function SubbysPlushiesPageMain() {
                     at: placement.at,
                 };
             }
-            nativePresenceDrawMetrics.totalMs+=performance.now()-sampledStart;
+            const hookEnd = performance.now();
+            const downstreamCost = Math.max(0, downstreamEnd-downstreamStart);
+            const ownCost = Math.max(0, (downstreamStart-sampledStart)+(hookEnd-downstreamEnd));
+            nativePresenceDrawMetrics.downstreamMs += downstreamCost;
+            nativePresenceDrawMetrics.hookMs += ownCost;
+            nativePresenceDrawMetrics.maxDownstreamMs = Math.max(nativePresenceDrawMetrics.maxDownstreamMs,downstreamCost);
+            nativePresenceDrawMetrics.maxHookMs = Math.max(nativePresenceDrawMetrics.maxHookMs,ownCost);
+            nativePresenceDrawMetrics.totalMs += hookEnd-sampledStart;
             return result;
         });
         nativePresenceChatRoomRunHooked = hooked;
@@ -7346,7 +7369,24 @@ function SubbysPlushiesPageMain() {
                     note:'Total game FPS, not a per-addon attribution'});
             };
             requestAnimationFrame(tick);
-        })
+        }),
+        // Compare the same five-second period instead of lifetime counters.
+        // Does not disable any features or third-party render hooks.
+        sampleRender:async(duration=5000)=>{
+            const counters=['calls','sampled','skipped','hiddenSkips','rosterRefreshes',
+                'totalMs','downstreamMs','hookMs','queuedOverlays'];
+            const start=Object.fromEntries(counters.map(k=>[k,nativePresenceDrawMetrics[k]]));
+            const fps=await window.SubbysMaxPerformanceDiag.sampleFps(duration);
+            const delta=Object.fromEntries(counters.map(k=>[k,
+                Math.round(1000*(nativePresenceDrawMetrics[k]-start[k]))/1000]));
+            const count=Math.max(1,delta.sampled);
+            return {version:VERSION,fps,draw:{...delta,
+                downstreamMeanMs:Math.round(1000*delta.downstreamMs/count)/1000,
+                subbysHookMeanMs:Math.round(1000*delta.hookMs/count)/1000,
+                downstreamSharePercent:Math.round(1000*delta.downstreamMs/Math.max(0.001,delta.totalMs))/10,
+                subbysHookSharePercent:Math.round(1000*delta.hookMs/Math.max(0.001,delta.totalMs))/10},
+                note:'Downstream includes BC and other addons. Subbys hook excludes deferred overlays, chat, and other addon work. Measurements only cover sampled DrawCharacter calls.'};
+        }
     });
     window.SubbysPlushiesDialogueTest = (actionKey = "pet") => {
         const spec = PLUGIN_ACTIVITY_BY_KEY.get(String(actionKey || "pet"));
@@ -28754,7 +28794,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.12";
+    const VERSION = "3.9.13";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
