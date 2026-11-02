@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.8
-// @description  No-shimmer performance edition; fixed sender/recipient whisper name colors; preserves Cuddle Queen and chat themes
+// @version      3.9.9
+// @description  Maximum performance edition: bounded chat tracking, reduced paint, no shimmer, no auras; preserves Cuddle Queen and chat themes
 // @released     2026-11-01
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.8";
+    const VERSION = "3.9.9";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -3248,12 +3248,12 @@ function SubbysPlushiesPageMain() {
 #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatPalette {
     position:relative!important; box-sizing:border-box;
     border-left:3px var(--subbys-style-border,solid) var(--subbys-style-accent,#ff6ba8)!important;
-    border-radius:6px; background:linear-gradient(100deg,var(--subbys-style-background,transparent),transparent 90%)!important;
-    box-shadow:inset 1px 0 4px var(--subbys-style-shade,transparent);
+    border-radius:6px; background-color:var(--subbys-style-background,transparent)!important;
+    background-image:none!important; box-shadow:none!important;
     padding-left:7px!important; padding-right:6px!important; margin-top:2px; margin-bottom:2px;
 }
 #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatGlow {
-    box-shadow:inset 1px 0 3px var(--subbys-style-shade,transparent);
+    box-shadow:none!important;
 }
 /* Native BC LabelColor (and some other addons) sets inline foreground colors
    on the author or nested spans. Give the author a CSS gradient with a native-
@@ -3277,14 +3277,15 @@ function SubbysPlushiesPageMain() {
 /* The Cuddle Queen Royal Seal is exclusive to Subbycat's verified
    native member number; it adds no text to outgoing BC messages. */
 #TextAreaChatLog .${ROYAL_CHAT_CLASS} {
-    background:linear-gradient(104deg,rgba(89,7,45,.22),var(--subbys-style-background,transparent) 45%,transparent 95%)!important;
+    background-color:var(--subbys-style-background,rgba(89,7,45,.12))!important;
+    background-image:none!important;
 }
 #TextAreaChatLog .${ROYAL_CHAT_CLASS} .${ROYAL_SEAL_CLASS} {
     display:inline-flex; align-items:center; gap:4px; vertical-align:middle;
     margin:0 6px 1px; padding:2px 7px; white-space:nowrap;
     color:#ffe6ef; background:linear-gradient(120deg,#5c082b,#aa1b57 65%,#e9639b);
     border:1px solid #f9a6cf; border-radius:999px;
-    box-shadow:0 0 5px rgba(234,70,135,.38),inset 0 0 3px rgba(255,255,255,.19);
+    box-shadow:none!important;
     font-size:10px; line-height:1.1; font-weight:700;
     text-shadow:0 0 2px #ff5ba2; user-select:none; pointer-events:auto;
 }
@@ -3307,7 +3308,7 @@ function SubbysPlushiesPageMain() {
 }
 #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_SYMBOL_CLASS} {
     position:absolute; top:1px; right:5px; color:var(--subbys-style-secondary,#ff76d9);
-    text-shadow:0 0 5px var(--subbys-style-accent,#ff6ba8); font-size:11px;
+    text-shadow:none!important; font-size:11px;
     line-height:1; z-index:1; pointer-events:none; user-select:none;
 }
 #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_SYMBOL_CLASS}.SubbysCustomChatAnimated {
@@ -3319,6 +3320,10 @@ function SubbysPlushiesPageMain() {
     80%{opacity:.4;transform:translateY(-5px) scale(1.05)}
     100%{opacity:0;transform:translateY(-9px) scale(.9)}
 }
+
+/* v3.9.9 Maximum Performance: no continuous or per-row cosmetic animations. */
+#TextAreaChatLog .SubbysRoyalSealAnimated,
+#TextAreaChatLog .SubbysCustomChatAnimated {animation:none!important;filter:none!important;}
 /* Older chat retains its colors but avoids extra glow layers. */
 #TextAreaChatLog .SubbysChatStyleCold,
 #TextAreaChatLog .SubbysWhisperTheme.SubbysChatStyleCold {box-shadow:none!important;background:transparent!important}
@@ -3344,7 +3349,7 @@ function SubbysPlushiesPageMain() {
         if(at>=0)chatStyleHotRows.splice(at,1);
         chatStyleHotRows.push(row);
         row.classList.remove('SubbysChatStyleCold');
-        while(chatStyleHotRows.length>12){
+        while(chatStyleHotRows.length>4){
             const old=chatStyleHotRows.shift();
             if(old?.isConnected)old.classList.add('SubbysChatStyleCold');
         }
@@ -3523,7 +3528,7 @@ function SubbysPlushiesPageMain() {
                 // Add the badge BEFORE the verified sender's name, never after.
                 // Identity is based on BC's sender, not message text.
                 const seal=document.createElement('span');
-                seal.className=ROYAL_SEAL_CLASS+(style.animation?' SubbysRoyalSealAnimated':'');
+                seal.className=ROYAL_SEAL_CLASS;
                 seal.title='Subbycat · Cuddle Queen Royal Seal';
                 seal.setAttribute('aria-label','Subbycat: Cuddle Queen Royal Seal');
                 const icon=document.createElement('span');icon.className='SubbysRoyalSealIcon';icon.textContent='♛ ♡';
@@ -3535,7 +3540,7 @@ function SubbysPlushiesPageMain() {
             }
             if(style.enabled && style.symbol!=='none') {
                 const symbol=document.createElement('span');
-                symbol.className=CHAT_STYLE_SYMBOL_CLASS+(style.animation?' SubbysCustomChatAnimated':'');
+                symbol.className=CHAT_STYLE_SYMBOL_CLASS;
                 symbol.textContent=style.symbol;
                 symbol.setAttribute('aria-hidden','true');
                 row.appendChild(symbol);
@@ -6985,6 +6990,8 @@ function SubbysPlushiesPageMain() {
         }, delay);
         return true;
     }
+    const nativePresenceDrawSampleAt=new WeakMap();
+    const nativePresenceDrawMetrics={calls:0,sampled:0,skipped:0,totalMs:0};
     function installNativeAddonPresenceOverlayHook({ scheduleRetry = true } = {}) {
         if (nativePresenceChatRoomRunHooked) return true;
         if (typeof window.DrawCharacter !== "function") {
@@ -6992,6 +6999,21 @@ function SubbysPlushiesPageMain() {
             return false;
         }
         const hooked = installHook("DrawCharacter", 10000, (args, next) => {
+            // ModSDK invokes this on every character every frame. Sampling
+            // placement at 10 Hz is plenty for hover badges and saves all the
+            // room-roster lookups, maps and allocations on intermediate frames.
+            nativePresenceDrawMetrics.calls++;
+            if(window.CurrentScreen!=='ChatRoom')return next(args);
+            const candidate=args?.[0];
+            if(!candidate||typeof candidate!=='object')return next(args);
+            const now=Date.now();
+            if(now-(nativePresenceDrawSampleAt.get(candidate)||0)<100){
+                nativePresenceDrawMetrics.skipped++;
+                return next(args);
+            }
+            nativePresenceDrawSampleAt.set(candidate,now);
+            nativePresenceDrawMetrics.sampled++;
+            const sampledStart=performance.now();
             let C = null;
             let placement = null;
             if (window.CurrentScreen === "ChatRoom") {
@@ -7042,6 +7064,7 @@ function SubbysPlushiesPageMain() {
                     at: placement.at,
                 };
             }
+            nativePresenceDrawMetrics.totalMs+=performance.now()-sampledStart;
             return result;
         });
         nativePresenceChatRoomRunHooked = hooked;
@@ -7063,6 +7086,31 @@ function SubbysPlushiesPageMain() {
         activePresenceBadges: nativePresenceDomBadges.size,
         queuedPresenceDraws: nativePresencePendingOverlayWork.size,
         cachedLore: (gitDataState.loadedFiles || []).includes("lore.json"),
+    });
+    window.SubbysMaxPerformanceDiag=Object.freeze({
+        status:()=>({version:VERSION,quickReaction:{...quickReactionPerfMetrics,
+            trackedRows:quickReactionRecords.length},draw:{...nativePresenceDrawMetrics,
+            meanSampleMs:Math.round(1000*nativePresenceDrawMetrics.totalMs/Math.max(1,nativePresenceDrawMetrics.sampled))/1000},
+            expression:window.SubbysExpressionStudio?.performance?.()||null,
+            wceLoggingNotControlled:true}),
+        // An opt-in five-second FPS sample. Does not add any permanent timers.
+        sampleFps:(duration=5000)=>new Promise(resolve=>{
+            const limit=Math.max(1000,Math.min(10000,Number(duration)||5000));
+            if(document.hidden||typeof window.requestAnimationFrame!=='function'){
+                resolve({error:'Chat tab must be visible for an FPS sample'});return;
+            }
+            let first=0,last=0,frames=0,longGaps=0,worst=0;
+            const tick=time=>{
+                if(!first)first=time;
+                if(last){const gap=time-last;worst=Math.max(worst,gap);if(gap>50)longGaps++;}
+                last=time;frames++;
+                if(time-first<limit){requestAnimationFrame(tick);return;}
+                resolve({durationMs:Math.round(time-first),fps:Math.round(1000*(frames-1)/Math.max(1,time-first)),
+                    framesOver50ms:longGaps,worstFrameGapMs:Math.round(worst*10)/10,
+                    note:'Total game FPS, not a per-addon attribution'});
+            };
+            requestAnimationFrame(tick);
+        })
     });
     window.SubbysPlushiesDialogueTest = (actionKey = "pet") => {
         const spec = PLUGIN_ACTIVITY_BY_KEY.get(String(actionKey || "pet"));
@@ -7097,6 +7145,8 @@ function SubbysPlushiesPageMain() {
             hoveredCharacter: nativePresenceHoveredKey,
             pointerOverGameCanvas: !!nativePresenceHoverPointer,
             overlayRetryAttempt: nativePresenceOverlayRetryAttempt,
+            drawHookSampled: nativePresenceDrawMetrics.sampled,
+            drawHookSkipped: nativePresenceDrawMetrics.skipped,
             overlayRetryPending: nativePresenceOverlayRetryTimer != null,
             renderModSdkHooksBySubbysPlushies: {
                 DrawCharacter: installedHooks.has("DrawCharacter"),
@@ -18588,14 +18638,20 @@ function SubbysPlushiesPageMain() {
         const row = node.classList.contains("ChatMessage") ? node : node.closest(".ChatMessage");
         if (row && !context.row) context.row = row;
     }
+    const quickReactionPerfMetrics={tracked:0,tailNodes:0};
     function quickReactionTrackIncoming(data, next) {
         const context = {
             sender: Number(data.Sender), kind: data.Type, signature: quickReactionDigest(data),
             room: quickReactionRoomKey(), created: Date.now(), row: null,
         };
         const prior = quickReactionRendering;
+        // Before v3.9.9 this created a Set of EVERY historical chat row,
+        // then queried EVERY row again after every incoming message. Long room
+        // histories made the cost grow linearly with time spent in the room.
+        if (!getFeatureSettings().quickReactions) return next();
         const root = getOfferChatRoot();
-        const previousRows = root ? new Set(root.querySelectorAll(".ChatMessage")) : null;
+        const previousTail = root?.lastElementChild || null;
+        quickReactionPerfMetrics.tracked++;
         quickReactionRendering = context;
         let result;
         try { result = next(); }
@@ -18604,10 +18660,19 @@ function SubbysPlushiesPageMain() {
             if (context.row?.isConnected && quickReactionAttachRow(context.row, context)) return true;
             const currentRoot = getOfferChatRoot();
             if (!currentRoot) return false;
-            const rows = currentRoot.querySelectorAll(".ChatMessage");
-            for (let i = rows.length - 1; i >= 0; i--) {
-                if (previousRows?.has(rows[i])) continue;
-                if (quickReactionAttachRow(rows[i], context)) return true;
+            // Examine only freshly appended tail siblings. Never scan old room
+            // history, and never assign a sender to an old message by mistake.
+            let node = currentRoot.lastElementChild;
+            for (let scanned = 0; node && node !== previousTail && scanned < 12;
+                 node = node.previousElementSibling, scanned++) {
+                quickReactionPerfMetrics.tailNodes++;
+                if (node.matches('.ChatMessage') && quickReactionAttachRow(node, context)) return true;
+                // Some chat builds append a wrapper containing the message.
+                // Traverse only its last few immediate descendants.
+                let child = node.lastElementChild;
+                for (let depth = 0; child && depth < 5; depth++, child = child.lastElementChild) {
+                    if (child.matches('.ChatMessage') && quickReactionAttachRow(child,context)) return true;
+                }
             }
             return false;
         };
@@ -21006,6 +21071,9 @@ function SubbysPlushiesPageMain() {
                 if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
                 chatStyleDecorate(node,chatStyleNativeChatContext);
                 chatWhisperDecorate(node,chatWhisperNativeContext);
+                // Feed inline emotes from the native append event. No second
+                // full-subtree MutationObserver is needed on supported BC builds.
+                try { window.SubbysEssentialsExtras?.onChatRow?.(node); } catch (_) {}
                 if(followWhisper)chatWhisperFollowAfterAppend(whisperScroller);
                 // Existing native hook: no new chat observer or polling loop.
                 try { quietPerfEnhanceChatNode(node); } catch (_) {}
@@ -27804,6 +27872,8 @@ function SubbysPlushiesPageMain() {
     if(log===state.chatLog)return;
     state.logObserver?.disconnect();state.logObserver=null;state.chatLog=log;
     if(!log)return;enhanceChatMessages(log);
+    if(installedHooks.has('ChatRoomAppendChat'))return;
+    // Legacy BC only: use a fallback observer if the native append hook fails.
     const observer=new MutationObserver(records=>{
       for(const rec of records)for(const node of rec.addedNodes){if(node.nodeType!==1)continue;
         // A badge, gradient wrapper or whisper ornament is not a new chat row.
@@ -27842,6 +27912,9 @@ function SubbysPlushiesPageMain() {
     refreshChatButton:setupChatButton,
     chatButtonVisible:()=>!!getFeatureSettings().showEmoticonButton,
     catalog:()=>({source:state.catalogSource,count:state.emotes.length,error:state.catalogError}),
+    onChatRow:(node)=>{if(!node||window.CurrentScreen!=='ChatRoom')return;
+      if(node.matches?.('.ChatMessage'))decorateMessage(node);
+      else if(node.querySelectorAll)enhanceChatMessages(node);},
     status:()=>({version:VERSION,baseAddon:VERSION,chatLog:!!state.chatLog,accountKey:activeStorageKey,storedPalettes:data.palettes.length,floatingEmoticonButton:getFeatureSettings().showEmoticonButton}),
     destroy:()=>{stopUiWatch();state.logObserver?.disconnect();state.chatButton?.remove();clearModal();style.remove();delete window.SubbysEssentialsExtras;},
     _test:{safeHex,cleanEmotes,harmony}
@@ -28227,7 +28300,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.8";
+    const VERSION = "3.9.9";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
