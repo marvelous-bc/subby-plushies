@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.9
-// @description  Maximum performance edition: bounded chat tracking, reduced paint, no shimmer, no auras; preserves Cuddle Queen and chat themes
+// @version      3.9.10
+// @description  Performance v3.9.10: targeted modal watches, event-driven UI, recovery scheduler, cheaper drawing/chat, bounded previews and cooperative bridge
 // @released     2026-11-01
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.9";
+    const VERSION = "3.9.10";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -362,6 +362,11 @@ function SubbysPlushiesPageMain() {
         if (!PERF_FEATURES.includes(key)) return false;
         perfFlags()[key] = !!on;
         try { localStorage.setItem(PERF_ENGINE_KEY, JSON.stringify(perfFlags())); } catch (_) {}
+        // Changes to polling policy should apply immediately, not after the
+        // previous recovery window has elapsed.
+        if (key === 'outfitEvents') try {
+            window.dispatchEvent(new Event('subbys:outfit-monitor-config'));
+        } catch (_) {}
         return perfFlags()[key];
     }
     function perfCount(name, number = 1) {
@@ -498,9 +503,79 @@ function SubbysPlushiesPageMain() {
             ping:() => perfUIBus.ping('manual')
         });
     }
+    // === Cooperative Essentials / PawLounge performance bus (v3.9.10) ===
+    // Existing PawLounge versions may not emit these events. All Essentials
+    // features continue independently, and no PawLounge internals are patched.
+    const sharedPerfBridgeState = { frames: new Map(), observers: new Set(),
+        signals: 0, scheduled: 0, delivered: 0, received: 0,
+        observedPawLoungeChanges: 0, lastReason: '' };
+    function sharedPerfSignal(reason = 'essentials-ui') {
+        sharedPerfBridgeState.signals++;
+        sharedPerfBridgeState.lastReason = String(reason).slice(0, 80);
+        // Local callbacks first; inter-addon CustomEvent only after a real UI
+        // change. Never broadcast from character drawing or chat append.
+        for (const callback of [...sharedPerfBridgeState.observers]) {
+            try { callback(sharedPerfBridgeState.lastReason); } catch (_) {}
+        }
+        try { window.dispatchEvent(new CustomEvent('subbys:performance-ui',
+            { detail: { source:'essentials', reason:sharedPerfBridgeState.lastReason,
+                screen:String(window.CurrentScreen || ''), hidden:!!document.hidden } })); } catch (_) {}
+    }
+    function sharedPerfNextFrame(key, fn) {
+        if (typeof fn !== 'function') return false;
+        const label = String(key || 'shared').slice(0, 80);
+        if (sharedPerfBridgeState.frames.has(label)) return false;
+        sharedPerfBridgeState.scheduled++;
+        const tick = () => {
+            sharedPerfBridgeState.frames.delete(label);
+            if (document.hidden) return;
+            sharedPerfBridgeState.delivered++;
+            try { fn(); } catch (e) { console.warn('[Subby shared performance]', label, e); }
+        };
+        const frame = typeof window.requestAnimationFrame === 'function'
+            ? window.requestAnimationFrame(tick) : window.setTimeout(tick,16);
+        sharedPerfBridgeState.frames.set(label, frame);
+        return true;
+    }
+    function installSharedPerformanceBridge() {
+        // Optional protocol: PawLounge can dispatch 'pawlounge:performance-ui'
+        // on real panel/visibility changes, and consume 'subbys:performance-ui'.
+        window.addEventListener('pawlounge:performance-ui', event => {
+            if (event?.detail?.source === 'essentials') return;
+            sharedPerfBridgeState.received++;
+            perfUIBus.ping('pawlounge-ui');
+            scheduleRoomMascotUiRefresh();
+        }, { passive:true });
+        window.SubbysSharedPerformanceBridge = Object.freeze({
+            version:'1.0.0', signal:sharedPerfSignal, nextFrame:sharedPerfNextFrame,
+            subscribe(callback) {
+                if (typeof callback !== 'function') return () => {};
+                sharedPerfBridgeState.observers.add(callback);
+                return () => sharedPerfBridgeState.observers.delete(callback);
+            },
+            status:() => ({version:VERSION, connected:!!document.getElementById('kittychat-host'),
+                protocol:'subbys:performance-ui / pawlounge:performance-ui',
+                peerEventsReceived:sharedPerfBridgeState.received,
+                observedPawLoungeChanges:sharedPerfBridgeState.observedPawLoungeChanges,
+                signals:sharedPerfBridgeState.signals,
+                queuedFrames:sharedPerfBridgeState.frames.size,
+                scheduledFrames:sharedPerfBridgeState.scheduled,
+                deliveredFrames:sharedPerfBridgeState.delivered,
+                lastReason:sharedPerfBridgeState.lastReason})
+        });
+        perfUIBus.watch((screen, previous, reason) => {
+            if (screen !== previous) sharedPerfSignal('screen:'+screen);
+        }, 'shared-navigation');
+        window.addEventListener('resize', () => sharedPerfNextFrame('bridge-resize',
+            () => sharedPerfSignal('resize')), { passive:true });
+        document.addEventListener('visibilitychange',
+            () => sharedPerfSignal(document.hidden?'hidden':'visible'), { passive:true });
+    }
+    // === End cooperative performance bus ===
+
     // === End Targeted Performance Engine ===
 
-    const BUILD_DATE = "2026-10-19";
+    const BUILD_DATE = "2026-11-01";
     const TAG = "[Subby's Plushies & Essentials]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -3321,7 +3396,7 @@ function SubbysPlushiesPageMain() {
     100%{opacity:0;transform:translateY(-9px) scale(.9)}
 }
 
-/* v3.9.9 Maximum Performance: no continuous or per-row cosmetic animations. */
+/* v3.9.10 Maximum Performance: no continuous or per-row cosmetic animations. */
 #TextAreaChatLog .SubbysRoyalSealAnimated,
 #TextAreaChatLog .SubbysCustomChatAnimated {animation:none!important;filter:none!important;}
 /* Older chat retains its colors but avoids extra glow layers. */
@@ -6991,7 +7066,23 @@ function SubbysPlushiesPageMain() {
         return true;
     }
     const nativePresenceDrawSampleAt=new WeakMap();
-    const nativePresenceDrawMetrics={calls:0,sampled:0,skipped:0,totalMs:0};
+    const nativePresenceDrawMetrics={calls:0,sampled:0,skipped:0,hiddenSkips:0,rosterRefreshes:0,totalMs:0};
+    let nativePresenceRosterExpires = 0;
+    let nativePresenceRosterSource = null;
+    let nativePresenceRoomMembers = new Set();
+    function nativePresenceMemberInRoom(member) {
+        if (!Number.isFinite(member)) return false;
+        const roster = window.ChatRoomCharacter;
+        if (!Array.isArray(roster)) return false;
+        const now = Date.now();
+        if (roster !== nativePresenceRosterSource || now >= nativePresenceRosterExpires) {
+            nativePresenceRoomMembers = new Set(roster.map(C=>Number(C?.MemberNumber)).filter(Number.isFinite));
+            nativePresenceRosterSource = roster;
+            nativePresenceRosterExpires = now + 500;
+            nativePresenceDrawMetrics.rosterRefreshes++;
+        }
+        return nativePresenceRoomMembers.has(member);
+    }
     function installNativeAddonPresenceOverlayHook({ scheduleRetry = true } = {}) {
         if (nativePresenceChatRoomRunHooked) return true;
         if (typeof window.DrawCharacter !== "function") {
@@ -7004,6 +7095,7 @@ function SubbysPlushiesPageMain() {
             // room-roster lookups, maps and allocations on intermediate frames.
             nativePresenceDrawMetrics.calls++;
             if(window.CurrentScreen!=='ChatRoom')return next(args);
+            if(document.hidden){nativePresenceDrawMetrics.hiddenSkips++;return next(args);}
             const candidate=args?.[0];
             if(!candidate||typeof candidate!=='object')return next(args);
             const now=Date.now();
@@ -7021,9 +7113,7 @@ function SubbysPlushiesPageMain() {
                 const member = Number(C?.MemberNumber);
                 const isPlayer = C === window.Player ||
                     (Number.isFinite(member) && member === Number(window.Player?.MemberNumber));
-                const inRoom = isPlayer ||
-                    (Number.isFinite(member) && Array.isArray(window.ChatRoomCharacter) &&
-                     window.ChatRoomCharacter.some(p => Number(p?.MemberNumber) === member));
+                const inRoom = isPlayer || nativePresenceMemberInRoom(member);
                 if (C && inRoom) {
                     const x = Number(args?.[1]);
                     const y = Number(args?.[2]);
@@ -8933,59 +9023,79 @@ function SubbysPlushiesPageMain() {
             scheduleRoomMascotUiRefresh();
         }, 180);
     }
-    function roomMascotMutationIsInterfaceChange(records) {
-        for (const record of records) {
-            const target = record.target;
-            if (target instanceof Element &&
-                (target === roomMascotOverlay || roomMascotOverlay?.contains(target) ||
-                 target.closest('.SubbysPlushiesRoomMascot'))) continue;
-            if (record.type === 'attributes') {
-                if (target instanceof Element &&
-                    (target.matches(ROOM_MASCOT_MODAL_SELECTOR) ||
-                     target.closest(ROOM_MASCOT_MODAL_SELECTOR))) return true;
-                continue;
-            }
-            if (target instanceof Element && target.closest(ROOM_MASCOT_MODAL_SELECTOR)) return true;
-            for (const node of [...record.addedNodes, ...record.removedNodes]) {
-                if (!(node instanceof Element) || node === roomMascotOverlay ||
-                    node.classList?.contains('SubbysPlushiesRoomMascot')) continue;
-                if (node.matches(ROOM_MASCOT_MODAL_SELECTOR) ||
-                    node.querySelector(ROOM_MASCOT_MODAL_SELECTOR)) return true;
-            }
+    const roomMascotWatchedModals = new Map();
+    function roomMascotSyncTargetedObservers() {
+        if (!mascotUiHooksInstalled || typeof MutationObserver !== 'function') return;
+        const roots = new Set();
+        try {
+            for (const element of document.querySelectorAll(ROOM_MASCOT_MODAL_SELECTOR))
+                if (element !== roomMascotOverlay && !roomMascotOverlay?.contains(element)) roots.add(element);
+            const pawPanel = document.getElementById('kittychat-host')?.shadowRoot?.getElementById('kc-panel');
+            if (pawPanel) roots.add(pawPanel);
+        } catch (_) {}
+        for (const [element, observer] of roomMascotWatchedModals) {
+            if (element.isConnected && roots.has(element)) continue;
+            observer.disconnect();
+            roomMascotWatchedModals.delete(element);
         }
-        return false;
+        // Cap observed dialogs if a third-party addon generates many placeholders.
+        for (const element of roots) {
+            if (roomMascotWatchedModals.has(element) || roomMascotWatchedModals.size >= 60) continue;
+            const pawPanel = element.id === 'kc-panel' &&
+                document.getElementById('kittychat-host')?.shadowRoot?.getElementById('kc-panel') === element;
+            const observer = new MutationObserver(() => {
+                scheduleRoomMascotUiRefresh();
+                if (pawPanel) sharedPerfNextFrame('pawlounge-panel-layout', () => {
+                    sharedPerfBridgeState.observedPawLoungeChanges++;
+                    perfUIBus.ping('pawlounge-panel-layout');
+                });
+            });
+            observer.observe(element, { attributes:true,
+                attributeFilter:['class','style','hidden','open','aria-hidden','aria-modal'] });
+            roomMascotWatchedModals.set(element, observer);
+        }
     }
     function installRoomMascotUiSafety() {
         if (mascotUiHooksInstalled) return true;
         mascotUiHooksInstalled = true;
-        // Observe relevant dialog changes, not general chat message edits.
+        // Only direct body insert/remove events plus the attributes of actual
+        // dialog roots. Chat message mutations never enter this observer.
         if (document.body && typeof MutationObserver === 'function') {
             roomMascotUiObserver = new MutationObserver(records => {
-                if (roomMascotMutationIsInterfaceChange(records)) scheduleRoomMascotUiRefresh();
+                if (!records.some(record => [...record.addedNodes, ...record.removedNodes]
+                    .some(node => node instanceof Element && (
+                        node.matches?.(ROOM_MASCOT_MODAL_SELECTOR) ||
+                        node.querySelector?.(ROOM_MASCOT_MODAL_SELECTOR))))) return;
+                roomMascotSyncTargetedObservers();
+                scheduleRoomMascotUiRefresh();
             });
-            roomMascotUiObserver.observe(document.body, {
-                subtree: true, childList: true, attributes: true,
-                attributeFilter: ['class', 'style', 'hidden', 'open', 'aria-hidden', 'aria-modal'],
-            });
+            roomMascotUiObserver.observe(document.body,{childList:true});
         }
+        roomMascotSyncTargetedObservers();
+        // Re-evaluate in the event loop only after possible UI interactions.
+        // This also detects controls nested in app roots and Shadow DOM.
+        const refreshAfterInteraction = () => {
+            scheduleRoomMascotUiInteraction();
+            sharedPerfNextFrame('mascot-modal-roots', roomMascotSyncTargetedObservers);
+        };
         document.addEventListener('pointerdown', event => {
             if (roomMascotOverlay?.contains(event.target)) return;
-            scheduleRoomMascotUiInteraction();
+            refreshAfterInteraction();
         }, true);
-        document.addEventListener('click', scheduleRoomMascotUiInteraction, true);
+        document.addEventListener('click', refreshAfterInteraction, true);
         document.addEventListener('keydown', event => {
             if (['Escape', 'Enter', ' ', 'F1'].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey)
-                scheduleRoomMascotUiInteraction();
+                refreshAfterInteraction();
         }, true);
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) scheduleRoomMascotUiRefresh();
+            if (!document.hidden) { roomMascotSyncTargetedObservers(); scheduleRoomMascotUiRefresh(); }
         }, { passive: true });
         for (const event of ['focus', 'pageshow', 'popstate']) {
             window.addEventListener(event, scheduleRoomMascotUiRefresh, { passive: true });
         }
         window.addEventListener('resize', scheduleRoomMascotUiRefresh, { passive: true });
         // Also use the existing shared screen-change bus; no new polling.
-        perfUIBus.watch(scheduleRoomMascotUiRefresh, 'mascot-interface-visibility');
+        perfUIBus.watch(() => { roomMascotSyncTargetedObservers(); scheduleRoomMascotUiRefresh(); }, 'mascot-interface-visibility');
         window.SubbysMascotVisibilityDiag = () => ({
             version: VERSION,
             screen: window.CurrentScreen,
@@ -8998,7 +9108,7 @@ function SubbysPlushiesPageMain() {
             overlayDisplay: roomMascotOverlay?.style?.display || null,
             nativeFocusIsSet: !!(window.DialogFocusCharacter || window.DialogFocusItem),
             // Native focus fields being populated no longer hide the mascot.
-            observer: !!roomMascotUiObserver,
+            observer: !!roomMascotUiObserver, targetedModals: roomMascotWatchedModals.size,
         });
         window.SubbysPlushIndicatorDiag = () => ({
             version: VERSION,
@@ -18645,7 +18755,7 @@ function SubbysPlushiesPageMain() {
             room: quickReactionRoomKey(), created: Date.now(), row: null,
         };
         const prior = quickReactionRendering;
-        // Before v3.9.9 this created a Set of EVERY historical chat row,
+        // Before v3.9.10 this created a Set of EVERY historical chat row,
         // then queried EVERY row again after every incoming message. Long room
         // histories made the cost grow linearly with time spent in the room.
         if (!getFeatureSettings().quickReactions) return next();
@@ -21066,16 +21176,20 @@ function SubbysPlushiesPageMain() {
             const followWhisper=!!whisperScroller&&chatWhisperNearBottom(whisperScroller);
             const result = next(args);
             quickReactionCaptureAppendedRow(node);
-            if (node && window.CurrentScreen === "ChatRoom") {
-                inspectOfferMutationNode(node, getOfferChatRoot());
+            if (node instanceof Element && window.CurrentScreen === "ChatRoom") {
+                const isPublic = node.matches('.ChatMessageChat') ||
+                    (!node.matches('.ChatMessage') && !!node.querySelector('.ChatMessageChat'));
+                const isWhisper = isWhisperAppend;
+                // Preserve all action/offer detection, but avoid unnecessary
+                // chat-root lookup for standard native ChatMessage rows.
+                inspectOfferMutationNode(node, node.matches('.ChatMessage') ? null : getOfferChatRoot());
                 if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
-                chatStyleDecorate(node,chatStyleNativeChatContext);
-                chatWhisperDecorate(node,chatWhisperNativeContext);
-                // Feed inline emotes from the native append event. No second
-                // full-subtree MutationObserver is needed on supported BC builds.
-                try { window.SubbysEssentialsExtras?.onChatRow?.(node); } catch (_) {}
+                if (isPublic) chatStyleDecorate(node,chatStyleNativeChatContext);
+                if (isWhisper) chatWhisperDecorate(node,chatWhisperNativeContext);
+                if (isPublic) {
+                    try { window.SubbysEssentialsExtras?.onChatRow?.(node); } catch (_) {}
+                }
                 if(followWhisper)chatWhisperFollowAfterAppend(whisperScroller);
-                // Existing native hook: no new chat observer or polling loop.
                 try { quietPerfEnhanceChatNode(node); } catch (_) {}
             }
             return result;
@@ -23683,8 +23797,13 @@ function SubbysPlushiesPageMain() {
         }
     }
     function drawCustomPlushMenu() {
-        if (nativeLayeringVisible()) { removePlushSearchInput(); return; }
-        refreshPlushSearchInput();
+        if (nativeLayeringVisible()) { if (plushSearchInput) removePlushSearchInput(); return; }
+        // Drawing runs at game FPS. Layout is driven by menu transitions and
+        // resize events; only do a cheap mount/unmount check per frame.
+        if (plushMenuPage === 'characters' && !plushSearchInput?.isConnected)
+            refreshPlushSearchInput();
+        else if (plushMenuPage !== 'characters' && plushSearchInput)
+            removePlushSearchInput();
         if (typeof DrawRect === "function") {
             DrawRect(MENU.PanelX, MENU.PanelY, MENU.PanelW, MENU.PanelH, getUseMenuStyle().background);
             DrawRect(MENU.PanelX, MENU.PanelY, MENU.PanelW, 148, getUseMenuStyle().header);
@@ -25026,7 +25145,11 @@ function SubbysPlushiesPageMain() {
       const MIN_PANEL_HEIGHT = 320;
       const HOVER_DELAY_MS = 220;
       const MAX_PREVIEW_CACHE = 4;
+      const MAX_PREVIEW_CACHE_BYTES = 520000; // Data URLs are UTF-16 in JS heaps.
       const hoverPreviewCache = new Map();
+      let previewCacheBytes = 0;
+      let previewRenderQueue = Promise.resolve();
+      let previewGeneration = 0;
       // A 10-second read-only registry cache reduces repeated AssetGroup scans
       // while keeping runtime-loaded addon groups discoverable.
       const quietGroupCache = {array:null,length:-1,family:'',body:null,expires:0,groups:null};
@@ -25212,7 +25335,11 @@ function SubbysPlushiesPageMain() {
       async function portraitAsync(snapshot,key) {
         if(hoverPreviewCache.has(key))return hoverPreviewCache.get(key);
         if(previewPending.has(key))return previewPending.get(key);
-        const task=(async()=>{
+        const generation = previewGeneration;
+        // Serialize expensive offscreen appearance builds; same-key calls
+        // already share the in-flight promise. Continue even after a failure.
+        const task=previewRenderQueue.catch(()=>{}).then(async()=>{
+          if(generation !== previewGeneration || (quietPerfEnabled() && document.hidden))return null;
           const shadow=offscreenCharacter(snapshot);
           if(!shadow)return null;
           try {await window.CharacterLoadCanvas?.(shadow);}catch(_){}
@@ -25225,16 +25352,27 @@ function SubbysPlushiesPageMain() {
             if(image)return image;
           }
           return renderPortraitOffscreen(snapshot);
-        })();
+        });
+        previewRenderQueue = task.catch(()=>{});
         previewPending.set(key,task);
-        try {const result=await task;if(result)putPreviewCache(key,result);return result;}
-        finally {previewPending.delete(key);}
+        try {const result=await task;
+          if(result && generation === previewGeneration)putPreviewCache(key,result);
+          return generation === previewGeneration ? result : null;
+        } finally {if(previewPending.get(key)===task)previewPending.delete(key);}
       }
       function putPreviewCache(key,value) {
-        if(hoverPreviewCache.has(key)) hoverPreviewCache.delete(key);
+        if(typeof value !== 'string' || value.length > MAX_PREVIEW_CACHE_BYTES) return;
+        if(hoverPreviewCache.has(key)) {
+          previewCacheBytes -= hoverPreviewCache.get(key)?.length || 0;
+          hoverPreviewCache.delete(key);
+        }
         hoverPreviewCache.set(key,value);
-        while(hoverPreviewCache.size>MAX_PREVIEW_CACHE)
-          hoverPreviewCache.delete(hoverPreviewCache.keys().next().value);
+        previewCacheBytes += value.length;
+        while(hoverPreviewCache.size>MAX_PREVIEW_CACHE || previewCacheBytes>MAX_PREVIEW_CACHE_BYTES) {
+          const oldest=hoverPreviewCache.keys().next().value;
+          previewCacheBytes -= hoverPreviewCache.get(oldest)?.length || 0;
+          hoverPreviewCache.delete(oldest);
+        }
       }
       function cachedHoverImage(entry) {
         if (hoverPreviewCache.has(entry.id)) {
@@ -26109,7 +26247,9 @@ function SubbysPlushiesPageMain() {
         window.addEventListener('resize',()=>{if(state.show)clampPanelToViewport();},{passive:true});
       }
       function togglePanel() { if(!sheetMounted)mount();loadAccount();state.show=!state.show;sheet?.classList.toggle('open',state.show);
-        if(state.show){clampPanelToViewport();render();}else {clearWearPreview();sheet.dispatchEvent(new Event('otm-closed'));} }
+        if(state.show){clampPanelToViewport();render();}else {clearWearPreview();
+          previewGeneration++;hoverPreviewCache.clear();previewCacheBytes=0;
+          sheet.dispatchEvent(new Event('otm-closed'));} }
       let outfitMonitorTimer = null;
       function scheduleOutfitMonitor(reason='appearance') {
           if (outfitMonitorTimer != null) window.clearTimeout(outfitMonitorTimer);
@@ -26156,29 +26296,45 @@ function SubbysPlushiesPageMain() {
         undo:()=>navigate(-1),redo:()=>navigate(1),
         favoriteHistory:(index)=>{if(!loadAccount())return false;return toggleFavoriteOutfit(state.history[index],false);},
         favoriteSaved:(index)=>{if(!loadAccount())return false;return toggleFavoriteOutfit(state.saved[index],false);},
-        releasePreviews:()=>{hoverPreviewCache.clear();previewPending.clear();return true;},
+        releasePreviews:()=>{previewGeneration++;hoverPreviewCache.clear();previewCacheBytes=0;previewPending.clear();return true;},
+        previewPerformance:()=>({cached: hoverPreviewCache.size,cacheChars:previewCacheBytes,
+          cacheBudgetChars:MAX_PREVIEW_CACHE_BYTES,queued:previewPending.size}),
         diagnose:()=>{loadAccount();return {account:state.account, history:state.history.length,cursor:state.cursor,
-          appearanceSlots:collect()?.scope||[],saved:state.saved.length,favorites:state.favorites.length,storageOK:state.storageOK};}
+          appearanceSlots:collect()?.scope||[],saved:state.saved.length,favorites:state.favorites.length,storageOK:state.storageOK,
+          recoveryChecks:outfitRecoveryChecks,recoveryIntervalMs:(!eventHooks||!perfEnabled('outfitEvents'))?3000:POLL_MS};}
       });
       // UI construction is deferred until the user opens the Time Machine.
       // Outfit capture is independent of the UI and continues to work.
       const eventHooks = installOutfitEvents();
       // Still scan periodically for addons that directly edit Appearance or when
       // ModSDK is missing; never rely on unverified third-party events alone.
-      let lastWatchCheck = 0;
-      window.setInterval(() => {
-          const now = Date.now();
-          // A single recovery clock. Turning off event hooks immediately restores
-          // the faster polling fallback, without requiring a page reload.
-          if (!eventHooks || !perfEnabled('outfitEvents') || now-lastWatchCheck >= POLL_MS) {
-              lastWatchCheck = now;
-              monitor();
-          }
-      },3000);
+      let outfitRecoveryTimer = null;
+      let outfitRecoveryChecks = 0;
+      function planOutfitRecovery() {
+          if (outfitRecoveryTimer != null) window.clearTimeout(outfitRecoveryTimer);
+          outfitRecoveryTimer = null;
+          // A hidden tab with low-CPU mode enabled needs no recovery wakeups.
+          // The tab visibility listener checks the appearance immediately.
+          if (quietPerfEnabled() && document.hidden) return;
+          // When BC native hooks are missing or disabled, fall back to a faster
+          // recovery clock to detect direct addon changes to Appearance.
+          const delay = !eventHooks || !perfEnabled('outfitEvents') ? 3000 : POLL_MS;
+          outfitRecoveryTimer = window.setTimeout(() => {
+              outfitRecoveryTimer = null;
+              if (!(quietPerfEnabled() && document.hidden)) {
+                  outfitRecoveryChecks++;
+                  monitor();
+              } else quietPerfData.outfitScansSkipped++;
+              planOutfitRecovery();
+          }, delay);
+      }
+      planOutfitRecovery();
       setTimeout(monitor,1000);
       document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && quietPerfEnabled()) monitor();
+        if (!document.hidden) monitor();
+        planOutfitRecovery();
       }, {passive:true});
+      window.addEventListener('subbys:outfit-monitor-config',planOutfitRecovery,{passive:true});
       window.addEventListener('keydown',e=>{
         if(e.key==='Escape'&&state.show){togglePanel();return;}
         if(editableTarget(e.target))return;
@@ -28162,7 +28318,6 @@ function SubbysPlushiesPageMain() {
         log(`Starting standalone v${VERSION}...`);
         optionalStartupStep("pagehide-save", () => window.addEventListener("pagehide", flushDeferredProgressStores, { capture: true }));
         optionalStartupStep("cached-metadata", loadCachedGitData);
-        optionalStartupStep("remote-metadata", () => { void refreshGitDataFromGitHub({ force: false, silent: true }); });
         setStartupStage("waiting-for-bc");
         await waitForBC();
         // Enable the native Pet Bed lock capability as soon as the asset registry is usable.
@@ -28177,6 +28332,7 @@ function SubbysPlushiesPageMain() {
         checkDuplicateAsset();
         initHookBackend();
         optionalStartupStep("performance-engine-api", perfExposeEngine);
+        optionalStartupStep("shared-performance-bridge", installSharedPerformanceBridge);
         optionalStartupStep("performance-ui-watch", () => perfUIBus.start());
         if (!installPetBedRemovalGuard()) {
             for (const delay of [1500, 5000, 12000])
@@ -28190,6 +28346,9 @@ function SubbysPlushiesPageMain() {
         optionalStartupStep("wardrobe-labels", installWardrobeVisibleLabelFix);
         setStartupStage("registering-wardrobe");
         setupWardrobeAssets();
+        // Startup image preparation is independent of wardrobe color fetching.
+        // Start concurrently rather than waiting for the 12.5s art timeout.
+        const plushStartupArtwork = prepareRenderImages();
         try { installSubbysOutfitTimeMachine(); }
         catch (e) { warn("Outfit Time Machine initialization failed:", e); }
         optionalStartupStep("wardrobe-native-picker", installWardrobeNativePickerHooks);
@@ -28209,7 +28368,7 @@ function SubbysPlushiesPageMain() {
             warn("Wardrobe items registered, but remote color artwork is not ready:", wardrobeLayersError);
         }
         setStartupStage("preparing-plush-artwork");
-        await prepareRenderImages();
+        await plushStartupArtwork;
         setStartupStage("registering-plush-assets");
         setupNativeAsset();
         try { installPlushStateHooks(); }
@@ -28261,6 +28420,12 @@ function SubbysPlushiesPageMain() {
         optionalStartupStep("achievements", () => checkAchievements(true));
         optionalStartupStep("automatic-update-check", scheduleAutomaticUpdateCheck);
         setStartupStage("ready");
+        // Remote noncritical metadata updates after interactive essentials load.
+        const refreshMetadataWhenIdle = () => optionalStartupStep('remote-metadata',
+            () => { void refreshGitDataFromGitHub({ force:false, silent:true }); });
+        if (typeof window.requestIdleCallback === 'function')
+            window.requestIdleCallback(refreshMetadataWhenIdle,{timeout:2500});
+        else window.setTimeout(refreshMetadataWhenIdle,350);
         optionalStartupStep("outfit-lock-api", registerOutfitLockApi);
         optionalStartupStep("appearance-shield", appearanceShieldInstall);
         // Some R133 hooks become available late; only retry if opted in.
@@ -28300,7 +28465,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.9";
+    const VERSION = "3.9.10";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {

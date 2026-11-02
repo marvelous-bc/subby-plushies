@@ -1,6 +1,6 @@
 {
-  "version": "3.9.9",
+  "version": "3.9.10",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Maximum performance optimization: bounded quick-reaction tracking (no full chat history scans per message), shared native chat handling for emoticons, no duplicate chat observers, throttled DrawCharacter overlay calculations, cheaper static chat backgrounds and badges, no shimmer/auras. Adds on-demand FPS and hot-path diagnostics. WCE ArousalSync logs are external to Essentials.",
+  "notes": "Performance v3.9.10: targeted mascot modal observers, event-driven search field layout, 12s outfit recovery checks with 3s fallback, cached room roster for character drawing, chat row type routing, serialized budgeted outfit thumbnails, parallel startup artwork and idle metadata refresh, and opt-in cooperative PawLounge performance event bridge. Compatibility and behavior preserved; no PawLounge source modified.",
   "released": "2026-11-01"
 }
