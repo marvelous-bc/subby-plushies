@@ -1,6 +1,6 @@
 {
-  "version": "3.9.7",
+  "version": "3.9.8",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "3.9 performance pass: one viewport-aware name shimmer; batched targeted style refresh; cached gradient and whisper settings; avoid self-triggered DOM mutation scans; reusable overlapping purr audio; low CPU effects pause; plushie auras stay removed.",
+  "notes": "Removed shimmer engine completely; optimized persistent chat glow/background painting; fixed whisper nickname colors independently of sender-owned whisper frames, including outgoing recipient labels; new styling timing diagnostics; all other customizations preserved.",
   "released": "2026-11-01"
 }

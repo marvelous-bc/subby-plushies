@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.7
-// @description  Optimizes gradients, whispers, presence styling and chat sound effects; preserves Cuddle Queen and customization
+// @version      3.9.8
+// @description  No-shimmer performance edition; fixed sender/recipient whisper name colors; preserves Cuddle Queen and chat themes
 // @released     2026-11-01
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.7";
+    const VERSION = "3.9.8";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2486,7 +2486,7 @@ function SubbysPlushiesPageMain() {
     const ROYAL_SEAL_CLASS = 'SubbysRoyalSeal';
     const CHAT_STYLE_DEFAULT = Object.freeze({
         enabled:false, primary:'#FF477B',middle:'#FF98BB',secondary:'#FF76D9',accent:'#FF6BA8',
-        direction:'right',shimmer:false,intensity:60,
+        direction:'right',intensity:60,
         symbol:'♡ ✧', border:'solid', glow:true, animation:true
     });
     const CHAT_STYLE_PRESETS = Object.freeze([
@@ -2565,26 +2565,34 @@ function SubbysPlushiesPageMain() {
     box-shadow:inset 1px 0 5px var(--sw-shade,rgba(255,126,183,.14));
 }
 #TextAreaChatLog .SubbysWhisperTheme.SubbysWhisperGlow {
-    box-shadow:inset 1px 0 5px var(--sw-shade,rgba(255,126,183,.14)),0 0 6px var(--sw-shade,rgba(255,126,183,.14));
+    box-shadow:inset 1px 0 3px var(--sw-shade,rgba(255,126,183,.14));
 }
 #TextAreaChatLog .SubbysWhisperTheme .SubbysWhisperOrnament {
     display:inline-block;color:var(--sw-primary,#ff8abf);margin-right:5px;font-size:13px;
     pointer-events:none;user-select:none;
 }
-/* Theme only the verified whisper nickname, not the prefix, reply icon or text.
-   This wrapper overrides native BC LabelColor and other inline name colors. */
-#TextAreaChatLog .ChatMessageWhisper.SubbysWhisperTheme .SubbysWhisperName {
-    color:var(--sw-name-primary,#ff8abf)!important;
-    -webkit-text-fill-color:var(--sw-name-primary,#ff8abf)!important;
+/* Name colors belong to the NAME displayed in the whisper header. For
+   'Whisper to' this is the recipient, not the sender of the whisper.
+   Apply separately from the message frame because not everyone shares a
+   whisper frame. This defeats BC's native red name color, but never touches
+   the prefix, reply control or actual private message text. */
+#TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors .SubbysWhisperName,
+#TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors .SubbysWhisperName * {
+    color:var(--sw-name-primary,#efddee)!important;
+    -webkit-text-fill-color:var(--sw-name-primary,#efddee)!important;
     text-shadow:none!important;
 }
 @supports ((-webkit-background-clip:text) or (background-clip:text)) {
-    #TextAreaChatLog .ChatMessageWhisper.SubbysWhisperTheme .SubbysWhisperName {
-        background-image:linear-gradient(90deg,var(--sw-name-primary,#ff8abf),var(--sw-name-secondary,#ffe1f1))!important;
-        -webkit-background-clip:text!important;background-clip:text!important;
+    #TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors .SubbysWhisperName {
+        background:linear-gradient(var(--sw-name-angle,90deg),var(--sw-name-primary,#efddee),var(--sw-name-middle,#efddee) 50%,var(--sw-name-secondary,#efddee))!important;
+        background-clip:text!important;-webkit-background-clip:text!important;
+        color:transparent!important;-webkit-text-fill-color:transparent!important;
+    }
+    #TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors .SubbysWhisperName * {
         color:transparent!important;-webkit-text-fill-color:transparent!important;
     }
 }
+
 `;
     function chatExpressionEnsureCss(){
         if(!document.getElementById(CHAT_EXPRESSION_CSS_ID) && document.head){
@@ -2608,7 +2616,7 @@ function SubbysPlushiesPageMain() {
         chatWhisperLocalCacheTheme=theme;
         return theme;
     }
-    // v3.9.7: sender-owned whisper themes. Presence shares ONLY a small, validated
+    // v3.9.8: sender-owned whisper themes. Presence shares ONLY a small, validated
     // cosmetic palette. BC whisper content never enters the hidden style packet.
     // Missing/old client palettes render as ordinary BC whispers, NOT the
     // receiver's own theme (which caused all whispers to look like theirs).
@@ -2681,11 +2689,44 @@ function SubbysPlushiesPageMain() {
             const member=currentAccountMemberNumber();
             if(Number.isSafeInteger(member)&&member>0){
                 row.dataset.subbysVerifiedWhisperSender=String(member);
+                row.dataset.subbysVerifiedWhisperTarget=String(pending.target);
                 chatWhisperRecentOutbound=null;
                 return member;
             }
         }
         return 0;
+    }
+    function chatWhisperNameMember(row,sender){
+        const me=currentAccountMemberNumber();
+        if(sender!==me)return sender; // 'Whisper from' -> sender's displayed name.
+        // 'Whisper to' -> the recipient's displayed name, not the author.
+        const header=(row.textContent||'').slice(0,140);
+        if(!/Whisper\s+to\b/i.test(header))return sender;
+        let target=Number(row.getAttribute('data-target')||row.dataset.subbysVerifiedWhisperTarget);
+        if(!Number.isSafeInteger(target)||target<=0||!getRoomCharacterByMember(target)){
+            const pending=chatWhisperRecentOutbound;
+            if(pending&&Date.now()-pending.time<4500&&getRoomCharacterByMember(pending.target)){
+                target=pending.target;
+                row.dataset.subbysVerifiedWhisperTarget=String(target);
+                chatWhisperRecentOutbound=null;
+            }
+        }
+        return Number.isSafeInteger(target)&&target>0&&getRoomCharacterByMember(target)?target:0;
+    }
+    function chatWhisperNamePalette(member,whisperTheme){
+        if(!member || !chatStyleViewAllowed() ||
+            getFeatureSettings().chatStyleShowNameColors===false || essentialsConfig().safeMode)return null;
+        // Public names are the primary source of name gradients, even when the
+        // player has not chosen a separate whisper theme.
+        const publicStyle=chatStyleForMember(member);
+        if(publicStyle?.enabled)return {primary:publicStyle.primary,middle:publicStyle.middle,
+            secondary:publicStyle.secondary,direction:publicStyle.direction||'right'};
+        if(whisperTheme)return {primary:whisperTheme.primary,middle:whisperTheme.primary,
+            secondary:whisperTheme.secondary,direction:'right'};
+        // For unthemed users use a legible neutral, rather than BC's default
+        // bright-red whisper nickname. With Show Name Colors OFF, BC is untouched.
+        const neutral='#EDE6F2';
+        return {primary:neutral,middle:neutral,secondary:neutral,direction:'right'};
     }
     // The vanilla chat row prints "Whisper to/from Name: message". The name can
     // be one text node, an inline-colored span, or split across nested spans by
@@ -2750,47 +2791,72 @@ function SubbysPlushiesPageMain() {
         const root=document.getElementById('TextAreaChatLog');
         if(!root||(root!==node&&!root.contains(node)))return;
         const rows=node.matches('.ChatMessageWhisper')?[node]:Array.from(node.querySelectorAll('.ChatMessageWhisper')).slice(-30);
+        const t0=performance.now();
         for(const row of rows){
-            if(!row.classList.contains('ChatMessageWhisper'))continue;
             const sender=chatWhisperVerifiedSender(row,context);
-            // Sender owns appearance; viewer's master OFF switch always wins.
-            const theme=chatStyleViewAllowed()&&!essentialsConfig().safeMode && sender>0 ?
+            const allowed=chatStyleViewAllowed()&&!essentialsConfig().safeMode;
+            const theme=allowed&&sender>0 ?
                 (sender===currentAccountMemberNumber() ?
                     (chatExpressionMine().whisperEnabled?chatWhisperStyle():null) :
                     chatWhisperRemote.get(sender)||null) : null;
-            if(!theme){
-                if(!row.classList.contains('SubbysWhisperTheme')&&!row.dataset.subbysWhisperTheme)continue;
-                row.classList.remove('SubbysWhisperTheme','SubbysWhisperGlow','SubbysChatStyleCold');
-                delete row.dataset.subbysWhisperTheme;
-                for(const key of ['border','primary','accent','background','shade','secondary-shade','name-primary','name-secondary'])row.style.removeProperty('--sw-'+key);
-                chatWhisperClearName(row);
-                for(const el of row.querySelectorAll('.SubbysWhisperOrnament'))el.remove();
-                continue;
+            const shownMember=sender?chatWhisperNameMember(row,sender):0;
+            const namedTheme=shownMember&&shownMember===sender?theme:null;
+            const namePalette=chatWhisperNamePalette(shownMember,namedTheme);
+            const nameSign=namePalette ? JSON.stringify([shownMember,namePalette]) : '';
+            const styleSign=theme?chatWhisperSignature(sender,theme):'';
+            const themeChanged=(row.dataset.subbysWhisperTheme||'')!==styleSign ||
+                row.classList.contains('SubbysWhisperTheme')!==!!theme;
+            const nameChanged=(row.dataset.subbysWhisperNameStyle||'')!==nameSign ||
+                row.classList.contains('SubbysWhisperNameColors')!==!!namePalette;
+            if(!themeChanged&&!nameChanged && (!namePalette||row.querySelector('.SubbysWhisperName')))continue;
+            if(theme||namePalette)chatExpressionEnsureCss();
+            if(themeChanged){
+                row.classList.toggle('SubbysWhisperTheme',!!theme);
+                row.classList.toggle('SubbysWhisperGlow',!!theme?.glow);
+                if(theme){
+                    row.dataset.subbysWhisperTheme=styleSign;
+                    row.style.setProperty('--sw-border',theme.border);
+                    row.style.setProperty('--sw-primary',theme.primary);
+                    row.style.setProperty('--sw-secondary-shade',chatStyleHexRgb(theme.secondary,.085));
+                    row.style.setProperty('--sw-accent',theme.accent);
+                    row.style.setProperty('--sw-background',chatStyleHexRgb(theme.accent,.12));
+                    row.style.setProperty('--sw-shade',chatStyleHexRgb(theme.accent,.22));
+                    for(const n of row.querySelectorAll('.SubbysWhisperOrnament'))n.remove();
+                    if(theme.icon!=='none'){
+                        const icon=document.createElement('span');icon.className='SubbysWhisperOrnament';
+                        icon.textContent=theme.icon;icon.setAttribute('aria-hidden','true');
+                        row.insertBefore(icon,row.firstChild);
+                    }
+                    chatStyleMarkHot(row);
+                }else{
+                    delete row.dataset.subbysWhisperTheme;
+                    for(const key of ['border','primary','accent','background','shade','secondary-shade'])row.style.removeProperty('--sw-'+key);
+                    for(const n of row.querySelectorAll('.SubbysWhisperOrnament'))n.remove();
+                }
             }
-            chatExpressionEnsureCss();
-            const sign=chatWhisperSignature(sender,theme);
-            if(row.dataset.subbysWhisperTheme===sign&&row.classList.contains('SubbysWhisperTheme'))continue;
-            row.classList.add('SubbysWhisperTheme');
-            chatStyleMarkHot(row);
-            row.classList.toggle('SubbysWhisperGlow',theme.glow);
-            row.dataset.subbysWhisperTheme=sign;
-            row.style.setProperty('--sw-border',theme.border);
-            row.style.setProperty('--sw-primary',theme.primary);
-            row.style.setProperty('--sw-name-primary',theme.primary);
-            row.style.setProperty('--sw-name-secondary',theme.secondary);
-            row.style.setProperty('--sw-secondary-shade',chatStyleHexRgb(theme.secondary,.085));
-            row.style.setProperty('--sw-accent',theme.accent);
-            row.style.setProperty('--sw-background',chatStyleHexRgb(theme.accent,.12));
-            row.style.setProperty('--sw-shade',chatStyleHexRgb(theme.accent,.22));
-            for(const n of row.querySelectorAll('.SubbysWhisperOrnament'))n.remove();
-            chatWhisperStyleName(row);
-            if(theme.icon!=='none'){
-                const icon=document.createElement('span');icon.className='SubbysWhisperOrnament';
-                icon.textContent=theme.icon;icon.setAttribute('aria-hidden','true');row.insertBefore(icon,row.firstChild);
+            if(nameChanged || (namePalette&&!row.querySelector('.SubbysWhisperName'))){
+                row.classList.toggle('SubbysWhisperNameColors',!!namePalette);
+                if(namePalette){
+                    row.dataset.subbysWhisperNameStyle=nameSign;
+                    row.style.setProperty('--sw-name-primary',namePalette.primary);
+                    row.style.setProperty('--sw-name-middle',namePalette.middle);
+                    row.style.setProperty('--sw-name-secondary',namePalette.secondary);
+                    row.style.setProperty('--sw-name-angle',CHAT_GRADIENT_ANGLES[namePalette.direction]||'90deg');
+                    // Wrapping is necessary because native BC hardcodes whisper
+                    // nickname red on a dedicated inline element.
+                    if(!row.querySelector('.SubbysWhisperName'))chatWhisperStyleName(row);
+                }else{
+                    delete row.dataset.subbysWhisperNameStyle;
+                    for(const key of ['name-primary','name-middle','name-secondary','name-angle'])row.style.removeProperty('--sw-'+key);
+                    chatWhisperClearName(row);
+                }
             }
         }
+        chatStylePerfMetrics.whisperDecorateCalls++;
+        chatStylePerfMetrics.whisperDecorateMs+=performance.now()-t0;
     }
-    const chatStylePerfMetrics={queuedPublic:0,queuedWhispers:0,publicJobs:0,whisperJobs:0};
+    const chatStylePerfMetrics={queuedPublic:0,queuedWhispers:0,publicJobs:0,whisperJobs:0,
+        whisperDecorateCalls:0,whisperDecorateMs:0,publicDecorateCalls:0,publicDecorateMs:0};
     let chatWhisperRefreshToken=0;
     function chatWhisperRefresh(member=0){
         const root=document.getElementById('TextAreaChatLog');if(!root)return;
@@ -2936,14 +3002,26 @@ function SubbysPlushiesPageMain() {
             queuedWhispers:chatStylePerfMetrics.queuedWhispers,
             backfillPublicRuns:chatStylePerfMetrics.publicJobs,
             backfillWhisperRuns:chatStylePerfMetrics.whisperJobs,
-            activeShimmer:!!chatShimmerCurrentRow?.classList.contains('SubbysChatShimmerActive'),
+            activeShimmer:false,
+            publicDecorateCalls:chatStylePerfMetrics.publicDecorateCalls,
+            publicDecorateTotalMs:Math.round(chatStylePerfMetrics.publicDecorateMs*100)/100,
+            publicDecorateMeanMs:Math.round(1000*chatStylePerfMetrics.publicDecorateMs/Math.max(1,chatStylePerfMetrics.publicDecorateCalls))/1000,
+            whisperDecorateCalls:chatStylePerfMetrics.whisperDecorateCalls,
+            whisperDecorateTotalMs:Math.round(chatStylePerfMetrics.whisperDecorateMs*100)/100,
+            whisperDecorateMeanMs:Math.round(1000*chatStylePerfMetrics.whisperDecorateMs/Math.max(1,chatStylePerfMetrics.whisperDecorateCalls))/1000,
+            styledPublicRows:document.querySelectorAll('#TextAreaChatLog .SubbysCustomChat').length,
+            styledWhisperRows:document.querySelectorAll('#TextAreaChatLog .SubbysWhisperTheme').length,
+            recoloredWhisperNames:document.querySelectorAll('#TextAreaChatLog .SubbysWhisperNameColors').length,
             coldRows:document.querySelectorAll('#TextAreaChatLog .SubbysChatStyleCold').length,
             lowCpu:isLowCpuMode()};},
         diagnostic(){return {version:VERSION,settings:{...chatExpressionMine()},
             visibleWhispers:document.querySelectorAll('.SubbysWhisperTheme').length,
             remoteStyles:chatStyleRemote.size,remoteWhisperMembers:[...chatWhisperRemote.keys()],
             whisperRows:[...document.querySelectorAll('#TextAreaChatLog .ChatMessageWhisper')].slice(-8).map(r=>({sender:r.dataset.subbysVerifiedWhisperSender||r.getAttribute('data-sender')||null,
-                styled:r.classList.contains('SubbysWhisperTheme'),nameStyled:r.dataset.subbysWhisperNameStyled||null}))};}
+                styled:r.classList.contains('SubbysWhisperTheme'),nameStyled:r.dataset.subbysWhisperNameStyled||null,
+                nameMember:r.dataset.subbysVerifiedWhisperTarget||r.getAttribute('data-target')||null,
+                nameColorApplied:r.classList.contains('SubbysWhisperNameColors'),
+                nativeNameElements:r.querySelectorAll('.SubbysWhisperName').length}))};}
     })});
     const chatStyleRemote = new Map();
     // BC may append our own chat to the DOM from a separate send/echo path.
@@ -3044,7 +3122,6 @@ function SubbysPlushiesPageMain() {
             middle:validHex(r.middle, CHAT_STYLE_DEFAULT.middle),
             secondary:validHex(r.secondary, CHAT_STYLE_DEFAULT.secondary),
             direction:CHAT_GRADIENT_DIRECTIONS.includes(r.direction)?r.direction:'right',
-            shimmer:r.shimmer===true,
             intensity:Number.isFinite(Number(r.intensity))?Math.round(Math.max(0,Math.min(100,Number(r.intensity)))):60,
             accent:validHex(r.accent, CHAT_STYLE_DEFAULT.accent),
             symbol:CHAT_STYLE_SYMBOLS.includes(r.symbol) ? r.symbol : CHAT_STYLE_DEFAULT.symbol,
@@ -3091,6 +3168,7 @@ function SubbysPlushiesPageMain() {
         chatStylePersonal=updated;
         writeLocalJSON(CHAT_STYLE_STORAGE_PREFIX+member,updated);
         chatStyleRefresh(member,false);
+        chatWhisperRefresh();
         // Announce both changes and opt-outs, but never leak chat text or passwords.
         if(window.CurrentScreen === 'ChatRoom') sendAddonPresence(true);
         if(redrawEditor && extensionsPanelElement?.isConnected) renderExtensionsPanel();
@@ -3106,7 +3184,7 @@ function SubbysPlushiesPageMain() {
         const packet={v:1,enabled:true,paletteEnabled:style.enabled===true,
             primary:style.primary,secondary:style.secondary,
             accent:style.accent,middle:style.middle,direction:style.direction,
-            shimmer:style.shimmer,intensity:style.intensity,
+            intensity:style.intensity,
             symbol:style.symbol,border:style.border,
             glow:style.glow,animation:style.animation};
         if(currentAccountMemberNumber()===ROYAL_SEAL_MEMBER) packet.royalSeal=style.royalSeal===true;
@@ -3133,7 +3211,6 @@ function SubbysPlushiesPageMain() {
                     // Optional v3.9 palette enhancements; legacy packets stay valid.
                     style.middle=/^#[0-9a-fA-F]{6}$/.test(raw.middle||'')?raw.middle.toUpperCase():style.middle;
                     style.direction=CHAT_GRADIENT_DIRECTIONS.includes(raw.direction)?raw.direction:'right';
-                    style.shimmer=raw.shimmer===true;
                     style.intensity=Number.isFinite(Number(raw.intensity))?Math.min(100,Math.max(0,Number(raw.intensity))):60;
                     // The BC packet sender is authoritative. Malicious peers
                     // cannot claim this feature merely by adding royalSeal:true.
@@ -3147,6 +3224,7 @@ function SubbysPlushiesPageMain() {
         chatStyleMetrics.packets++;
         if(JSON.stringify(previous||null)!==JSON.stringify(style||null)) {
             chatStyleRefresh(sender,false);
+            chatWhisperRefresh();
         }
     }
     function chatStyleForMember(member) {
@@ -3175,7 +3253,7 @@ function SubbysPlushiesPageMain() {
     padding-left:7px!important; padding-right:6px!important; margin-top:2px; margin-bottom:2px;
 }
 #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatGlow {
-    box-shadow:inset 1px 0 5px var(--subbys-style-shade,transparent),0 0 6px var(--subbys-style-shade,transparent);
+    box-shadow:inset 1px 0 3px var(--subbys-style-shade,transparent);
 }
 /* Native BC LabelColor (and some other addons) sets inline foreground colors
    on the author or nested spans. Give the author a CSS gradient with a native-
@@ -3195,22 +3273,7 @@ function SubbysPlushiesPageMain() {
     text-shadow:0 0 3px var(--subbys-style-accent,#ff6ba8)!important;
     filter:none!important;
 }
-/* Shimmer belongs to name gradients, not to the independent floating
-   decorations animation option. Animate only the author glyphs, and let
-   historic messages settle after four cycles to avoid endless repainting. */
-#TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatShimmer .${CHAT_STYLE_NAME_CLASS} {
-    background-size:240% 100%!important;
-    animation:none!important;
-    will-change:auto!important;
-}
-#TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatShimmer.SubbysChatShimmerActive .${CHAT_STYLE_NAME_CLASS} {
-    animation:subbys-three-color-shimmer 3.3s ease-in-out infinite alternate!important;
-    will-change:auto!important;
-}
-@keyframes subbys-three-color-shimmer {
-    from{background-position:0% 50%}
-    to{background-position:100% 50%}
-}
+/* v3.9.8: Animated nickname gradients removed for stable frame pacing. */
 /* The Cuddle Queen Royal Seal is exclusive to Subbycat's verified
    native member number; it adds no text to outgoing BC messages. */
 #TextAreaChatLog .${ROYAL_CHAT_CLASS} {
@@ -3258,14 +3321,10 @@ function SubbysPlushiesPageMain() {
 }
 /* Older chat retains its colors but avoids extra glow layers. */
 #TextAreaChatLog .SubbysChatStyleCold,
-#TextAreaChatLog .SubbysWhisperTheme.SubbysChatStyleCold {box-shadow:none!important}
-#TextAreaChatLog.SubbysChatLowCpu .${CHAT_STYLE_CLASS}.SubbysCustomChatShimmer .${CHAT_STYLE_NAME_CLASS} {
-    animation:none!important;
-}
+#TextAreaChatLog .SubbysWhisperTheme.SubbysChatStyleCold {box-shadow:none!important;background:transparent!important}
 #TextAreaChatLog.SubbysChatLowCpu .${CHAT_STYLE_CLASS},
 #TextAreaChatLog.SubbysChatLowCpu .SubbysWhisperTheme {box-shadow:none!important}
 @media(prefers-reduced-motion:reduce) {
-    #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatShimmer .${CHAT_STYLE_NAME_CLASS}{animation:none!important;will-change:auto!important}
     #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_SYMBOL_CLASS}.SubbysCustomChatAnimated {animation:none;opacity:.65}
     #TextAreaChatLog .${ROYAL_CHAT_CLASS} .${ROYAL_SEAL_CLASS}.SubbysRoyalSealAnimated {animation:none;opacity:1;transform:none;filter:none}
 }`;
@@ -3277,65 +3336,27 @@ function SubbysPlushiesPageMain() {
         }
         return sheet;
     }
-    // One on-screen animated name at most. Older messages keep their static
-    // three-color gradients without doing background-position repaints.
-    let chatShimmerCurrentRow=null,chatShimmerObserver=null;
+    // v3.9.8: no perpetual animation observers, timers or active-shimmer state.
+    // Small history hot-set limits persistent translucent shadows to recent rows.
     const chatStyleHotRows=[];
     function chatStyleMarkHot(row){
         const at=chatStyleHotRows.indexOf(row);
         if(at>=0)chatStyleHotRows.splice(at,1);
         chatStyleHotRows.push(row);
         row.classList.remove('SubbysChatStyleCold');
-        while(chatStyleHotRows.length>48){
+        while(chatStyleHotRows.length>12){
             const old=chatStyleHotRows.shift();
             if(old?.isConnected)old.classList.add('SubbysChatStyleCold');
         }
     }
-    function chatStyleSyncShimmer(){
-        const row=chatShimmerCurrentRow;
-        if(!row?.isConnected)return;
-        const enabled=!document.hidden&&!isLowCpuMode()&&chatStyleViewAllowed()&&
-            !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        if(!enabled){row.classList.remove('SubbysChatShimmerActive');return;}
-        if(!chatShimmerObserver){row.classList.add('SubbysChatShimmerActive');return;}
-        // IntersectionObserver owns the class while on-screen.
-        chatShimmerObserver.unobserve(row);
-        chatShimmerObserver.observe(row);
-    }
-    function chatStyleKeepRecentShimmer(row){
-        if(!row?.isConnected||!row.classList.contains('SubbysCustomChatShimmer'))return;
-        if(chatShimmerCurrentRow===row)return;
-        if(chatShimmerCurrentRow){
-            chatShimmerCurrentRow.classList.remove('SubbysChatShimmerActive');
-            chatShimmerObserver?.unobserve(chatShimmerCurrentRow);
-        }
-        chatShimmerCurrentRow=row;
-        if(!chatShimmerObserver&&typeof IntersectionObserver==='function') {
-            chatShimmerObserver=new IntersectionObserver(entries=>{
-                for(const entry of entries){
-                    if(entry.target!==chatShimmerCurrentRow)continue;
-                    const allowed=entry.isIntersecting&&!document.hidden&&!isLowCpuMode()&&chatStyleViewAllowed()&&
-                        !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-                    entry.target.classList.toggle('SubbysChatShimmerActive',allowed);
-                }
-            },{threshold:0});
-        }
-        chatStyleSyncShimmer();
-    }
-    document.addEventListener('visibilitychange',chatStyleSyncShimmer,{passive:true});
     function chatStyleSyncPerformance(){
         const log=document.getElementById('TextAreaChatLog');
         log?.classList.toggle('SubbysChatLowCpu',isLowCpuMode());
-        chatStyleSyncShimmer();
     }
     function chatStyleClearRow(row) {
-        if(row===chatShimmerCurrentRow){
-            chatShimmerObserver?.unobserve(row);
-            chatShimmerCurrentRow=null;
-        }
         const hot=chatStyleHotRows.indexOf(row);
         if(hot>=0)chatStyleHotRows.splice(hot,1);
-        row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatPalette','SubbysCustomChatGlow','SubbysCustomChatShimmer','SubbysChatShimmerActive','SubbysChatStyleCold',ROYAL_CHAT_CLASS);
+        row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatPalette','SubbysCustomChatGlow','SubbysChatStyleCold',ROYAL_CHAT_CLASS);
         delete row.dataset.subbysChatStyle;
         for(const key of ['primary','middle','secondary','accent','direction','intensity','background','shade','border'])
             row.style.removeProperty('--subbys-style-'+key);
@@ -3425,6 +3446,7 @@ function SubbysPlushiesPageMain() {
         const root=document.getElementById('TextAreaChatLog');
         if(!root || !(root===node || root.contains(node)))return;
         const rows=node.classList.contains('ChatMessage')?[node]:Array.from(node.querySelectorAll('.ChatMessage')).slice(-30);
+        const t0=performance.now();
         for(const row of rows) {
             // Positive public-chat check, not just the absence of whisper/action
             // classes: presence notices may be wrapped in generic chat rows.
@@ -3485,7 +3507,6 @@ function SubbysPlushiesPageMain() {
             if(style.enabled) {
                 row.classList.add('SubbysCustomChatPalette');
                 if(style.glow)row.classList.add('SubbysCustomChatGlow');
-                if(style.shimmer && showNames)row.classList.add('SubbysCustomChatShimmer');
                 row.style.setProperty('--subbys-style-primary',style.primary);
                 row.style.setProperty('--subbys-style-secondary',style.secondary);
                 row.style.setProperty('--subbys-style-middle',style.middle);
@@ -3520,9 +3541,10 @@ function SubbysPlushiesPageMain() {
                 row.appendChild(symbol);
             }
             chatStyleMarkHot(row);
-            if(style.enabled && showNames && style.shimmer && label)chatStyleKeepRecentShimmer(row);
             chatStyleMetrics.rows++;
         }
+        chatStylePerfMetrics.publicDecorateCalls++;
+        chatStylePerfMetrics.publicDecorateMs+=performance.now()-t0;
     }
     let chatStyleRefreshToken=0;
     function chatStyleRefresh(member=0,refreshWhispers=true){
@@ -3534,7 +3556,7 @@ function SubbysPlushiesPageMain() {
             chatStyleClearAll(root);
             if(refreshWhispers){
                 ++chatWhisperRefreshToken;
-                for(const row of root.querySelectorAll('.ChatMessageWhisper.SubbysWhisperTheme'))chatWhisperDecorate(row);
+                for(const row of root.querySelectorAll('.ChatMessageWhisper.SubbysWhisperTheme,.ChatMessageWhisper.SubbysWhisperNameColors'))chatWhisperDecorate(row);
                 chatStylePerfMetrics.queuedWhispers=0;
             }
             return;
@@ -12632,7 +12654,6 @@ function SubbysPlushiesPageMain() {
                 Object.assign(label.style,{background:`linear-gradient(${CHAT_GRADIENT_ANGLES[chosen.direction]||'90deg'},${chosen.primary},${chosen.middle},${chosen.secondary})`,
                     backgroundClip:'text',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',
                     filter:chosen.glow?`drop-shadow(0 0 ${1+Math.round(chosen.intensity*0.03)}px ${chosen.accent})`:'none'});
-                if(chosen.shimmer){label.style.backgroundSize='230% 100%';label.style.animation='subbys-three-color-shimmer 3.3s ease-in-out infinite';}
             }
             const message=document.createElement('span');message.textContent='Mrrp~ Hello, everyone!';
             message.style.color=getExtensionsStyle().text;
@@ -12775,7 +12796,6 @@ function SubbysPlushiesPageMain() {
             wrap.append(title,select);section.appendChild(wrap);
         };
         selectRow('Gradient direction',CHAT_GRADIENT_DIRECTIONS,style.direction,'direction');
-        section.append(extensionsSettingRow('Animated gradient shimmer','Move the gradient gently across the name; respects reduced-motion preferences.',style.shimmer,()=>chatStyleSet({shimmer:!chatStyleMine().shimmer})));
         const intensityWrap=document.createElement('label');
         Object.assign(intensityWrap.style,{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap',margin:'8px 0',color:getExtensionsStyle().text});
         const intensityText=document.createElement('span');intensityText.textContent='Glow intensity: '+style.intensity+'%';
@@ -28207,7 +28227,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.7";
+    const VERSION = "3.9.8";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
