@@ -1,6 +1,6 @@
 {
-  "version": "3.7.3",
+  "version": "3.9.0",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Fix Cuddle Queen badge and custom chat styles on verified R133 chat rows even when custom nickname markup lacks a recognizable name header; improve owner self-chat reconciliation and per-peer diagnostics.",
+  "notes": "Expression Studio: 3-color animated name gradients, whisper appearance, configurable chat sounds with hug purr, lightweight plushie auras, theme import/export. Preserve Cuddle Queen and existing chat visibility controls.",
   "released": "2026-11-01"
 }

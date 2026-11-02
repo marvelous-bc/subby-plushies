@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.7.3
-// @description  R133 chat sender reconciliation for local and peer nickname styles
+// @version      3.9.0
+// @description  Advanced gradients, whisper themes, chat sound themes and plushie auras
 // @released     2026-11-01
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.7.3";
+    const VERSION = "3.9.0";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2482,19 +2482,333 @@ function SubbysPlushiesPageMain() {
     const ROYAL_CHAT_CLASS = 'SubbysRoyalChat';
     const ROYAL_SEAL_CLASS = 'SubbysRoyalSeal';
     const CHAT_STYLE_DEFAULT = Object.freeze({
-        enabled:false, primary:'#FF477B',secondary:'#FF76D9',accent:'#FF6BA8',
+        enabled:false, primary:'#FF477B',middle:'#FF98BB',secondary:'#FF76D9',accent:'#FF6BA8',
+        direction:'right',shimmer:false,intensity:60,
         symbol:'♡ ✧', border:'solid', glow:true, animation:true
     });
     const CHAT_STYLE_PRESETS = Object.freeze([
-        {name:'Rose',primary:'#FF477B',secondary:'#FF76D9',accent:'#FF6BA8',symbol:'♡ ✧'},
-        {name:'Royal',primary:'#A76BFF',secondary:'#FFB4E7',accent:'#A76BFF',symbol:'♛ ✦'},
-        {name:'Midnight',primary:'#70B5FF',secondary:'#C1A7FF',accent:'#7785E7',symbol:'☾ ✧'},
-        {name:'Emerald',primary:'#65DEB0',secondary:'#D2FFD9',accent:'#47B58B',symbol:'✦ ★'},
-        {name:'Inferno',primary:'#FF6857',secondary:'#FFD27C',accent:'#E96D40',symbol:'🔥 ✦'},
-        {name:'Kitten',primary:'#FF9DD4',secondary:'#FFDDEA',accent:'#F48DC5',symbol:'🐾 ♡'},
+        {name:'Rose',primary:'#FF477B',middle:'#FF76AE',secondary:'#FF76D9',accent:'#FF6BA8',symbol:'♡ ✧'},
+        {name:'Royal',primary:'#A76BFF',middle:'#D58DFF',secondary:'#FFB4E7',accent:'#A76BFF',symbol:'♛ ✦'},
+        {name:'Midnight',primary:'#70B5FF',middle:'#8C87E9',secondary:'#C1A7FF',accent:'#7785E7',symbol:'☾ ✧'},
+        {name:'Emerald',primary:'#65DEB0',middle:'#8FF3C9',secondary:'#D2FFD9',accent:'#47B58B',symbol:'✦ ★'},
+        {name:'Inferno',primary:'#FF6857',middle:'#FF995B',secondary:'#FFD27C',accent:'#E96D40',symbol:'🔥 ✦'},
+        {name:'Kitten',primary:'#FF9DD4',middle:'#FFC0E1',secondary:'#FFDDEA',accent:'#F48DC5',symbol:'🐾 ♡'},
+        {name:'Pastel Dream',primary:'#9CCBFF',middle:'#E2B5FF',secondary:'#FFBFE5',accent:'#C2A3FF',symbol:'♡ ✧'},
     ]);
     const CHAT_STYLE_SYMBOLS = Object.freeze(['♡ ✧','♛ ✦','☾ ✧','✦ ★','🔥 ✦','🐾 ♡','❀ ♡','★ ✦','none']);
     const CHAT_STYLE_BORDERS = Object.freeze(['solid','dashed','double','none']);
+    const CHAT_GRADIENT_DIRECTIONS = Object.freeze(['right','down','diagonal','up']);
+    const CHAT_GRADIENT_ANGLES = Object.freeze({right:'90deg',down:'180deg',diagonal:'135deg',up:'0deg'});
+    const CHAT_WHISPER_PRESETS = Object.freeze({
+        'Soft Pink':{primary:'#FF8ABF',secondary:'#FFE1F1',accent:'#FF7EB7',icon:'♡',border:'solid'},
+        'Moonlight':{primary:'#A3B7FF',secondary:'#E5D5FF',accent:'#9F91E9',icon:'☾',border:'double'},
+        'Velvet':{primary:'#BB70A9',secondary:'#FFB0D4',accent:'#AB4386',icon:'✦',border:'solid'},
+        'Secret Note':{primary:'#F7DDA5',secondary:'#FFF4D5',accent:'#C9A975',icon:'✉',border:'dashed'}
+    });
+    const CHAT_SOUND_TYPES = Object.freeze(['none','purr','chime','sparkle','squeak']);
+    const CHAT_AURA_TYPES = Object.freeze(['none','hearts','sparkles','paws','stars','moons','petals','bats','ghosts','crown']);
+    const CHAT_AURA_SYMBOLS = Object.freeze({hearts:'♡',sparkles:'✦',paws:'🐾',stars:'★',moons:'☾',petals:'❀',bats:'🦇',ghosts:'👻',crown:'♛'});
+    const CHAT_AURA_PRESETS = Object.freeze({
+        Rose:{type:'hearts',color:'#FF79B9',speed:50,strength:65,size:65},
+        Celestial:{type:'stars',color:'#B1A0FF',speed:35,strength:60,size:75},
+        Royal:{type:'crown',color:'#F4C77D',speed:30,strength:80,size:80},
+        Halloween:{type:'bats',color:'#E08EFA',speed:65,strength:65,size:75},
+        Winter:{type:'sparkles',color:'#A7E7FF',speed:30,strength:55,size:65}
+    });
+
+    const CHAT_EXPRESSION_KEY = 'SubbysPlushies:expression-studio:v3:';
+    const CHAT_EXPRESSION_DEFAULT = Object.freeze({
+        whisperEnabled:false,whisperInherit:false,whisperPreset:'Soft Pink',
+        whisperPrimary:'#FF8ABF',whisperSecondary:'#FFE1F1',whisperAccent:'#FF7EB7',
+        whisperIcon:'♡',whisperBorder:'solid',whisperGlow:true,
+        soundEnabled:false,soundType:'purr',soundVolume:35,
+        soundWhisper:true,soundBeep:false,soundFavorites:false,soundMentions:false,
+        soundMuteBusy:true,soundMuteHidden:true,
+        auraEnabled:false,auraShowSelf:true,auraShowOthers:true,auraType:'hearts',
+        auraColor:'#FF79B9',auraStrength:65,auraSize:65,auraSpeed:50,
+        auraAffection:false,auraMatchChat:false
+    });
+    let chatExpressionMember=0,chatExpressionValue=null;
+    function chatExpressionNormalize(raw) {
+        const r=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+        const out={...CHAT_EXPRESSION_DEFAULT};
+        const bools=['whisperEnabled','whisperInherit','whisperGlow','soundEnabled','soundWhisper','soundBeep',
+            'soundFavorites','soundMentions','soundMuteBusy','soundMuteHidden','auraEnabled',
+            'auraShowSelf','auraShowOthers','auraAffection','auraMatchChat'];
+        for(const k of bools)if(typeof r[k]==='boolean')out[k]=r[k];
+        for(const k of ['whisperPrimary','whisperSecondary','whisperAccent','auraColor'])
+            if(typeof r[k]==='string'&&/^#[0-9A-Fa-f]{6}$/.test(r[k]))out[k]=r[k].toUpperCase();
+        for(const k of ['soundVolume','auraStrength','auraSize','auraSpeed'])
+            if(Number.isFinite(Number(r[k])))out[k]=Math.max(0,Math.min(100,Math.round(Number(r[k]))));
+        if(CHAT_SOUND_TYPES.includes(r.soundType))out.soundType=r.soundType;
+        if(CHAT_AURA_TYPES.includes(r.auraType))out.auraType=r.auraType;
+        if(CHAT_STYLE_BORDERS.includes(r.whisperBorder))out.whisperBorder=r.whisperBorder;
+        if(['♡','☾','✦','✉','none'].includes(r.whisperIcon))out.whisperIcon=r.whisperIcon;
+        if(Object.hasOwn(CHAT_WHISPER_PRESETS,r.whisperPreset))out.whisperPreset=r.whisperPreset;
+        return out;
+    }
+    function chatExpressionMine() {
+        const member=currentAccountMemberNumber()||0;
+        if(chatExpressionMember!==member||!chatExpressionValue){
+            chatExpressionMember=member;
+            chatExpressionValue=chatExpressionNormalize(member?readLocalJSON(CHAT_EXPRESSION_KEY+member,{}):{});
+        }
+        return chatExpressionValue;
+    }
+    function chatExpressionSet(changes,redraw=true) {
+        const member=currentAccountMemberNumber();if(!member)return false;
+        chatExpressionValue=chatExpressionNormalize({...chatExpressionMine(),...changes});
+        writeLocalJSON(CHAT_EXPRESSION_KEY+member,chatExpressionValue);
+        chatWhisperRefresh();chatAuraRefreshAll();
+        if(window.CurrentScreen==='ChatRoom')sendAddonPresence(true);
+        if(redraw&&extensionsPanelElement?.isConnected)renderExtensionsPanel();
+        return {...chatExpressionValue};
+    }
+    function chatAuraNormalize(raw){
+        const r=raw&&typeof raw==='object'?raw:{};
+        const enabled=r.enabled===true&&CHAT_AURA_TYPES.includes(r.type)&&r.type!=='none';
+        return {enabled,type:CHAT_AURA_TYPES.includes(r.type)?r.type:'none',
+            color:typeof r.color==='string'&&/^#[0-9a-fA-F]{6}$/.test(r.color)?r.color.toUpperCase():'#FF79B9',
+            strength:Number.isFinite(Number(r.strength))?Math.max(0,Math.min(100,Math.round(Number(r.strength)))):65,
+            size:Number.isFinite(Number(r.size))?Math.max(0,Math.min(100,Math.round(Number(r.size)))):65,
+            speed:Number.isFinite(Number(r.speed))?Math.max(0,Math.min(100,Math.round(Number(r.speed)))):50};
+    }
+    function chatAuraPacket(){
+        const a=chatExpressionMine();
+        return chatAuraNormalize({enabled:a.auraEnabled,type:a.auraType,
+            color:a.auraMatchChat?chatStyleMine().accent:a.auraColor,
+            strength:a.auraStrength,size:a.auraSize,speed:a.auraSpeed});
+    }
+    // === v3.9 Expression Studio: whisper themes, sound themes and plushie auras ===
+    const CHAT_EXPRESSION_CSS_ID='subbys-expression-studio-v39';
+    const chatAuraOverlays=new Map();
+    const CHAT_EXPRESSION_CSS=`
+#TextAreaChatLog .SubbysWhisperTheme {
+    position:relative!important;box-sizing:border-box;border-left:3px var(--sw-border,solid) var(--sw-accent,#ff7eb7)!important;
+    border-radius:6px;padding-left:8px!important;margin:2px 0!important;
+    background:linear-gradient(100deg,var(--sw-background,rgba(255,126,183,.09)),var(--sw-secondary-shade,rgba(255,180,222,.08)) 48%,transparent 94%)!important;
+    box-shadow:inset 1px 0 5px var(--sw-shade,rgba(255,126,183,.14));
+}
+#TextAreaChatLog .SubbysWhisperTheme.SubbysWhisperGlow {
+    box-shadow:inset 1px 0 5px var(--sw-shade,rgba(255,126,183,.14)),0 0 6px var(--sw-shade,rgba(255,126,183,.14));
+}
+#TextAreaChatLog .SubbysWhisperTheme .SubbysWhisperOrnament {
+    display:inline-block;color:var(--sw-primary,#ff8abf);margin-right:5px;font-size:13px;
+    pointer-events:none;user-select:none;
+}
+.SubbysPlushAura {position:fixed;pointer-events:none!important;user-select:none!important;
+    transform:translate(-50%,-50%);z-index:2147482870;box-sizing:border-box;
+    display:flex;align-items:center;justify-content:center;isolation:isolate;
+    color:var(--spa-color,#ff79b9);opacity:var(--spa-opacity,.7);}
+.SubbysPlushAura .spa-halo {position:absolute;inset:10%;border:2px solid currentColor;
+    border-radius:50%;box-shadow:0 0 12px currentColor,inset 0 0 8px currentColor;
+    opacity:.24;}
+.SubbysPlushAura .spa-orbit {position:absolute;inset:0;animation:spa-spin var(--spa-duration,8s) linear infinite;}
+.SubbysPlushAura .spa-symbol {position:absolute;left:50%;top:50%;font-size:var(--spa-font,15px);
+    text-shadow:0 0 7px currentColor,0 1px 2px rgba(0,0,0,.7);}
+.SubbysPlushAura .spa-symbol:nth-child(1) {transform:translate(-50%,-50%) rotate(0deg) translateY(calc(var(--spa-radius,36px)*-1)) rotate(0deg)}
+.SubbysPlushAura .spa-symbol:nth-child(2) {transform:translate(-50%,-50%) rotate(120deg) translateY(calc(var(--spa-radius,36px)*-1)) rotate(-120deg)}
+.SubbysPlushAura .spa-symbol:nth-child(3) {transform:translate(-50%,-50%) rotate(240deg) translateY(calc(var(--spa-radius,36px)*-1)) rotate(-240deg)}
+@keyframes spa-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.SubbysPlushAura .spa-orbit{animation:none!important}}
+`;
+    function chatExpressionEnsureCss(){
+        if(!document.getElementById(CHAT_EXPRESSION_CSS_ID) && document.head){
+            const sheet=document.createElement('style');sheet.id=CHAT_EXPRESSION_CSS_ID;
+            sheet.textContent=CHAT_EXPRESSION_CSS;document.head.appendChild(sheet);
+        }
+    }
+    function chatWhisperStyle(){
+        const cfg=chatExpressionMine();
+        if(cfg.whisperInherit){
+            const c=chatStyleMine();
+            return {primary:c.primary,secondary:c.secondary,accent:c.accent,
+                border:c.border,icon:cfg.whisperIcon,glow:cfg.whisperGlow};
+        }
+        return {primary:cfg.whisperPrimary,secondary:cfg.whisperSecondary,accent:cfg.whisperAccent,
+            border:cfg.whisperBorder,icon:cfg.whisperIcon,glow:cfg.whisperGlow};
+    }
+    function chatWhisperDecorate(node){
+        if(!(node instanceof Element)||window.CurrentScreen!=='ChatRoom')return;
+        const root=document.getElementById('TextAreaChatLog');
+        if(!root||(root!==node&&!root.contains(node)))return;
+        const rows=node.classList.contains('ChatMessage')?[node]:Array.from(node.querySelectorAll('.ChatMessageWhisper')).slice(-30);
+        const cfg=chatExpressionMine();
+        for(const row of rows){
+            if(!row.classList.contains('ChatMessageWhisper'))continue;
+            // No message text is read, stored, sent, or copied by this feature.
+            const enabled=cfg.whisperEnabled&&chatStyleViewAllowed();
+            if(!enabled){
+                row.classList.remove('SubbysWhisperTheme','SubbysWhisperGlow');
+                delete row.dataset.subbysWhisperTheme;
+                for(const el of row.querySelectorAll('.SubbysWhisperOrnament'))el.remove();
+                continue;
+            }
+            chatExpressionEnsureCss();
+            const theme=chatWhisperStyle();
+            const sign=JSON.stringify(theme);
+            if(row.dataset.subbysWhisperTheme===sign&&row.classList.contains('SubbysWhisperTheme'))continue;
+            row.classList.add('SubbysWhisperTheme');
+            row.classList.toggle('SubbysWhisperGlow',theme.glow);
+            row.dataset.subbysWhisperTheme=sign;
+            row.style.setProperty('--sw-border',theme.border);
+            row.style.setProperty('--sw-primary',theme.primary);
+            row.style.setProperty('--sw-secondary-shade',chatStyleHexRgb(theme.secondary,.085));
+            row.style.setProperty('--sw-accent',theme.accent);
+            row.style.setProperty('--sw-background',chatStyleHexRgb(theme.accent,.12));
+            row.style.setProperty('--sw-shade',chatStyleHexRgb(theme.accent,.22));
+            for(const n of row.querySelectorAll('.SubbysWhisperOrnament'))n.remove();
+            if(theme.icon!=='none'){
+                const icon=document.createElement('span');icon.className='SubbysWhisperOrnament';
+                icon.textContent=theme.icon;icon.setAttribute('aria-hidden','true');row.insertBefore(icon,row.firstChild);
+            }
+        }
+    }
+    function chatWhisperRefresh(){
+        const root=document.getElementById('TextAreaChatLog');if(!root)return;
+        for(const row of Array.from(root.querySelectorAll('.ChatMessageWhisper')).slice(-300))chatWhisperDecorate(row);
+    }
+    function chatSoundIsFavorite(member){
+        const list=window.Player?.FriendList;
+        if(!Array.isArray(list))return false;
+        return list.some(item=>Number(typeof item==='object'?(item.MemberNumber??item.Member):item)===member);
+    }
+    function chatSoundIncoming(data){
+        const cfg=chatExpressionMine();
+        if(!cfg.soundEnabled||cfg.soundType==='none'||essentialsConfig().safeMode ||window.CurrentScreen!=='ChatRoom')return;
+        if(cfg.soundMuteHidden && document.hidden)return;
+        if(cfg.soundMuteBusy && Array.isArray(window.ChatRoomCharacter) && window.ChatRoomCharacter.length>8)return;
+        const sender=Number(data?.Sender);
+        if(!Number.isSafeInteger(sender)||sender<=0||sender===currentAccountMemberNumber())return;
+        const type=String(data?.Type||'');
+        // The native packet type and sender are trusted. Never parse hidden messages.
+        if(type==='Hidden'||type==='Action')return;
+        const whisper=type==='Whisper';
+        const beep=type==='Beep'||(type==='Chat'&&data.Content==='Beep');
+        const chat=type==='Chat';
+        if(!whisper&&!beep&&!chat)return;
+        const myName=String(window.Player?.Nickname||window.Player?.Name||'').trim();
+        const mentioned=chat&&myName.length>=3&&typeof data.Content==='string'&&
+            data.Content.toLocaleLowerCase().includes(myName.toLocaleLowerCase());
+        const match=(whisper&&cfg.soundWhisper)||(beep&&cfg.soundBeep)||
+            (chat&&cfg.soundFavorites&&chatSoundIsFavorite(sender))||
+            (mentioned&&cfg.soundMentions);
+        if(match)void chatSoundPlay(cfg.soundType,cfg.soundVolume/100);
+    }
+    async function chatSoundPlay(theme,volume){
+        if(!CHAT_SOUND_TYPES.includes(theme)||theme==='none')return false;
+        const gain=Math.max(0,Math.min(1,Number(volume)||0));if(!gain)return false;
+        if(theme==='purr'){
+            // Same SFX asset used by the existing plushie Hug Tightly action.
+            for(const url of [purrSfxWorkingUrl,...PURR_SFX_URLS].filter((u,i,a)=>u&&a.indexOf(u)===i)){
+                try {const audio=new Audio(url);audio.volume=gain;
+                    await audio.play();return true;}catch(_){}
+            }
+            // Browser/player may block autoplay; no forced interaction or retry loop.
+            return playGeneratedPurrFallback(gain);
+        }
+        const Context=window.AudioContext||window.webkitAudioContext;
+        if(typeof Context!=='function')return false;
+        try{
+            if(!purrAudioContext||purrAudioContext.state==='closed')purrAudioContext=new Context();
+            const ctx=purrAudioContext;if(ctx.state==='suspended')await ctx.resume();
+            const notes=theme==='chime'?[660,880]:theme==='sparkle'?[880,1320,1760]:[440,310];
+            notes.forEach((frequency,index)=>{
+                const osc=ctx.createOscillator(),g=ctx.createGain(),start=ctx.currentTime+index*.085;
+                osc.type=theme==='squeak'?'triangle':'sine';osc.frequency.setValueAtTime(frequency,start);
+                if(theme==='squeak')osc.frequency.exponentialRampToValueAtTime(Math.max(80,frequency*.7),start+.13);
+                g.gain.setValueAtTime(.001,start);
+                g.gain.exponentialRampToValueAtTime(Math.max(.001,gain*.07),start+.012);
+                g.gain.exponentialRampToValueAtTime(.001,start+.24);
+                osc.connect(g);g.connect(ctx.destination);osc.start(start);osc.stop(start+.25);
+            });return true;
+        }catch(_){return false;}
+    }
+    function chatAuraRemove(member){
+        const state=chatAuraOverlays.get(Number(member));if(!state)return;
+        try{state.element.remove();}catch(_){}
+        chatAuraOverlays.delete(Number(member));
+    }
+    function chatAuraClearAll(){for(const member of [...chatAuraOverlays.keys()])chatAuraRemove(member);}
+    function chatAuraWantedMember(member){
+        const id=Number(member),local=id===currentAccountMemberNumber(),cfg=chatExpressionMine();
+        if(!id||!cfg.auraEnabled&&local)return false;
+        if(!cfg.auraShowSelf&&local)return false;
+        if(!cfg.auraShowOthers&&!local)return false;
+        if(essentialsConfig().safeMode||!chatStyleViewAllowed())return false;
+        const aura=local?chatAuraPacket():chatStyleRemote.get(id)?.aura;
+        return !!(aura&&aura.enabled);
+    }
+    function chatAuraRefreshMember(member){
+        const id=Number(member);if(!Number.isSafeInteger(id)||id<=0)return false;
+        const cfg=chatExpressionMine(),local=id===currentAccountMemberNumber();
+        if(window.CurrentScreen!=='ChatRoom'||!plushScreenVisible()||!chatAuraWantedMember(id)){
+            chatAuraRemove(id);return false;
+        }
+        const C=local?window.Player:getRoomCharacterByMember(id);
+        const item=local?statusOverlayTargetItem():getHeld(C);
+        if(!C||!isOurs(item)){chatAuraRemove(id);return false;}
+        const aura=local?chatAuraPacket():chatStyleRemote.get(id)?.aura;
+        if(!aura?.enabled){chatAuraRemove(id);return false;}
+        let centerX,centerY,width,height;
+        if(local){
+            const box=plushScreenBounds(C,item);if(!box)return false;
+            centerX=box.centerX;centerY=box.top+box.height*.5;
+            width=box.width;height=box.height;
+        }else{
+            const bounds=currentPlushCanvasBounds(item);
+            if(!bounds)return false;
+            const top=characterPointToScreen(C,bounds.centerX,bounds.visualTop);
+            const bottom=characterPointToScreen(C,bounds.centerX,bounds.visualBottom);
+            if(!top||!bottom)return false;
+            centerX=top.x;centerY=(top.y+bottom.y)/2;
+            height=Math.abs(bottom.y-top.y);width=height*.65;
+        }
+        if(![centerX,centerY,width,height].every(Number.isFinite)||height<=0)return false;
+        const size=Math.max(32,Math.min(260,Math.max(width,height)*(.7+aura.size/150)));
+        const effectStrength=local&&cfg.auraAffection?
+            Math.max(.1,Math.min(1,(Number(getPlushMoodRecord(plushNameForItem(item))?.score)||40)/100)) : 1;
+        let state=chatAuraOverlays.get(id);
+        if(!state){
+            chatExpressionEnsureCss();
+            const element=document.createElement('div');element.className='SubbysPlushAura';
+            element.setAttribute('aria-hidden','true');
+            const halo=document.createElement('div');halo.className='spa-halo';
+            const orbit=document.createElement('div');orbit.className='spa-orbit';
+            for(let i=0;i<3;i++){
+                const symbol=document.createElement('span');symbol.className='spa-symbol';orbit.appendChild(symbol);
+            }
+            element.append(halo,orbit);document.body.appendChild(element);
+            state={element,orbit,type:''};chatAuraOverlays.set(id,state);
+        }
+        if(state.type!==aura.type){
+            for(const el of state.orbit.children)el.textContent=CHAT_AURA_SYMBOLS[aura.type]||'✦';
+            state.type=aura.type;
+        }
+        const style=state.element.style;
+        style.left=Math.round(centerX)+'px';style.top=Math.round(centerY)+'px';
+        style.width=Math.round(size)+'px';style.height=Math.round(size)+'px';
+        style.setProperty('--spa-color',aura.color);
+        style.setProperty('--spa-opacity',String((.15+aura.strength*.0075)*effectStrength));
+        style.setProperty('--spa-duration',(13-aura.speed*.09).toFixed(2)+'s');
+        style.setProperty('--spa-font',Math.round(11+size*.05)+'px');
+        style.setProperty('--spa-radius',Math.round(size*.38)+'px');
+        style.display=plushOverlaysBlockedByInterface?'none':'';
+        return true;
+    }
+    function chatAuraRefreshAll(){
+        for(const member of [...chatAuraOverlays.keys()])chatAuraRefreshMember(member);
+        chatAuraRefreshMember(currentAccountMemberNumber());
+        for(const member of chatStyleRemote.keys())chatAuraRefreshMember(member);
+    }
+    Object.defineProperty(window,'SubbysExpressionStudio',{configurable:true,value:Object.freeze({
+        get settings(){return {...chatExpressionMine()};},set:chatExpressionSet,
+        playTestSound(){return chatSoundPlay(chatExpressionMine().soundType,chatExpressionMine().soundVolume/100);},
+        refresh(){chatWhisperRefresh();chatAuraRefreshAll();},
+        diagnostic(){return {version:VERSION,settings:{...chatExpressionMine()},
+            visibleAuras:chatAuraOverlays.size,visibleWhispers:document.querySelectorAll('.SubbysWhisperTheme').length,
+            remoteStyles:chatStyleRemote.size};}
+    })});
     const chatStyleRemote = new Map();
     // BC may append our own chat to the DOM from a separate send/echo path.
     // Track a short-lived, sender-verified message record so a native chat row
@@ -2591,7 +2905,11 @@ function SubbysPlushiesPageMain() {
         return {
             enabled:r.enabled === true,
             primary:validHex(r.primary, CHAT_STYLE_DEFAULT.primary),
+            middle:validHex(r.middle, CHAT_STYLE_DEFAULT.middle),
             secondary:validHex(r.secondary, CHAT_STYLE_DEFAULT.secondary),
+            direction:CHAT_GRADIENT_DIRECTIONS.includes(r.direction)?r.direction:'right',
+            shimmer:r.shimmer===true,
+            intensity:Number.isFinite(Number(r.intensity))?Math.round(Math.max(0,Math.min(100,Number(r.intensity)))):60,
             accent:validHex(r.accent, CHAT_STYLE_DEFAULT.accent),
             symbol:CHAT_STYLE_SYMBOLS.includes(r.symbol) ? r.symbol : CHAT_STYLE_DEFAULT.symbol,
             border:CHAT_STYLE_BORDERS.includes(r.border) ? r.border : CHAT_STYLE_DEFAULT.border,
@@ -2621,7 +2939,7 @@ function SubbysPlushiesPageMain() {
         // In v3.7 the Cuddle Queen broadcast is independent of the owner's
         // personal gradient/border switch. A new owner account broadcasts its
         // badge by default, but an explicit royalSeal:false remains respected.
-        return style.enabled || (me===ROYAL_SEAL_MEMBER && style.royalSeal===true) ? style : null;
+        return style.enabled || chatExpressionMine().auraEnabled || (me===ROYAL_SEAL_MEMBER && style.royalSeal===true) ? style : null;
     }
     // Owner-side broadcast toggle (distinct from local visibility). The
     // existing hidden presence packet carries royalSeal:false immediately,
@@ -2651,8 +2969,10 @@ function SubbysPlushiesPageMain() {
         // released before v3.7 still understand the rest of this packet.
         const packet={v:1,enabled:true,paletteEnabled:style.enabled===true,
             primary:style.primary,secondary:style.secondary,
-            accent:style.accent,symbol:style.symbol,border:style.border,
-            glow:style.glow,animation:style.animation};
+            accent:style.accent,middle:style.middle,direction:style.direction,
+            shimmer:style.shimmer,intensity:style.intensity,
+            symbol:style.symbol,border:style.border,
+            glow:style.glow,animation:style.animation,aura:chatAuraPacket()};
         if(currentAccountMemberNumber()===ROYAL_SEAL_MEMBER) packet.royalSeal=style.royalSeal===true;
         return JSON.stringify(packet);
     }
@@ -2661,7 +2981,7 @@ function SubbysPlushiesPageMain() {
         if(!Number.isSafeInteger(sender)||sender<=0) return;
         const text=getDictionaryText(data,CHAT_STYLE_TAG);
         let style=null;
-        if(typeof text==='string' && text.length<=500) {
+        if(typeof text==='string' && text.length<=1200) {
             try {
                 const raw=JSON.parse(text);
                 if(raw && raw.v===1 && raw.enabled===true &&
@@ -2674,6 +2994,12 @@ function SubbysPlushiesPageMain() {
                     // Backward compatible: old senders with no paletteEnabled
                     // field were always sending a fully enabled palette.
                     style.enabled=raw.paletteEnabled!==false;
+                    // Optional v3.9 palette enhancements; legacy packets stay valid.
+                    style.middle=/^#[0-9a-fA-F]{6}$/.test(raw.middle||'')?raw.middle.toUpperCase():style.middle;
+                    style.direction=CHAT_GRADIENT_DIRECTIONS.includes(raw.direction)?raw.direction:'right';
+                    style.shimmer=raw.shimmer===true;
+                    style.intensity=Number.isFinite(Number(raw.intensity))?Math.min(100,Math.max(0,Number(raw.intensity))):60;
+                    style.aura=chatAuraNormalize(raw.aura);
                     // The BC packet sender is authoritative. Malicious peers
                     // cannot claim this feature merely by adding royalSeal:true.
                     style.royalSeal=sender===ROYAL_SEAL_MEMBER && raw.royalSeal===true;
@@ -2684,7 +3010,9 @@ function SubbysPlushiesPageMain() {
         if(style) chatStyleRemote.set(sender,style);
         else chatStyleRemote.delete(sender);
         chatStyleMetrics.packets++;
-        if(JSON.stringify(previous||null)!==JSON.stringify(style||null)) chatStyleRefresh();
+        if(JSON.stringify(previous||null)!==JSON.stringify(style||null)) {
+            chatStyleRefresh(); chatAuraRefreshMember(sender);
+        }
     }
     function chatStyleForMember(member) {
         const id=Number(member);
@@ -2711,7 +3039,7 @@ function SubbysPlushiesPageMain() {
    color fallback, and override ONLY its own descendant foreground, not the
    surrounding chat text. This works even when the label has a nested span. */
 #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_NAME_CLASS} {
-    background:linear-gradient(110deg,var(--subbys-style-primary,#ff477b) 5%,var(--subbys-style-secondary,#ff76d9) 90%)!important;
+    background:linear-gradient(var(--subbys-style-direction,90deg),var(--subbys-style-primary,#ff477b) 0%,var(--subbys-style-middle,#ff98bb) 50%,var(--subbys-style-secondary,#ff76d9) 100%)!important;
     background-clip:text!important; -webkit-background-clip:text!important;
     color:transparent!important; -webkit-text-fill-color:transparent!important;
     font-weight:700!important; text-shadow:none!important;
@@ -2721,7 +3049,14 @@ function SubbysPlushiesPageMain() {
     text-shadow:none!important;
 }
 #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatGlow .${CHAT_STYLE_NAME_CLASS} {
-    filter:drop-shadow(0 0 2px var(--subbys-style-accent,#ff6ba8));
+    filter:drop-shadow(0 0 calc(1px + 3px * var(--subbys-style-intensity,.6)) var(--subbys-style-accent,#ff6ba8));
+}
+#TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatShimmer .${CHAT_STYLE_NAME_CLASS} {
+    background-size:230% 100%!important;
+    animation:subbys-three-color-shimmer 3.3s linear infinite;
+}
+@keyframes subbys-three-color-shimmer {
+    0%{background-position:0% 0%}100%{background-position:230% 0%}
 }
 /* The Cuddle Queen Royal Seal is exclusive to Subbycat's verified
    native member number; it adds no text to outgoing BC messages. */
@@ -2769,6 +3104,7 @@ function SubbysPlushiesPageMain() {
     100%{opacity:0;transform:translateY(-9px) scale(.9)}
 }
 @media(prefers-reduced-motion:reduce) {
+    #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysCustomChatShimmer .${CHAT_STYLE_NAME_CLASS}{animation:none}
     #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_SYMBOL_CLASS}.SubbysCustomChatAnimated {animation:none;opacity:.65}
     #TextAreaChatLog .${ROYAL_CHAT_CLASS} .${ROYAL_SEAL_CLASS}.SubbysRoyalSealAnimated {animation:none;opacity:1;transform:none;filter:none}
 }`;
@@ -2781,9 +3117,9 @@ function SubbysPlushiesPageMain() {
         return sheet;
     }
     function chatStyleClearRow(row) {
-        row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatPalette','SubbysCustomChatGlow',ROYAL_CHAT_CLASS);
+        row.classList.remove(CHAT_STYLE_CLASS,'SubbysCustomChatPalette','SubbysCustomChatGlow','SubbysCustomChatShimmer',ROYAL_CHAT_CLASS);
         delete row.dataset.subbysChatStyle;
-        for(const key of ['primary','secondary','accent','background','shade','border'])
+        for(const key of ['primary','middle','secondary','accent','direction','intensity','background','shade','border'])
             row.style.removeProperty('--subbys-style-'+key);
         for(const label of row.querySelectorAll('.'+CHAT_STYLE_NAME_CLASS+',.SubbysCustomChatSyntheticName')) {
             if(label.classList.contains('SubbysCustomChatSyntheticName'))
@@ -2904,7 +3240,8 @@ function SubbysPlushiesPageMain() {
                 if(member>0)row.dataset.subbysVerifiedChatSender=String(member);
             }
             if(!member)chatStyleMetrics.unmatchedRows++;
-            const style=chatStyleViewAllowed() && member>0 ? chatStyleForMember(member) : null;
+            const candidate=chatStyleViewAllowed() && member>0 ? chatStyleForMember(member) : null;
+            const style=candidate&&(candidate.enabled||(member===ROYAL_SEAL_MEMBER&&candidate.royalSeal))?candidate:null;
             if(!style){
                 if(row.classList.contains(CHAT_STYLE_CLASS))chatStyleClearRow(row);
                 continue;
@@ -2930,12 +3267,16 @@ function SubbysPlushiesPageMain() {
             if(style.enabled) {
                 row.classList.add('SubbysCustomChatPalette');
                 if(style.glow)row.classList.add('SubbysCustomChatGlow');
+                if(style.shimmer && style.animation)row.classList.add('SubbysCustomChatShimmer');
                 row.style.setProperty('--subbys-style-primary',style.primary);
                 row.style.setProperty('--subbys-style-secondary',style.secondary);
+                row.style.setProperty('--subbys-style-middle',style.middle);
+                row.style.setProperty('--subbys-style-direction',CHAT_GRADIENT_ANGLES[style.direction]||'90deg');
+                row.style.setProperty('--subbys-style-intensity',String(style.intensity/100));
                 row.style.setProperty('--subbys-style-accent',style.accent);
                 row.style.setProperty('--subbys-style-border',style.border);
                 row.style.setProperty('--subbys-style-background',chatStyleHexRgb(style.accent,.14));
-                row.style.setProperty('--subbys-style-shade',chatStyleHexRgb(style.accent,.25));
+                row.style.setProperty('--subbys-style-shade',chatStyleHexRgb(style.accent,.06+.004*style.intensity));
             }
             // A badge-only message gets its royal seal but no forced palette.
             if(showNames && style.enabled && label) label.classList.add(CHAT_STYLE_NAME_CLASS);
@@ -2969,6 +3310,7 @@ function SubbysPlushiesPageMain() {
         if(!chatStyleViewAllowed()){chatStyleClearAll(root);return;}
         chatStyleEnsureCss();
         for(const row of Array.from(root.querySelectorAll('.ChatMessage')).slice(-300))chatStyleDecorate(row);
+        chatWhisperRefresh();
     }
     Object.defineProperty(window,'SubbysChatStyles',{configurable:true,value:Object.freeze({
         get showAll(){return chatStyleViewAllowed();},
@@ -3082,7 +3424,7 @@ function SubbysPlushiesPageMain() {
             if (settings[key]) highlightMyNameInVisibleChat();
             else clearMyNameHighlights();
         }
-        if (key === "chatStyleShowAll" || key === "chatStyleShowNameColors" || key === "chatStyleShowNameTitles") chatStyleRefresh();
+        if (key === "chatStyleShowAll" || key === "chatStyleShowNameColors" || key === "chatStyleShowNameTitles") {chatStyleRefresh();chatAuraRefreshAll();}
         if (key === "quickReactions") quickReactionUpdateVisibility();
         if (key === "showDragButton") {
             if (settings[key]) refreshDragToggleButton();
@@ -5572,6 +5914,7 @@ function SubbysPlushiesPageMain() {
         const display = blocked ? "none" : "";
         if (plushStatusIconElement?.isConnected) plushStatusIconElement.style.display = display;
         if (speechBubbleElement?.isConnected) speechBubbleElement.style.display = display;
+        for(const aura of chatAuraOverlays.values())if(aura.element?.isConnected)aura.element.style.display=display;
         for (const state of remotePlushEmotes.values()) {
             if (state.icon?.isConnected) state.icon.style.display = display;
             if (state.bubble?.isConnected) state.bubble.style.display = display;
@@ -5585,6 +5928,7 @@ function SubbysPlushiesPageMain() {
             localOverlayRepositionFrame = null;
             if (speechBubbleElement?.isConnected) positionSpeechBubble();
             if (plushStatusIconElement?.isConnected) positionPlushStatusIcon();
+            chatAuraRefreshMember(currentAccountMemberNumber());
             if (dragToggleButton?.isConnected) refreshDragToggleButton();
             const item = statusOverlayTargetItem();
             if (isOurs(item)) localOverlayPositionSignature = plushOverlayPositionSignature(window.Player, item);
@@ -5708,6 +6052,7 @@ function SubbysPlushiesPageMain() {
     function clearRemotePlushEmotes() {
         for (const member of [...remotePlushEmotes.keys()]) removeRemotePlushEmote(member);
         clearPetSuitPlushOverlays();
+        chatAuraClearAll();
         lastCharacterChatRoomDraw.clear();
     }
     function positionRemotePlushEmote(memberNumber) {
@@ -5842,6 +6187,7 @@ function SubbysPlushiesPageMain() {
         }
         for (const member of [...chatStyleRemote.keys()]) if(!present.has(member)) chatStyleRemote.delete(member);
         for (const member of [...chatStylePresenceAcknowledged]) if(!present.has(member)) chatStylePresenceAcknowledged.delete(member);
+        for(const member of [...chatAuraOverlays.keys()])if(!present.has(member))chatAuraRemove(member);
     }
     function characterHasAddonPresence(C) {
         if (!C) return false;
@@ -6326,6 +6672,7 @@ function SubbysPlushiesPageMain() {
     function refreshCharacterPlushOverlaysFromNativeOverlay(C, placement) {
         if (!C || !placement || window.CurrentScreen !== "ChatRoom") return false;
         rememberVisibleOverlayPlacement(C, placement);
+        chatAuraRefreshMember(Number(C.MemberNumber));
         const handheld = getHandheldItem(C);
         if (isOurs(handheld) || petSuitRenderStates.has(petSuitOverlayKey(C))) {
             try { drawPetSuitPlushCanvasOverlay(C); } catch (_) {}
@@ -6409,6 +6756,7 @@ function SubbysPlushiesPageMain() {
                 }
                 const needsOverlay = !!nativePresenceHoverPointer || activeRestraintOverlay || newlyRestrained ||
                     (Number.isFinite(member) && remotePlushEmotes.has(member)) ||
+                    chatAuraWantedMember(member) ||
                     (local && (speechBubbleElement?.isConnected || plushStatusIconElement?.isConnected));
                 const last = nativePresenceCaptureTimes.get(key) || 0;
                 if (needsOverlay && (placement.at - last >= 100 || !last)) {
@@ -12054,9 +12402,10 @@ function SubbysPlushiesPageMain() {
             const myName=String(window.Player?.Nickname||window.Player?.Name||'Your nickname').slice(0,65);
             label.textContent=myName+': ';
             if(getFeatureSettings().chatStyleShowNameColors) {
-                Object.assign(label.style,{background:`linear-gradient(110deg,${chosen.primary},${chosen.secondary})`,
+                Object.assign(label.style,{background:`linear-gradient(${CHAT_GRADIENT_ANGLES[chosen.direction]||'90deg'},${chosen.primary},${chosen.middle},${chosen.secondary})`,
                     backgroundClip:'text',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',
-                    filter:chosen.glow?`drop-shadow(0 0 2px ${chosen.accent})`:'none'});
+                    filter:chosen.glow?`drop-shadow(0 0 ${1+Math.round(chosen.intensity*0.03)}px ${chosen.accent})`:'none'});
+                if(chosen.shimmer){label.style.backgroundSize='230% 100%';label.style.animation='subbys-three-color-shimmer 3.3s linear infinite';}
             }
             const message=document.createElement('span');message.textContent='Mrrp~ Hello, everyone!';
             message.style.color=getExtensionsStyle().text;
@@ -12123,7 +12472,7 @@ function SubbysPlushiesPageMain() {
         };
         const colorContainer=document.createElement('div');
         Object.assign(colorContainer.style,{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'10px',marginTop:'14px'});
-        for(const [key,title] of [['primary','Gradient start'],['secondary','Gradient end'],['accent','Border / glow']]) {
+        for(const [key,title] of [['primary','Gradient start'],['middle','Gradient middle'],['secondary','Gradient end'],['accent','Border / glow']]) {
             const group=document.createElement('div');
             Object.assign(group.style,{display:'flex',flexDirection:'column',gap:'5px',minWidth:'0',color:getExtensionsStyle().text,fontSize:'12px'});
             const text=document.createElement('label');text.textContent=title;
@@ -12198,6 +12547,16 @@ function SubbysPlushiesPageMain() {
             select.addEventListener('change',()=>chatStyleSet({[field]:select.value,enabled:true}));
             wrap.append(title,select);section.appendChild(wrap);
         };
+        selectRow('Gradient direction',CHAT_GRADIENT_DIRECTIONS,style.direction,'direction');
+        section.append(extensionsSettingRow('Animated gradient shimmer','Move the gradient gently across the name; respects reduced-motion preferences.',style.shimmer,()=>chatStyleSet({shimmer:!chatStyleMine().shimmer})));
+        const intensityWrap=document.createElement('label');
+        Object.assign(intensityWrap.style,{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap',margin:'8px 0',color:getExtensionsStyle().text});
+        const intensityText=document.createElement('span');intensityText.textContent='Glow intensity: '+style.intensity+'%';
+        const intensityInput=document.createElement('input');intensityInput.type='range';intensityInput.min='0';intensityInput.max='100';intensityInput.value=String(style.intensity);
+        intensityInput.setAttribute('aria-label','Name glow intensity');
+        intensityInput.addEventListener('input',()=>{intensityText.textContent='Glow intensity: '+intensityInput.value+'%';});
+        intensityInput.addEventListener('change',()=>chatStyleSet({intensity:Number(intensityInput.value)}));
+        intensityWrap.append(intensityText,intensityInput);section.appendChild(intensityWrap);
         selectRow('Decorative symbol',CHAT_STYLE_SYMBOLS,style.symbol,'symbol');
         selectRow('Border style',CHAT_STYLE_BORDERS,style.border,'border');
         section.append(
@@ -12229,6 +12588,141 @@ function SubbysPlushiesPageMain() {
         Object.assign(footnote.style,{fontSize:'12px',lineHeight:'1.5',color:getExtensionsStyle().muted});
         container.appendChild(footnote);
     }
+    function expressionSelect(container,label,choices,value,callback){
+        const row=document.createElement('label');
+        Object.assign(row.style,{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:'8px',alignItems:'center',margin:'9px 0',color:getExtensionsStyle().text});
+        const name=document.createElement('span');name.textContent=label;
+        const select=document.createElement('select');
+        Object.assign(select.style,{background:getExtensionsStyle().surface,color:getExtensionsStyle().text,
+            border:'1px solid '+getExtensionsStyle().border,borderRadius:'6px',padding:'7px',maxWidth:'100%'});
+        for(const item of choices){
+            const option=document.createElement('option');option.value=typeof item==='string'?item:item[0];
+            option.textContent=typeof item==='string'?item:item[1];select.appendChild(option);
+        }
+        select.value=value;select.addEventListener('change',()=>callback(select.value));
+        row.append(name,select);container.appendChild(row);return select;
+    }
+    function expressionHex(container,label,value,callback){
+        const row=document.createElement('label');
+        Object.assign(row.style,{display:'flex',flexWrap:'wrap',gap:'7px',alignItems:'center',margin:'8px 0',color:getExtensionsStyle().text});
+        const title=document.createElement('span');title.textContent=label;
+        const color=document.createElement('input');color.type='color';color.value=value;
+        const text=document.createElement('input');text.type='text';text.value=value;text.maxLength=7;
+        text.placeholder='#RRGGBB';text.spellcheck=false;text.setAttribute('aria-label',label+' HEX');
+        Object.assign(text.style,{maxWidth:'110px',padding:'7px',borderRadius:'6px',fontFamily:'monospace',
+            background:getExtensionsStyle().surface,color:getExtensionsStyle().text,border:'1px solid '+getExtensionsStyle().border});
+        color.addEventListener('input',()=>{text.value=color.value.toUpperCase();});
+        color.addEventListener('change',()=>callback(color.value.toUpperCase()));
+        text.addEventListener('change',()=>{
+            let v=text.value.trim();if(/^#[0-9a-fA-F]{3}$/.test(v))v='#'+[...v.slice(1)].map(c=>c+c).join('');
+            if(!/^#[0-9a-fA-F]{6}$/.test(v)){text.value=value;return;}
+            callback(v.toUpperCase());
+        });
+        row.append(title,color,text);container.appendChild(row);
+    }
+    function expressionSlider(container,label,value,callback){
+        const row=document.createElement('label');
+        Object.assign(row.style,{display:'flex',flexWrap:'wrap',gap:'8px',alignItems:'center',margin:'8px 0',color:getExtensionsStyle().text});
+        const title=document.createElement('span');title.textContent=label+' '+value+'%';
+        const input=document.createElement('input');input.type='range';input.min='0';input.max='100';input.value=value;
+        input.addEventListener('input',()=>{title.textContent=label+' '+input.value+'%';});
+        input.addEventListener('change',()=>callback(Number(input.value)));
+        row.append(title,input);container.appendChild(row);
+    }
+    function renderExtensionsWhisperAppearance(container){
+        const c=chatExpressionMine(),section=makeExtensionsSection('Whisper Appearance');
+        section.append(extensionsSettingRow('Enable custom whisper appearance',
+            'Style whisper rows on your screen; message privacy and native BC messages are unchanged.',
+            c.whisperEnabled,()=>chatExpressionSet({whisperEnabled:!chatExpressionMine().whisperEnabled})),
+            extensionsSettingRow('Use public-chat colors for whispers','Inherit your current public gradient and border.',
+                c.whisperInherit,()=>chatExpressionSet({whisperInherit:!chatExpressionMine().whisperInherit})),
+            extensionsSettingRow('Whisper glow','A subtle glow around whisper messages.',
+                c.whisperGlow,()=>chatExpressionSet({whisperGlow:!chatExpressionMine().whisperGlow})));
+        expressionSelect(section,'Whisper preset',Object.keys(CHAT_WHISPER_PRESETS),c.whisperPreset,name=>
+            chatExpressionSet({whisperPreset:name,whisperPrimary:CHAT_WHISPER_PRESETS[name].primary,
+                whisperSecondary:CHAT_WHISPER_PRESETS[name].secondary,whisperAccent:CHAT_WHISPER_PRESETS[name].accent,
+                whisperBorder:CHAT_WHISPER_PRESETS[name].border,whisperIcon:CHAT_WHISPER_PRESETS[name].icon,
+                whisperEnabled:true,whisperInherit:false}));
+        if(!c.whisperInherit){
+            for(const [k,label] of [['whisperPrimary','Whisper start'],['whisperSecondary','Whisper end'],['whisperAccent','Whisper border / glow']])
+                expressionHex(section,label,c[k],value=>chatExpressionSet({[k]:value,whisperEnabled:true}));
+            expressionSelect(section,'Whisper border',CHAT_STYLE_BORDERS,c.whisperBorder,value=>chatExpressionSet({whisperBorder:value}));
+        }
+        expressionSelect(section,'Whisper icon',['♡','☾','✦','✉','none'],c.whisperIcon,value=>chatExpressionSet({whisperIcon:value}));
+        const note=document.createElement('p');note.textContent='Whisper styles are purely visual: whispers are never shared, stored, or sent through Essentials.';
+        note.style.color=getExtensionsStyle().muted;section.appendChild(note);container.appendChild(section);
+    }
+    function renderExtensionsSoundThemes(container){
+        const c=chatExpressionMine(),section=makeExtensionsSection('Chat Sound Themes');
+        section.append(extensionsSettingRow('Enable sound themes','OFF by default. Browser autoplay restrictions may require a click before sounds play.',
+            c.soundEnabled,()=>chatExpressionSet({soundEnabled:!chatExpressionMine().soundEnabled})));
+        expressionSelect(section,'Sound',CHAT_SOUND_TYPES,c.soundType,value=>chatExpressionSet({soundType:value}));
+        expressionSlider(section,'Volume',c.soundVolume,value=>chatExpressionSet({soundVolume:value}));
+        for(const [key,name,note] of [
+            ['soundWhisper','Incoming whispers','Play for a whisper received from another player.'],
+            ['soundBeep','Incoming beeps','Play for native beeps received from another player.'],
+            ['soundFavorites','Favorites / friends','Play for public chat by members of your BC friends list.'],
+            ['soundMentions','Name mentions','Play when a public chat message mentions your display name.'],
+            ['soundMuteBusy','Mute in busy rooms','Suppress sounds when more than 8 people are present.'],
+            ['soundMuteHidden','Mute while minimized','Suppress sounds while BC is in a hidden background tab.']])
+            section.appendChild(extensionsSettingRow(name,note,c[key],()=>chatExpressionSet({[key]:!chatExpressionMine()[key]})));
+        section.appendChild(makeExtensionsButton('Test selected sound',()=>{
+            const x=chatExpressionMine();void chatSoundPlay(x.soundType,x.soundVolume/100);
+        }));
+        const hint=document.createElement('p');
+        hint.textContent='Purr reuses the same hosted sound as the Subbycat plushie hug. No Subbycat-specific notification trigger or cooldown is added.';
+        hint.style.color=getExtensionsStyle().muted;section.appendChild(hint);container.appendChild(section);
+    }
+    function renderExtensionsAuraStudio(container){
+        const c=chatExpressionMine(),section=makeExtensionsSection('Plushie Auras');
+        const hint=document.createElement('p');
+        hint.textContent='Lightweight animated halos around equipped Essentials plushies, shown locally. Other players need Essentials to see your shared aura. Nothing is drawn over BC clothing.';
+        hint.style.color=getExtensionsStyle().muted;section.appendChild(hint);
+        for(const [key,title,description] of [
+            ['auraEnabled','Enable my plushie aura','Publish your chosen aura to Essentials room members.'],
+            ['auraShowSelf','See my aura','Locally show the aura surrounding your equipped plushie.'],
+            ['auraShowOthers','See other players’ auras','Locally display compatible players’ equipped plushie auras.'],
+            ['auraAffection','Affection-based brightness','My plushie affection adjusts its aura brightness.'],
+            ['auraMatchChat','Match my chat accent','Use your personal chat style accent as the aura color.']])
+            section.appendChild(extensionsSettingRow(title,description,c[key],()=>chatExpressionSet({[key]:!chatExpressionMine()[key]})));
+        expressionSelect(section,'Aura type',CHAT_AURA_TYPES,c.auraType,value=>chatExpressionSet({auraType:value}));
+        if(!c.auraMatchChat)expressionHex(section,'Aura HEX',c.auraColor,value=>chatExpressionSet({auraColor:value}));
+        expressionSlider(section,'Glow strength',c.auraStrength,value=>chatExpressionSet({auraStrength:value}));
+        expressionSlider(section,'Aura size',c.auraSize,value=>chatExpressionSet({auraSize:value}));
+        expressionSlider(section,'Animation speed',c.auraSpeed,value=>chatExpressionSet({auraSpeed:value}));
+        const presets=document.createElement('div');
+        Object.assign(presets.style,{display:'flex',gap:'6px',flexWrap:'wrap',margin:'10px 0'});
+        for(const [name,values] of Object.entries(CHAT_AURA_PRESETS))
+            presets.appendChild(makeExtensionsButton(name,()=>chatExpressionSet({
+                auraEnabled:true,auraType:values.type,auraColor:values.color,
+                auraSpeed:values.speed,auraSize:values.size,auraStrength:values.strength,auraMatchChat:false})));
+        section.appendChild(presets);
+        container.appendChild(section);
+    }
+    function renderExtensionsExpressionShare(container){
+        const section=makeExtensionsSection('Expression Preset Codes');
+        const info=document.createElement('p');info.textContent='Export or import your public style, whisper appearance, sound choices and aura theme as JSON. Codes are not sent automatically.';
+        info.style.color=getExtensionsStyle().muted;section.appendChild(info);
+        const input=document.createElement('textarea');input.rows=3;
+        input.placeholder='Paste a saved Expression Studio code here';
+        Object.assign(input.style,{width:'100%',boxSizing:'border-box',color:getExtensionsStyle().text,
+            background:getExtensionsStyle().surface,border:'1px solid '+getExtensionsStyle().border,borderRadius:'6px'});
+        const buttons=document.createElement('div');Object.assign(buttons.style,{display:'flex',flexWrap:'wrap',gap:'8px'});
+        buttons.append(makeExtensionsButton('Export preset',()=>{
+            input.value=JSON.stringify({v:1,chat:{...chatStyleMine(),royalSeal:undefined},extras:chatExpressionMine()});
+            input.select();try{navigator.clipboard?.writeText(input.value)?.catch(()=>{});}catch(_){}
+        }),makeExtensionsButton('Import preset',()=>{
+            try{
+                if(input.value.length>4096)throw Error('Code too long');
+                const data=JSON.parse(input.value);
+                if(data?.v!==1||!data.chat||!data.extras)throw Error('Unsupported format');
+                const requestedRoyalSeal=chatStyleMine().royalSeal;
+                chatStyleSet({...data.chat,royalSeal:requestedRoyalSeal},false);
+                chatExpressionSet(data.extras);
+            }catch(_){appendLocalInfoBox('Invalid Expression Studio preset',['Paste a v3.9 preset exported from Essentials.']);}
+        }));
+        section.append(input,buttons);container.appendChild(section);
+    }
     function renderExtensionsSettings(container) {
         const nav = document.createElement("div");
         Object.assign(nav.style, {
@@ -12240,6 +12734,9 @@ function SubbysPlushiesPageMain() {
         const options = [
             ["general", "General"],
             ["chatstyles", "Chat Styles"],
+            ["whispers", "Whispers"],
+            ["sounds", "Sounds"],
+            ["auras", "Auras"],
             ["layout", "Layout"],
         ];
         for (const [key, label] of options) {
@@ -12250,11 +12747,19 @@ function SubbysPlushiesPageMain() {
         }
         container.appendChild(nav);
         if (extensionsSettingsTab === "layout") renderExtensionsLayout(container);
-        else if (extensionsSettingsTab === "chatstyles") renderExtensionsChatStyles(container);
+        else if (extensionsSettingsTab === "chatstyles") {renderExtensionsChatStyles(container);renderExtensionsExpressionShare(container);}
+        else if (extensionsSettingsTab === "whispers") renderExtensionsWhisperAppearance(container);
+        else if (extensionsSettingsTab === "sounds") renderExtensionsSoundThemes(container);
+        else if (extensionsSettingsTab === "auras") renderExtensionsAuraStudio(container);
         else renderExtensionsSettingsGeneral(container);
     }
     function renderExtensionsPlushies(container) {
         const name = currentPlushName();
+        const auraAccess=makeExtensionsSection('Aura customization');
+        auraAccess.appendChild(makeExtensionsButton('Open Plushie Aura Settings',()=>{
+            extensionsActiveTab='settings';extensionsSettingsTab='auras';renderExtensionsPanel();
+        }));
+        container.appendChild(auraAccess);
         const mood = getPlushMoodRecord(name);
         const relationship = relationshipStatus(name);
         const heldSection = makeExtensionsSection("Held plushie");
@@ -13929,7 +14434,7 @@ function SubbysPlushiesPageMain() {
         }
         const bookChapter = extensionsPanelElement.querySelector?.(".SubbysBookChapter");
         if (bookChapter) {
-            const chapterNames = { status: "Status", lore: "Plushie Lore", wardrobe: "Wardrobe", essentials: "Essentials Tools", settings: `Settings · ${extensionsSettingsTab === "layout" ? "Layout" : (extensionsSettingsTab === "chatstyles" ? "Chat Styles" : "General")}`, progress: "Progress", commands: "Commands" };
+            const chapterNames = { status: "Status", lore: "Plushie Lore", wardrobe: "Wardrobe", essentials: "Essentials Tools", settings: `Settings · ${({layout:"Layout",chatstyles:"Chat Styles",whispers:"Whispers",sounds:"Sounds",auras:"Auras"})[extensionsSettingsTab]||"General"}`, progress: "Progress", commands: "Commands" };
             bookChapter.textContent = extensionsMobileMoreOpen ? "More tools" : (chapterNames[extensionsActiveTab] || "Essentials");
         }
         if (extensionsPanelElement.dataset.subbysCat === 'true') subbysCatRefreshSections();
@@ -19152,7 +19657,7 @@ function SubbysPlushiesPageMain() {
         }
         return false;
     }
-    async function playGeneratedPurrFallback() {
+    async function playGeneratedPurrFallback(volumeScale=1) {
         const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
         if (typeof AudioContextCtor !== "function") return false;
         try {
@@ -19187,7 +19692,7 @@ function SubbysPlushiesPageMain() {
             const source = ctx.createBufferSource();
             const gain = ctx.createGain();
             source.buffer = buffer;
-            gain.gain.setValueAtTime(0.16, ctx.currentTime);
+            gain.gain.setValueAtTime(0.16*Math.max(0,Math.min(1,Number(volumeScale)||0)), ctx.currentTime);
             source.connect(gain);
             gain.connect(ctx.destination);
             source.start();
@@ -20235,6 +20740,7 @@ function SubbysPlushiesPageMain() {
                 inspectOfferMutationNode(node, getOfferChatRoot());
                 if (getFeatureSettings().highlightMyName) highlightMyNameInAppendedChat(node);
                 chatStyleDecorate(node,chatStyleNativeChatContext);
+                chatWhisperDecorate(node);
                 // Existing native hook: no new chat observer or polling loop.
                 try { quietPerfEnhanceChatNode(node); } catch (_) {}
             }
@@ -20245,6 +20751,7 @@ function SubbysPlushiesPageMain() {
         else startOfferChatObserverMonitor();
         const actionMessageHooked = installHook("ChatRoomMessage", 10000, (args, next) => {
             const data = args?.[0];
+            chatSoundIncoming(data);
             if (processAddonPresencePacket(data)) return next(args);
             if (processSharedWaveChainPacket(data)) return next(args);
             if (processOfferDecisionSignal(data)) return next(args);
@@ -27451,7 +27958,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.7.3";
+    const VERSION = "3.9.0";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
