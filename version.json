@@ -1,6 +1,6 @@
 {
-  "version": "3.9.20",
+  "version": "3.9.24",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Targeted low-risk performance optimization: cache BC name/nickname mention matchers during chat bursts, cut repeated chat scroller geometry reads, scan only inline-font-size nodes on UI zoom, index immutable plush image sources, batch text-highlight cleanup. No features removed; settings, messages, chat gradients, badges and plushie behavior preserved.",
+  "notes": "Floating-heart loaded popup; Commands tab now lists Chat Styles, Text Quick Panel and /plushietoast preview; /help plushie and autocomplete include the new shortcuts. No saved settings changed.",
   "released": "2026-11-02"
 }

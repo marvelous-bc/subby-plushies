@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.20
-// @description  v3.9.20: Targeted chat, UI and artwork performance optimization
+// @version      3.9.24
+// @description  v3.9.24: Floating-heart startup toast, updated Commands reference and text shortcuts
 // @released     2026-11-02
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.20";
+    const VERSION = "3.9.24";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -34,6 +34,111 @@ function SubbysPlushiesPageMain() {
             document.documentElement?.setAttribute("data-subbys-plushies-load-source", "direct");
         }
     } catch (_) {}
+  // Lightweight shared-ready notification. Injected only after the addon is interactive.
+  // No observers, canvas redraws, images, external requests, or repeating timers.
+  function showBcAddonReadyToast(key, label, force = false) {
+    try {
+      if (!document.body || !key || !label) return;
+      const onceKey = '__bcAddonReadyToastsShown';
+      let shown = window[onceKey];
+      if (!(shown instanceof Set)) shown = window[onceKey] = new Set();
+      if (shown.has(key) && !force) return;
+      const styleId = 'bc-addon-ready-toast-styles';
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+          #bc-addon-ready-toast-stack {
+            position:fixed; bottom:calc(18px + env(safe-area-inset-bottom, 0px));
+            right:calc(18px + env(safe-area-inset-right, 0px));
+            width:min(294px,calc(100vw - 36px)); display:flex; flex-direction:column;
+            align-items:stretch; gap:10px; pointer-events:none; z-index:2147483646;
+          }
+          #bc-addon-ready-toast-stack .bc-addon-ready-toast {
+            position:relative; isolation:isolate; box-sizing:border-box;
+            border:1px solid rgba(255,155,214,.55); border-radius:15px;
+            padding:13px 17px 14px 43px; min-height:54px;
+            background:linear-gradient(110deg,rgba(49,24,60,.97),rgba(84,33,76,.97));
+            box-shadow:0 7px 22px rgba(11,5,23,.32), inset 0 1px rgba(255,255,255,.11);
+            color:#ffe9f7; font:600 14px/1.35 system-ui,-apple-system,Segoe UI,sans-serif;
+            letter-spacing:.08px; white-space:normal; overflow:visible;
+            animation:bc-addon-ready-toast-life 4400ms ease-in-out both;
+          }
+          #bc-addon-ready-toast-stack .bc-addon-ready-toast-icon {
+            position:absolute; left:13px; top:50%; transform:translateY(-50%);
+            color:#ff94c5; font-size:20px; line-height:1;
+          }
+          #bc-addon-ready-toast-stack .bc-addon-ready-toast-text { position:relative; z-index:2; }
+          #bc-addon-ready-toast-stack .bc-addon-ready-heart {
+            position:absolute; bottom:19px; left:var(--heart-left); z-index:1;
+            color:var(--heart-color); font-size:var(--heart-size); font-weight:400;
+            line-height:1; opacity:0; pointer-events:none;
+            text-shadow:0 1px 4px rgba(255,92,173,.20);
+            animation:bc-addon-ready-heart-float var(--heart-duration) ease-out var(--heart-delay) both;
+          }
+          @keyframes bc-addon-ready-toast-life {
+            0% { opacity:0; transform:translateY(12px) scale(.97); }
+            14%,75% { opacity:1; transform:translateY(0) scale(1); }
+            100% { opacity:0; transform:translateY(-16px) scale(.99); }
+          }
+          @keyframes bc-addon-ready-heart-float {
+            0% { opacity:0; transform:translate(0,7px) scale(.65) rotate(-7deg); }
+            20% { opacity:.90; }
+            85% { opacity:.45; }
+            100% { opacity:0; transform:translate(var(--heart-drift),-90px) scale(1.25) rotate(13deg); }
+          }
+          @media (prefers-reduced-motion:reduce) {
+            #bc-addon-ready-toast-stack .bc-addon-ready-toast,
+            #bc-addon-ready-toast-stack .bc-addon-ready-heart { animation:none!important; }
+            #bc-addon-ready-toast-stack .bc-addon-ready-heart { display:none; }
+          }
+        `;
+        (document.head || document.documentElement).appendChild(style);
+      }
+      let stack = document.getElementById('bc-addon-ready-toast-stack');
+      if (!stack) {
+        stack = document.createElement('div');
+        stack.id = 'bc-addon-ready-toast-stack';
+        stack.setAttribute('aria-live', 'polite');
+        stack.setAttribute('aria-atomic', 'false');
+        document.body.appendChild(stack);
+      }
+      const toast = document.createElement('div');
+      toast.className = 'bc-addon-ready-toast';
+      toast.setAttribute('role', 'status');
+      const icon = document.createElement('span');
+      icon.className = 'bc-addon-ready-toast-icon';
+      icon.textContent = '♥';
+      icon.setAttribute('aria-hidden', 'true');
+      const text = document.createElement('span');
+      text.className = 'bc-addon-ready-toast-text';
+      text.textContent = label;
+      toast.append(icon, text);
+      const offsets = [7, 19, 32, 46, 60, 75, 87];
+      for (let i = 0; i < offsets.length; i++) {
+        const heart = document.createElement('span');
+        heart.className = 'bc-addon-ready-heart';
+        heart.textContent = i % 3 ? '♡' : '♥';
+        heart.setAttribute('aria-hidden', 'true');
+        heart.style.setProperty('--heart-left', offsets[i] + '%');
+        heart.style.setProperty('--heart-drift', ((i % 2 ? -1 : 1) * (9 + 3 * i)) + 'px');
+        heart.style.setProperty('--heart-delay', (250 + i * 160) + 'ms');
+        heart.style.setProperty('--heart-duration', (2100 + (i % 3) * 300) + 'ms');
+        heart.style.setProperty('--heart-size', (13 + (i % 3) * 3) + 'px');
+        heart.style.setProperty('--heart-color', i % 2 ? '#ffc3e2' : '#ff82bd');
+        toast.appendChild(heart);
+      }
+      stack.appendChild(toast);
+      shown.add(key);
+      window.setTimeout(() => {
+        try {
+          toast.remove();
+          if (!stack.childElementCount) stack.remove();
+        } catch (_) {}
+      }, 4600);
+    } catch (_) { /* A cosmetic notice must never affect addon startup. */ }
+  }
+
     // === Responsive, zoom-aware Essentials UI (v3.5.90) ===
     // Browser zoom changes CSS pixels; avoid modifying the game's canvas or
     // any third-party mod. Keep only our own DOM text/overlays sized consistently.
@@ -1865,6 +1970,13 @@ function SubbysPlushiesPageMain() {
             accent: "#D0D0D0", text: "#F4F4F4", muted: "#B8B8B8", shadow: "#0B0B0B",
         }),
     });
+    // Six consistent rows of three buttons for the Plushie Settings screen only.
+    // Other menus (emotes, presets, etc.) keep their original coordinates.
+    const SETTINGS_GRID_COLS = Object.freeze([1040, 1345, 1650]);
+    const SETTINGS_GRID_ROWS = Object.freeze([418, 494, 570, 646, 722, 798]);
+    function settingsGridCell(column, row) {
+        return Object.freeze({ x: SETTINGS_GRID_COLS[column], y: SETTINGS_GRID_ROWS[row], w: 295, h: 55 });
+    }
     const FEATURE_MENU = Object.freeze({
         TimeMachine: Object.freeze({ x: 1510, y: 770, w: 430, h: 58 }),
         Emotes: Object.freeze({ x: 1040, y: 842, w: 280, h: 58 }),
@@ -1873,23 +1985,31 @@ function SubbysPlushiesPageMain() {
         Presets: Object.freeze({ x: 1040, y: 914, w: 280, h: 58 }),
         Extensions: Object.freeze({ x: 1335, y: 914, w: 300, h: 58 }),
         Battle: Object.freeze({ x: 1650, y: 914, w: 300, h: 58 }),
-        Protect: Object.freeze({ x: 1040, y: 842, w: 280, h: 58 }),
-        Jealous: Object.freeze({ x: 1335, y: 842, w: 300, h: 58 }),
-        Drag: Object.freeze({ x: 1650, y: 842, w: 300, h: 58 }),
-        MascotVisible: Object.freeze({ x: 1040, y: 914, w: 280, h: 58 }),
-        AutoUpdate: Object.freeze({ x: 1335, y: 914, w: 300, h: 58 }),
-        Update: Object.freeze({ x: 1650, y: 914, w: 300, h: 58 }),
-        HideEmoticonButton: Object.freeze({ x: 1040, y: 608, w: 430, h: 58 }),
-        Idle: Object.freeze({ x: 1040, y: 690, w: 280, h: 58 }),
-        Speech: Object.freeze({ x: 1335, y: 690, w: 300, h: 58 }),
-        EmotesSettings: Object.freeze({ x: 1650, y: 690, w: 300, h: 58 }),
-        ExtraActions: Object.freeze({ x: 1040, y: 770, w: 280, h: 58 }),
-        HighlightMyName: Object.freeze({ x: 1335, y: 770, w: 300, h: 58 }),
-        IgnorePoseChanges: Object.freeze({ x: 1650, y: 770, w: 300, h: 58 }),
-        NameGradients: Object.freeze({ x: 1040, y: 418, w: 280, h: 58 }),
-        NameTitles: Object.freeze({ x: 1335, y: 418, w: 300, h: 58 }),
-        AllChatStyles: Object.freeze({ x: 1650, y: 418, w: 300, h: 58 }),
-        BroadcastCuddleQueen: Object.freeze({ x: 1255, y: 501, w: 475, h: 58 }),
+        // Row 1: chat name display preferences
+        NameGradients: settingsGridCell(0, 0),
+        NameTitles: settingsGridCell(1, 0),
+        AllChatStyles: settingsGridCell(2, 0),
+        // Row 2: shortcuts and chat helpers; last slot is permission-dependent
+        ChatStyles: settingsGridCell(0, 1),
+        HideEmoticonButton: settingsGridCell(1, 1),
+        BroadcastCuddleQueen: settingsGridCell(2, 1),
+        ExtensionSettings: settingsGridCell(2, 1),
+        // Row 3
+        Idle: settingsGridCell(0, 2),
+        Speech: settingsGridCell(1, 2),
+        EmotesSettings: settingsGridCell(2, 2),
+        // Row 4
+        ExtraActions: settingsGridCell(0, 3),
+        HighlightMyName: settingsGridCell(1, 3),
+        IgnorePoseChanges: settingsGridCell(2, 3),
+        // Row 5
+        Protect: settingsGridCell(0, 4),
+        Jealous: settingsGridCell(1, 4),
+        Drag: settingsGridCell(2, 4),
+        // Row 6
+        MascotVisible: settingsGridCell(0, 5),
+        AutoUpdate: settingsGridCell(1, 5),
+        Update: settingsGridCell(2, 5),
         SettingsBack: Object.freeze({ x: 1640, y: 103, w: 235, h: 38 }),
     });
     const USE_MENU_EMOTES = Object.freeze([
@@ -1932,6 +2052,15 @@ function SubbysPlushiesPageMain() {
                 Object.freeze({ command: "/plushiebackup", description: "Open Progress → Backup / Restore." }),
                 Object.freeze({ command: "/plushiecommands", description: "Open the Commands tab directly." }),
                 Object.freeze({ command: "/plushiecommand", description: "Alias for /plushiecommands." }),
+            ]),
+        }),
+        Object.freeze({
+            title: "Chat Styles & Notifications",
+            commands: Object.freeze([
+                Object.freeze({ command: "/plushiechatstyle", description: "Open Chat Styles, including public chat gradients and whisper themes." }),
+                Object.freeze({ command: "/plushiestyle", description: "Alias for /plushiechatstyle." }),
+                Object.freeze({ command: "/plushietext", description: "Open Chat Styles → Text Quick Panel for direction, saved palettes, quote styling, animations and @mentions." }),
+                Object.freeze({ command: "/plushietoast", description: "Replay the local floating-hearts 'Subby's essentials loaded' popup to preview its appearance (does not reload the addon)." }),
             ]),
         }),
         Object.freeze({
@@ -13218,11 +13347,6 @@ function SubbysPlushiesPageMain() {
     });
     function renderExtensionsSettingsGeneral(container) {
         renderAppearanceShieldSettings(container);
-        const textShortcut=makeExtensionsSection('Text appearance');
-        textShortcut.appendChild(makeExtensionsButton('Open Text Quick Panel · @mentions',()=>{
-            extensionsSettingsTab='text';renderExtensionsPanel();
-        }));
-        container.appendChild(textShortcut);
         const settings = getFeatureSettings();
         const poseSafety = makeExtensionsSection(`Pose Safety • v${VERSION}`);
         poseSafety.append(
@@ -13531,7 +13655,7 @@ function SubbysPlushiesPageMain() {
             selectRow('Gradient direction',CHAT_GRADIENT_DIRECTIONS,style.direction,'direction');
         else {
             const tip=document.createElement('p');
-            tip.textContent='Advanced gradient directions are off. Enable them in Settings → Text Quick Panel.';
+            tip.textContent='Advanced gradient directions are off. Enable them in Chat Styles → Text Quick Panel.';
             tip.style.color=getExtensionsStyle().muted;
             section.appendChild(tip);
         }
@@ -13708,14 +13832,15 @@ function SubbysPlushiesPageMain() {
         const nav=document.createElement('div');
         Object.assign(nav.style,{display:'flex',gap:'7px',flexWrap:'wrap',marginBottom:'12px'});
         for(const [key,label] of [['public','Public Style'],['whispers','Whispers'],['sounds','Sounds'],
-            ['badges','Badges & Visibility'],['presets','Preset Codes']]) {
+            ['badges','Badges & Visibility'],['presets','Preset Codes'],['text','Text Quick Panel']]) {
             nav.appendChild(makeExtensionsButton(label,()=>{
                 extensionsChatStudioTab=key;renderExtensionsPanel();
                 if(extensionsPanelContent)extensionsPanelContent.scrollTop=0;
             },{active:extensionsChatStudioTab===key}));
         }
         container.appendChild(nav);
-        if(extensionsChatStudioTab==='whispers')renderExtensionsWhisperAppearance(container);
+        if(extensionsChatStudioTab==='text')renderExtensionsTextQuickPanel(container);
+        else if(extensionsChatStudioTab==='whispers')renderExtensionsWhisperAppearance(container);
         else if(extensionsChatStudioTab==='sounds')renderExtensionsSoundThemes(container);
         else if(extensionsChatStudioTab==='badges')renderExtensionsChatBadgeSettings(container);
         else if(extensionsChatStudioTab==='presets')renderExtensionsExpressionShare(container);
@@ -13729,10 +13854,10 @@ function SubbysPlushiesPageMain() {
         Object.assign(intro.style,{fontSize:'12px',lineHeight:'1.5',color:getExtensionsStyle().muted});
         section.appendChild(intro);
         for(const [key,label,hint] of [
-            ['textGradientDirection','2 · Gradient direction editor','Choose horizontal, vertical, diagonal or upward nick gradients; off uses normal horizontal.'],
-            ['textGradientPresets','4 · Saved gradient presets','Save and load up to eight of your own palettes, locally for this BC account.'],
-            ['textQuoteStyle','9 · Quoted text styling','Softly mark > quoted lines and text inside quotation marks in regular chat.'],
-            ['textEntranceAnimation','16 · Gentle message entrances','Tiny 240ms fade for newly received public-chat lines, off by default; respects reduced motion.'],
+            ['textGradientDirection','Gradient direction editor','Choose horizontal, vertical, diagonal or upward nick gradients; off uses normal horizontal.'],
+            ['textGradientPresets','Saved gradient presets','Save and load up to eight of your own palettes, locally for this BC account.'],
+            ['textQuoteStyle','Quoted text styling','Softly mark > quoted lines and text inside quotation marks in regular chat.'],
+            ['textEntranceAnimation','Gentle message entrances','Tiny 240ms fade for newly received public-chat lines, off by default; respects reduced motion.'],
             ['textAtMentions','@Name / @Nickname highlighting','Highlight @mentions of people present in the chat room, including your real BC name or nickname. ON by default.'],
             ['highlightMyName','Highlight my name and nickname','Highlight your BC name and nickname in public chat even without @. ON by default.'],
             ['textAtMentionSound','Sound when I am @mentioned','Gentle chime when another player @mentions your BC name or nickname in public chat. ON by default.']
@@ -13790,7 +13915,7 @@ function SubbysPlushiesPageMain() {
     function renderExtensionsSettings(container){
         const nav=document.createElement('div');
         Object.assign(nav.style,{display:'flex',gap:'8px',flexWrap:'wrap',marginBottom:'12px'});
-        for(const [key,label] of [['general','General'],['text','Text Quick Panel'],['layout','Layout']]) {
+        for(const [key,label] of [['general','General'],['layout','Layout']]) {
             nav.appendChild(makeExtensionsButton(label,()=>{extensionsSettingsTab=key;renderExtensionsPanel();},
                 {active:extensionsSettingsTab===key}));
         }
@@ -13799,7 +13924,6 @@ function SubbysPlushiesPageMain() {
         }));
         container.appendChild(nav);
         if(extensionsSettingsTab==='layout')renderExtensionsLayout(container);
-        else if(extensionsSettingsTab==='text')renderExtensionsTextQuickPanel(container);
         else renderExtensionsSettingsGeneral(container);
     }
     function renderExtensionsPlushies(container) {
@@ -14453,7 +14577,7 @@ function SubbysPlushiesPageMain() {
             marginBottom: "8px",
         });
         const navigation = document.createElement("div");
-        navigation.textContent = "Navigation: Settings → General / Layout • Progress → Stats / Achievements / Plushies / Battle History / Backup • Lore is a top-level tab.";
+        navigation.textContent = "Shortcuts: /plushiechatstyle (Chat Styles), /plushietext (Text Quick Panel), /plushietoast (heart popup preview). Settings → General / Layout • Progress → Stats / Achievements / Plushies / Battle History / Backup.";
         Object.assign(navigation.style, {
             color: getExtensionsStyle().muted,
             lineHeight: "1.4",
@@ -15510,7 +15634,7 @@ function SubbysPlushiesPageMain() {
         }
         const bookChapter = extensionsPanelElement.querySelector?.(".SubbysBookChapter");
         if (bookChapter) {
-            const chapterNames = { status: "Status", lore: "Plushie Lore", wardrobe: "Wardrobe", essentials: "Essentials Tools", settings: `Settings · ${({layout:"Layout"})[extensionsSettingsTab]||"General"}`, chatstyles: "Chat Styles · "+({public:"Public",whispers:"Whispers",sounds:"Sounds",badges:"Badges",presets:"Presets"}[extensionsChatStudioTab]||"Public"), progress: "Progress", commands: "Commands" };
+            const chapterNames = { status: "Status", lore: "Plushie Lore", wardrobe: "Wardrobe", essentials: "Essentials Tools", settings: `Settings · ${({layout:"Layout"})[extensionsSettingsTab]||"General"}`, chatstyles: "Chat Styles · "+({public:"Public",whispers:"Whispers",sounds:"Sounds",badges:"Badges",presets:"Presets",text:"Text Quick Panel"}[extensionsChatStudioTab]||"Public"), progress: "Progress", commands: "Commands" };
             bookChapter.textContent = extensionsMobileMoreOpen ? "More tools" : (chapterNames[extensionsActiveTab] || "Essentials");
         }
         if (extensionsPanelElement.dataset.subbysCat === 'true') subbysCatRefreshSections();
@@ -16927,6 +17051,18 @@ function SubbysPlushiesPageMain() {
         }
         if (command === "/plushiechatstyle" || command === "/plushiestyle") {
             requireReady(() => openExtensionsPanel("chatstyles"));
+            return true;
+        }
+        if (command === "/plushietext") {
+            requireReady(() => {
+                openExtensionsPanel("chatstyles");
+                extensionsChatStudioTab = "text";
+                renderExtensionsPanel();
+            });
+            return true;
+        }
+        if (command === "/plushietoast") {
+            requireReady(() => showBcAddonReadyToast("essentials", "Subby's essentials loaded", true));
             return true;
         }
         if (command === "/plushiestatus") {
@@ -24654,13 +24790,20 @@ function SubbysPlushiesPageMain() {
         const starSpace = showFavoriteStar ? 54 : 0;
         const labelWidth = Math.max(60, rect.w - 34 - starSpace);
         const labelCenter = rect.x + 17 + labelWidth / 2;
-        drawLofiTextFit(label, labelCenter, rect.y + rect.h / 2 + 5, labelWidth, getUseMenuStyle().text, compact ? 21 : 24);
+        const preferredSize = Number(options?.fontSize);
+        const labelFontSize = Number.isFinite(preferredSize) && preferredSize >= 12 && preferredSize <= 30
+            ? preferredSize : (compact ? 21 : 24);
+        drawLofiTextFit(label, labelCenter, rect.y + rect.h / 2 + 5, labelWidth, getUseMenuStyle().text, labelFontSize);
         if (showFavoriteStar) {
             const name = publicPlushName(favoriteOption);
             const starred = isFavoritePlush(name);
             const star = favoriteStarRect(rect);
             drawLofiTextFit(starred ? "★" : "☆", star.x + star.w / 2, rect.y + rect.h / 2 + 5, star.w - 8, starred ? getUseMenuStyle().accent : getUseMenuStyle().muted, compact ? 18 : 20);
         }
+    }
+    function drawSettingsButton(rect, label, selected = false) {
+        // Smaller type and uniform button dimensions, only for this settings grid.
+        drawButton(rect, label, selected, { fontSize: 19 });
     }
     function pagedMenuEntries(entries) {
         const source = Array.isArray(entries) ? entries : [];
@@ -24812,32 +24955,30 @@ function SubbysPlushiesPageMain() {
             drawButton(FEATURE_MENU.Battle, "Battle");
         } else if (settingsPage) {
             const settings = getFeatureSettings();
+            const royal = currentAccountMemberNumber() === ROYAL_SEAL_MEMBER;
             drawButton(FEATURE_MENU.SettingsBack, "Back to plushies");
-            drawButton(FEATURE_MENU.Idle, `Idle Animation: ${settings.idleAnimations ? "ON" : "off"}`, settings.idleAnimations);
-            drawButton(FEATURE_MENU.Speech, `Speech Bubbles: ${settings.speechBubbles ? "ON" : "off"}`, settings.speechBubbles);
-            drawButton(FEATURE_MENU.EmotesSettings, "Emotes");
-            drawButton(FEATURE_MENU.ExtraActions, `Extra Actions: ${settings.extraActions ? "ON" : "off"}`, settings.extraActions);
-            drawButton(FEATURE_MENU.HighlightMyName, `Highlight My Name: ${settings.highlightMyName ? "ON" : "off"}`, settings.highlightMyName);
             drawLofiTextFit("CHAT NAME DISPLAY  •  local preferences", 1500, 377, 840, getUseMenuStyle().muted, 22);
-            drawButton(FEATURE_MENU.NameGradients, `Name Colors: ${settings.chatStyleShowNameColors ? "ON" : "off"}`, settings.chatStyleShowNameColors);
-            drawButton(FEATURE_MENU.NameTitles, `Name Badges: ${settings.chatStyleShowNameTitles ? "ON" : "off"}`, settings.chatStyleShowNameTitles);
-            drawButton(FEATURE_MENU.AllChatStyles, `All Chat Styles: ${settings.chatStyleShowAll ? "ON" : "off"}`, settings.chatStyleShowAll);
-            if (currentAccountMemberNumber()===ROYAL_SEAL_MEMBER)
-                drawButton(FEATURE_MENU.BroadcastCuddleQueen, `Broadcast Cuddle Queen: ${chatStyleMine().royalSeal ? "ON" : "off"}`, chatStyleMine().royalSeal);
-            drawButton(
-                FEATURE_MENU.IgnorePoseChanges,
-                `Ignore Pose Changes: ${settings.ignorePoseChangingEmotes ? "ON" : "off"}`,
-                settings.ignorePoseChangingEmotes
-            );
-            drawButton(FEATURE_MENU.Protect, `Protect Me: ${settings.protectMe ? "ON" : "off"}`, settings.protectMe);
-            drawButton(FEATURE_MENU.Jealous, `Jealous: ${settings.jealousPlushie ? "ON" : "off"}`, settings.jealousPlushie);
-            drawButton(FEATURE_MENU.Drag, `Drag UI: ${dragModeEnabled ? "ON" : "off"}`, dragModeEnabled);
-            drawButton(FEATURE_MENU.MascotVisible, `Mascot Picture: ${settings.showRoomMascot ? "ON" : "hidden"}`, settings.showRoomMascot);
-            drawButton(FEATURE_MENU.AutoUpdate, `Auto Update Check: ${settings.autoUpdateChecks ? "ON" : "off"}`, settings.autoUpdateChecks);
-            drawButton(FEATURE_MENU.Update, "Check Update Now");
-            drawButton(FEATURE_MENU.HideEmoticonButton,
-                `Hide Emoticon Button: ${settings.showEmoticonButton ? "OFF" : "ON"}`,
-                !settings.showEmoticonButton);
+            // Each row has exactly three equal-width buttons. The special royal
+            // control is replaced by an Extensions shortcut for everyone else.
+            drawSettingsButton(FEATURE_MENU.NameGradients, `Name Colors: ${settings.chatStyleShowNameColors ? "ON" : "off"}`, settings.chatStyleShowNameColors);
+            drawSettingsButton(FEATURE_MENU.NameTitles, `Name Badges: ${settings.chatStyleShowNameTitles ? "ON" : "off"}`, settings.chatStyleShowNameTitles);
+            drawSettingsButton(FEATURE_MENU.AllChatStyles, `All Chat Styles: ${settings.chatStyleShowAll ? "ON" : "off"}`, settings.chatStyleShowAll);
+            drawSettingsButton(FEATURE_MENU.ChatStyles, "Chat Styles");
+            drawSettingsButton(FEATURE_MENU.HideEmoticonButton, `Hide Emoticon: ${settings.showEmoticonButton ? "OFF" : "ON"}`, !settings.showEmoticonButton);
+            if (royal) drawSettingsButton(FEATURE_MENU.BroadcastCuddleQueen, `Cuddle Queen: ${chatStyleMine().royalSeal ? "ON" : "off"}`, chatStyleMine().royalSeal);
+            else drawSettingsButton(FEATURE_MENU.ExtensionSettings, "Extension Settings");
+            drawSettingsButton(FEATURE_MENU.Idle, `Idle Animation: ${settings.idleAnimations ? "ON" : "off"}`, settings.idleAnimations);
+            drawSettingsButton(FEATURE_MENU.Speech, `Speech Bubbles: ${settings.speechBubbles ? "ON" : "off"}`, settings.speechBubbles);
+            drawSettingsButton(FEATURE_MENU.EmotesSettings, "Emotes");
+            drawSettingsButton(FEATURE_MENU.ExtraActions, `Extra Actions: ${settings.extraActions ? "ON" : "off"}`, settings.extraActions);
+            drawSettingsButton(FEATURE_MENU.HighlightMyName, `Highlight My Name: ${settings.highlightMyName ? "ON" : "off"}`, settings.highlightMyName);
+            drawSettingsButton(FEATURE_MENU.IgnorePoseChanges, `Ignore Pose Changes: ${settings.ignorePoseChangingEmotes ? "ON" : "off"}`, settings.ignorePoseChangingEmotes);
+            drawSettingsButton(FEATURE_MENU.Protect, `Protect Me: ${settings.protectMe ? "ON" : "off"}`, settings.protectMe);
+            drawSettingsButton(FEATURE_MENU.Jealous, `Jealous: ${settings.jealousPlushie ? "ON" : "off"}`, settings.jealousPlushie);
+            drawSettingsButton(FEATURE_MENU.Drag, `Drag UI: ${dragModeEnabled ? "ON" : "off"}`, dragModeEnabled);
+            drawSettingsButton(FEATURE_MENU.MascotVisible, `Mascot Picture: ${settings.showRoomMascot ? "ON" : "hidden"}`, settings.showRoomMascot);
+            drawSettingsButton(FEATURE_MENU.AutoUpdate, `Auto Update Check: ${settings.autoUpdateChecks ? "ON" : "off"}`, settings.autoUpdateChecks);
+            drawSettingsButton(FEATURE_MENU.Update, "Check Update Now");
             return;
         }
         if (emotesPage) {
@@ -24926,6 +25067,16 @@ function SubbysPlushiesPageMain() {
             }
             if (mouseInRect(FEATURE_MENU.ExtraActions)) { toggleFeatureSetting("extraActions"); return true; }
             if (mouseInRect(FEATURE_MENU.HighlightMyName)) { toggleFeatureSetting("highlightMyName"); return true; }
+            if (mouseInRect(FEATURE_MENU.ChatStyles)) {
+                closeCustomPlushMenu();
+                window.setTimeout(() => openExtensionsPanel("chatstyles"), 0);
+                return true;
+            }
+            if (currentAccountMemberNumber() !== ROYAL_SEAL_MEMBER && mouseInRect(FEATURE_MENU.ExtensionSettings)) {
+                closeCustomPlushMenu();
+                window.setTimeout(() => openExtensionsPanel("settings"), 0);
+                return true;
+            }
             if (mouseInRect(FEATURE_MENU.NameGradients)) { toggleFeatureSetting("chatStyleShowNameColors"); return true; }
             if (mouseInRect(FEATURE_MENU.NameTitles)) { toggleFeatureSetting("chatStyleShowNameTitles"); return true; }
             if (mouseInRect(FEATURE_MENU.AllChatStyles)) { toggleFeatureSetting("chatStyleShowAll"); return true; }
@@ -29375,6 +29526,8 @@ function SubbysPlushiesPageMain() {
         optionalStartupStep("achievements", () => checkAchievements(true));
         optionalStartupStep("automatic-update-check", scheduleAutomaticUpdateCheck);
         setStartupStage("ready");
+        if (ready && !failed) optionalStartupStep("loaded-hearts-toast", () =>
+            showBcAddonReadyToast("essentials", "Subby's essentials loaded"));
         // Remote noncritical metadata updates after interactive essentials load.
         const refreshMetadataWhenIdle = () => optionalStartupStep('remote-metadata',
             () => { void refreshGitDataFromGitHub({ force:false, silent:true }); });
@@ -29420,7 +29573,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.20";
+    const VERSION = "3.9.24";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
