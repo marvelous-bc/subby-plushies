@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.24
-// @description  v3.9.24: Floating-heart startup toast, updated Commands reference and text shortcuts
+// @version      3.9.25
+// @description  v3.9.25: Subtle inline @mentions; no boxed highlights or duplicate name marks
 // @released     2026-11-02
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.24";
+    const VERSION = "3.9.25";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -19656,21 +19656,24 @@ function SubbysPlushiesPageMain() {
         '.SubbysTextAtMention,'+TEXT_FX_NATIVE_META;
     const TEXT_FX_CSS=`
 /* Keep the game's line height, font, and text contrast unchanged. */
+/* v3.9.25: @mentions are text-only. No colored box, glow, or resized line. */
 #TextAreaChatLog .ChatMessageChat .SubbysTextAtMention {
   display:inline!important;position:static!important;
   font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;
-  line-height:inherit!important;letter-spacing:inherit!important;
+  font-style:inherit!important;line-height:inherit!important;letter-spacing:inherit!important;
   color:inherit!important;-webkit-text-fill-color:currentColor!important;
   text-shadow:none!important;box-shadow:none!important;
-  border-radius:2px!important;padding:0 1px!important;margin:0!important;
-  vertical-align:baseline!important;background:rgba(154,89,179,.13)!important;
-  box-decoration-break:clone;-webkit-box-decoration-break:clone;
+  background:none!important;background-image:none!important;
+  border:0!important;outline:0!important;border-radius:0!important;
+  padding:0!important;margin:0!important;vertical-align:baseline!important;
+  text-decoration-line:underline!important;text-decoration-style:solid!important;
+  text-decoration-color:rgba(186,154,221,.70)!important;
+  text-decoration-thickness:1px!important;text-underline-offset:2px!important;
 }
 #TextAreaChatLog .ChatMessageChat .SubbysTextAtMention.SubbysTextMentionMe {
+  background:none!important;background-image:none!important;
   color:inherit!important;-webkit-text-fill-color:currentColor!important;
-  background:rgba(255,199,117,.20)!important;
-  text-decoration:underline!important;text-decoration-color:rgba(255,199,117,.70)!important;
-  text-underline-offset:2px!important;text-decoration-thickness:1px!important;
+  text-decoration-color:rgba(255,166,208,.92)!important;
 }
 #TextAreaChatLog .SubbysTextQuote{border-left:2px solid rgba(182,146,215,.65);
   border-radius:2px;padding:0 4px;margin:0 2px;color:inherit;
@@ -19894,7 +19897,9 @@ function SubbysPlushiesPageMain() {
     function myNameMentionPattern(names) {
         if (!Array.isArray(names) || !names.length) return null;
         const escaped = names.map(textFxEscapeRegex);
-        return new RegExp("(^|[^\\p{L}\\p{N}_])(" + escaped.join("|") + ")(?=$|[^\\p{L}\\p{N}_])", "giu");
+        // A name following @ belongs to the dedicated @mention decorator, not
+        // the generic name highlighter (which uses a larger <mark> background).
+        return new RegExp("(^|[^\\p{L}\\p{N}_@])(" + escaped.join("|") + ")(?=$|[^\\p{L}\\p{N}_])", "giu");
     }
     function clearMyNameHighlights() {
         const root = getOfferChatRoot();
@@ -29573,7 +29578,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.24";
+    const VERSION = "3.9.25";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {

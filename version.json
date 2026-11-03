@@ -1,6 +1,6 @@
 {
-  "version": "3.9.24",
+  "version": "3.9.25",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Floating-heart loaded popup; Commands tab now lists Chat Styles, Text Quick Panel and /plushietoast preview; /help plushie and autocomplete include the new shortcuts. No saved settings changed.",
+  "notes": "Only @mention highlighting changed: subtle underline rather than boxed background; generic name highlighting no longer wraps names immediately after @. All gradients, chat name bars, badges, settings, commands and startup hearts unchanged.",
   "released": "2026-11-02"
 }
