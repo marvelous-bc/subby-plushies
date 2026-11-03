@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.25
-// @description  v3.9.25: Subtle inline @mentions; no boxed highlights or duplicate name marks
+// @version      3.9.26
+// @description  v3.9.26: Warm yellow inline @mentions and room-name/nickname Tab completion
 // @released     2026-11-02
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.25";
+    const VERSION = "3.9.26";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -16250,10 +16250,89 @@ function SubbysPlushiesPageMain() {
         }
         return plushieCommandAutocompleteCache.filter(candidate => candidate.startsWith(lower));
     }
+    // Complete a member's BC name or nickname at the text cursor, including
+    // @Ale -> @Alessandro, without rewriting message suffixes or sending text.
+    // Repeated Tab cycles ambiguous room matches; Shift+Tab cycles backwards.
+    // This only runs on Tab and reuses the existing in-room alias cache.
+    let plushieNameCompletionState = null;
+    function plushieRoomNameMatches(value, caret) {
+        if (!Number.isInteger(caret) || caret < 0 || caret > value.length) return null;
+        const before = value.slice(0, caret);
+        if (!before || /\s$/u.test(before)) return null;
+        // Leave native/plugin command completion entirely alone.
+        if (/^\s*\/(?:plu|help\s+p)/iu.test(value)) return null;
+        const names = textFxAliasesInRoom();
+        if (!names.length) return null;
+        const starts = [];
+        const floor = Math.max(0, before.length - 80);
+        if (floor === 0) starts.push(0);
+        for (let i = Math.max(1, floor); i < before.length; i++) {
+            if (/[\s([{"'«,:;!?]/u.test(before[i-1])) starts.push(i);
+        }
+        // Prefer the longest matching typed phrase (important for spaced names).
+        for (const start of starts) {
+            const raw = before.slice(start);
+            const hasAt = raw.startsWith('@');
+            const typed = hasAt ? raw.slice(1) : raw;
+            if (typed.length < 2 || typed.length > 70 ||
+                !/^[\p{L}\p{N}]/u.test(typed) || /[@\r\n\t]/u.test(typed)) continue;
+            const lower = typed.toLocaleLowerCase();
+            const candidates = [];
+            const seen = new Set();
+            for (const {name} of names) {
+                if (typeof name !== 'string' || /[\r\n\t]/u.test(name) ||
+                    !name.toLocaleLowerCase().startsWith(lower)) continue;
+                const key = name.toLocaleLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                candidates.push(name);
+            }
+            if (candidates.length && candidates.some(name => name !== typed)) {
+                return {before: before.slice(0, start), after: value.slice(caret),
+                    at: hasAt, candidates, index: -1};
+            }
+        }
+        return null;
+    }
+    function handlePlushieNameTabCompletion(event, input) {
+        if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey ||
+            event.isComposing || window.CurrentScreen !== 'ChatRoom' ||
+            !input || input.disabled || input.readOnly ||
+            typeof input.selectionStart !== 'number' ||
+            input.selectionStart !== input.selectionEnd) return false;
+        const current = String(input.value || '');
+        const caret = input.selectionStart;
+        let state = plushieNameCompletionState;
+        if (!state || state.lastValue !== current || state.lastCaret !== caret) {
+            state = plushieRoomNameMatches(current, caret);
+            if (!state) { plushieNameCompletionState = null; return false; }
+        } else if (state.candidates.length === 1) {
+            // A second Tab should retain the browser's normal focus navigation.
+            plushieNameCompletionState = null;
+            return false;
+        }
+        state.index = (state.index + (event.shiftKey ? -1 : 1) + state.candidates.length) % state.candidates.length;
+        const nextValue = state.before + (state.at ? '@' : '') + state.candidates[state.index] + state.after;
+        const nextCaret = (state.before + (state.at ? '@' : '') + state.candidates[state.index]).length;
+        input.value = nextValue;
+        try { input.setSelectionRange(nextCaret, nextCaret); } catch (_) {}
+        state.lastValue = nextValue;
+        state.lastCaret = nextCaret;
+        plushieNameCompletionState = state;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        return true;
+    }
     function handlePlushieChatAutocomplete(event, input) {
         if (event.key !== "Tab") {
             plushieCommandAutocompleteState = null;
+            plushieNameCompletionState = null;
             return false;
+        }
+        if (handlePlushieNameTabCompletion(event, input)) {
+            plushieCommandAutocompleteState = null;
+            return true;
         }
         const current = String(input?.value || "");
         let state = plushieCommandAutocompleteState;
@@ -16299,7 +16378,7 @@ function SubbysPlushiesPageMain() {
         appendLocalInfoBox("Subby's Plushies & Essentials — /help", [
             "Plushie commands are available in this room:",
             ...chunks,
-            "Type /help plushie for descriptions. Press Tab while typing /plu… to autocomplete.",
+            "Type /help plushie for descriptions. Tab completes /plu commands or room names (Ale / @Ale).",
         ], { compact: true });
         return true;
     }
@@ -19655,25 +19734,23 @@ function SubbysPlushiesPageMain() {
         '.SubbysCustomChatSyntheticName,.SubbysPlushiesMyNameHighlight,'+
         '.SubbysTextAtMention,'+TEXT_FX_NATIVE_META;
     const TEXT_FX_CSS=`
-/* Keep the game's line height, font, and text contrast unchanged. */
-/* v3.9.25: @mentions are text-only. No colored box, glow, or resized line. */
+/* v3.9.26: warm yellow @tags, drawn inline with native chat typography.
+   Decorations are scoped to message-body spans, never authors or timestamps. */
 #TextAreaChatLog .ChatMessageChat .SubbysTextAtMention {
   display:inline!important;position:static!important;
-  font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;
-  font-style:inherit!important;line-height:inherit!important;letter-spacing:inherit!important;
-  color:inherit!important;-webkit-text-fill-color:currentColor!important;
-  text-shadow:none!important;box-shadow:none!important;
-  background:none!important;background-image:none!important;
-  border:0!important;outline:0!important;border-radius:0!important;
+  font:inherit!important;font-size:inherit!important;font-family:inherit!important;
+  font-weight:inherit!important;line-height:inherit!important;letter-spacing:inherit!important;
+  color:#ffe5a0!important;-webkit-text-fill-color:#ffe5a0!important;
+  text-shadow:none!important;box-shadow:inset 0 -1px 0 rgba(255,214,103,.64)!important;
+  background:rgba(255,221,118,.11)!important;background-image:none!important;
+  border:0!important;outline:0!important;border-radius:2px!important;
   padding:0!important;margin:0!important;vertical-align:baseline!important;
-  text-decoration-line:underline!important;text-decoration-style:solid!important;
-  text-decoration-color:rgba(186,154,221,.70)!important;
-  text-decoration-thickness:1px!important;text-underline-offset:2px!important;
+  text-decoration:none!important;box-decoration-break:clone;-webkit-box-decoration-break:clone;
 }
 #TextAreaChatLog .ChatMessageChat .SubbysTextAtMention.SubbysTextMentionMe {
-  background:none!important;background-image:none!important;
-  color:inherit!important;-webkit-text-fill-color:currentColor!important;
-  text-decoration-color:rgba(255,166,208,.92)!important;
+  color:#ffefa9!important;-webkit-text-fill-color:#ffefa9!important;
+  background:rgba(255,224,107,.17)!important;
+  box-shadow:inset 0 -1px 0 rgba(255,228,129,.9)!important;
 }
 #TextAreaChatLog .SubbysTextQuote{border-left:2px solid rgba(182,146,215,.65);
   border-radius:2px;padding:0 4px;margin:0 2px;color:inherit;
@@ -29578,7 +29655,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.25";
+    const VERSION = "3.9.26";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
