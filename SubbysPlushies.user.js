@@ -3,7 +3,7 @@
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
 // @version      3.9.26
-// @description  v3.9.26: Warm yellow inline @mentions and room-name/nickname Tab completion
+// @description  v3.9.26 hotfix: Warm yellow @mentions; Tab completes only displayed names and nicknames
 // @released     2026-11-02
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -16250,10 +16250,30 @@ function SubbysPlushiesPageMain() {
         }
         return plushieCommandAutocompleteCache.filter(candidate => candidate.startsWith(lower));
     }
-    // Complete a member's BC name or nickname at the text cursor, including
-    // @Ale -> @Alessandro, without rewriting message suffixes or sending text.
-    // Repeated Tab cycles ambiguous room matches; Shift+Tab cycles backwards.
-    // This only runs on Tab and reuses the existing in-room alias cache.
+    // Tab completes VISIBLE names, never BC login/account names. In particular,
+    // AccountName can be uppercase while the player's displayed Name is mixed case.
+    // Only compute this on Tab; leave mention detection / notification aliases intact.
+    function plushieTabDisplayNamesInRoom() {
+        const player=window.Player;
+        const roster=Array.isArray(window.ChatRoomCharacter)?window.ChatRoomCharacter:[];
+        const unique=new Map();
+        for (const character of [player,...roster.slice(0,64)]) {
+            if (!character) continue;
+            // Nickname and Name are displayable; AccountName is a login identifier.
+            for (const alias of [character.Name,character.Nickname]) {
+                if (typeof alias !== 'string') continue;
+                const name=alias.trim();
+                if (name.length<2 || name.length>70 || /[\r\n\t]/u.test(name)) continue;
+                const key=name.toLocaleLowerCase();
+                if (!unique.has(key)) unique.set(key,{name});
+            }
+        }
+        return [...unique.values()];
+    }
+    // Complete a room member's nickname or displayed Name at the text cursor.
+    // @Ale -> @Alessandro; @SUB -> @Subbycat, never the uppercase AccountName.
+    // Repeated Tab cycles ambiguous matches; Shift+Tab cycles backwards.
+    // Only runs on Tab, so it doesn't add a chat rendering listener.
     let plushieNameCompletionState = null;
     function plushieRoomNameMatches(value, caret) {
         if (!Number.isInteger(caret) || caret < 0 || caret > value.length) return null;
@@ -16261,7 +16281,7 @@ function SubbysPlushiesPageMain() {
         if (!before || /\s$/u.test(before)) return null;
         // Leave native/plugin command completion entirely alone.
         if (/^\s*\/(?:plu|help\s+p)/iu.test(value)) return null;
-        const names = textFxAliasesInRoom();
+        const names = plushieTabDisplayNamesInRoom();
         if (!names.length) return null;
         const starts = [];
         const floor = Math.max(0, before.length - 80);
@@ -16378,7 +16398,7 @@ function SubbysPlushiesPageMain() {
         appendLocalInfoBox("Subby's Plushies & Essentials — /help", [
             "Plushie commands are available in this room:",
             ...chunks,
-            "Type /help plushie for descriptions. Tab completes /plu commands or room names (Ale / @Ale).",
+            "Type /help plushie for descriptions. Tab completes /plu commands or room display names/nicknames (Ale / @Ale).",
         ], { compact: true });
         return true;
     }

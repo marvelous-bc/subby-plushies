@@ -1,6 +1,6 @@
 {
   "version": "3.9.26",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Warm yellow inline @tag highlighting, unchanged native font/spacing and chat metadata. Tab completes room BC names and nicknames at caret (including @prefix), cycles ambiguous matches, preserves text and existing /plushie command completion. Unrelated duplicate-text issue untouched.",
+  "notes": "v3.9.26 hotfix: Tab autocompletion uses displayed Name and Nickname only; excludes AccountName/login identifiers, preserving display casing (e.g. @Subbycat instead of @SUBBYCAT). The yellow mention styling and all other v3.9.26 features are unchanged. Same version; reinstall manually if updater skips identical version.",
   "released": "2026-11-02"
 }
