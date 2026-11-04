@@ -1,33 +1,42 @@
 {
-  "version": "3.9.34",
+  "version": "3.9.35",
   "releaseDate": "2026-11-04",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Chat Styles performance update: decorative gradients are limited to the 50 most recent chat messages, color refreshes are batched, and Essentials no longer installs a global TextGet hook to reduce recursion risk in R133. Includes the v3.9.33 chat optimizations.",
+  "notes": "Adaptive Essentials performance release: unified native/fallback chat dispatch, a bounded visual-work queue, hidden-tab suspension, selectable Quality/Balanced/Performance profiles, partial UI updates, batched outfit monitoring and more detailed bottleneck warnings. Balanced retains the 50-message chat-gradient limit; R133 live validation is still required.",
   "changes": [
     {
-      "category": "Chat Styles performance",
+      "category": "Unified chat and scheduling",
       "items": [
-        "Limits public name gradients, whisper name gradients, whisper frame/background gradients, and Royal Seal gradients to the latest 50 native chat messages.",
-        "Older messages retain readable solid colors, names, symbols and non-gradient decorations.",
-        "Tracks the newest 50 chat rows without scanning the full log on every new message.",
-        "Low CPU mode disables decorative chat gradients while preserving solid colors."
+        "Routes native chat appends and fallback observers through one per-row dispatcher with duplicate guards.",
+        "Keeps sender-verified chat styling synchronous and schedules optional mentions, highlights, and emotes in a limited visual-work queue.",
+        "Suspends optional styling work in hidden tabs, resumes on visibility changes, and drops stale/disconnected visual jobs."
       ]
     },
     {
-      "category": "Chat rendering optimizations",
+      "category": "Adaptive rendering profiles",
       "items": [
-        "Coalesces character chat color changes and processes refreshes in batches of up to 16 rows or 4 milliseconds per frame.",
-        "Keeps the v3.9.33 optimizations for unchanged-style caching, public and whisper refreshes, shared stylesheet batching and room cleanup.",
-        "Preserves delegated Quick Reaction event handlers and bounded inline-emote processing (maximum 40 rendered emotes per message).",
-        "Retains chat performance diagnostics and reports."
+        "Adds Quality (50 gradient rows, 180 reaction rows, 40 emotes/message), Balanced (50/80/20), and Performance (20/40/8).",
+        "Balanced is the default, retaining the requested 50-message gradient window.",
+        "Automatic adjustment is enabled by default and uses repeated Essentials timing samples, with cooldowns before changes.",
+        "Provides editable settings within Essentials > Performance Budget Manager and a SubbysAdaptivePerformance console API."
       ]
     },
     {
-      "category": "R133 compatibility",
+      "category": "History, cache and interface work",
       "items": [
-        "Removes Essentials' global TextGet hook to avoid participating in a previously observed recursion path.",
-        "Keeps wardrobe translation-cache repairs and targeted label fallbacks.",
-        "Compatibility and performance have passed local checks, but require verification in a live R133 session."
+        "Reduces public, whisper and local color backfills to the newest 200 relevant rows while maintaining older rendered solid styles.",
+        "Keeps shared per-member CSS rules bounded, batches CSS writes and cleans temporary visual work during room resets.",
+        "Updates the Character Chat Colors summary without rebuilding the whole panel and updates selected simple setting toggles in place.",
+        "Skips unchanged panel-theme passes and defers hidden-tab room mascot UI updates."
+      ]
+    },
+    {
+      "category": "Outfit and diagnostics",
+      "items": [
+        "Coalesces native outfit events and their settle confirmation to avoid redundant checks during multi-item edits.",
+        "Preserves existing outfit recovery checks and Appearance Shield enforcement without changing item permissions or server packets.",
+        "Adds queue/cache/dispatch metrics and shows persistent slow-path warnings in Essentials settings and console reports.",
+        "Preserves the v3.9.34 R133 TextGet recursion workaround and wardrobe-specific translation repairs."
       ]
     }
   ]
