@@ -1,5 +1,34 @@
 {
-  "version": "3.9.32",
+  "version": "3.9.34",
+  "releaseDate": "2026-11-04",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Removed the Floating decorations setting and decorative-symbol animation. Added a persistent local Hide decorations / Show decorations button in Chat Styles; preserves shared colors, borders, badges, whisper themes, all other features, and the v3.9.31 startup repair."
+  "notes": "Chat Styles performance update: decorative gradients are limited to the 50 most recent chat messages, color refreshes are batched, and Essentials no longer installs a global TextGet hook to reduce recursion risk in R133. Includes the v3.9.33 chat optimizations.",
+  "changes": [
+    {
+      "category": "Chat Styles performance",
+      "items": [
+        "Limits public name gradients, whisper name gradients, whisper frame/background gradients, and Royal Seal gradients to the latest 50 native chat messages.",
+        "Older messages retain readable solid colors, names, symbols and non-gradient decorations.",
+        "Tracks the newest 50 chat rows without scanning the full log on every new message.",
+        "Low CPU mode disables decorative chat gradients while preserving solid colors."
+      ]
+    },
+    {
+      "category": "Chat rendering optimizations",
+      "items": [
+        "Coalesces character chat color changes and processes refreshes in batches of up to 16 rows or 4 milliseconds per frame.",
+        "Keeps the v3.9.33 optimizations for unchanged-style caching, public and whisper refreshes, shared stylesheet batching and room cleanup.",
+        "Preserves delegated Quick Reaction event handlers and bounded inline-emote processing (maximum 40 rendered emotes per message).",
+        "Retains chat performance diagnostics and reports."
+      ]
+    },
+    {
+      "category": "R133 compatibility",
+      "items": [
+        "Removes Essentials' global TextGet hook to avoid participating in a previously observed recursion path.",
+        "Keeps wardrobe translation-cache repairs and targeted label fallbacks.",
+        "Compatibility and performance have passed local checks, but require verification in a live R133 session."
+      ]
+    }
+  ]
 }
