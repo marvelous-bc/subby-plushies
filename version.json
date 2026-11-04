@@ -1,6 +1,5 @@
 {
-  "version": "3.9.26",
+  "version": "3.9.28",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "v3.9.26 hotfix: Tab autocompletion uses displayed Name and Nickname only; excludes AccountName/login identifiers, preserving display casing (e.g. @Subbycat instead of @SUBBYCAT). The yellow mention styling and all other v3.9.26 features are unchanged. Same version; reinstall manually if updater skips identical version.",
-  "released": "2026-11-02"
+  "notes": "BC-Safe Speed Guard: fewer unnecessary canvas/layout calculations, reduced DOM writes, batched remote plushie position updates, adaptive badge hover processing, and improved background-tab performance. Experimental long-chat paint skipping is available but disabled by default. All existing features retained."
 }
