@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.32
-// @description  v3.9.32 Remove floating chat decorations; add local Hide/Show Decorations toggle; preserve v3.9.31 startup repair
+// @version      3.9.34
+// @description  v3.9.34 Limit chat gradients to 50 newest messages; batch color refreshes; avoid recursive global TextGet hook
 // @released     2026-11-04
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.32";
+    const VERSION = "3.9.34";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -781,7 +781,8 @@ function SubbysPlushiesPageMain() {
         version:VERSION,optimizations:{...subbysOptimizationMetrics},
         chatScroll:{appends:chatScrollState.appends,followRequests:chatScrollState.followRequests,
             corrections:chatScrollState.corrections,skippedScrollback:chatScrollState.skippedScrollback},
-        messageStyles:{...chatStylePerfMetrics},
+        messageStyles:{...chatStylePerfMetrics}, gradientWindow:chatGradientStatus(),
+        chatPerformance:subbysChatPerfSnapshot(),
         imageIndexCount:renderSourceIndexes.size,
         note:'Performance counters are local and do not contain message text.'
     })});
@@ -2883,8 +2884,11 @@ function SubbysPlushiesPageMain() {
 #TextAreaChatLog .SubbysWhisperTheme {
     position:relative!important;box-sizing:border-box;border-left:3px var(--sw-border,solid) var(--sw-accent,#ff7eb7)!important;
     border-radius:6px;padding-left:8px!important;margin:2px 0!important;
-    background:linear-gradient(100deg,var(--sw-background,rgba(255,126,183,.09)),var(--sw-secondary-shade,rgba(255,180,222,.08)) 48%,transparent 94%)!important;
+    background:var(--sw-background,rgba(255,126,183,.09))!important;
     box-shadow:none!important;
+}
+#TextAreaChatLog .SubbysWhisperTheme.SubbysGradientRecent {
+    background:linear-gradient(100deg,var(--sw-background,rgba(255,126,183,.09)),var(--sw-secondary-shade,rgba(255,180,222,.08)) 48%,transparent 94%)!important;
 }
 #TextAreaChatLog .SubbysWhisperTheme .SubbysWhisperOrnament {
     display:inline-block;color:var(--sw-primary,#ff8abf);margin-right:5px;font-size:13px;
@@ -2903,12 +2907,12 @@ function SubbysPlushiesPageMain() {
     display:inline!important;
 }
 @supports ((-webkit-background-clip:text) or (background-clip:text)) {
-    #TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors .SubbysWhisperName {
+    #TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors.SubbysGradientRecent .SubbysWhisperName {
         background:linear-gradient(var(--sw-name-angle,90deg),var(--sw-name-primary,#efddee),var(--sw-name-middle,#efddee) 50%,var(--sw-name-secondary,#efddee))!important;
         background-clip:text!important;-webkit-background-clip:text!important;
         color:transparent!important;-webkit-text-fill-color:transparent!important;
     }
-    #TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors .SubbysWhisperName * {
+    #TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors.SubbysGradientRecent .SubbysWhisperName * {
         color:transparent!important;-webkit-text-fill-color:transparent!important;
     }
 }
@@ -3229,7 +3233,9 @@ function SubbysPlushiesPageMain() {
             }
         }
         chatStylePerfMetrics.whisperDecorateCalls++;
-        chatStylePerfMetrics.whisperDecorateMs+=performance.now()-t0;
+        const cost=performance.now()-t0;
+        chatStylePerfMetrics.whisperDecorateMs+=cost;
+        if((chatStylePerfMetrics.whisperDecorateCalls&7)===0)subbysChatPerfMeasure('whisperStyle',cost);
     }
     // All information is structural; no whisper text or contents leave the client.
     window.SubbysWhisperColorDiag=()=>{
@@ -3255,31 +3261,62 @@ function SubbysPlushiesPageMain() {
     const chatStylePerfMetrics={queuedPublic:0,queuedWhispers:0,publicJobs:0,whisperJobs:0,
         whisperDecorateCalls:0,whisperDecorateMs:0,publicDecorateCalls:0,publicDecorateMs:0};
     let chatWhisperRefreshToken=0;
-    function chatWhisperRefresh(member=0){
-        const root=document.getElementById('TextAreaChatLog');if(!root)return;
-        const token=++chatWhisperRefreshToken;
-        const id=Number(member);
-        const selector=id>0 ?
-            `.ChatMessageWhisper[data-sender="${id}"],.ChatMessageWhisper[data-subbys-verified-whisper-sender="${id}"],`+
-            `.ChatMessageWhisper[data-target="${id}"],.ChatMessageWhisper[data-subbys-verified-whisper-target="${id}"],`+
-            `.ChatMessageWhisper[data-subbys-name-palette-member="${id}"]` :
-            '.ChatMessageWhisper';
-        const rows=Array.from(root.querySelectorAll(selector)).slice(-300);
-        let index=0;
-        const flush=()=>{
-            if(token!==chatWhisperRefreshToken||!root.isConnected)return;
-            const start=performance.now();let n=0;
-            while(index<rows.length&&n<18&&performance.now()-start<5){
-                chatWhisperDecorate(rows[index++]);n++;
-            }
-            if(n)chatScrollQueue('whisper-backfill');
-            if(index<rows.length){chatStylePerfMetrics.queuedWhispers=rows.length-index;
-                window.requestAnimationFrame?.(flush)??window.setTimeout(flush,16);
-            }else{chatStylePerfMetrics.queuedWhispers=0;chatStylePerfMetrics.whisperJobs++;}
-        };
-        flush();
+    const chatWhisperPendingMembers=new Set();
+    let chatWhisperQueued=false,chatWhisperWorking=false;
+    function chatWhisperSchedule(){
+        if(chatWhisperQueued||chatWhisperWorking||!chatWhisperPendingMembers.size)return;
+        chatWhisperQueued=true;
+        const scheduledToken=chatWhisperRefreshToken;
+        const schedule=!document.hidden&&typeof window.requestAnimationFrame==='function'?
+            window.requestAnimationFrame.bind(window):fn=>window.setTimeout(fn,20);
+        schedule(()=>{
+            if(scheduledToken!==chatWhisperRefreshToken)return;
+            chatWhisperQueued=false;
+            const root=document.getElementById('TextAreaChatLog');
+            if(!root)return;
+            if(chatGradientState.root!==root)chatGradientReseed(root);
+            const members=[...chatWhisperPendingMembers];chatWhisperPendingMembers.clear();
+            const all=members.includes(0)||members.length>8;
+            const selector=all?'.ChatMessageWhisper':members.flatMap(id=>[
+                `.ChatMessageWhisper[data-sender="${id}"]`,
+                `.ChatMessageWhisper[data-subbys-verified-whisper-sender="${id}"]`,
+                `.ChatMessageWhisper[data-target="${id}"]`,
+                `.ChatMessageWhisper[data-subbys-verified-whisper-target="${id}"]`,
+                `.ChatMessageWhisper[data-subbys-name-palette-member="${id}"]`]).join(',');
+            const rows=Array.from(root.querySelectorAll(selector)).slice(-300);
+            const token=chatWhisperRefreshToken;chatWhisperWorking=true;
+            subbysChatPerfState.refresh.whisperBatches++;
+            let index=0;
+            const flush=()=>{
+                if(token!==chatWhisperRefreshToken||!root.isConnected){
+                    chatWhisperWorking=false;chatWhisperSchedule();return;
+                }
+                const start=performance.now();let n=0;
+                while(index<rows.length&&n<18&&performance.now()-start<5){
+                    chatWhisperDecorate(rows[index++]);n++;
+                }
+                if(n)chatScrollQueue('whisper-backfill');
+                if(index<rows.length){
+                    chatStylePerfMetrics.queuedWhispers=rows.length-index;
+                    schedule(flush);
+                }else{
+                    chatStylePerfMetrics.queuedWhispers=0;chatStylePerfMetrics.whisperJobs++;
+                    chatWhisperWorking=false;chatWhisperSchedule();
+                }
+            };
+            flush();
+        });
     }
-    // v3.9.14: shared scroll-follow coordinator for every native chat row.
+    function chatWhisperRefresh(member=0){
+        const id=Number(member);
+        if(Number.isSafeInteger(id)&&id>0){
+            if(!chatWhisperPendingMembers.has(0))chatWhisperPendingMembers.add(id);
+        }else{chatWhisperPendingMembers.clear();chatWhisperPendingMembers.add(0);}
+        if(chatWhisperQueued||chatWhisperWorking)subbysChatPerfState.refresh.mergedWhisper++;
+        chatWhisperSchedule();
+    }
+
+        // v3.9.14: shared scroll-follow coordinator for every native chat row.
     // Preserve explicit scrollback: scrolling upward pauses following until the
     // reader scrolls to the bottom again. Background tabs retain that intent;
     // requestAnimationFrame alone is insufficient while the window is hidden.
@@ -3598,6 +3635,7 @@ function SubbysPlushiesPageMain() {
             backfillPublicRuns:chatStylePerfMetrics.publicJobs,
             backfillWhisperRuns:chatStylePerfMetrics.whisperJobs,
             activeShimmer:false,
+            gradientWindow:chatGradientStatus(),
             paletteRules:{public:chatSharedRules.public.size,whisper:chatSharedRules.whisper.size,name:chatSharedRules.name.size},
             sharedPaletteCss:{...chatSharedPaletteMetrics},
             publicDecorateCalls:chatStylePerfMetrics.publicDecorateCalls,
@@ -3848,6 +3886,41 @@ function SubbysPlushiesPageMain() {
     const chatSharedRules={public:new Map(),whisper:new Map(),name:new Map()};
     let chatSharedCssText='',chatSharedCssNode=null;
     const chatSharedPaletteMetrics={writes:0,avoided:0,evictions:0,publicRows:0,whisperRows:0,nameRows:0};
+    let chatSharedCssQueued=false,chatSharedCssDirty=false;
+    function chatSharedCssApplyNow(){
+        if(!chatSharedCssDirty)return;
+        chatSharedCssDirty=false;
+        const next=Object.values(chatSharedRules).flatMap(m=>Array.from(m.values(),v=>v.rule)).join('\n');
+        if(next===chatSharedCssText)return;
+        chatSharedCssText=next;
+        if(!chatSharedCssNode?.isConnected){
+            chatSharedCssNode=document.getElementById('subbys-chat-shared-palettes');
+            if(!chatSharedCssNode&&document.head){
+                chatSharedCssNode=document.createElement('style');
+                chatSharedCssNode.id='subbys-chat-shared-palettes';document.head.appendChild(chatSharedCssNode);
+            }
+        }
+        if(chatSharedCssNode){chatSharedCssNode.textContent=chatSharedCssText;chatSharedPaletteMetrics.writes++;}
+    }
+    function chatSharedCssQueue(){
+        chatSharedCssDirty=true;
+        if(chatSharedCssQueued)return;
+        chatSharedCssQueued=true;
+        const schedule=!document.hidden&&typeof window.requestAnimationFrame==='function'?
+            window.requestAnimationFrame.bind(window):fn=>window.setTimeout(fn,20);
+        schedule(()=>{chatSharedCssQueued=false;chatSharedCssApplyNow();});
+    }
+    function chatSharedResetRoomStyles(){
+        for(const map of Object.values(chatSharedRules))map.clear();
+        chatSharedCssText='';chatSharedCssDirty=false;
+        if(chatSharedCssNode?.isConnected)chatSharedCssNode.textContent='';
+        chatStyleHotRows.length=0;
+        chatGradientForgetRoom();
+        ++chatStyleRefreshToken;++chatWhisperRefreshToken;
+        chatStylePendingMembers.clear();chatWhisperPendingMembers.clear();
+        chatStyleRefreshQueued=false;chatStyleRefreshWorking=false;chatStyleWantWhispers=false;
+        chatWhisperQueued=false;chatWhisperWorking=false;
+    }
     function chatSharedRule(kind,member,palette){
         const id=Number(member);
         if(!Number.isSafeInteger(id)||id<=0||!palette)return false;
@@ -3887,17 +3960,9 @@ function SubbysPlushiesPageMain() {
         };
         const rule=`${selector}{${Object.entries(props).map(([k,v])=>`${k}:${v}`).join(';')}}`;
         map.set(id,{fingerprint,rule});
-        // One stylesheet update per actual member palette change, never per chat row.
-        chatSharedCssText=Object.values(chatSharedRules).flatMap(m=>Array.from(m.values(),v=>v.rule)).join('\n');
-        if(!chatSharedCssNode?.isConnected){
-            chatSharedCssNode=document.getElementById('subbys-chat-shared-palettes');
-            if(!chatSharedCssNode && document.head){
-                chatSharedCssNode=document.createElement('style');
-                chatSharedCssNode.id='subbys-chat-shared-palettes';document.head.appendChild(chatSharedCssNode);
-            }
-        }
-        if(chatSharedCssNode)chatSharedCssNode.textContent=chatSharedCssText;
-        chatSharedPaletteMetrics.writes++;
+        // Defer stylesheet text generation until the next frame, combining
+        // simultaneous member updates while leaving each validated rule intact.
+        chatSharedCssQueue();
         return true;
     }
     // Style specificity of these ID-verified rules stays below inline overrides
@@ -3920,14 +3985,21 @@ function SubbysPlushiesPageMain() {
     font-weight:700!important;text-shadow:none!important;
 }
 @supports ((-webkit-background-clip:text) or (background-clip:text)) {
-  #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_NAME_CLASS} {
+  #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysGradientRecent .${CHAT_STYLE_NAME_CLASS} {
     background:linear-gradient(var(--subbys-style-direction,90deg),var(--subbys-style-primary,#ff477b) 0%,var(--subbys-style-middle,#ff98bb) 50%,var(--subbys-style-secondary,#ff76d9) 100%)!important;
     background-clip:text!important;-webkit-background-clip:text!important;
     color:transparent!important;-webkit-text-fill-color:transparent!important;
   }
-  #TextAreaChatLog .${CHAT_STYLE_CLASS} .${CHAT_STYLE_NAME_CLASS} * {
+  #TextAreaChatLog .${CHAT_STYLE_CLASS}.SubbysGradientRecent .${CHAT_STYLE_NAME_CLASS} * {
     color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important;
   }
+}
+/* Rows older than the latest 50 keep a readable solid nickname color. */
+#TextAreaChatLog .${CHAT_STYLE_CLASS}:not(.SubbysGradientRecent) .${CHAT_STYLE_NAME_CLASS},
+#TextAreaChatLog .${CHAT_STYLE_CLASS}:not(.SubbysGradientRecent) .${CHAT_STYLE_NAME_CLASS} * {
+    background-image:none!important;
+    color:var(--subbys-style-primary,#ff477b)!important;
+    -webkit-text-fill-color:var(--subbys-style-primary,#ff477b)!important;
 }
 /* v3.9.8: Animated nickname gradients removed for stable frame pacing. */
 /* The Cuddle Queen Royal Seal is exclusive to Subbycat's verified
@@ -3939,11 +4011,14 @@ function SubbysPlushiesPageMain() {
 #TextAreaChatLog .${ROYAL_CHAT_CLASS} .${ROYAL_SEAL_CLASS} {
     display:inline-flex; align-items:center; gap:4px; vertical-align:middle;
     margin:0 6px 1px; padding:2px 7px; white-space:nowrap;
-    color:#ffe6ef; background:linear-gradient(120deg,#5c082b,#aa1b57 65%,#e9639b);
+    color:#ffe6ef; background:#842b59;
     border:1px solid #f9a6cf; border-radius:999px;
     box-shadow:none!important;
     font-size:10px; line-height:1.1; font-weight:700;
     text-shadow:none!important; user-select:none; pointer-events:auto;
+}
+#TextAreaChatLog .${ROYAL_CHAT_CLASS}.SubbysGradientRecent .${ROYAL_SEAL_CLASS} {
+    background:linear-gradient(120deg,#5c082b,#aa1b57 65%,#e9639b);
 }
 #TextAreaChatLog .${ROYAL_CHAT_CLASS} .SubbysRoyalSealIcon {
     font-size:12px; color:#ffd5e7;
@@ -3982,9 +4057,34 @@ function SubbysPlushiesPageMain() {
 #TextAreaChatLog .SubbysRoyalSealAnimated {animation:none!important;filter:none!important;}
 /* Older chat retains its colors but avoids extra glow layers. */
 #TextAreaChatLog .SubbysChatStyleCold,
-#TextAreaChatLog .SubbysWhisperTheme.SubbysChatStyleCold {box-shadow:none!important;background:transparent!important}
+#TextAreaChatLog .SubbysWhisperTheme.SubbysChatStyleCold {box-shadow:none!important}
+#TextAreaChatLog .SubbysWhisperTheme:not(.SubbysGradientRecent) {background-image:none!important}
+#TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors:not(.SubbysGradientRecent) .SubbysWhisperName,
+#TextAreaChatLog .ChatMessageWhisper.SubbysWhisperNameColors:not(.SubbysGradientRecent) .SubbysWhisperName * {
+    background-image:none!important;
+    color:var(--sw-name-primary,#efddee)!important;
+    -webkit-text-fill-color:var(--sw-name-primary,#efddee)!important;
+}
 #TextAreaChatLog.SubbysChatLowCpu .${CHAT_STYLE_CLASS},
 #TextAreaChatLog.SubbysChatLowCpu .SubbysWhisperTheme {box-shadow:none!important}
+/* Low CPU mode keeps solid colors but avoids all decorative chat gradients. */
+#TextAreaChatLog.SubbysChatLowCpu .${CHAT_STYLE_CLASS}.SubbysGradientRecent .${CHAT_STYLE_NAME_CLASS},
+#TextAreaChatLog.SubbysChatLowCpu .${CHAT_STYLE_CLASS}.SubbysGradientRecent .${CHAT_STYLE_NAME_CLASS} *,
+#TextAreaChatLog.SubbysChatLowCpu .ChatMessageWhisper.SubbysWhisperNameColors.SubbysGradientRecent .SubbysWhisperName,
+#TextAreaChatLog.SubbysChatLowCpu .ChatMessageWhisper.SubbysWhisperNameColors.SubbysGradientRecent .SubbysWhisperName * {
+    background-image:none!important;
+    color:var(--subbys-style-primary,var(--sw-name-primary,#efddee))!important;
+    -webkit-text-fill-color:var(--subbys-style-primary,var(--sw-name-primary,#efddee))!important;
+}
+#TextAreaChatLog.SubbysChatLowCpu .SubbysWhisperTheme.SubbysGradientRecent {
+    background:var(--sw-background,rgba(255,126,183,.09))!important;
+}
+#TextAreaChatLog.SubbysChatLowCpu .${ROYAL_CHAT_CLASS}.SubbysGradientRecent .${ROYAL_SEAL_CLASS} {
+    background:#842b59!important;
+}
+#TextAreaChatLog.SubbysChatLowCpu.SubbysPublicWhisperLook .ChatMessage.ChatMessageChat.SubbysCustomChatPalette.SubbysPublicGradientNameRow.SubbysGradientRecent {
+    background-image:none!important;
+}
 @media(prefers-reduced-motion:reduce) {
     #TextAreaChatLog .${ROYAL_CHAT_CLASS} .${ROYAL_SEAL_CLASS}.SubbysRoyalSealAnimated {animation:none;opacity:1;transform:none;filter:none}
 }`;
@@ -3996,10 +4096,70 @@ function SubbysPlushiesPageMain() {
         }
         return sheet;
     }
+    // v3.9.34: ONLY the 50 newest native chat messages may use CSS gradients.
+    // No frame loop, per-append whole-log scan, native BC mutation or new observer.
+    const CHAT_GRADIENT_WINDOW = 50;
+    const chatGradientState = { root:null, rows:[], appends:0, evicted:0, reseeds:0 };
+    function chatGradientForgetRoom() {
+        for (const row of chatGradientState.rows) row?.classList?.remove('SubbysGradientRecent');
+        chatGradientState.rows.length = 0;
+        chatGradientState.root = null;
+    }
+    function chatGradientReseed(root=document.getElementById('TextAreaChatLog')) {
+        if (!root) { chatGradientForgetRoom(); return; }
+        chatGradientForgetRoom();
+        chatGradientState.root = root;
+        // Only room start or chat-log DOM replacement does a complete lookup.
+        const rows=root.querySelectorAll('.ChatMessage');
+        const start=Math.max(0,rows.length-CHAT_GRADIENT_WINDOW);
+        for(let i=start;i<rows.length;i++){
+            rows[i].classList.add('SubbysGradientRecent');
+            chatGradientState.rows.push(rows[i]);
+        }
+        chatGradientState.reseeds++;
+    }
+    function chatGradientTrackAppend(node) {
+        const root=document.getElementById('TextAreaChatLog');
+        if(!root)return;
+        if(chatGradientState.root!==root){chatGradientReseed(root);return;}
+        if(!(node instanceof Element))return;
+        const added=node.matches('.ChatMessage')?[node]:
+            Array.from(node.querySelectorAll('.ChatMessage')).slice(-CHAT_GRADIENT_WINDOW);
+        const recent=chatGradientState.rows;
+        // Native BC may trim old nodes before appending. Drop stale references
+        // BEFORE comparing DOM order, otherwise a disconnected tail can cause
+        // an unnecessary full-log reseed on each new message.
+        for(let i=recent.length-1;i>=0;i--)if(!recent[i].isConnected)recent.splice(i,1);
+        for (const row of added) {
+            if(!root.contains(row))continue;
+            const prior=recent.indexOf(row);
+            if(prior>=0)recent.splice(prior,1);
+            // A prepend/backfill is unusual in native BC, but must not steal a
+            // gradient slot from new chat. Re-seed once in that case.
+            if(recent.length && row.compareDocumentPosition(recent[recent.length-1]) & Node.DOCUMENT_POSITION_FOLLOWING){
+                chatGradientReseed(root);return;
+            }
+            recent.push(row);row.classList.add('SubbysGradientRecent');
+            chatGradientState.appends++;
+            while(recent.length>CHAT_GRADIENT_WINDOW){
+                const oldest=recent.shift();
+                oldest?.classList?.remove('SubbysGradientRecent');
+                chatGradientState.evicted++;
+            }
+        }
+    }
+    function chatGradientStatus(){
+        return { limit:CHAT_GRADIENT_WINDOW, tracked:chatGradientState.rows.length,
+            active:chatGradientState.rows.filter(row=>row.isConnected&&row.classList.contains('SubbysGradientRecent')).length,
+            appends:chatGradientState.appends, evicted:chatGradientState.evicted,
+            reseeds:chatGradientState.reseeds, scansEachAppend:false };
+    }
     // v3.9.8: no perpetual animation observers, timers or active-shimmer state.
     // Small history hot-set limits persistent translucent shadows to recent rows.
     const chatStyleHotRows=[];
     function chatStyleMarkHot(row){
+        if(!row?.classList?.contains('SubbysGradientRecent'))return;
+        if(chatStyleHotRows.at(-1)===row)return;
         const at=chatStyleHotRows.indexOf(row);
         if(at>=0)chatStyleHotRows.splice(at,1);
         chatStyleHotRows.push(row);
@@ -4016,7 +4176,7 @@ function SubbysPlushiesPageMain() {
     // No new DOM observers, per-row inline styles, animations or extra packets.
     const PUBLIC_WHISPER_LOOK_CSS_ID='subbys-public-whisper-look-v1';
     const PUBLIC_WHISPER_LOOK_CSS=`
-#TextAreaChatLog.SubbysPublicWhisperLook .ChatMessage.ChatMessageChat.SubbysCustomChatPalette.SubbysPublicGradientNameRow:not(.ChatMessageWhisper) {
+#TextAreaChatLog.SubbysPublicWhisperLook .ChatMessage.ChatMessageChat.SubbysCustomChatPalette.SubbysPublicGradientNameRow.SubbysGradientRecent:not(.ChatMessageWhisper) {
     background-color:transparent!important;
     background-image:linear-gradient(100deg,
         var(--subbys-public-wash-start,rgba(255,106,160,.10)) 0%,
@@ -4171,6 +4331,7 @@ function SubbysPlushiesPageMain() {
                 if(member>0)row.dataset.subbysVerifiedChatSender=String(member);
             }
             if(!member)chatStyleMetrics.unmatchedRows++;
+            else essentialsColorChatRow(row,member);
             const candidate=chatStyleViewAllowed() && member>0 ? chatStyleForMember(member) : null;
             const style=candidate&&(candidate.enabled||(member===ROYAL_SEAL_MEMBER&&candidate.royalSeal))?candidate:null;
             if(!style){
@@ -4236,47 +4397,91 @@ function SubbysPlushiesPageMain() {
             chatStyleMetrics.rows++;
         }
         chatStylePerfMetrics.publicDecorateCalls++;
-        chatStylePerfMetrics.publicDecorateMs+=performance.now()-t0;
+        const cost=performance.now()-t0;
+        chatStylePerfMetrics.publicDecorateMs+=cost;
+        if((chatStylePerfMetrics.publicDecorateCalls&7)===0)subbysChatPerfMeasure('publicStyle',cost);
     }
     let chatStyleRefreshToken=0;
+    const chatStylePendingMembers=new Set();
+    let chatStyleRefreshQueued=false,chatStyleRefreshWorking=false,chatStyleWantWhispers=false;
+    function chatStyleScheduleRefresh(){
+        if(chatStyleRefreshQueued||chatStyleRefreshWorking||!chatStylePendingMembers.size)return;
+        chatStyleRefreshQueued=true;
+        const scheduledToken=chatStyleRefreshToken;
+        const schedule=!document.hidden&&typeof window.requestAnimationFrame==='function'?
+            window.requestAnimationFrame.bind(window):fn=>window.setTimeout(fn,20);
+        schedule(()=>{
+            if(scheduledToken!==chatStyleRefreshToken)return;
+            chatStyleRefreshQueued=false;
+            const root=document.getElementById('TextAreaChatLog');
+            if(!root || !chatStyleViewAllowed())return;
+            const members=[...chatStylePendingMembers];chatStylePendingMembers.clear();
+            const refreshWhispers=chatStyleWantWhispers;chatStyleWantWhispers=false;
+            const all=members.includes(0)||members.length>8;
+            const selector=all?'.ChatMessageChat':members.flatMap(id=>[
+                `.ChatMessageChat[data-sender="${id}"]`,
+                `.ChatMessageChat[data-subbys-verified-chat-sender="${id}"]`]).join(',');
+            const rows=Array.from(root.querySelectorAll(selector)).slice(-300);
+            const token=chatStyleRefreshToken;let index=0;
+            chatStyleRefreshWorking=true;
+            subbysChatPerfState.refresh.publicBatches++;
+            const flush=()=>{
+                if(token!==chatStyleRefreshToken||!root.isConnected){
+                    chatStyleRefreshWorking=false;chatStyleScheduleRefresh();return;
+                }
+                const start=performance.now();let n=0;
+                while(index<rows.length&&n<18&&performance.now()-start<5){
+                    chatStyleDecorate(rows[index++]);n++;
+                }
+                if(n)chatScrollQueue('palette-backfill');
+                if(index<rows.length){
+                    chatStylePerfMetrics.queuedPublic=rows.length-index;
+                    schedule(flush);
+                }else{
+                    chatStylePerfMetrics.queuedPublic=0;chatStylePerfMetrics.publicJobs++;
+                    chatStyleRefreshWorking=false;
+                    if(refreshWhispers){
+                        if(all)chatWhisperRefresh();
+                        else for(const id of members)chatWhisperRefresh(id);
+                    }
+                    chatStyleScheduleRefresh();
+                }
+            };
+            flush();
+        });
+    }
     function chatStyleRefresh(member=0,refreshWhispers=true){
-        const root=document.getElementById('TextAreaChatLog');
-        if(!root)return;
+        const root=document.getElementById('TextAreaChatLog');if(!root)return;
         chatStyleSyncPerformance();
         if(!chatStyleViewAllowed()){
             ++chatStyleRefreshToken;
+            chatStylePendingMembers.clear();chatStyleWantWhispers=false;
+            chatStyleRefreshQueued=false;chatStyleRefreshWorking=false;
+            chatStylePerfMetrics.queuedPublic=0;
             chatStyleClearAll(root);
             if(refreshWhispers){
+                // Preserve the existing immediate off-mode reset: this is
+                // a user-visible toggle, not an unbounded background scan.
                 ++chatWhisperRefreshToken;
-                for(const row of root.querySelectorAll('.ChatMessageWhisper.SubbysWhisperTheme,.ChatMessageWhisper.SubbysWhisperNameColors'))chatWhisperDecorate(row);
+                chatWhisperPendingMembers.clear();chatWhisperQueued=false;chatWhisperWorking=false;
+                for(const row of root.querySelectorAll('.ChatMessageWhisper.SubbysWhisperTheme,.ChatMessageWhisper.SubbysWhisperNameColors'))
+                    chatWhisperDecorate(row);
                 chatStylePerfMetrics.queuedWhispers=0;
             }
             return;
         }
         chatStyleEnsureCss();
+        if(chatGradientState.root!==root)chatGradientReseed(root);
         const id=Number(member);
-        const selector=id>0 ?
-            `.ChatMessageChat[data-sender="${id}"],.ChatMessageChat[data-subbys-verified-chat-sender="${id}"]` :
-            '.ChatMessage';
-        const rows=Array.from(root.querySelectorAll(selector)).slice(-300);
-        const token=++chatStyleRefreshToken;let index=0;
-        const flush=()=>{
-            if(token!==chatStyleRefreshToken||!root.isConnected)return;
-            const start=performance.now();let n=0;
-            while(index<rows.length&&n<18&&performance.now()-start<5){
-                chatStyleDecorate(rows[index++]);n++;
-            }
-            if(n)chatScrollQueue('palette-backfill');
-            if(index<rows.length){chatStylePerfMetrics.queuedPublic=rows.length-index;
-                window.requestAnimationFrame?.(flush)??window.setTimeout(flush,16);
-            }else{
-                chatStylePerfMetrics.queuedPublic=0;chatStylePerfMetrics.publicJobs++;
-                if(refreshWhispers)chatWhisperRefresh(id>0?id:0);
-            }
-        };
-        flush();
+        if(Number.isSafeInteger(id)&&id>0){
+            if(!chatStylePendingMembers.has(0))chatStylePendingMembers.add(id);
+        }else{chatStylePendingMembers.clear();chatStylePendingMembers.add(0);}
+        if(refreshWhispers)chatStyleWantWhispers=true;
+        if(chatStyleRefreshQueued||chatStyleRefreshWorking)subbysChatPerfState.refresh.mergedPublic++;
+        chatStyleScheduleRefresh();
     }
-    Object.defineProperty(window,'SubbysChatStyles',{configurable:true,value:Object.freeze({
+
+        Object.defineProperty(window,'SubbysChatStyles',{configurable:true,value:Object.freeze({
         get showAll(){return chatStyleViewAllowed();},
         get mine(){return {...chatStyleMine()};},
         get decorationsHidden(){return getFeatureSettings().chatStyleHideDecorations===true;},
@@ -15466,6 +15671,63 @@ function SubbysPlushiesPageMain() {
     const ESSENTIALS_QOL_KEY='SubbysPlushies:EssentialsQoL:v1';
     let essentialsState=null;
     const essentialsRowColors=new WeakMap();
+    // v3.9.33: Event-driven chat performance diagnostics. No polling, timers,
+    // packet inspection, content capture, or changes to another addon.
+    const subbysChatPerfState={
+        colors:{calls:0,skipped:0,restored:0,writes:0,refreshes:0,rowsChecked:0},
+        reactions:{purges:0,skippedTokenSweeps:0,fullTokenSweeps:0},
+        emotes:{calls:0,unchanged:0,tokenSkips:0,nodesExamined:0,nodesChanged:0,limitHits:0},
+        highlighting:{calls:0,fastSkips:0},
+        refresh:{publicBatches:0,whisperBatches:0,mergedPublic:0,mergedWhisper:0},
+        samples:Object.create(null),warnings:[],lastWarning:Object.create(null)
+    };
+    function subbysChatPerfMeasure(name,ms){
+        if(!Number.isFinite(ms)||ms<0)return;
+        const rec=subbysChatPerfState.samples[name]||
+            (subbysChatPerfState.samples[name]={samples:0,totalMs:0,maxMs:0,slow:0});
+        rec.samples++;rec.totalMs+=ms;rec.maxMs=Math.max(rec.maxMs,ms);
+        // Warnings only after multiple slow operations, with a two-minute quiet
+        // period per path. Thresholds are warning heuristics, not FPS evidence.
+        const limit={publicStyle:5,whisperStyle:5,emoteRow:5,colorRefresh:12,styleBackfill:12,
+            reactionPurge:5,highlightRow:5}[name]||8;
+        if(ms>=limit)rec.slow++;
+        const now=Date.now();
+        if(rec.samples>=12&&rec.slow>=5&&now-(subbysChatPerfState.lastWarning[name]||0)>120000){
+            subbysChatPerfState.lastWarning[name]=now;
+            const message=`${name}: ${rec.slow}/${rec.samples} sampled operations exceeded ${limit}ms `+
+                `(max ${rec.maxMs.toFixed(1)}ms). Try testing Quick Reactions and Inline Emotes separately.`;
+            subbysChatPerfState.warnings.push({at:new Date(now).toISOString(),name,message});
+            if(subbysChatPerfState.warnings.length>12)subbysChatPerfState.warnings.shift();
+            console.warn('[Subby chat performance]',message);
+            // Begin a new window so an old spike cannot warn forever.
+            rec.samples=0;rec.totalMs=0;rec.maxMs=0;rec.slow=0;
+        }
+    }
+    function subbysChatPerfSnapshot(){
+        const samples={};for(const [name,r]of Object.entries(subbysChatPerfState.samples))
+            samples[name]={samples:r.samples,avgMs:+(r.totalMs/Math.max(1,r.samples)).toFixed(3),
+                maxMs:+r.maxMs.toFixed(3),overBudget:r.slow};
+        return {version:VERSION,colors:{...subbysChatPerfState.colors},
+            reactions:{...subbysChatPerfState.reactions,trackedRows:quickReactionRecords.length,
+                incomingContexts:quickReactionPerfMetrics.tracked,tailNodesVisited:quickReactionPerfMetrics.tailNodes},
+            emotes:{...subbysChatPerfState.emotes},highlighting:{...subbysChatPerfState.highlighting},
+            refresh:{...subbysChatPerfState.refresh},samples,
+            gradientWindow:chatGradientStatus(),
+            publicDecorateCalls:chatStylePerfMetrics.publicDecorateCalls,
+            publicDecorateMs:+chatStylePerfMetrics.publicDecorateMs.toFixed(2),
+            whisperDecorateCalls:chatStylePerfMetrics.whisperDecorateCalls,
+            whisperDecorateMs:+chatStylePerfMetrics.whisperDecorateMs.toFixed(2),
+            warnings:subbysChatPerfState.warnings.slice(),
+            note:'Local Essentials-only measurements; does not attribute lag to other mods or measure game FPS.'};
+    }
+    Object.defineProperty(window,'SubbysChatStylePerf',{configurable:true,value:Object.freeze({
+        version:'3.9.34',status:subbysChatPerfSnapshot,
+        report(){const s=subbysChatPerfSnapshot();console.log('[Subby chat performance]',s);console.table(s.samples);return s;},
+        reset(){for(const group of ['colors','reactions','emotes','highlighting','refresh'])
+            for(const key of Object.keys(subbysChatPerfState[group]))subbysChatPerfState[group][key]=0;
+            subbysChatPerfState.samples=Object.create(null);subbysChatPerfState.warnings.length=0;
+            subbysChatPerfState.lastWarning=Object.create(null);return true;}
+    })});
     let essentialsBudgetTimer=null;
     let essentialsAutoOwnsLow=false;
     let essentialsBudgetSlow=0;
@@ -15490,35 +15752,100 @@ function SubbysPlushiesPageMain() {
     }
     function essentialsSave() {writeLocalJSON(ESSENTIALS_QOL_KEY,essentialsConfig());}
     function essentialsColorChatRow(row,member) {
-        if(!row||!row.isConnected)return;
-        const num=Number(member);
-        if(!Number.isInteger(num)||num<=0)return;
-        const state=essentialsConfig();
-        const color=state.safeMode?'':state.chatColors[String(num)];
-        const valid=typeof color==='string'&&/^#[\da-f]{6}$/i.test(color);
-        let prev=essentialsRowColors.get(row);
-        if(!valid&&!prev)return; // Most chat rows have no local override.
-        if(!prev){
-            prev={borderLeft:row.style.borderLeft,backgroundColor:row.style.backgroundColor,last:''};
-            essentialsRowColors.set(row,prev);
+        if(!row?.isConnected)return;
+        const num=Number(member);if(!Number.isSafeInteger(num)||num<=0)return;
+        const stats=subbysChatPerfState.colors;stats.calls++;
+        const settings=essentialsConfig();
+        const selected=settings.safeMode?'':settings.chatColors[String(num)];
+        const value=typeof selected==='string' && /^#[0-9a-fA-F]{6}$/.test(selected)?selected.toUpperCase():'';
+        let prior=essentialsRowColors.get(row);
+        if(!prior&&!value){stats.skipped++;return;}
+        if(!value){
+            // Only restore values we still own. A later WCE/BCX style write must
+            // remain untouched rather than being overwritten by an old snapshot.
+            if(row.style.borderLeft===prior.appliedBorder){row.style.borderLeft=prior.originalBorder;stats.writes++;}
+            if(row.style.backgroundColor===prior.appliedBackground){row.style.backgroundColor=prior.originalBackground;stats.writes++;}
+            if(row.style.getPropertyValue('--subbys-local-chat-accent')===prior.last)row.style.removeProperty('--subbys-local-chat-accent');
+            if(row.style.getPropertyValue('--subbys-local-chat-tint')===prior.last+'22')row.style.removeProperty('--subbys-local-chat-tint');
+            essentialsRowColors.delete(row);stats.restored++;return;
         }
-        const next=valid?color.toUpperCase():'';
-        if(prev.last===next)return;
-        row.style.borderLeft=valid?`4px solid ${next}`:prev.borderLeft;
-        row.style.backgroundColor=valid?`${next}18`:prev.backgroundColor;
-        if(valid){
-            row.style.setProperty('--subbys-local-chat-accent',next);
-            row.style.setProperty('--subbys-local-chat-tint',`${next}22`);
-        }else{
-            row.style.removeProperty('--subbys-local-chat-accent');
-            row.style.removeProperty('--subbys-local-chat-tint');
+        if(prior && prior.last===value && row.style.borderLeft===prior.appliedBorder &&
+            row.style.backgroundColor===prior.appliedBackground &&
+            row.style.getPropertyValue('--subbys-local-chat-accent')===value &&
+            row.style.getPropertyValue('--subbys-local-chat-tint')===value+'22'){
+            stats.skipped++;return;
         }
-        prev.last=next;
+        if(!prior){prior={originalBorder:row.style.borderLeft,originalBackground:row.style.backgroundColor,
+            appliedBorder:'',appliedBackground:'',last:''};essentialsRowColors.set(row,prior);}
+        else {
+            if(row.style.borderLeft!==prior.appliedBorder)prior.originalBorder=row.style.borderLeft;
+            if(row.style.backgroundColor!==prior.appliedBackground)prior.originalBackground=row.style.backgroundColor;
+        }
+        if(prior.last!==value || row.style.getPropertyValue('--subbys-local-chat-accent')!==value){
+            row.style.setProperty('--subbys-local-chat-accent',value);stats.writes++;
+        }
+        if(prior.last!==value || row.style.getPropertyValue('--subbys-local-chat-tint')!==value+'22'){
+            row.style.setProperty('--subbys-local-chat-tint',value+'22');stats.writes++;
+        }
+        const border='4px solid '+value,background=value+'18';
+        if(prior.last!==value || row.style.borderLeft!==prior.appliedBorder){row.style.borderLeft=border;stats.writes++;}
+        if(prior.last!==value || row.style.backgroundColor!==prior.appliedBackground){row.style.backgroundColor=background;stats.writes++;}
+        prior.appliedBorder=row.style.borderLeft;
+        prior.appliedBackground=row.style.backgroundColor;
+        prior.last=value;
     }
-    function essentialsRefreshChatColors() {
-        for(const record of quickReactionRecords)if(record.row?.isConnected)essentialsColorChatRow(record.row,record.sender);
+    // v3.9.34: coalesce rapid edits; update native-color history in short
+    // frame slices so toggling palettes cannot block the chat input for long.
+    const essentialsColorPending=new Set();
+    let essentialsColorFrame=0, essentialsColorWorking=false;
+    function essentialsColorNextFrame(callback) {
+        if(!document.hidden && typeof window.requestAnimationFrame==='function')
+            window.requestAnimationFrame(callback);
+        else window.setTimeout(callback,20);
     }
-    const ESSENTIALS_SAFE_FLAGS=['idleAnimations','speechBubbles','showRoomMascot','sharedEmoteChains','expressionReactions','quickReactions','extraActions','chatStyleShowAll'];
+    function essentialsColorScheduleRefresh(){
+        if(essentialsColorFrame || essentialsColorWorking || !essentialsColorPending.size)return;
+        essentialsColorFrame=1;
+        essentialsColorNextFrame(()=>{
+            essentialsColorFrame=0;
+            if(essentialsColorWorking)return;
+            const members=new Set(essentialsColorPending);essentialsColorPending.clear();
+            const root=document.getElementById('TextAreaChatLog');
+            if(!root){essentialsColorScheduleRefresh();return;}
+            const all=members.has(0);
+            const selector=all?'.ChatMessageChat[data-sender],.ChatMessageChat[data-subbys-verified-chat-sender]':
+                [...members].flatMap(n=>[
+                    `.ChatMessageChat[data-sender="${n}"]`,
+                    `.ChatMessageChat[data-subbys-verified-chat-sender="${n}"]`]).join(',');
+            const rows=Array.from(root.querySelectorAll(selector)).slice(-300);
+            let index=0,checked=0;
+            essentialsColorWorking=true;
+            const flush=()=>{
+                if(!root.isConnected){essentialsColorWorking=false;essentialsColorScheduleRefresh();return;}
+                const started=performance.now();let batch=0;
+                while(index<rows.length && batch<16 && performance.now()-started<4){
+                    const row=rows[index++];
+                    const sender=Number(row.getAttribute('data-sender')||row.dataset.subbysVerifiedChatSender);
+                    if(Number.isSafeInteger(sender)&&sender>0){essentialsColorChatRow(row,sender);checked++;}
+                    batch++;
+                }
+                subbysChatPerfMeasure('colorRefreshBatch',performance.now()-started);
+                if(index<rows.length){essentialsColorNextFrame(flush);return;}
+                subbysChatPerfState.colors.refreshes++;
+                subbysChatPerfState.colors.rowsChecked+=checked;
+                essentialsColorWorking=false;
+                essentialsColorScheduleRefresh();
+            };
+            flush();
+        });
+    }
+    function essentialsRefreshChatColors(member=0) {
+        const id=Number(member);
+        if(!Number.isSafeInteger(id)||id<=0){essentialsColorPending.clear();essentialsColorPending.add(0);}
+        else if(!essentialsColorPending.has(0))essentialsColorPending.add(id);
+        essentialsColorScheduleRefresh();
+    }
+        const ESSENTIALS_SAFE_FLAGS=['idleAnimations','speechBubbles','showRoomMascot','sharedEmoteChains','expressionReactions','quickReactions','extraActions','chatStyleShowAll'];
     function essentialsSetSafeMode(enabled) {
         const config=essentialsConfig();
         if(config.safeMode===enabled)return;
@@ -15611,7 +15938,7 @@ function SubbysPlushiesPageMain() {
         if(!Number.isInteger(+member)||+member<=0)return;
         if(/^#[a-f0-9]{6}$/i.test(color))config.chatColors[String(member)]=color;
         else delete config.chatColors[String(member)];
-        essentialsSave();essentialsRefreshChatColors();chatWhisperRefresh(Number(member));
+        essentialsSave();essentialsRefreshChatColors(Number(member));chatWhisperRefresh(Number(member));
     }
     function essentialsRenderXRay(section) {
         const character=window.Player;
@@ -19430,8 +19757,10 @@ function SubbysPlushiesPageMain() {
         const room = window.ChatRoomData;
         return room ? `${String(room.Space || "")}/${String(room.Name || "")}` : "";
     }
+    let quickReactionLastTokenSweep=0;
     function quickReactionPurge() {
         const now = Date.now();
+        subbysChatPerfState.reactions.purges++;
         while (quickReactionRecords.length &&
             (quickReactionRecords.length > 180 || now - quickReactionRecords[0].created > QUICK_REACTION_TTL_MS ||
                 !quickReactionRecords[0].row?.isConnected)) {
@@ -19443,6 +19772,10 @@ function SubbysPlushiesPageMain() {
             if (old.row?.style) old.row.style.position = old.priorPosition;
             if (old.row) old.row.tabIndex = old.priorTabIndex;
         }
+        if(now-quickReactionLastTokenSweep<4000){
+            subbysChatPerfState.reactions.skippedTokenSweeps++;return;
+        }
+        quickReactionLastTokenSweep=now;subbysChatPerfState.reactions.fullTokenSweeps++;
         for (const [token, received] of quickReactionSeenPackets) {
             if (now - received > QUICK_REACTION_TTL_MS) quickReactionSeenPackets.delete(token);
         }
@@ -19835,6 +20168,7 @@ function SubbysPlushiesPageMain() {
     }
     const quickReactionPerfMetrics={tracked:0,tailNodes:0};
     function quickReactionTrackIncoming(data, next) {
+        if (!getFeatureSettings().quickReactions) return next();
         const context = {
             sender: Number(data.Sender), kind: data.Type, signature: quickReactionDigest(data),
             room: quickReactionRoomKey(), created: Date.now(), row: null,
@@ -19843,7 +20177,6 @@ function SubbysPlushiesPageMain() {
         // Before v3.9.11 this created a Set of EVERY historical chat row,
         // then queried EVERY row again after every incoming message. Long room
         // histories made the cost grow linearly with time spent in the room.
-        if (!getFeatureSettings().quickReactions) return next();
         const root = getOfferChatRoot();
         const previousTail = root?.lastElementChild || null;
         quickReactionPerfMetrics.tracked++;
@@ -20202,6 +20535,14 @@ function SubbysPlushiesPageMain() {
         if (!row.classList.contains("ChatMessage") ||
             row.classList.contains("ChatMessageLocalMessage") ||
             row.classList.contains("SubbysPlushiesOfferPrompt")) return 0;
+        subbysChatPerfState.highlighting.calls++;
+        // A cheap whole-row regex probe avoids a TreeWalker for messages without
+        // the user's names. Reset /g lastIndex before the real body-only scan.
+        matcher.lastIndex=0;
+        if(!matcher.test(row.textContent||'')){
+            matcher.lastIndex=0;subbysChatPerfState.highlighting.fastSkips++;return 0;
+        }
+        matcher.lastIndex=0;
         const nodes = [];
         // Use the same body-first traversal as @mentions so names in the
         // timestamp, status badges or member number are never highlighted.
@@ -22039,6 +22380,7 @@ function SubbysPlushiesPageMain() {
             clearRemotePlushEmotes();
             gameSpeedClearRemotePositions();
             quickReactionReset();
+            chatSharedResetRoomStyles();
             addonPresenceMembers.clear();
             chatStyleRemote.clear();
             chatWhisperRemote.clear();
@@ -22058,6 +22400,7 @@ function SubbysPlushiesPageMain() {
         })) hooked++;
         if (installHook("ChatRoomSync", 10000, (args, next) => {
             quickReactionReset();
+            chatSharedResetRoomStyles();
             roomMascotState = null;
             removeRoomMascotOverlay();
             const result = next(args);
@@ -22542,6 +22885,7 @@ function SubbysPlushiesPageMain() {
                     chatPublicWhisperLookSync(log);
             }
             quickReactionCaptureAppendedRow(node);
+            if (window.CurrentScreen === "ChatRoom") chatGradientTrackAppend(node);
             if (node instanceof Element && window.CurrentScreen === "ChatRoom") {
                 const isPublic = node.matches('.ChatMessageChat') ||
                     (!node.matches('.ChatMessage') && !!node.querySelector('.ChatMessageChat'));
@@ -23711,39 +24055,22 @@ function SubbysPlushiesPageMain() {
         return repaired;
     }
     function installWardrobeLayerTextHook() {
-        wardrobeRepairLayerNamesCache();
+        // v3.9.34: never add to BC's global TextGet ModSDK hook chain.
+        // That hot global translation path can re-enter chatroom menu hooks
+        // under R133 with BCX/WCE and cause an unbounded recursion.
+        try { wardrobeRepairLayerNamesCache(); } catch (e) {
+            warn('Wardrobe layer translation cache repair unavailable:', e);
+        }
         if (wardrobeLayerTextHookInstalled) return true;
-        if (!modApi || typeof modApi.hookFunction !== "function" || typeof window.TextGet !== "function") {
-            if (wardrobeLayerTextHookRetries < WARDROBE_LAYER_TEXT_RETRY_DELAYS_MS.length &&
-                wardrobeLayerTextHookRetryTimer == null && typeof window.setTimeout === "function") {
-                const delay = WARDROBE_LAYER_TEXT_RETRY_DELAYS_MS[wardrobeLayerTextHookRetries++];
-                wardrobeLayerTextHookRetryTimer = window.setTimeout(() => {
-                    wardrobeLayerTextHookRetryTimer = null;
-                    installWardrobeLayerTextHook();
-                }, delay);
-            }
-            return false;
+        wardrobeLayerTextHookInstalled = true;
+        // Bound late cache repairs for R133's lazy translation-table loading.
+        // Existing targeted canvas/DOM label fallbacks remain active.
+        for (const delay of [500, 2000, 6000, 12000]) {
+            window.setTimeout(() => {
+                try { wardrobeRepairLayerNamesCache(); } catch (_) {}
+            }, delay);
         }
-        const labels = wardrobeLayerTextMap();
-        try {
-            modApi.hookFunction("TextGet", 100000, (args, next) => {
-                const exact = Array.isArray(args) ? args.find(value =>
-                    typeof value === "string" && labels.has(value)) : null;
-                if (exact) return labels.get(exact);
-                const result = next(args);
-                if (typeof result === "string" && /MISSING TEXT IN|Unknown translation key/i.test(result)) {
-                    for (const [key, value] of labels) {
-                        if (result.trimEnd().replace(/["']/g, "").endsWith(key)) return value;
-                    }
-                }
-                return result;
-            });
-            wardrobeLayerTextHookInstalled = true;
-            return true;
-        } catch (e) {
-            warn("Wardrobe LayerNames ModSDK hook unavailable:", e);
-            return false;
-        }
+        return true;
     }
     const WARDROBE_DRAW_LABEL_HOOK_TARGETS = Object.freeze([
         "DrawText", "DrawTextFit", "DrawTextWrap", "DrawButton", "DrawBackNextButton",
@@ -29432,12 +29759,22 @@ function SubbysPlushiesPageMain() {
     if(quietPerfEnabled()){cachedEmoteSource=state.emotes;cachedEmoteTokens=available;quietPerfData.emoteCacheRebuilds++;}
     return available;
   }
+  const emoteDecoratedRowText=new WeakMap();
   function decorateMessage(message){
     if(!(message instanceof Element)||!message.matches('.ChatMessage')||message.closest('#subby-extras-modal'))return;
-    // Cheap text test skips a TreeWalker for ordinary chat without an emote.
-    if(quietPerfEnabled() && !/:([A-Za-z][A-Za-z0-9_]{0,24}):/.test(message.textContent||'')){
+    const ePerf=subbysChatPerfState.emotes;ePerf.calls++;
+    const contents=message.textContent||'';
+    // A prior pass may have been triggered again by a different addon. Revisit
+    // only when its content or the emote catalog actually changed.
+    const prior=emoteDecoratedRowText.get(message);
+    if(prior && prior.text===contents && prior.source===state.emotes){ePerf.unchanged++;return;}
+    // Protect the main thread against exceptionally large addon-generated rows.
+    if(contents.length>16000){ePerf.limitHits++;return;}
+    if(!/:([A-Za-z][A-Za-z0-9_]{0,24}):/.test(contents)){
+      ePerf.tokenSkips++;emoteDecoratedRowText.set(message,{text:contents,source:state.emotes});
       quietPerfEnhanceChatNode(message);return;
     }
+    const emoteStart=performance.now();
     // Use a strict whitelist so unrelated colon text cannot become an image.
     const matcher=/:([A-Za-z][A-Za-z0-9_]{0,24}):/g;
     // Render older :subbyhappy:-style messages too, while sending only :happy: in new chats.
@@ -29447,9 +29784,14 @@ function SubbysPlushiesPageMain() {
       if(node.parentElement?.closest('script,style,textarea,input,button,.sxe-inline-emote,[contenteditable]'))return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     }});
-    const textNodes=[];while(walker.nextNode())textNodes.push(walker.currentNode);
-    for(const node of textNodes){const text=node.nodeValue;matcher.lastIndex=0;let match,last=0,changed=false;const fragment=document.createDocumentFragment();
-      while((match=matcher.exec(text))){const e=available.get(match[0]);if(!e)continue;
+    const textNodes=[];while(textNodes.length<120&&walker.nextNode())textNodes.push(walker.currentNode);
+    ePerf.nodesExamined+=textNodes.length;
+    let emotesRemaining=40;
+    for(const node of textNodes){
+      if(!emotesRemaining){ePerf.limitHits++;break;}const text=node.nodeValue;matcher.lastIndex=0;let match,last=0,changed=false;const fragment=document.createDocumentFragment();
+      let rendered=0;
+      while(emotesRemaining>0&&(match=matcher.exec(text))){const e=available.get(match[0]);if(!e)continue;
+        rendered++;emotesRemaining--;
         changed=true;if(match.index>last)fragment.append(document.createTextNode(text.slice(last,match.index)));
         const wrap=$('span','sxe-inline-emote');wrap.title=e.name;wrap.setAttribute('aria-label',e.name);
         if(hasArtwork(e)){
@@ -29457,8 +29799,12 @@ function SubbysPlushiesPageMain() {
         }else wrap.className='sxe-inline-glyph',wrap.textContent=e.emoji;
         fragment.append(wrap);last=matcher.lastIndex;
       }
-      if(changed){if(last<text.length)fragment.append(document.createTextNode(text.slice(last)));node.replaceWith(fragment);}
+      if(changed){if(last<text.length)fragment.append(document.createTextNode(text.slice(last)));node.replaceWith(fragment);ePerf.nodesChanged++;}
+      if(rendered>=40)ePerf.limitHits++;
     }
+    // Store the post-decoration text so extra callbacks can exit early.
+    emoteDecoratedRowText.set(message,{text:message.textContent||'',source:state.emotes});
+    subbysChatPerfMeasure('emoteRow',performance.now()-emoteStart);
     // Catch addon-supplied emoji created after BC appended the original row.
     quietPerfEnhanceChatNode(message);
   }
@@ -29915,7 +30261,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.32";
+    const VERSION = "3.9.34";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
