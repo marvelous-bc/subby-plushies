@@ -1,42 +1,24 @@
 {
-  "version": "3.9.35",
+  "version": "3.9.37",
   "releaseDate": "2026-11-04",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Adaptive Essentials performance release: unified native/fallback chat dispatch, a bounded visual-work queue, hidden-tab suspension, selectable Quality/Balanced/Performance profiles, partial UI updates, batched outfit monitoring and more detailed bottleneck warnings. Balanced retains the 50-message chat-gradient limit; R133 live validation is still required.",
+  "notes": "Echo Clothing direct lookup optimization based on Essentials 3.9.35. Removes v3.9.36 coexistence throttles. Exact-match in-task AssetGet microcache when Echo Clothing is registered, with automatic suspension, controls and optional GL pipeline profiling. No claim of measured R133 FPS gain.",
   "changes": [
     {
-      "category": "Unified chat and scheduling",
+      "category": "Echo Clothing direct acceleration",
       "items": [
-        "Routes native chat appends and fallback observers through one per-row dispatcher with duplicate guards.",
-        "Keeps sender-verified chat styling synchronous and schedules optional mentions, highlights, and emotes in a limited visual-work queue.",
-        "Suspends optional styling work in hidden tabs, resumes on visibility changes, and drops stale/disconnected visual jobs."
+        "Installs an SDK AssetGet microcache only after detecting the running Echo Clothing Extension (not Echo Actions).",
+        "Successful exact-name asset references can be reused within the same JavaScript task, bypassing repeated downstream lookup hooks including Echo alias checks.",
+        "Never caches missing assets or redirected alias results; invalidates on asset registry changes and each microtask boundary.",
+        "Automatically suspends when repeated lookups are rare, and provides disable/enable controls and hit-rate statistics.",
+        "Optional read-only GL appearance rendering profiler, off by default."
       ]
     },
     {
-      "category": "Adaptive rendering profiles",
+      "category": "Revert prior approach",
       "items": [
-        "Adds Quality (50 gradient rows, 180 reaction rows, 40 emotes/message), Balanced (50/80/20), and Performance (20/40/8).",
-        "Balanced is the default, retaining the requested 50-message gradient window.",
-        "Automatic adjustment is enabled by default and uses repeated Essentials timing samples, with cooldowns before changes.",
-        "Provides editable settings within Essentials > Performance Budget Manager and a SubbysAdaptivePerformance console API."
-      ]
-    },
-    {
-      "category": "History, cache and interface work",
-      "items": [
-        "Reduces public, whisper and local color backfills to the newest 200 relevant rows while maintaining older rendered solid styles.",
-        "Keeps shared per-member CSS rules bounded, batches CSS writes and cleans temporary visual work during room resets.",
-        "Updates the Character Chat Colors summary without rebuilding the whole panel and updates selected simple setting toggles in place.",
-        "Skips unchanged panel-theme passes and defers hidden-tab room mascot UI updates."
-      ]
-    },
-    {
-      "category": "Outfit and diagnostics",
-      "items": [
-        "Coalesces native outfit events and their settle confirmation to avoid redundant checks during multi-item edits.",
-        "Preserves existing outfit recovery checks and Appearance Shield enforcement without changing item permissions or server packets.",
-        "Adds queue/cache/dispatch metrics and shows persistent slow-path warnings in Essentials settings and console reports.",
-        "Preserves the v3.9.34 R133 TextGet recursion workaround and wardrobe-specific translation repairs."
+        "Based directly on 3.9.35 and excludes all 3.9.36 Echo coexistence budgeting, registry/copy reuse, polling changes or visual throttles.",
+        "Does not change Echo canvas width, artwork dimensions, textures, permissions, native/BCX hooks or sync."
       ]
     }
   ]

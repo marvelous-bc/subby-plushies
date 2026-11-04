@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.35
-// @description  v3.9.35 Adaptive performance modes, batched chat processing, lighter rendering and responsive UI
+// @version      3.9.37
+// @description  v3.9.37 Adaptive performance modes, batched chat processing, lighter rendering and responsive UI
 // @released     2026-11-04
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.35";
+    const VERSION = "3.9.37";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -538,6 +538,194 @@ function SubbysPlushiesPageMain() {
         return true;
     }
     // === End BC-safe game speed guard ===
+
+    // === Echo Clothing direct asset lookup accelerator (3.9.37) ===
+    // Scope: opt-in via running Echo Clothing's registered ModSDK identity.
+    // Echo's src/lib/fixups.js adds an AssetGet hook to every lookup. This
+    // accelerator reuses *exact, successful, unredirected* lookups within a
+    // single JS task, avoiding repeated execution of that downstream chain.
+    // Never stores failures/aliases; never changes Echo draw/canvas sizing,
+    // image resources, permissions, packets, appearance updates, or outfits.
+    const ECHO_DIRECT_STORAGE_KEY = 'SubbysPlushies:echo-direct-lookup:v1';
+    const echoDirectState = {
+        enabled: true, installed: false, detected: false, registeredName: '',
+        attempts: 0, calls: 0, hits: 0, misses: 0, stored: 0, skipped: 0,
+        aliasPasses: 0, invalidations: 0, bypassedDownstreamLookups: 0,
+        automaticSuspension: false, hookError: '', capacity: 64,
+        lastValidationAt: 0, assetRef: null, groupRef: null,
+        assetLength: -1, groupLength: -1, profileHookInstalled: false,
+        profiling: false, profileCalls: 0, profileTotalMs: 0,
+        profileMaxMs: 0, profileUntil: 0, profileTimer: null
+    };
+    try { echoDirectState.enabled = window.localStorage?.getItem(ECHO_DIRECT_STORAGE_KEY) !== 'off'; }
+    catch (_) {}
+    const echoDirectAssets = new Map();
+    let echoDirectClearQueued = false;
+    function echoDirectClear() {
+        if (echoDirectAssets.size) { echoDirectAssets.clear(); echoDirectState.invalidations++; }
+    }
+    function echoDirectQueueClear() {
+        if (echoDirectClearQueued) return;
+        echoDirectClearQueued = true;
+        // Microtask boundary: no cross-frame, cross-event or stale wardrobe data.
+        const flush = () => { echoDirectClearQueued = false; echoDirectClear(); };
+        if (typeof queueMicrotask === 'function') queueMicrotask(flush);
+        else Promise.resolve().then(flush);
+    }
+    function echoDirectRegistered(mod) {
+        if (!mod || typeof mod !== 'object') return false;
+        const repo = String(mod.repository || mod.repo || mod.repositoryUrl || '');
+        if (/SugarChain-Studio\/echo-clothing-ext(?:\b|\/|$)/i.test(repo)) return true;
+        const title = [mod.name, mod.fullName].filter(Boolean).join(' ');
+        // Do not trigger on Echo's separate Activity/动作 extension.
+        return /echo/i.test(title) && /(clothing|clothes|服装|服飾|服饰)/i.test(title);
+    }
+    function echoDirectDetect() {
+        try {
+            const sdk = window.bcModSdk || window.bcModSDK;
+            const mods = typeof sdk?.getModsInfo === 'function' ? sdk.getModsInfo() : [];
+            const found = Array.isArray(mods) ? mods.find(echoDirectRegistered) : null;
+            echoDirectState.detected = !!found;
+            echoDirectState.registeredName = found ? String(found.fullName || found.name || 'Echo Clothing').slice(0, 120) : '';
+        } catch (_) { echoDirectState.detected = false; echoDirectState.registeredName = ''; }
+        echoDirectState.lastValidationAt = Date.now();
+        if (!echoDirectState.detected) echoDirectClear();
+        return echoDirectState.detected;
+    }
+    function echoDirectLookup(args, next) {
+        // Even when the SDK hook remains installed after a manual disable,
+        // the fast exit does not change native or other-addon behavior.
+        if (!echoDirectState.enabled || echoDirectState.automaticSuspension || !echoDirectState.detected) return next(args);
+        if (!Array.isArray(args) || args.length !== 3 || args.some(value => typeof value !== 'string')) {
+            echoDirectState.skipped++; return next(args);
+        }
+        // Recheck registration off the hot path, at most once per 30 seconds.
+        if (Date.now() - echoDirectState.lastValidationAt > 30000 && !echoDirectDetect()) return next(args);
+        const assets = window.Asset, groups = window.AssetGroup;
+        if (!Array.isArray(assets) || !Array.isArray(groups)) return next(args);
+        if (echoDirectState.assetRef !== assets || echoDirectState.groupRef !== groups ||
+            echoDirectState.assetLength !== assets.length || echoDirectState.groupLength !== groups.length) {
+            echoDirectClear();
+            echoDirectState.assetRef = assets; echoDirectState.groupRef = groups;
+            echoDirectState.assetLength = assets.length; echoDirectState.groupLength = groups.length;
+        }
+        const family = args[0], group = args[1], name = args[2];
+        const key = family + '\u0000' + group + '\u0000' + name;
+        echoDirectState.calls++;
+        if (echoDirectAssets.has(key)) {
+            echoDirectState.hits++;
+            echoDirectState.bypassedDownstreamLookups++;
+            return echoDirectAssets.get(key);
+        }
+        echoDirectState.misses++;
+        // Forward the SAME args untouched. Echo may rewrite aliases here.
+        const result = next(args);
+        if (result && typeof result === 'object' && result.Name === name &&
+            result.Group?.Name === group && (!result.Group.Family || result.Group.Family === family)) {
+            if (echoDirectAssets.size >= echoDirectState.capacity) echoDirectAssets.delete(echoDirectAssets.keys().next().value);
+            echoDirectAssets.set(key, result);
+            echoDirectState.stored++;
+            echoDirectQueueClear();
+        } else if (result) echoDirectState.aliasPasses++;
+        // A cache can cost more than it saves. Stop caching after sufficient
+        // observations if < 3% of queries repeat within a task.
+        if (echoDirectState.calls >= 4096 && echoDirectState.hits < 123) {
+            echoDirectState.automaticSuspension = true;
+            echoDirectClear();
+            console.info('[Subby Echo Direct] Low repeated-lookup rate; cache automatically suspended.');
+        }
+        return result;
+    }
+    function echoDirectInstall() {
+        if (echoDirectState.installed) return true;
+        echoDirectState.attempts++;
+        if (!modApi || typeof modApi.hookFunction !== 'function' ||
+            typeof window.AssetGet !== 'function' || !echoDirectDetect()) return false;
+        try {
+            // ModSDK processes higher priorities first; Echo's fixup is at 0.
+            modApi.hookFunction('AssetGet', 100000, echoDirectLookup);
+            echoDirectState.installed = true;
+            return true;
+        } catch (err) {
+            echoDirectState.hookError = String(err?.message || err);
+            return false;
+        }
+    }
+    function echoDirectProfileStop() {
+        echoDirectState.profiling = false;
+        if (echoDirectState.profileTimer != null) clearTimeout(echoDirectState.profileTimer);
+        echoDirectState.profileTimer = null;
+        return echoDirectStatus();
+    }
+    function echoDirectProfileStart(duration = 15000) {
+        if (!echoDirectState.detected || !modApi?.hookFunction) return false;
+        if (!echoDirectState.profileHookInstalled) {
+            try {
+                // Observation ONLY. Shared GL pipeline cost cannot be assigned
+                // entirely to Echo, but helps identify the rendering bottleneck.
+                modApi.hookFunction('GLDrawAppearanceBuild', -1000, (args, next) => {
+                    if (!echoDirectState.profiling) return next(args);
+                    const start = performance.now();
+                    try { return next(args); }
+                    finally {
+                        const elapsed = Math.max(0, performance.now() - start);
+                        echoDirectState.profileCalls++;
+                        echoDirectState.profileTotalMs += elapsed;
+                        echoDirectState.profileMaxMs = Math.max(echoDirectState.profileMaxMs, elapsed);
+                    }
+                });
+                echoDirectState.profileHookInstalled = true;
+            } catch (e) { echoDirectState.hookError = String(e?.message || e); return false; }
+        }
+        echoDirectProfileStop();
+        echoDirectState.profileCalls = 0;
+        echoDirectState.profileTotalMs = 0;
+        echoDirectState.profileMaxMs = 0;
+        echoDirectState.profiling = true;
+        const ms = Math.max(1000, Math.min(60000, Number(duration) || 15000));
+        echoDirectState.profileUntil = Date.now() + ms;
+        echoDirectState.profileTimer = window.setTimeout(echoDirectProfileStop, ms);
+        return true;
+    }
+    function echoDirectStatus() {
+        const d = echoDirectState;
+        return { version: VERSION, enabled: d.enabled, detected: d.detected,
+            installed: d.installed, active: d.enabled && d.detected && d.installed && !d.automaticSuspension,
+            registeredName: d.registeredName, suspended: d.automaticSuspension,
+            assetLookup: { calls: d.calls, hits: d.hits, misses: d.misses,
+                bypassedDownstreamLookups: d.bypassedDownstreamLookups,
+                stored: d.stored, aliasesUncached: d.aliasPasses,
+                invalidations: d.invalidations, skipped: d.skipped,
+                liveEntries: echoDirectAssets.size, capacity: d.capacity },
+            profiling: d.profiling, drawPipelineSamples: d.profileCalls,
+            drawPipelineAverageMs: d.profileCalls ? d.profileTotalMs / d.profileCalls : 0,
+            drawPipelinePeakMs: d.profileMaxMs, hookError: d.hookError,
+            scope: 'Exact-result AssetGet cache per JS task; no graphics, equipment or permission overrides' };
+    }
+    function echoDirectToggle(on) {
+        echoDirectState.enabled = !!on;
+        echoDirectState.automaticSuspension = false;
+        echoDirectState.calls = echoDirectState.hits = echoDirectState.misses = 0;
+        echoDirectClear();
+        try { window.localStorage?.setItem(ECHO_DIRECT_STORAGE_KEY, on ? 'on' : 'off'); } catch (_) {}
+        if (on) echoDirectInstall();
+        return echoDirectStatus();
+    }
+    window.SubbysEchoDirectOptimization = Object.freeze({
+        status: echoDirectStatus,
+        enable: () => echoDirectToggle(true), disable: () => echoDirectToggle(false),
+        retryInstall: echoDirectInstall,
+        profileStart: echoDirectProfileStart, profileStop: echoDirectProfileStop
+    });
+    function echoDirectScheduleStartup() {
+        // Echo often registers after Essentials. No hook is installed for users
+        // without Echo; a finite late-registration check costs little.
+        if (echoDirectInstall()) return;
+        for (const delay of [1500, 4000, 9000, 18000, 35000, 65000, 120000]) {
+            window.setTimeout(() => { if (!echoDirectState.installed) echoDirectInstall(); }, delay);
+        }
+    }
+    // === End Echo Clothing direct asset lookup accelerator ===
 
     // === Targeted Performance Engine (v3.5.79) ===
     // Observes only our own work. Never patches global timers, native drawing,
@@ -2823,7 +3011,7 @@ function SubbysPlushiesPageMain() {
     const CHAT_STYLE_SYMBOLS = Object.freeze(['♡ ✧','♛ ✦','☾ ✧','✦ ★','🔥 ✦','🐾 ♡','❀ ♡','★ ✦','none']);
     const CHAT_STYLE_BORDERS = Object.freeze(['solid','dashed','double','none']);
 
-    // v3.9.35: Entirely local, optional, reversible performance profiles.
+    // v3.9.37: Entirely local, optional, reversible performance profiles.
     // Never modifies BC's game loop or any other addon. All profile changes
     // preserve messages, custom colors, saves, and chat packet formatting.
     const SUBBYS_ADAPTIVE_KEY='SubbysPlushies:adaptive-performance:v1';
@@ -15869,7 +16057,7 @@ function SubbysPlushiesPageMain() {
             note:'Local Essentials-only measurements; does not attribute lag to other mods or measure game FPS.'};
     }
     Object.defineProperty(window,'SubbysChatStylePerf',{configurable:true,value:Object.freeze({
-        version:'3.9.35',status:subbysChatPerfSnapshot,
+        version:'3.9.37',status:subbysChatPerfSnapshot,
         report(){const s=subbysChatPerfSnapshot();console.log('[Subby chat performance]',s);console.table(s.samples);return s;},
         reset(){for(const group of ['colors','reactions','emotes','highlighting','refresh'])
             for(const key of Object.keys(subbysChatPerfState[group]))subbysChatPerfState[group][key]=0;
@@ -21096,7 +21284,7 @@ function SubbysPlushiesPageMain() {
         inspectRenderedHideBehindRow(row);
         if (protectRow) inspectRenderedProtectRow(row);
     }
-    // v3.9.35: all chat entry paths share this one row dispatcher. The native
+    // v3.9.37: all chat entry paths share this one row dispatcher. The native
     // hook runs core styling while its trusted Sender context is still active;
     // optional highlights and inline images are scheduled under the frame cap.
     const subbysChatProcessedRows=new WeakMap();
@@ -30314,6 +30502,7 @@ function SubbysPlushiesPageMain() {
         }
         checkDuplicateAsset();
         initHookBackend();
+        optionalStartupStep("echo-direct-asset-optimizer", echoDirectScheduleStartup);
         optionalStartupStep("performance-engine-api", perfExposeEngine);
         optionalStartupStep("game-speed-guard", gameSpeedInstall);
         optionalStartupStep("shared-performance-bridge", installSharedPerformanceBridge);
@@ -30455,7 +30644,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.35";
+    const VERSION = "3.9.37";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
