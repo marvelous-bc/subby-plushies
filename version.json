@@ -1,5 +1,5 @@
 {
-  "version": "3.9.28",
+  "version": "3.9.32",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "BC-Safe Speed Guard: fewer unnecessary canvas/layout calculations, reduced DOM writes, batched remote plushie position updates, adaptive badge hover processing, and improved background-tab performance. Experimental long-chat paint skipping is available but disabled by default. All existing features retained."
+  "notes": "Removed the Floating decorations setting and decorative-symbol animation. Added a persistent local Hide decorations / Show decorations button in Chat Styles; preserves shared colors, borders, badges, whisper themes, all other features, and the v3.9.31 startup repair."
 }
