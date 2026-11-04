@@ -1,18 +1,25 @@
-
-    
-  
 {
-  "version": "3.9.39",
+  "version": "3.9.37",
   "releaseDate": "2026-11-04",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Subbycat's Essentials v3.9.39 release metadata. Upload the matching v3.9.39 SubbysPlushies.user.js to the same repository path",
+  "notes": "Echo Clothing direct lookup optimization based on Essentials 3.9.35. Removes v3.9.36 coexistence throttles. Exact-match in-task AssetGet microcache when Echo Clothing is registered, with automatic suspension, controls and optional GL pipeline profiling. No claim of measured R133 FPS gain.",
   "changes": [
     {
-      "category": "Release metadata",
+      "category": "Echo Clothing direct acceleration",
       "items": [
-        "Publishes version 3.9.39 for the Essentials update checker."
+        "Installs an SDK AssetGet microcache only after detecting the running Echo Clothing Extension (not Echo Actions).",
+        "Successful exact-name asset references can be reused within the same JavaScript task, bypassing repeated downstream lookup hooks including Echo alias checks.",
+        "Never caches missing assets or redirected alias results; invalidates on asset registry changes and each microtask boundary.",
+        "Automatically suspends when repeated lookups are rare, and provides disable/enable controls and hit-rate statistics.",
+        "Optional read-only GL appearance rendering profiler, off by default."
+      ]
+    },
+    {
+      "category": "Revert prior approach",
+      "items": [
+        "Based directly on 3.9.35 and excludes all 3.9.36 Echo coexistence budgeting, registry/copy reuse, polling changes or visual throttles.",
+        "Does not change Echo canvas width, artwork dimensions, textures, permissions, native/BCX hooks or sync."
       ]
     }
   ]
 }
-
