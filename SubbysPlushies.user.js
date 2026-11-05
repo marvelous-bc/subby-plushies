@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.37
-// @description  v3.9.37 Adaptive performance modes, batched chat processing, lighter rendering and responsive UI
+// @version      3.9.40
+// @description  3.9.40 Crowd-Room Stability: manual modes, stable auto switching, idle draw sampling
 // @released     2026-11-04
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.37";
+    const VERSION = "3.9.40";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -629,7 +629,10 @@ function SubbysPlushiesPageMain() {
         } else if (result) echoDirectState.aliasPasses++;
         // A cache can cost more than it saves. Stop caching after sufficient
         // observations if < 3% of queries repeat within a task.
-        if (echoDirectState.calls >= 4096 && echoDirectState.hits < 123) {
+        const crowded=window.CurrentScreen==='ChatRoom' && (window.ChatRoomCharacter?.length||0)>=8;
+        const evaluationCalls=crowded?512:2048;
+        if (echoDirectState.calls >= evaluationCalls &&
+            echoDirectState.hits / echoDirectState.calls < 0.03) {
             echoDirectState.automaticSuspension = true;
             echoDirectClear();
             console.info('[Subby Echo Direct] Low repeated-lookup rate; cache automatically suspended.');
@@ -3037,17 +3040,20 @@ function SubbysPlushiesPageMain() {
         if(typeof quickReactionPurge==='function')quickReactionPurge();
         return true;
     }
+    // Only sample distinct periods: a burst of eight DOM events is not eight slow frames.
     function subbysAdaptiveSample(ms){
         const st=subbysAdaptiveState;
-        if(!st.automatic || document.hidden || !Number.isFinite(ms))return;
-        st.measurements++;const now=Date.now();
+        if(!st.automatic || document.hidden || !Number.isFinite(ms) ||
+            isLowCpuMode() || essentialsConfig().manualModeLock) return;
+        const now=Date.now();
+        if(now-(st.lastMeasurementAt||0)<250)return;
+        st.lastMeasurementAt=now;st.measurements++;
         if(ms>=10){st.slowCount++;st.fastCount=0;st.lastSlow=now;}
         else if(ms<3){st.fastCount++;if(st.slowCount)st.slowCount--;}
-        // Hysteresis: react to sustained work, not one blocked frame.
-        if(st.slowCount>=8 && now-st.lastSwitch>15000){
+        if(st.slowCount>=8 && now-st.lastSwitch>90000){
             const downgrade=st.active==='quality'?'balanced':'performance';
             subbysAdaptiveSwitch(downgrade);st.slowCount=0;st.fastCount=0;
-        }else if(st.fastCount>=120 && now-st.lastSlow>60000 && now-st.lastSwitch>60000){
+        }else if(st.fastCount>=120 && now-st.lastSlow>90000 && now-st.lastSwitch>90000){
             subbysAdaptiveSwitch(st.base);st.fastCount=0;st.slowCount=0;
         }
     }
@@ -3064,7 +3070,7 @@ function SubbysPlushiesPageMain() {
         measurements:subbysAdaptiveState.measurements,lastSwitch:subbysAdaptiveState.lastSwitch||null,
         independentOfBCFrameLimiter:true};}
     window.SubbysAdaptivePerformance=Object.freeze({status:subbysAdaptiveStatus,
-        setProfile:profile=>subbysAdaptiveSet(profile),
+        setProfile:profile=>subbysAdaptiveSet(profile,false),
         setAutomatic:enabled=>subbysAdaptiveSet(subbysAdaptiveState.base,!!enabled),
         profiles:()=>({quality:{...SUBBYS_PROFILE_LEVELS.quality},
             balanced:{...SUBBYS_PROFILE_LEVELS.balanced},performance:{...SUBBYS_PROFILE_LEVELS.performance}})});
@@ -4975,18 +4981,35 @@ function SubbysPlushiesPageMain() {
         }
         return true;
     }
-    function setPerformanceMode(mode) {
-        const normalized = String(mode || "").trim().toLowerCase();
-        const next = normalized === "low" || normalized === "low cpu" || normalized === "lowcpu" ? "low" : "normal";
-        const settings = getFeatureSettings();
-        settings.performanceMode = next;
-        writeLocalJSON(FEATURE_SETTINGS_STORAGE_KEY, settings);
-        cancelIdleAnimation(false);
-        if (next === "normal" && settings.idleAnimations) scheduleNextIdleAnimation(1200);
-        restartPerformanceSensitiveMonitors();
-        chatStyleSyncPerformance();
-        if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
-        emitPluginApiEvent("performance", { mode: next });
+    function setPerformanceMode(mode, origin = 'manual') {
+        const normalized=String(mode || '').trim().toLowerCase();
+        const next=normalized==='low'||normalized==='low cpu'||normalized==='lowcpu'?'low':'normal';
+        const settings=getFeatureSettings();
+        if(origin==='budget-auto' && (essentialsConfig().budget!=='automatic' ||
+            essentialsConfig().manualModeLock || essentialsConfig().safeMode))return settings.performanceMode;
+        if(origin==='manual'){
+            const config=essentialsConfig();
+            config.manualModeLock=true;
+            if(subbysAdaptiveState.automatic){subbysAdaptiveState.automatic=false;subbysAdaptivePersist();}
+            config.budget='off'; // Auto FPS switching never overrides explicit selection.
+            config.autoLow=false;
+            essentialsAutoOwnsLow=false;
+            essentialsBudgetSlow=essentialsBudgetFast=0;
+            essentialsBudgetRecent.length=0;
+            if(essentialsBudgetTimer!==null){window.clearInterval(essentialsBudgetTimer);essentialsBudgetTimer=null;}
+            essentialsSave();
+        }
+        const changed=settings.performanceMode!==next;
+        settings.performanceMode=next;
+        if(changed){
+            writeLocalJSON(FEATURE_SETTINGS_STORAGE_KEY,settings);
+            cancelIdleAnimation(false);
+            if(next==='normal'&&settings.idleAnimations)scheduleNextIdleAnimation(1200);
+            restartPerformanceSensitiveMonitors();
+            chatStyleSyncPerformance();
+            emitPluginApiEvent('performance',{mode:next});
+        }
+        if(extensionsPanelElement?.isConnected&&(changed||origin==='manual'))renderExtensionsPanel();
         return next;
     }
     function toggleFeatureSetting(key) {
@@ -8277,13 +8300,15 @@ function SubbysPlushiesPageMain() {
         return true;
     }
     const nativePresenceDrawSampleAt=new WeakMap();
+    let nativePresenceProfileClients=0; // Timings only during an explicit sampleRender().
+
     // Times for the 10 Hz samples are CUMULATIVE since startup, not for the
     // most recent FPS sample. downstreamMs is the time inside next(args):
     // it includes BC's DrawCharacter AND all downstream mods, not just BC.
     // hookMs is ONLY this plugin's synchronous work around next(args); deferred
     // RAF/DOM work is separate and is intentionally not claimed here.
     const nativePresenceDrawMetrics={calls:0,sampled:0,skipped:0,hiddenSkips:0,
-        rosterRefreshes:0,totalMs:0,downstreamMs:0,hookMs:0,
+        rosterRefreshes:0,idleSamples:0,activeSamples:0,profiledSamples:0,totalMs:0,downstreamMs:0,hookMs:0,
         maxDownstreamMs:0,maxHookMs:0,queuedOverlays:0};
     let nativePresenceRosterExpires = 0;
     let nativePresenceRosterSource = null;
@@ -8319,7 +8344,14 @@ function SubbysPlushiesPageMain() {
             const now=Date.now();
             // BC still renders normally: only our non-essential placement
             // sampling is slightly less frequent in the existing Low CPU mode.
-            const sampleGap = gameSpeedDrawSampleGap(now);
+            // Cheap room-wide activity test: no per-character membership maps
+            // on every drawn frame. A single active effect restores fast sampling.
+            const overlayActive=!!nativePresenceHoverPointer||!!nativePresenceHoveredKey||
+                petSuitRenderStates.size>0||remotePlushEmotes.size>0||
+                !!speechBubbleElement?.isConnected||!!plushStatusIconElement?.isConnected;
+            // Idle characters need infrequent placement probes for newly equipped
+            // effects; active overlays retain the original response speed.
+            const sampleGap=gameSpeedDrawSampleGap(now)*(overlayActive?1:6);
             if(now-(nativePresenceDrawSampleAt.get(candidate)||0)<sampleGap){
                 if (sampleGap !== 100) gameSpeedMetrics.adaptiveDrawSkips++;
                 nativePresenceDrawMetrics.skipped++;
@@ -8327,7 +8359,10 @@ function SubbysPlushiesPageMain() {
             }
             nativePresenceDrawSampleAt.set(candidate,now);
             nativePresenceDrawMetrics.sampled++;
-            const sampledStart=performance.now();
+            if(overlayActive)nativePresenceDrawMetrics.activeSamples++;
+            else nativePresenceDrawMetrics.idleSamples++;
+            const profileDraw=nativePresenceProfileClients>0;
+            const sampledStart=profileDraw?performance.now():0;
             let C = null;
             let placement = null;
             if (window.CurrentScreen === "ChatRoom") {
@@ -8348,9 +8383,9 @@ function SubbysPlushiesPageMain() {
             }
             // Measure downstream drawing separately from our hook. The
             // previous totalMs mistakenly appeared to measure addon CPU.
-            const downstreamStart = performance.now();
+            const downstreamStart = profileDraw?performance.now():0;
             const result = next(args);
-            const downstreamEnd = performance.now();
+            const downstreamEnd = profileDraw?performance.now():0;
             if (placement) {
                 rememberVisibleOverlayPlacement(C, placement);
                 const key = nativePresenceBadgeKey(C);
@@ -8380,14 +8415,17 @@ function SubbysPlushiesPageMain() {
                     at: placement.at,
                 };
             }
-            const hookEnd = performance.now();
-            const downstreamCost = Math.max(0, downstreamEnd-downstreamStart);
-            const ownCost = Math.max(0, (downstreamStart-sampledStart)+(hookEnd-downstreamEnd));
-            nativePresenceDrawMetrics.downstreamMs += downstreamCost;
-            nativePresenceDrawMetrics.hookMs += ownCost;
-            nativePresenceDrawMetrics.maxDownstreamMs = Math.max(nativePresenceDrawMetrics.maxDownstreamMs,downstreamCost);
-            nativePresenceDrawMetrics.maxHookMs = Math.max(nativePresenceDrawMetrics.maxHookMs,ownCost);
-            nativePresenceDrawMetrics.totalMs += hookEnd-sampledStart;
+            if(profileDraw){
+                nativePresenceDrawMetrics.profiledSamples++;
+                const hookEnd=performance.now();
+                const downstreamCost=Math.max(0,downstreamEnd-downstreamStart);
+                const ownCost=Math.max(0,(downstreamStart-sampledStart)+(hookEnd-downstreamEnd));
+                nativePresenceDrawMetrics.downstreamMs+=downstreamCost;
+                nativePresenceDrawMetrics.hookMs+=ownCost;
+                nativePresenceDrawMetrics.maxDownstreamMs=Math.max(nativePresenceDrawMetrics.maxDownstreamMs,downstreamCost);
+                nativePresenceDrawMetrics.maxHookMs=Math.max(nativePresenceDrawMetrics.maxHookMs,ownCost);
+                nativePresenceDrawMetrics.totalMs+=hookEnd-sampledStart;
+            }
             return result;
         });
         nativePresenceChatRoomRunHooked = hooked;
@@ -8413,7 +8451,7 @@ function SubbysPlushiesPageMain() {
     window.SubbysMaxPerformanceDiag=Object.freeze({
         status:()=>({version:VERSION,quickReaction:{...quickReactionPerfMetrics,
             trackedRows:quickReactionRecords.length},draw:{...nativePresenceDrawMetrics,
-            meanSampleMs:Math.round(1000*nativePresenceDrawMetrics.totalMs/Math.max(1,nativePresenceDrawMetrics.sampled))/1000},
+            meanSampleMs:Math.round(1000*nativePresenceDrawMetrics.totalMs/Math.max(1,nativePresenceDrawMetrics.profiledSamples))/1000},
             expression:window.SubbysExpressionStudio?.performance?.()||null,
             wceLoggingNotControlled:true}),
         // An opt-in five-second FPS sample. Does not add any permanent timers.
@@ -8437,19 +8475,22 @@ function SubbysPlushiesPageMain() {
         // Compare the same five-second period instead of lifetime counters.
         // Does not disable any features or third-party render hooks.
         sampleRender:async(duration=5000)=>{
-            const counters=['calls','sampled','skipped','hiddenSkips','rosterRefreshes',
+            const counters=['calls','sampled','skipped','hiddenSkips','rosterRefreshes','profiledSamples',
                 'totalMs','downstreamMs','hookMs','queuedOverlays'];
             const start=Object.fromEntries(counters.map(k=>[k,nativePresenceDrawMetrics[k]]));
-            const fps=await window.SubbysMaxPerformanceDiag.sampleFps(duration);
+            nativePresenceProfileClients++;
+            let fps;
+            try { fps=await window.SubbysMaxPerformanceDiag.sampleFps(duration); }
+            finally { nativePresenceProfileClients=Math.max(0,nativePresenceProfileClients-1); }
             const delta=Object.fromEntries(counters.map(k=>[k,
                 Math.round(1000*(nativePresenceDrawMetrics[k]-start[k]))/1000]));
-            const count=Math.max(1,delta.sampled);
+            const count=Math.max(1,delta.profiledSamples);
             return {version:VERSION,fps,draw:{...delta,
                 downstreamMeanMs:Math.round(1000*delta.downstreamMs/count)/1000,
                 subbysHookMeanMs:Math.round(1000*delta.hookMs/count)/1000,
                 downstreamSharePercent:Math.round(1000*delta.downstreamMs/Math.max(0.001,delta.totalMs))/10,
                 subbysHookSharePercent:Math.round(1000*delta.hookMs/Math.max(0.001,delta.totalMs))/10},
-                note:'Downstream includes BC and other addons. Subbys hook excludes deferred overlays, chat, and other addon work. Measurements only cover sampled DrawCharacter calls.'};
+                note:'Timed drawing overhead is collected only during this explicit sample. Downstream includes BC and other addons, not just Echo. Native DrawCharacter remains unthrottled.'};
         }
     });
     window.SubbysPlushiesDialogueTest = (actionKey = "pet") => {
@@ -16057,7 +16098,7 @@ function SubbysPlushiesPageMain() {
             note:'Local Essentials-only measurements; does not attribute lag to other mods or measure game FPS.'};
     }
     Object.defineProperty(window,'SubbysChatStylePerf',{configurable:true,value:Object.freeze({
-        version:'3.9.37',status:subbysChatPerfSnapshot,
+        version:'3.9.40',status:subbysChatPerfSnapshot,
         report(){const s=subbysChatPerfSnapshot();console.log('[Subby chat performance]',s);console.table(s.samples);return s;},
         reset(){for(const group of ['colors','reactions','emotes','highlighting','refresh'])
             for(const key of Object.keys(subbysChatPerfState[group]))subbysChatPerfState[group][key]=0;
@@ -16069,6 +16110,8 @@ function SubbysPlushiesPageMain() {
     let essentialsBudgetSlow=0;
     let essentialsBudgetFast=0;
     let essentialsBudgetLastFps=0;
+    let essentialsBudgetTransitionAt=0;
+    const essentialsBudgetRecent=[];
     function essentialsConfig() {
         if(essentialsState)return essentialsState;
         const saved=readLocalJSON(ESSENTIALS_QOL_KEY,{});
@@ -16080,6 +16123,7 @@ function SubbysPlushiesPageMain() {
             dockCollapsed:saved.dockCollapsed===true,
             chatColors: saved.chatColors&&typeof saved.chatColors==='object'&&!Array.isArray(saved.chatColors)?saved.chatColors:{},
             budget: saved.budget==='automatic'?'automatic':'off',
+            manualModeLock:saved.manualModeLock===true,
             autoLow:saved.autoLow===true,
             safeMode:saved.safeMode===true,
             safeBackup:saved.safeBackup&&typeof saved.safeBackup==='object'?saved.safeBackup:null,
@@ -16222,11 +16266,19 @@ function SubbysPlushiesPageMain() {
         renderExtensionsPanel();
     }
     function essentialsSetBudget(value) {
-        const state=essentialsConfig();state.budget=value==='automatic'?'automatic':'off';essentialsSave();
-        essentialsBudgetSlow=0;essentialsBudgetFast=0;
-        if(state.budget==='off'&&(essentialsAutoOwnsLow||state.autoLow)){essentialsAutoOwnsLow=false;state.autoLow=false;essentialsSave();setPerformanceMode('normal');}
+        const state=essentialsConfig();
+        const owned=(essentialsAutoOwnsLow||state.autoLow)&&!state.manualModeLock;
+        state.budget=value==='automatic'?'automatic':'off';
+        state.manualModeLock=false;
+        essentialsBudgetSlow=essentialsBudgetFast=0;
+        essentialsBudgetRecent.length=0;
+        if(state.budget==='off'){
+            state.autoLow=false;essentialsAutoOwnsLow=false;
+            essentialsSave();
+            if(owned&&getFeatureSettings().performanceMode==='low')setPerformanceMode('normal','budget-release');
+        }else essentialsSave();
         essentialsStartBudget();
-        renderExtensionsPanel();
+        if(extensionsPanelElement?.isConnected)renderExtensionsPanel();
     }
     let essentialsBudgetVisibilityListener=false;
     function essentialsStartBudget() {
@@ -16234,37 +16286,63 @@ function SubbysPlushiesPageMain() {
             essentialsBudgetVisibilityListener=true;
             document.addEventListener('visibilitychange',essentialsStartBudget,{passive:true});
         }
-        // Do not keep an 8-second timer running while disabled or hidden.
-        if(essentialsConfig().budget!=='automatic'||essentialsConfig().safeMode||document.hidden){
+        const config=essentialsConfig();
+        if(config.budget!=='automatic'||config.manualModeLock||config.safeMode||document.hidden){
             if(essentialsBudgetTimer!==null){window.clearInterval(essentialsBudgetTimer);essentialsBudgetTimer=null;}
             return;
         }
         if(essentialsBudgetTimer!==null)return;
-        essentialsAutoOwnsLow=essentialsConfig().autoLow;
+        essentialsAutoOwnsLow=config.autoLow&&getFeatureSettings().performanceMode==='low';
         const sample=()=>{
-            if(essentialsConfig().budget!=='automatic'||essentialsConfig().safeMode||document.hidden||typeof window.requestAnimationFrame!=='function')return;
-            let count=0,start=0;
+            const cfg=essentialsConfig();
+            if(cfg.budget!=='automatic'||cfg.manualModeLock||cfg.safeMode||document.hidden||
+                typeof window.requestAnimationFrame!=='function')return;
+            let frames=0,first=0;
             const frame=(time)=>{
-                if(!start)start=time;
-                count++;
-                if(count<14){window.requestAnimationFrame(frame);return;}
-                const elapsed=Math.max(1,time-start);
-                const fps=Math.min(120,Math.round(1000*(count-1)/elapsed));
+                if(document.hidden||essentialsConfig().budget!=='automatic'||essentialsConfig().manualModeLock)return;
+                if(!first)first=time;
+                frames++;
+                const duration=time-first;
+                if(duration<1500){window.requestAnimationFrame(frame);return;}
+                if(frames<8)return; // Avoid treating a paused/inactive tab as a game FPS sample.
+                const fps=Math.min(120,Math.round(1000*(frames-1)/Math.max(1,duration)));
                 essentialsBudgetLastFps=fps;
-                if(fps<26){essentialsBudgetSlow++;essentialsBudgetFast=0;}
-                else if(fps>47){essentialsBudgetFast++;essentialsBudgetSlow=0;}
-                else{essentialsBudgetSlow=0;essentialsBudgetFast=0;}
-                if(essentialsBudgetSlow>=3&&!essentialsAutoOwnsLow&&getFeatureSettings().performanceMode==='normal'){
-                    essentialsAutoOwnsLow=true;essentialsConfig().autoLow=true;essentialsSave();setPerformanceMode('low');
-                }
-                if(essentialsBudgetFast>=5&&essentialsAutoOwnsLow){
-                    essentialsAutoOwnsLow=false;essentialsConfig().autoLow=false;essentialsSave();setPerformanceMode('normal');
+                essentialsBudgetRecent.push(fps);
+                if(essentialsBudgetRecent.length>3)essentialsBudgetRecent.shift();
+                if(essentialsBudgetRecent.length<3)return;
+                const sorted=[...essentialsBudgetRecent].sort((a,b)=>a-b);
+                const median=sorted[1],now=Date.now();
+                if(median<24){essentialsBudgetSlow++;essentialsBudgetFast=0;}
+                else if(median>50){essentialsBudgetFast++;essentialsBudgetSlow=0;}
+                else{essentialsBudgetSlow=essentialsBudgetFast=0;}
+                if(essentialsBudgetSlow>=4&&!essentialsAutoOwnsLow&&
+                    getFeatureSettings().performanceMode==='normal'&&now-essentialsBudgetTransitionAt>90000){
+                    essentialsAutoOwnsLow=true;cfg.autoLow=true;
+                    essentialsBudgetTransitionAt=now;essentialsBudgetSlow=0;
+                    essentialsSave();setPerformanceMode('low','budget-auto');
+                }else if(essentialsBudgetFast>=8&&essentialsAutoOwnsLow&&
+                    now-essentialsBudgetTransitionAt>120000){
+                    essentialsAutoOwnsLow=false;cfg.autoLow=false;
+                    essentialsBudgetTransitionAt=now;essentialsBudgetFast=0;
+                    essentialsSave();setPerformanceMode('normal','budget-release');
                 }
             };
             window.requestAnimationFrame(frame);
         };
-        essentialsBudgetTimer=window.setInterval(sample,8000);
+        essentialsBudgetTimer=window.setInterval(sample,12000);
     }
+    // Read-only diagnostics; never modifies BC frame rate or drawing.
+    window.SubbysPerformanceControl=Object.freeze({
+        status:()=>({version:VERSION,cpuMode:getFeatureSettings().performanceMode,
+            budget:essentialsConfig().budget,manualModeLock:essentialsConfig().manualModeLock,
+            autoOwnsLow:essentialsAutoOwnsLow,profiles:subbysAdaptiveStatus(),
+            lastSampleFps:essentialsBudgetLastFps,recentFps:essentialsBudgetRecent.slice(),
+            sampleTimerActive:essentialsBudgetTimer!==null,
+            draw:window.SubbysMaxPerformanceDiag?.status?.().draw||null}),
+        setManualMode:mode=>setPerformanceMode(mode),
+        enableAutomatic:()=>essentialsSetBudget('automatic'),
+        disableAutomatic:()=>essentialsSetBudget('off')
+    });
     function essentialsH(tag,text,style) {
         const el=document.createElement(tag);
         if(text!=null)el.textContent=text;
@@ -16364,14 +16442,14 @@ function SubbysPlushiesPageMain() {
         const windows=makeExtensionsSection('Floating Window Minimize');
         windows.append(essentialsH('p','Use Minimize in Extensions or Outfit Time Machine to reduce the window to a draggable icon. Tap the icon to restore the same tab and scroll position.',{fontSize:'12px',color:getExtensionsStyle().muted}));container.append(windows);
         const perf=makeExtensionsSection('Performance Budget Manager');
-        perf.append(essentialsH('p','Optional lightweight frame sampling (14 frames every 8 seconds). Sustained slow results activate existing Low CPU mode; recovery returns to Normal only if the manager changed it. FPS is an estimate, not a GPU benchmark.',{fontSize:'12px',color:getExtensionsStyle().muted}));
+        perf.append(essentialsH('p','Optional 1.5-second sampling every 12 seconds, with three-sample smoothing and cooldowns. Manual Normal / Low CPU choices stay locked until Automatic is explicitly enabled. FPS is an estimate, not a GPU benchmark.',{fontSize:'12px',color:getExtensionsStyle().muted}));
         const prow=essentialsH('div',null,{display:'flex',gap:'6px',flexWrap:'wrap'});
         for(const [id,label] of [['off','Off'],['automatic','Automatic']])prow.append(makeExtensionsButton(label,()=>essentialsSetBudget(id),{active:essentialsConfig().budget===id}));
         perf.append(prow,essentialsH('p',`Last sample: ${essentialsBudgetLastFps||'—'} FPS · Current mode: ${getFeatureSettings().performanceMode}`,{fontSize:'12px',color:getExtensionsStyle().muted}));
         const profileRow=essentialsH('div',null,{display:'flex',flexWrap:'wrap',gap:'6px',marginTop:'12px'});
         for(const [name,label] of [['quality','Quality'],['balanced','Balanced'],['performance','Performance']])
             profileRow.append(makeExtensionsButton(label,()=>{
-                subbysAdaptiveSet(name);renderExtensionsPanel();
+                subbysAdaptiveSet(name,false);renderExtensionsPanel();
             },{active:subbysAdaptiveState.base===name}));
         perf.append(essentialsH('p','Essentials-only rendering profiles. Balanced keeps gradients on 50 recent messages; Performance uses 20. Older messages remain readable. No BC game-speed changes.',{fontSize:'12px',color:getExtensionsStyle().muted}),profileRow);
         const adaptiveToggle=makeExtensionsButton(subbysAdaptiveState.automatic?'Automatic adjustment: ON':'Automatic adjustment: OFF',()=>{
@@ -30644,7 +30722,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.37";
+    const VERSION = "3.9.40";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
