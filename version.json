@@ -1,24 +1,30 @@
 {
-  "version": "3.9.37",
+  "version": "3.9.40",
   "releaseDate": "2026-11-04",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Echo Clothing direct lookup optimization based on Essentials 3.9.35. Removes v3.9.36 coexistence throttles. Exact-match in-task AssetGet microcache when Echo Clothing is registered, with automatic suspension, controls and optional GL pipeline profiling. No claim of measured R133 FPS gain.",
+  "notes": "Crowded-room performance stability: manual mode pinning, smoothed FPS switching, reduced idle DrawCharacter overlay sampling and opt-in timing. Deploy only with the matching patched v3.9.40 userscript.",
   "changes": [
     {
-      "category": "Echo Clothing direct acceleration",
+      "category": "Performance mode stability",
       "items": [
-        "Installs an SDK AssetGet microcache only after detecting the running Echo Clothing Extension (not Echo Actions).",
-        "Successful exact-name asset references can be reused within the same JavaScript task, bypassing repeated downstream lookup hooks including Echo alias checks.",
-        "Never caches missing assets or redirected alias results; invalidates on asset registry changes and each microtask boundary.",
-        "Automatically suspends when repeated lookups are rare, and provides disable/enable controls and hit-rate statistics.",
-        "Optional read-only GL appearance rendering profiler, off by default."
+        "Explicit Low CPU and Normal mode selections stop automatic CPU switching and pin the visual profile.",
+        "The FPS automatic manager uses longer samples, a rolling median, sustained slow/fast thresholds and switch cooldowns.",
+        "Automatic recovery to Normal occurs only if that manager previously enabled Low CPU."
       ]
     },
     {
-      "category": "Revert prior approach",
+      "category": "Crowded-room character rendering",
       "items": [
-        "Based directly on 3.9.35 and excludes all 3.9.36 Echo coexistence budgeting, registry/copy reuse, polling changes or visual throttles.",
-        "Does not change Echo canvas width, artwork dimensions, textures, permissions, native/BCX hooks or sync."
+        "Idle Essentials overlay-position checks run about once every 600 milliseconds per character rather than 100 milliseconds.",
+        "Hovering, speech, pet suit and remote emote overlays keep faster checks.",
+        "Detailed DrawCharacter timing is collected only during explicit performance sampling; native game drawing still executes on every call."
+      ]
+    },
+    {
+      "category": "Echo accelerator safeguards",
+      "items": [
+        "The direct AssetGet microcache suspends sooner in crowded rooms when repeated lookups are too rare to offset its overhead.",
+        "No changes to Echo canvas size, asset data, equipment updates or native game hooks."
       ]
     }
   ]
