@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.50
-// @description  3.9.50 uses readable ivory for Kitten menu text with dark titles and purple accents on pink controls
+// @version      3.9.51
+// @description  3.9.51 uses readable ivory for Kitten menu text with dark titles and purple accents on pink controls
 // @released     2026-11-08
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.50";
+    const VERSION = "3.9.51";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -16209,7 +16209,7 @@ function SubbysPlushiesPageMain() {
         font-weight:650!important;
         text-shadow:none!important;
       }
-      /* v3.9.50: ivory is the default on dark Kitten menu surfaces.
+      /* v3.9.51: ivory is the default on dark Kitten menu surfaces.
          Light/pink controls keep their dark titles, while known explanatory labels stay purple.
          Do not apply this rule to Classic UI or user-generated chat previews. */
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysPlushiesExtensionsContent button :is(span,small,p,label,div):not(.SubbysHomeShortcutDescription):not(.SubbysFeatureFinderDescription):not(.SubbysFeatureFinderCategory){
@@ -25001,6 +25001,8 @@ function SubbysPlushiesPageMain() {
     function wardrobeResolveMissingVisibleLabel(value) {
         if (typeof value !== "string" || value.length > 1024 ||
             !/MISSING TEXT IN|UNKNOWN TRANSLATION KEY|MISSING ASSET DESCRIPTION/i.test(value)) return value;
+        const plushLabel = plushNameResolveVisibleText(value);
+        if (plushLabel !== value) return plushLabel;
         const layerMatch = /(?:MISSING TEXT IN|UNKNOWN TRANSLATION KEY)/i.test(value);
         const itemMatch = /MISSING ASSET DESCRIPTION/i.test(value);
         const normalized = value.trim().replace(/["'`\s]+$/g, "");
@@ -25128,21 +25130,117 @@ function SubbysPlushiesPageMain() {
             }, WARDROBE_DISPLAY_HOOK_RETRIES_MS[wardrobeDisplayHookRetryIndex]);
         }
     }
+    // BC may initialize or refresh its translation tables after our native items
+    // register. Keep asset identity (and its label) independent of that timing.
+    // This fix is strictly scoped to known Essentials assets; it never changes
+    // the text of unrelated BC items or other addons.
+    const plushNameTextMap = buildNativeAssetTextMap();
+    const plushNameTextMapLower = new Map([...plushNameTextMap].map(([key, label]) => [key.toLowerCase(), label]));
+    const plushNameKeyPattern = /(?:ItemHandheld|ItemAddon)\s*[:\-]?\s*SubbysPlushies/i;
+    const plushNameMissingPattern = /MISSING\s+(?:ASSET(?:\s+DESCRIPTION)?|TEXT)|UNKNOWN\s+TRANSLATION\s+KEY/i;
+    const plushNameRepairStats = { repairs: 0, recoveredLookups: 0, directHookRestores: 0,
+        checked: 0, lastReason: '', lastAt: 0, missingGroups: [], failures: 0 };
+    let plushNameDirectHook = null;
+    let plushNameRepairInstalled = false;
+    function plushNameTextForKey(key) {
+        if (typeof key !== 'string' || key.length > 512 || !/SubbysPlushies|Subby(?:CatHeadband|HeartCharm|DrapedWrapDress)/i.test(key)) return null;
+        const clean = key.trim();
+        const joined = clean.replace(/^(ItemHandheld|ItemAddon)\s*[:\-]\s*(?=SubbysPlushies)/i, '$1');
+        return plushNameTextMap.get(clean) || plushNameTextMapLower.get(clean.toLowerCase()) ||
+            plushNameTextMap.get(joined) || plushNameTextMapLower.get(joined.toLowerCase()) || null;
+    }
+    function plushNameResolveVisibleText(value) {
+        if (typeof value !== 'string' || value.length > 1024 || !plushNameMissingPattern.test(value) ||
+            !/\bSubbysPlushies/i.test(value)) return value;
+        // Only translate a visibly broken label when it explicitly identifies
+        // this asset. Never replace an unrelated item's missing-asset message.
+        const match = value.match(/(?:ItemHandheld|ItemAddon)\s*[:\-]?\s*SubbysPlushies(?:[A-Za-z0-9]*)/i);
+        const standalone = !match && value.match(/\bSubbysPlushies(?:SelectBase|Optionp\d+|Setp\d+)?\b/i);
+        const label = match ? plushNameTextForKey(match[0]) :
+            standalone ? plushNameTextForKey(GROUP + standalone[0]) : null;
+        return label || value;
+    }
+    function plushNameAssetTextHandler(args, next) {
+        const key = args?.[0];
+        const known = plushNameTextForKey(key);
+        if (known) return known;
+        const result = next(args);
+        if (typeof result !== 'string' || !plushNameMissingPattern.test(result)) return result;
+        const repaired = plushNameResolveVisibleText(result);
+        if (repaired !== result) plushNameRepairStats.recoveredLookups++;
+        return repaired;
+    }
     function installAssetTextHook() {
-        const textMap = buildNativeAssetTextMap();
-        if (!installHook("AssetTextGet", 1000, (args, next) => {
-            const key = args?.[0];
-            if (typeof key === "string" && textMap.has(key)) return textMap.get(key);
-            const result = next(args);
-            if (typeof result === "string" && /MISSING ASSET DESCRIPTION/i.test(result)) {
-                for (const [candidate, label] of textMap) {
-                    if (result.trimEnd().endsWith(candidate)) return label;
-                }
-            }
-            return result;
-        })) {
-            throw new Error("AssetTextGet is unavailable; cannot install custom asset text.");
+        if (typeof window.AssetTextGet !== 'function') return false;
+        // ModSDK hooks stay registered across native translation refreshes.
+        // For the no-SDK fallback, BC can replace the original function during
+        // late loading; restore our single direct wrapper only if it was lost.
+        if (installedHooks.has('AssetTextGet') &&
+            (!plushNameDirectHook || window.AssetTextGet === plushNameDirectHook)) return true;
+        if (installedHooks.has('AssetTextGet')) {
+            installedHooks.delete('AssetTextGet');
+            plushNameRepairStats.directHookRestores++;
         }
+        const success = installHook('AssetTextGet', 1000, plushNameAssetTextHandler);
+        if (success && window.AssetTextGet?.[CUSTOM_HOOK_MARK]) plushNameDirectHook = window.AssetTextGet;
+        if (!success) throw new Error('AssetTextGet is unavailable; cannot install custom asset text.');
+        return success;
+    }
+    function plushNameRepairNativeAssets(reason = 'startup') {
+        const now = Date.now();
+        if (now - plushNameRepairStats.lastAt < 750) return false;
+        plushNameRepairStats.checked++;
+        plushNameRepairStats.lastAt = now;
+        plushNameRepairStats.lastReason = String(reason).slice(0, 70);
+        plushNameRepairStats.missingGroups = [];
+        try { installAssetTextHook(); } catch (_) { plushNameRepairStats.failures++; }
+        let changed = false;
+        for (const groupName of PLUSH_GROUPS) {
+            const same = entry => entry?.Name === ASSET_NAME &&
+                (!entry?.Group || entry.Group?.Name === groupName || entry.Group?.Group === groupName);
+            const candidates = [];
+            try {
+                const asset = window.AssetGet?.(FAMILY, groupName, ASSET_NAME);
+                if (asset && same(asset)) candidates.push(asset);
+                else plushNameRepairStats.missingGroups.push(groupName);
+            } catch (_) { plushNameRepairStats.missingGroups.push(groupName); }
+            const group = findRuntimeAssetGroup(groupName);
+            if (Array.isArray(group?.Asset)) candidates.push(...group.Asset.filter(same));
+            const source = findSourceAssetGroup(groupName);
+            if (Array.isArray(source?.Asset)) candidates.push(...source.Asset.filter(same));
+            for (const asset of new Set(candidates)) {
+                if (asset.Description === DISPLAY_NAME) continue;
+                // A missing or transiently incorrect display name must never
+                // leak into the native UI even before a text lookup succeeds.
+                asset.Description = DISPLAY_NAME;
+                plushNameRepairStats.repairs++;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+    function plushNameInstallRecovery() {
+        if (plushNameRepairInstalled) return;
+        plushNameRepairInstalled = true;
+        plushNameRepairNativeAssets('registered');
+        // Bounded late repairs cover slow BC translations and late addon hooks.
+        for (const ms of [700, 2000, 6000, 12000]) {
+            window.setTimeout(() => plushNameRepairNativeAssets('late-init'), ms);
+        }
+        // The shared UI bus already runs on screen transitions and page focus;
+        // no additional game-loop, DOM-wide observer, or periodic polling.
+        perfUIBus.watch((screen, previous, reason) => {
+            if (screen === previous && reason !== 'focus' && reason !== 'pageshow' &&
+                reason !== 'visibility-change') return;
+            plushNameRepairNativeAssets('ui:' + screen);
+        }, 'plush-name-stability');
+        window.SubbysPlushieNameDiag = Object.freeze({
+            status: () => ({ version: VERSION, ...plushNameRepairStats,
+                main: plushNameTextForKey(GROUP + ASSET_NAME),
+                addon: plushNameTextForKey(ADDON_GROUP + ASSET_NAME),
+                hook: installedHooks.has('AssetTextGet') }),
+            repair: () => plushNameRepairNativeAssets('manual')
+        });
     }
     function installHugTightlyTextHook() {
         const compactHugName = compactActivityName(HUG_TIGHTLY_ACTIVITY_NAME);
@@ -25809,7 +25907,7 @@ function SubbysPlushiesPageMain() {
             rememberNativeDefinition(definition, groupName);
             asset.Extended = true;
             if (asset.Archetype == null) asset.Archetype = resolveModularArchetype();
-            if (asset.Description === ASSET_NAME || !asset.Description) asset.Description = DISPLAY_NAME;
+            asset.Description = DISPLAY_NAME;
             registerNativeModularData(asset, groupName);
             if (groupName === GROUP) primaryAsset = asset;
         }
@@ -31085,6 +31183,7 @@ function SubbysPlushiesPageMain() {
         void plushStartupArtwork.catch(e => warn("Background plush art preparation failed:", e));
         setStartupStage("registering-plush-assets");
         setupNativeAsset();
+        optionalStartupStep('plush-name-stability', plushNameInstallRecovery);
         try { installPlushStateHooks(); }
         catch (e) { warn("R133: some optional room/activity hooks could not be installed:", e); }
         optionalStartupStep("offer-chat-observer", startOfferChatObserverMonitor);
@@ -31181,7 +31280,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.50";
+    const VERSION = "3.9.51";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
