@@ -1,31 +1,5 @@
 {
-  "version": "3.9.40",
-  "releaseDate": "2026-11-04",
+  "version": "3.9.51",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Crowded-room performance stability: manual mode pinning, smoothed FPS switching, reduced idle DrawCharacter overlay sampling and opt-in timing. Deploy only with the matching patched v3.9.40 userscript.",
-  "changes": [
-    {
-      "category": "Performance mode stability",
-      "items": [
-        "Explicit Low CPU and Normal mode selections stop automatic CPU switching and pin the visual profile.",
-        "The FPS automatic manager uses longer samples, a rolling median, sustained slow/fast thresholds and switch cooldowns.",
-        "Automatic recovery to Normal occurs only if that manager previously enabled Low CPU."
-      ]
-    },
-    {
-      "category": "Crowded-room character rendering",
-      "items": [
-        "Idle Essentials overlay-position checks run about once every 600 milliseconds per character rather than 100 milliseconds.",
-        "Hovering, speech, pet suit and remote emote overlays keep faster checks.",
-        "Detailed DrawCharacter timing is collected only during explicit performance sampling; native game drawing still executes on every call."
-      ]
-    },
-    {
-      "category": "Echo accelerator safeguards",
-      "items": [
-        "The direct AssetGet microcache suspends sooner in crowded rooms when repeated lookups are too rare to offset its overhead.",
-        "No changes to Echo canvas size, asset data, equipment updates or native game hooks."
-      ]
-    }
-  ]
+  "notes": "v3.9.51: Improved plushie asset-name registration and recovery to prevent intermittent \"Missing Asset\" labels, including handheld and second-slot plushies. Retains the calmer Kitten UI with ivory text and electric-purple accents."
 }
