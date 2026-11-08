@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.49
-// @description  3.9.49 improves Kitten Find readability: ivory instructions, bold purple category labels
+// @version      3.9.50
+// @description  3.9.50 uses readable ivory for Kitten menu text with dark titles and purple accents on pink controls
 // @released     2026-11-08
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.49";
+    const VERSION = "3.9.50";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -5069,8 +5069,20 @@ function SubbysPlushiesPageMain() {
     function getUseMenuStyle() {
         return getLayoutSettings().useMenuColors;
     }
+    // Kitten uses ivory as its default text and supporting-copy color.
+    // Only alter the rendered palette: do not rewrite saved custom colors or Classic UI.
     function getExtensionsStyle() {
-        return getLayoutSettings().extensionsColors;
+        const palette = getLayoutSettings().extensionsColors;
+        try {
+            if (subbysBookEnabled()) {
+                return {
+                    ...palette,
+                    text: palette.text === LOFI_MENU_STYLE.text ? '#FFFFF0' : palette.text,
+                    muted: palette.muted === LOFI_MENU_STYLE.muted ? '#FFFFF0' : palette.muted,
+                };
+            }
+        } catch (_) { /* The Kitten preference may not be initialized yet. */ }
+        return palette;
     }
     function setLayoutSetting(key, value) {
         const settings = getLayoutSettings();
@@ -15740,7 +15752,7 @@ function SubbysPlushiesPageMain() {
     const SUBBYS_CAT_CSS = `
       /* v3.5.103: responsive kitten shell, resize controls, and optimized button assets. */
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"]{
-        --cat-text:#eee4eb;--cat-pink:#c9a3ba;--cat-hot:#ac829a;
+        --cat-text:#FFFFF0;--cat-pink:#c9a3ba;--cat-hot:#ac829a;
         position:fixed!important;box-sizing:border-box!important;
         display:flex!important;flex-direction:column!important;
         border:0!important;outline:0!important;border-radius:0!important;
@@ -15796,7 +15808,7 @@ function SubbysPlushiesPageMain() {
       }
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysCatHeaderActions button{
         font:700 11px Arial,sans-serif!important;min-height:31px!important;min-width:62px!important;padding:5px 12px 7px!important;
-        border-radius:10px!important;color:#f5eaf0!important;text-shadow:0 1px 2px #000!important;
+        border-radius:10px!important;color:#FFFFF0!important;text-shadow:0 1px 2px #000!important;
         border:0!important;background:transparent url("${SUBBYS_CAT_BUTTON_ART.headerButton}") center/100% 100% no-repeat!important;
         box-shadow:none!important;cursor:pointer;touch-action:manipulation;
       }
@@ -15812,7 +15824,7 @@ function SubbysPlushiesPageMain() {
         flex:initial!important;white-space:normal!important;overflow-wrap:normal!important;
         text-align:center!important;font:700 11.5px Georgia,serif!important;
         padding:7px 6px 9px!important;border-radius:11px!important;
-        color:#eee2ea!important;border:0!important;text-shadow:0 1px 2px #000!important;
+        color:#FFFFF0!important;border:0!important;text-shadow:0 1px 2px #000!important;
         background:transparent url("${SUBBYS_CAT_BUTTON_ART.tabInactive}") center/100% 100% no-repeat!important;
         box-shadow:none!important;cursor:pointer;touch-action:manipulation;overflow:hidden!important;
       }
@@ -15858,13 +15870,13 @@ function SubbysPlushiesPageMain() {
       }
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysCatSidebarTitle{
         padding:6px 4px 10px!important;font:700 12px Georgia,serif!important;
-        color:#dbb4ca!important;letter-spacing:.08em!important;
+        color:#FFFFF0!important;letter-spacing:.08em!important;
       }
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysCatChapterButton{
         display:block!important;flex:0 0 auto!important;min-height:40px!important;width:100%!important;
         border-radius:10px!important;padding:9px 12px!important;text-align:left!important;
         border:0!important;background:transparent url("${SUBBYS_CAT_BUTTON_ART.chapterInactive}") center/100% 100% no-repeat!important;
-        color:#eee1eb!important;font:700 12px Georgia,serif!important;text-shadow:0 1px 2px #000!important;
+        color:#FFFFF0!important;font:700 12px Georgia,serif!important;text-shadow:0 1px 2px #000!important;
         overflow-wrap:anywhere;cursor:pointer;touch-action:manipulation;box-shadow:none!important;
       }
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysCatChapterButton[data-selected="true"]{
@@ -15881,7 +15893,7 @@ function SubbysPlushiesPageMain() {
         overflow:hidden!important;
       }
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysBookChapter{
-        flex:0 0 auto!important;color:#d8adc4!important;font:700 clamp(18px,2vw,24px) Georgia,serif!important;
+        flex:0 0 auto!important;color:#FFFFF0!important;font:700 clamp(18px,2vw,24px) Georgia,serif!important;
         padding:5px 8px 9px!important;border-bottom:1px solid #91758966!important;
         text-shadow:0 2px 3px #0009;
       }
@@ -15912,7 +15924,7 @@ function SubbysPlushiesPageMain() {
       }
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysBookResizeHint{
         position:absolute!important;z-index:15!important;bottom:29px!important;right:35px!important;
-        background:#332b38;border:1px solid #b38ca5;color:#f0e4ed;
+        background:#332b38;border:1px solid #b38ca5;color:#FFFFF0;
         border-radius:8px;min-width:27px;min-height:27px;cursor:nwse-resize;touch-action:none;
       }
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysPlushiesMobileBottomNav{display:none!important}
@@ -16168,15 +16180,15 @@ function SubbysPlushiesPageMain() {
 
       /* v3.9.47 calm kitten palette: accessible control states on all viewport sizes. */
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysPlushiesExtensionsContent :is(input:not([type="checkbox"]):not([type="range"]),select,textarea){
-        background:#332d39!important;color:#f0e7ed!important;
+        background:#332d39!important;color:#FFFFF0!important;
         border:1px solid #806b7d!important;border-radius:8px!important;
         caret-color:#e2bbcd!important;
       }
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysPlushiesExtensionsContent :is(input,textarea)::placeholder{
-        color:#c3b1c0!important;opacity:1!important;
+        color:#FFFFF0!important;opacity:.75!important;
       }
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysPlushiesExtensionsContent select option{
-        background:#332d39;color:#f0e7ed;
+        background:#332d39;color:#FFFFF0;
       }
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] :is(button,input,select,textarea):focus-visible{
         outline:2px solid #d5afc2!important;outline-offset:2px!important;
@@ -16197,7 +16209,14 @@ function SubbysPlushiesPageMain() {
         font-weight:650!important;
         text-shadow:none!important;
       }
-      /* v3.9.49: ivory on the dark Find page; vivid dark purple on the pale-pink result artwork. */
+      /* v3.9.50: ivory is the default on dark Kitten menu surfaces.
+         Light/pink controls keep their dark titles, while known explanatory labels stay purple.
+         Do not apply this rule to Classic UI or user-generated chat previews. */
+      .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] .SubbysPlushiesExtensionsContent button :is(span,small,p,label,div):not(.SubbysHomeShortcutDescription):not(.SubbysFeatureFinderDescription):not(.SubbysFeatureFinderCategory){
+        color:#352735!important;
+        -webkit-text-fill-color:#352735!important;
+      }
+      /* v3.9.49: ivory on the dark Find page; vivid dark purple on pale-pink result artwork. */
       .SubbysPlushiesExtensionsPanel[data-subbys-cat="true"] :is(.SubbysFeatureFinderIntro,.SubbysFeatureFinderSummary,.SubbysFeatureFinderEmpty){
         color:#FFFFF0!important;
         -webkit-text-fill-color:#FFFFF0!important;
@@ -30192,7 +30211,7 @@ function SubbysPlushiesPageMain() {
             function updatePreview() {
                 const h=safeHex(primaryRow.hexInput.value),a=safeHex(accentRow.hexInput.value),m=safeHex(metalRow.hexInput.value);
                 previewBody.replaceChildren();preview.open=true;
-                if(!h||!a||!m){previewBody.append(elt('p','Enter three valid colors first.'));return [];}
+                if(!h||!a||!m){previewBody.append(elt('p','Enter three valid colors first.'));return [];} 
                 const plans=planColors(h,a,m);
                 previewHeader.textContent=`🔎 Preview Color Changes · ${plans.length} item(s)`;
                 if(!plans.length){previewBody.append(elt('p','No changes needed for the included outfit.'));return plans;}
@@ -31162,7 +31181,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.49";
+    const VERSION = "3.9.50";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
