@@ -1,5 +1,6 @@
+
 {
-  "version": "3.9.55",
+  "version": "3.9.56",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "v3.9.55: Cute scrapbook aesthetic moodboards, categorized sticker picker, rotate/duplicate tools, opt-in live collaboration with room players, and a room-specific board editable only by BC room administrators. Shared updates use bounded hidden messages; uploaded local images remain private. Works with PawLounge 1.2.22."
+  "notes": "Added Fallen Seraph Rose ItemHandheld with 10 recolorable color zones. All existing Essentials features retained."
 }
