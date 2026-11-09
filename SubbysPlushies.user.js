@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.58
-// @description  3.9.58 Compact handheld Fallen Seraph Rose with functional per-layer fit controls
+// @version      3.9.59
+// @description  3.9.59 Fallen Seraph Rose ready-to-wear fit, move/resize, and 10 color zones
 // @released     2026-11-09
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.58";
+    const VERSION = "3.9.59";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2652,14 +2652,16 @@ function SubbysPlushiesPageMain() {
         if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
         return wardrobePlacement(entry);
     }
-    // Fallen Seraph Rose (3.9.58): compact default geometry plus BC native per-layer
+    // Fallen Seraph Rose (3.9.59): ready-to-wear fitted geometry plus BC native per-layer
     // transforms. Unlike arbitrary top-level Property.ScaleX etc, the Layer... maps
     // are the actual BC appearance-layer transform fields. A record is written for
     // EACH of the ten color zones so all pieces move, scale and rotate together.
     // The 3.9.57 saved editor state used a different, ineffective property shape,
-    // so start v2 fit neutral relative to the corrected handheld geometry.
-    const SUBBY_ROSE_FIT_KEY = 'SubbysPlushies:FallenSeraphRose:fit:v2';
-    const SUBBY_ROSE_FIT_DEFAULT = Object.freeze({TranslationX:0,TranslationY:0,ScaleX:1,ScaleY:1,Rotation:0});
+    // v3 starts from the user-tested X 50, Y -40, X/Y scale 0.70. Prior v2
+    // fits are intentionally left untouched and not auto-imported: the new
+    // preset must be deterministic, and is not an additive transform.
+    const SUBBY_ROSE_FIT_KEY = 'SubbysPlushies:FallenSeraphRose:fit:v3';
+    const SUBBY_ROSE_FIT_DEFAULT = Object.freeze({TranslationX:50,TranslationY:-40,ScaleX:0.7,ScaleY:0.7,Rotation:0});
     const SUBBY_ROSE_FIT_LIMITS = Object.freeze({TranslationX:[-350,350],TranslationY:[-500,500],ScaleX:[0.3,2.5],ScaleY:[0.3,2.5],Rotation:[-180,180]});
     const SUBBY_ROSE_FIT_NATIVE_KEYS = Object.freeze({
         TranslationX:'LayerTranslationX',TranslationY:'LayerTranslationY',
@@ -2771,7 +2773,7 @@ function SubbysPlushiesPageMain() {
         const close=document.createElement('button');close.textContent='✕ Close';header.appendChild(close);panel.appendChild(header);
         const closeModal=()=>overlay.remove();close.onclick=closeModal;
         overlay.addEventListener('pointerdown',e=>{if(e.target===overlay)closeModal();});
-        const hint=document.createElement('p');hint.textContent='The rose starts at a smaller handheld position. Drag the preview or adjust X, Y, size and angle; changes use BC native layer transforms. The preview is approximate—check the avatar to fine-tune.';
+        const hint=document.createElement('p');hint.textContent='Default fit: X 50, Y -40, width 0.70, height 0.70, rotation 0°. Drag or adjust to customize. Reset fit restores this ready-to-wear placement.';
         Object.assign(hint.style,{fontSize:'12px',lineHeight:'1.45',opacity:'.85'});panel.appendChild(hint);
         const stageWrap=document.createElement('div');Object.assign(stageWrap.style,{display:'flex',gap:'13px',flexWrap:'wrap',alignItems:'start'});panel.appendChild(stageWrap);
         const stage=document.createElement('div');Object.assign(stage.style,{position:'relative',width:'210px',height:'420px',maxWidth:'90vw',flex:'0 0 210px',border:'1px solid #b18db9',borderRadius:'8px',background:'linear-gradient(#42304b,#191021)',overflow:'hidden',touchAction:'none'});stageWrap.appendChild(stage);
@@ -32609,7 +32611,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.57";
+    const VERSION = "3.9.59";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
