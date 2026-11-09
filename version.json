@@ -1,10 +1,11 @@
 {
-  "version": "3.9.66",
+  "version": "3.9.67",
   "released": "2026-11-09",
   "name": "Subby's Plushies & Essentials",
   "notes": [
-    "Fixed the Heartkeeper's Lantern halo-glow alignment so the bloom is centered on the lantern instead of drifting above-left.",
-    "The DOM halo overlay now anchors to the lantern sprite center and follows item translation/scale more accurately.",
-    "Kept the current lantern placement, size, and priority settings unchanged."
+    "Corrected the Heartkeeper glow alignment with a positive-X-right and positive-Y-down calibration.",
+    "Added independent Glow X and Glow Y controls to the lantern fit editor; no changes to the item itself.",
+    "Fixed the upper-right Exit button in the Lantern Use / Extinguish screen.",
+    "Preserved lantern dimensions, native transform, priority 26, and other Essentials wardrobe assets."
   ]
 }
