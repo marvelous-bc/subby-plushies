@@ -2,9 +2,9 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.55
-// @description  3.9.55 cute moodboards, sticker library, invited collaboration and admin-only room boards
-// @released     2026-11-08
+// @version      3.9.56
+// @description  3.9.56 Fallen Seraph Rose handheld with 10 recolorable zones; moodboards and Essentials
+// @released     2026-11-09
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.55";
+    const VERSION = "3.9.56";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -1731,7 +1731,7 @@ function SubbysPlushiesPageMain() {
   }
   try { installPawAestheticMoodboards(); } catch (e) { console.warn('[Aesthetic moodboards] Optional editor unavailable:',e); }
 
-    const BUILD_DATE = "2026-11-08";
+    const BUILD_DATE = "2026-11-09";
     const TAG = "[Subby's Plushies & Essentials]";
     const MOD_NAME = "SubbysPlushies";
     const DISPLAY_NAME = "Subby's Plushies";
@@ -2453,14 +2453,15 @@ function SubbysPlushiesPageMain() {
     const WARDROBE_ITEMS = [
         {"name": "SubbyCatHeadband", "title": "Subby's Plush Cat-Ear Headband", "group": "HairAccessory2", "top": 50, "left": 168, "width": 183, "height": 100, "priority": 55, "colorZones": ["OuterEars", "InnerEars", "Headband", "Bow"], "defaultColors": ["#BB8CCC", "#F2C1D6", "#B58ACA", "#E58DBA"]},
         {"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]},
-        {"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Cloth","top":182,"left":90,"width":279,"height":373,"priority":38,"layerPriorities":{"Fabric":29},"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]}
+        {"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Cloth","top":182,"left":90,"width":279,"height":373,"priority":38,"layerPriorities":{"Fabric":29},"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]},
+        {"name":"SubbyFallenSeraphRose","title":"The Fallen Seraph's Rose","group":"ItemHandheld","top":165,"left":78,"width":170,"height":285,"priority":58,"colorZones":["HaloGlow","Halo","Stem","Leaves","Thorns","Ribbon","Petals","PetalEdges","HeartCore","Jewels"],"defaultColors":["#B65CFF","#B88A3D","#24162F","#603473","#B88A3D","#C93F87","#32173F","#D9689B","#F0B3DF","#D4A75D"]}
     ];
     const WARDROBE_ITEM_NAME_SET = new Set(WARDROBE_ITEMS.map(entry => entry.name));
     const WARDROBE_IMAGE_BY_NAME = new Map(WARDROBE_ITEMS.map(entry =>
         [entry.name, `${WARDROBE_ASSET_ROOT}/${encodeURIComponent(entry.name)}.png`]));
     const WARDROBE_LAYER_IMAGES = new Map(WARDROBE_ITEMS.map(entry => [entry.name, new Map()]));
     const WARDROBE_POSE_IMAGES = new Map();
-    const WARDROBE_SLOTS = new Set(["Cloth", "Suit", "ClothLower", "Necklace", "HairAccessory2", "HairAccessory1", "Bra", "Panties", "Socks", "Shoes"]);
+    const WARDROBE_SLOTS = new Set(["Cloth", "Suit", "ClothLower", "Necklace", "HairAccessory2", "HairAccessory1", "Bra", "Panties", "Socks", "Shoes", "ItemHandheld"]);
     const WARDROBE_POSES = ["Standing", "ArmsUp", "ArmsUpWide", "ArmsBehind", "Kneel", "AllFours"];
     const WARDROBE_NATIVE_POSE = Object.freeze({
         ArmsUp: "ArmsUp", OverTheHead: "ArmsUp", ArmsRaised: "ArmsUp",
@@ -26963,6 +26964,21 @@ function SubbysPlushiesPageMain() {
             try { window.AssetCurrentGroup = previousCurrentGroup; } catch (_) {}
         }
     }
+    // SubbyFallenSeraphRose: R133 native Bitmap fetch bridge (does not modify other item URLs).
+    function installSubbyFallenRoseBitmapBridge() {
+        const previous = window.fetch;
+        if (typeof previous !== "function" || previous.__subbyFallenRoseBridge) return;
+        const patched = function (input, init) {
+            const url = typeof input === "string" ? input : input?.url;
+            if (typeof url === "string" && /SubbyFallenSeraphRose/i.test(url)) {
+                const mapped = wardrobeSpriteForPath(url);
+                if (mapped && mapped !== url) return previous.call(this, mapped, init);
+            }
+            return previous.apply(this, arguments);
+        };
+        Object.defineProperty(patched, "__subbyFallenRoseBridge", {value: true});
+        window.fetch = patched;
+    }
     function setupNativeAsset() {
         if (!imageMappings) throw new Error("Render image mappings were not prepared.");
         installExtendedConfig();
@@ -26971,6 +26987,7 @@ function SubbysPlushiesPageMain() {
         catch (e) { warn("Optional activity text hook could not be installed:", e); }
         optionalStartupStep("R133-native-plush-image-fetch", installR133NativePlushImageFetchBridge);
         installImageMappingHooks();
+        try { installSubbyFallenRoseBitmapBridge(); } catch (e) { warn("Optional Fallen Seraph Rose image bridge unavailable:", e); }
         let primaryAsset = null;
         for (const groupName of PLUSH_GROUPS) {
             const definition = makeNativeAssetDefinition();
@@ -31389,7 +31406,7 @@ function SubbysPlushiesPageMain() {
             function updatePreview() {
                 const h=safeHex(primaryRow.hexInput.value),a=safeHex(accentRow.hexInput.value),m=safeHex(metalRow.hexInput.value);
                 previewBody.replaceChildren();preview.open=true;
-                if(!h||!a||!m){previewBody.append(elt('p','Enter three valid colors first.'));return [];} 
+                if(!h||!a||!m){previewBody.append(elt('p','Enter three valid colors first.'));return [];}
                 const plans=planColors(h,a,m);
                 previewHeader.textContent=`🔎 Preview Color Changes · ${plans.length} item(s)`;
                 if(!plans.length){previewBody.append(elt('p','No changes needed for the included outfit.'));return plans;}
@@ -32360,7 +32377,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.55";
+    const VERSION = "3.9.56";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {

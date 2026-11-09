@@ -1,0 +1,77 @@
+{
+  "item": "SubbyFallenSeraphRose",
+  "defaultColors": {
+    "Stem": "#24162F",
+    "Leaves": "#603473",
+    "Thorns": "#B88A3D",
+    "Petals": "#32173F",
+    "PetalEdges": "#D9689B",
+    "HeartCore": "#F0B3DF",
+    "Halo": "#B88A3D",
+    "HaloGlow": "#B65CFF",
+    "Ribbon": "#C93F87",
+    "Jewels": "#D4A75D"
+  },
+  "zoneOrder": [
+    "HaloGlow",
+    "Halo",
+    "Stem",
+    "Leaves",
+    "Thorns",
+    "Ribbon",
+    "Petals",
+    "PetalEdges",
+    "HeartCore",
+    "Jewels"
+  ],
+  "presets": {
+    "FallenSeraph": {
+      "Stem": "#24162F",
+      "Leaves": "#603473",
+      "Thorns": "#B88A3D",
+      "Petals": "#32173F",
+      "PetalEdges": "#D9689B",
+      "HeartCore": "#F0B3DF",
+      "Halo": "#B88A3D",
+      "HaloGlow": "#B65CFF",
+      "Ribbon": "#C93F87",
+      "Jewels": "#D4A75D"
+    },
+    "BloodMoon": {
+      "Stem": "#24162F",
+      "Leaves": "#603473",
+      "Thorns": "#B88A3D",
+      "Petals": "#3D0C27",
+      "PetalEdges": "#E4416B",
+      "HeartCore": "#FFB4BF",
+      "Halo": "#C98C62",
+      "HaloGlow": "#E1447B",
+      "Ribbon": "#990D49",
+      "Jewels": "#D4A75D"
+    },
+    "VoidOrchid": {
+      "Stem": "#24162F",
+      "Leaves": "#603473",
+      "Thorns": "#B88A3D",
+      "Petals": "#110B24",
+      "PetalEdges": "#9C68EC",
+      "HeartCore": "#CFB4FF",
+      "Halo": "#705078",
+      "HaloGlow": "#7530CE",
+      "Ribbon": "#75448E",
+      "Jewels": "#D4A75D"
+    },
+    "CelestialAsh": {
+      "Stem": "#24162F",
+      "Leaves": "#603473",
+      "Thorns": "#B88A3D",
+      "Petals": "#615176",
+      "PetalEdges": "#E6B9ED",
+      "HeartCore": "#FFFFFF",
+      "Halo": "#E0BE83",
+      "HaloGlow": "#E8D1FF",
+      "Ribbon": "#C69ACF",
+      "Jewels": "#D4A75D"
+    }
+  }
+}
