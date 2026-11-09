@@ -1,6 +1,6 @@
 {
-  "version": "3.9.63",
+  "version": "3.9.64",
   "released": "2026-11-09",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "The Heartkeeper's Lantern now has a Light up / Extinguish Use action and visible glow; original 0.62 x 0.62 scale restored; native Move / Resize retained."
+  "notes": "Heartkeeper Lantern - X -50, Y -90 relative shift; native layers priority capped at 26; brighter visible halo and stable one-click Use action. Other Essentials items preserved."
 }
