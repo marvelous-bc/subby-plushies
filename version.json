@@ -1,11 +1,11 @@
 {
-  "version": "3.9.69",
+  "version": "3.9.70",
   "released": "2026-11-09",
   "name": "Subby's Plushies & Essentials",
   "notes": [
-    "Added an independent Heartkeeper Glow Layer Calibration panel with separate live X and Y controls.",
-    "Added \u00b11, \u00b15 and \u00b110 nudge buttons and a copyable exact position readout.",
-    "Added optional overlay guides for glow bounds, glow center and lantern center.",
-    "Preserved lantern item fit, layer priority, and previous glow offsets without clearing saved data."
+    "Restored the working v3.9.68 addon baseline instead of retaining the larger v3.9.69 calibration changes.",
+    "Added a lightweight standalone Heartkeeper Glow Layer X/Y panel with exact value and +/-1,5,10 nudges.",
+    "Synchronized the userscript bootstrap version with the addon version.",
+    "Kept existing Heartkeeper size, positioning, halo, color layers, and locally saved settings unchanged."
   ]
 }
