@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.61
-// @description  3.9.61 Heartkeeper's Lantern repo-native asset and color layer fix
+// @version      3.9.63
+// @description  3.9.63 Heartkeeper lantern Light up / Extinguish Use action and restored full scale
 // @released     2026-11-09
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.61";
+    const VERSION = "3.9.63";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2833,7 +2833,7 @@ function SubbysPlushiesPageMain() {
     }
 
     const SUBBY_LANTERN_FIT_KEY = 'SubbysPlushies:HeartkeepersLantern:fit:v1';
-    const SUBBY_LANTERN_FIT_DEFAULT = Object.freeze({TranslationX:55,TranslationY:-55,ScaleX:0.62,ScaleY:0.62,Rotation:0});
+    const SUBBY_LANTERN_FIT_DEFAULT = Object.freeze({TranslationX:86,TranslationY:112,ScaleX:0.62,ScaleY:0.62,Rotation:0});
     const SUBBY_LANTERN_FIT_LIMITS = Object.freeze({TranslationX:[-350,350],TranslationY:[-500,500],ScaleX:[0.3,2.5],ScaleY:[0.3,2.5],Rotation:[-180,180]});
     const SUBBY_LANTERN_FIT_NATIVE_KEYS = Object.freeze({
         TranslationX:'LayerTranslationX',TranslationY:'LayerTranslationY',
@@ -2850,7 +2850,16 @@ function SubbysPlushiesPageMain() {
     function subbyLanternFitSaved() {
         try {
             const raw=localStorage.getItem(SUBBY_LANTERN_FIT_KEY);
-            return raw ? subbyLanternFitNormalize(JSON.parse(raw)) : null;
+            if (!raw) return null;
+            const fit=subbyLanternFitNormalize(JSON.parse(raw));
+            // One-time targeted migration: v3.9.62's unedited default was 0.58.
+            // Keep every custom adjustment, and restore only that exact old preset.
+            if (fit.ScaleX === 0.58 && fit.ScaleY === 0.58 &&
+                fit.TranslationX === 86 && fit.TranslationY === 112 && fit.Rotation === 0) {
+                fit.ScaleX = fit.ScaleY = 0.62;
+                localStorage.setItem(SUBBY_LANTERN_FIT_KEY,JSON.stringify(fit));
+            }
+            return fit;
         } catch(_) {return null;}
     }
     function subbyLanternFitItem() {
@@ -2928,7 +2937,7 @@ function SubbysPlushiesPageMain() {
         const close=document.createElement('button');close.textContent='✕ Close';header.appendChild(close);panel.appendChild(header);
         const closeModal=()=>overlay.remove();close.onclick=closeModal;
         overlay.addEventListener('pointerdown',e=>{if(e.target===overlay)closeModal();});
-        const hint=document.createElement('p');hint.textContent='Default fit: X 55, Y -55, width 0.62, height 0.62, rotation 0°. Drag or adjust to customize. Reset fit restores this ready-to-hold placement.';
+        const hint=document.createElement('p');hint.textContent='Default fit: X 86, Y 112, width 0.62, height 0.62, rotation 0°. Drag or adjust to customize. Reset fit restores this ready-to-hold placement.';
         Object.assign(hint.style,{fontSize:'12px',lineHeight:'1.45',opacity:'.85'});panel.appendChild(hint);
         const stageWrap=document.createElement('div');Object.assign(stageWrap.style,{display:'flex',gap:'13px',flexWrap:'wrap',alignItems:'start'});panel.appendChild(stageWrap);
         const stage=document.createElement('div');Object.assign(stage.style,{position:'relative',width:'210px',height:'420px',maxWidth:'90vw',flex:'0 0 210px',border:'1px solid #b18db9',borderRadius:'8px',background:'linear-gradient(#42304b,#191021)',overflow:'hidden',touchAction:'none'});stageWrap.appendChild(stage);
@@ -3024,6 +3033,130 @@ function SubbysPlushiesPageMain() {
             row.append(button,desc);list.appendChild(row);
         }
         document.body.append(overlay);
+        return true;
+    }
+
+
+    // Heartkeeper's Lantern: item-specific light state. This is stored in the
+    // equipped item's Property, not global localStorage, so it can be synchronized
+    // via the ordinary BC character appearance update.
+    const SUBBY_LANTERN_LIGHT_PROPERTY = 'SubbysHeartkeeperGlow';
+    const SUBBY_LANTERN_USE_PREFIX = 'InventoryItemHandheldSubbyHeartkeepersLantern';
+    const SUBBY_LANTERN_LIGHT_BUTTON = Object.freeze({x:1310,y:470,w:515,h:82});
+    function subbyLanternItemFor(C = window.Player) {
+        if (!C) return null;
+        const item = typeof window.InventoryGet === 'function'
+            ? window.InventoryGet(C, 'ItemHandheld')
+            : C.Appearance?.find?.(part => part?.Asset?.Group?.Name === 'ItemHandheld');
+        return item?.Asset?.Name === SUBBY_LANTERN_NAME ? item : null;
+    }
+    function subbyLanternIsLit(C = window.Player) {
+        return subbyLanternItemFor(C)?.Property?.[SUBBY_LANTERN_LIGHT_PROPERTY] === true;
+    }
+    function subbyLanternSetLight(lit, C = window.Player) {
+        // The equipped character owns its appearance; never alter another
+        // character's appearance from an unverified local menu click.
+        if (!C || C !== window.Player) return false;
+        const item = subbyLanternItemFor(C);
+        if (!item) return false;
+        if (!item.Property || typeof item.Property !== 'object' || Array.isArray(item.Property)) item.Property = {};
+        item.Property[SUBBY_LANTERN_LIGHT_PROPERTY] = !!lit;
+        try { window.CharacterRefresh?.(C, false, false); } catch (_) {}
+        try { window.CharacterLoadCanvas?.(C); } catch (_) {}
+        if (window.CurrentScreen === 'ChatRoom') {
+            try { window.ChatRoomCharacterUpdate?.(C); } catch (e) { console.warn('[Heartkeeper Lantern] Could not sync glow:',e); }
+        }
+        if (extensionsPanelElement?.isConnected) renderExtensionsPanel();
+        return !!lit;
+    }
+    function subbyLanternLightColor(item) {
+        const first = Array.isArray(item?.Color) ? item.Color[0] : item?.Color;
+        const value = typeof first === 'string' && /^#[0-9a-f]{6}$/i.test(first) ? first : '#FFB6F0';
+        // Avoid pure-white bloom when the flame is nearly white.
+        const hex = value.toLowerCase();
+        const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+        return {r, g, b};
+    }
+    // Draw a soft, additive heartlight on the normal BC canvas. This is visual
+    // only and does not modify character textures, restraints, or game lighting.
+    // Other players will see this effect only if their client also runs Essentials.
+    function subbyLanternDrawGlow(C) {
+        if (window.CurrentScreen !== 'ChatRoom' || document.hidden || !C) return false;
+        const item = subbyLanternItemFor(C);
+        if (!item?.Property?.[SUBBY_LANTERN_LIGHT_PROPERTY]) return false;
+        const context = window.MainCanvas;
+        if (!context || typeof context.createRadialGradient !== 'function') return false;
+        const entry = WARDROBE_ITEMS.find(x => x.name === SUBBY_LANTERN_NAME);
+        if (!entry) return false;
+        const fit = item.Property;
+        const layer = 'HeartFlame';
+        const tx = Number(fit.LayerTranslationX?.[layer]) || 0;
+        const ty = Number(fit.LayerTranslationY?.[layer]) || 0;
+        const scaleX = Number(fit.LayerScaleX?.[layer]) || 1;
+        const scaleY = Number(fit.LayerScaleY?.[layer]) || 1;
+        const placement = wardrobePlacement(entry);
+        const px = placement.left + entry.width * 0.52;
+        const py = placement.top + entry.height * 0.58;
+        const center = characterPointToMainCanvas(C, px, py);
+        const unit = characterPointToMainCanvas(C, px+1, py);
+        const moved = layerTranslationMainCanvasDelta(C, px, py, tx, ty);
+        if (!center || !unit || !moved) return false;
+        const x = center.x + moved.x, y = center.y + moved.y;
+        const pxScale = Math.hypot(unit.x-center.x, unit.y-center.y);
+        if (!Number.isFinite(pxScale) || pxScale < .02) return false;
+        const radius = Math.max(6, Math.min(340, pxScale * 145 * Math.max(.25,Math.abs(scaleX),Math.abs(scaleY))));
+        const {r,g,b}=subbyLanternLightColor(item);
+        try {
+            context.save();
+            if (typeof context.setTransform === 'function') context.setTransform(1,0,0,1,0,0);
+            context.globalCompositeOperation='screen';
+            const outer=context.createRadialGradient(x,y,0,x,y,radius);
+            outer.addColorStop(0,`rgba(${r},${g},${b},.60)`);
+            outer.addColorStop(.20,`rgba(${r},${g},${b},.36)`);
+            outer.addColorStop(.52,`rgba(${r},${g},${b},.14)`);
+            outer.addColorStop(1,`rgba(${r},${g},${b},0)`);
+            context.fillStyle=outer;
+            context.beginPath();context.arc(x,y,radius,0,Math.PI*2);context.fill();
+            // The small inner radiance helps the heart actually look lit.
+            const inner=context.createRadialGradient(x,y,0,x,y,radius*.27);
+            inner.addColorStop(0,'rgba(255,255,255,.74)');
+            inner.addColorStop(.35,`rgba(${r},${g},${b},.28)`);
+            inner.addColorStop(1,'rgba(255,255,255,0)');
+            context.fillStyle=inner;
+            context.beginPath();context.arc(x,y,radius*.27,0,Math.PI*2);context.fill();
+            return true;
+        } catch (e) { console.warn('[Heartkeeper Lantern] glow drawing failed:',e);return false; }
+        finally { try { context.restore(); } catch (_) {} }
+    }
+    // Legacy scripted extended item callbacks. These let the normal BC Use
+    // button open an actual Light up / Extinguish action for this accessory.
+    function installSubbyLanternUseCallbacks() {
+        const prefix=SUBBY_LANTERN_USE_PREFIX;
+        window[`${prefix}Load`] = () => {};
+        const draw=() => {
+            const C=window.DialogFocusCharacter || window.Player;
+            const item=subbyLanternItemFor(C);
+            if (!item) return;
+            try {
+                window.DrawTextFit?.("The Heartkeeper's Lantern", 1550, 345, 650, 'White');
+                window.DrawTextFit?.(subbyLanternIsLit(C) ? 'The heartlight shines warmly.' : 'A little warmth sleeps inside the heart.', 1550, 402, 670, 'White');
+                window.DrawButton?.(SUBBY_LANTERN_LIGHT_BUTTON.x,SUBBY_LANTERN_LIGHT_BUTTON.y,
+                    SUBBY_LANTERN_LIGHT_BUTTON.w,SUBBY_LANTERN_LIGHT_BUTTON.h,
+                    subbyLanternIsLit(C) ? 'Extinguish' : 'Light up', C===window.Player ? 'White' : '#CCCCCC');
+            } catch (e) { console.warn('[Heartkeeper Lantern] Use menu draw:',e); }
+        };
+        window[`${prefix}Draw`]=draw;
+        window[`${prefix}Run`]=draw;
+        window[`${prefix}Click`]=() => {
+            const C=window.DialogFocusCharacter || window.Player;
+            if (!subbyLanternItemFor(C) || C!==window.Player) return;
+            const p=SUBBY_LANTERN_LIGHT_BUTTON;
+            if (typeof window.MouseIn==='function' && window.MouseIn(p.x,p.y,p.w,p.h)) {
+                subbyLanternSetLight(!subbyLanternIsLit(C),C);
+            }
+        };
+        const asset=window.AssetGet?.(FAMILY,'ItemHandheld',SUBBY_LANTERN_NAME);
+        if (asset) asset.Extended=true;
         return true;
     }
 
@@ -3189,6 +3322,13 @@ function SubbysPlushiesPageMain() {
                 open: openSubbyLanternActionPalette,
                 insert: text => subbyLanternQueueRpText(text),
                 get presets() { return SUBBY_LANTERN_RP_LINES.map(line => ({...line})); },
+            }),
+            lanternLight: Object.freeze({
+                get: () => subbyLanternIsLit(),
+                on: () => subbyLanternSetLight(true),
+                off: () => subbyLanternSetLight(false),
+                toggle: () => subbyLanternSetLight(!subbyLanternIsLit()),
+                get effect() { return 'soft canvas glow (visible to users with Essentials)'; },
             }),
             getColors: name => wardrobeGetColors(name),
             setColors: (name, values) => wardrobeSetColors(name, values),
@@ -9518,14 +9658,21 @@ function SubbysPlushiesPageMain() {
             return false;
         }
         const hooked = installHook("DrawCharacter", 10000, (args, next) => {
+            // Use a single existing DrawCharacter hook; the light effect runs after
+            // native drawing, including frames skipped by overlay sampling.
+            const nextWithLanternGlow = passed => {
+                const result = next(passed);
+                try { subbyLanternDrawGlow(passed?.[0]); } catch (_) {}
+                return result;
+            };
             // ModSDK invokes this on every character every frame. Sampling
             // placement at 10 Hz is plenty for hover badges and saves all the
             // room-roster lookups, maps and allocations on intermediate frames.
             nativePresenceDrawMetrics.calls++;
-            if(window.CurrentScreen!=='ChatRoom')return next(args);
-            if(document.hidden){nativePresenceDrawMetrics.hiddenSkips++;return next(args);}
+            if(window.CurrentScreen!=='ChatRoom')return nextWithLanternGlow(args);
+            if(document.hidden){nativePresenceDrawMetrics.hiddenSkips++;return nextWithLanternGlow(args);}
             const candidate=args?.[0];
-            if(!candidate||typeof candidate!=='object')return next(args);
+            if(!candidate||typeof candidate!=='object')return nextWithLanternGlow(args);
             const now=Date.now();
             // BC still renders normally: only our non-essential placement
             // sampling is slightly less frequent in the existing Low CPU mode.
@@ -9540,7 +9687,7 @@ function SubbysPlushiesPageMain() {
             if(now-(nativePresenceDrawSampleAt.get(candidate)||0)<sampleGap){
                 if (sampleGap !== 100) gameSpeedMetrics.adaptiveDrawSkips++;
                 nativePresenceDrawMetrics.skipped++;
-                return next(args);
+                return nextWithLanternGlow(args);
             }
             nativePresenceDrawSampleAt.set(candidate,now);
             nativePresenceDrawMetrics.sampled++;
@@ -9569,7 +9716,7 @@ function SubbysPlushiesPageMain() {
             // Measure downstream drawing separately from our hook. The
             // previous totalMs mistakenly appeared to measure addon CPU.
             const downstreamStart = profileDraw?performance.now():0;
-            const result = next(args);
+            const result = nextWithLanternGlow(args);
             const downstreamEnd = profileDraw?performance.now():0;
             if (placement) {
                 rememberVisibleOverlayPlacement(C, placement);
@@ -15007,9 +15154,16 @@ function SubbysPlushiesPageMain() {
                 positionControls.prepend(roseFitButton);
             }
             if (entry.name === SUBBY_LANTERN_NAME) {
+                const lightAction=makeExtensionsButton(subbyLanternIsLit() ? '✨ Extinguish' : '✨ Light up', () => subbyLanternSetLight(!subbyLanternIsLit()));
+                lightAction.title='Toggles the Heartkeeper lantern glow and synchronizes the item state in a chat room.';
+                lightAction.disabled=!subbyLanternFitItem();
+                positionControls.prepend(lightAction);
                 const lanternFitButton=makeExtensionsButton('🏮 Move / Resize / Rotate Lantern',openSubbyLanternFitEditor);
                 lanternFitButton.title='Opens draggable preview with native item X/Y, scale, rotation, saved settings and Reset.';
                 positionControls.prepend(lanternFitButton);
+                const nativeLanternButton=makeExtensionsButton('↔ Open Native BC Move / Resize', () => { closeExtensionsPanel(); void openWardrobeNativeLayering(entry.name); });
+                nativeLanternButton.title='Open Bondage Club\'s built-in Move / Resize editor for the equipped lantern.';
+                positionControls.prepend(nativeLanternButton);
                 const lanternRpButton=makeExtensionsButton('💗 Lantern RP Actions',openSubbyLanternActionPalette);
                 lanternRpButton.title='Insert a ready-made Heartkeeper\'s Lantern roleplay line into chat.';
                 positionControls.prepend(lanternRpButton);
@@ -26066,14 +26220,31 @@ function SubbysPlushiesPageMain() {
             }
         }, LAYERING_BRIDGE_MONITOR_INTERVAL_MS);
     }
+    function focusManagedItemForLayering(C, item) {
+        if (!C || !(isOurs(item) || isWardrobeManagedItem(item))) return false;
+        try { window.DialogFocusCharacter = C; } catch (_) {}
+        try { window.DialogFocusItem = item; } catch (_) {}
+        return true;
+    }
+    async function openWardrobeNativeLayering(entryName) {
+        const entry = wardrobeEntryByName(entryName);
+        const C = window.Player || window.DialogFocusCharacter || null;
+        const item = entry && wardrobeEquippedItem(entry);
+        if (!entry || !C || !item) {
+            warn("Equip the wardrobe item first, then try native Move / Resize again.");
+            return;
+        }
+        focusManagedItemForLayering(C, item);
+        return openNativeLayering();
+    }
     async function openNativeLayering() {
         if (!ready) {
             warn("Not ready yet.");
             return;
         }
-        const { C, item } = getFocusedPlushItem();
-        if (!C || !isOurs(item)) {
-            warn("Equip Subby's Plushies first with /plushie.");
+        const { C, item } = getFocusedManagedLayeringItem();
+        if (!C || !(isOurs(item) || isWardrobeManagedItem(item))) {
+            warn("Focus Subby's Plushies or one of the managed wardrobe items first, then try Move / Resize again.");
             return;
         }
         const api = getLayeringAPI();
@@ -26081,6 +26252,7 @@ function SubbysPlushiesPageMain() {
             error("R132 Layering.Init is unavailable. Run /plushiedebug.");
             return;
         }
+        focusManagedItemForLayering(C, item);
         removeRoomMascotOverlay();
         setDragMode(false);
         if (activeIdleAnimationSession) cancelIdleAnimation();
@@ -26088,7 +26260,8 @@ function SubbysPlushiesPageMain() {
         if (C === window.Player && activeHideBehindSession) restoreActiveHideBehind("opened Move / Resize");
         if (C === window.Player && activeProtectSession) restoreActiveProtect("opened Move / Resize");
         ensureNativeTransform(item);
-        canonicalizeExistingMoveResize(C, item, "Move / Resize open canonicalize");
+        if (isOurs(item)) canonicalizeExistingMoveResize(C, item, "Move / Resize open canonicalize");
+        else if (isWardrobeManagedItem(item)) canonicalizeWardrobeLayerTransforms(C, item, "Move / Resize open canonicalize", false);
         installNativeLayeringResizeBridge(api);
         try {
             api.activeTab = "translation";
@@ -27725,6 +27898,7 @@ function SubbysPlushiesPageMain() {
                 equipped.Color = [...entry.defaultColors];
             }
             if (entry.name === SUBBY_ROSE_NAME) subbyRoseFitApplySaved(equipped);
+            if (entry.name === SUBBY_LANTERN_NAME) subbyLanternFitApplySaved(equipped);
             wardrobeNeutralizeHeight(entry, equipped);
             try { if (typeof window.CharacterRefresh === "function") window.CharacterRefresh(window.Player, false, false); } catch (_) {}
             try { if (typeof window.CharacterLoadCanvas === "function") window.CharacterLoadCanvas(window.Player); } catch (_) {}
@@ -27796,7 +27970,7 @@ function SubbysPlushiesPageMain() {
                         Value: 0,
                         Difficulty: 0,
                         Random: false,
-                        Extended: false,
+                        Extended: entry.name === SUBBY_LANTERN_NAME,
                         Top: placement.top,
                         Left: placement.left,
                         Width: entry.width,
@@ -27816,6 +27990,7 @@ function SubbysPlushiesPageMain() {
                 } else {
                     wardrobeState.methods.push(`${entry.name}: already registered + picker catalogs`);
                 }
+                if (entry.name === SUBBY_LANTERN_NAME) asset.Extended = true;
                 asset.DefaultColor = [...entry.defaultColors];
                 if (asset.ColorableLayerCount !== entry.colorZones.length) asset.ColorableLayerCount = entry.colorZones.length;
                 if (!Array.isArray(asset.Layer) || asset.Layer.length !== entry.colorZones.length ||
@@ -27828,7 +28003,7 @@ function SubbysPlushiesPageMain() {
                     for (const layer of asset.Layer || []) layer.PoseMapping = { ...WARDROBE_NATIVE_POSE };
                 }
                 ensureWardrobePickerCatalog(asset, runtimeGroup, entry);
-                if(entry.name===SUBBY_ROSE_NAME)wardrobeApplyPlacement(entry,asset);
+                if(entry.name===SUBBY_ROSE_NAME||entry.name===SUBBY_LANTERN_NAME)wardrobeApplyPlacement(entry,asset);
                 wardrobeNeutralizeHeight(entry);
                 wardrobeState.registered.push(entry.name);
             } catch (e) {
@@ -32709,6 +32884,7 @@ function SubbysPlushiesPageMain() {
         setStartupStage("registering-wardrobe");
         subbyRoseMigratePlacement();
         setupWardrobeAssets();
+        optionalStartupStep('lantern-native-use',installSubbyLanternUseCallbacks);
         // Apply to an already-worn rose, including on a full game reload.
         const subbyRoseEquippedAtStartup=subbyRoseFitItem();
         if(subbyRoseEquippedAtStartup)subbyRoseFitApplySaved(subbyRoseEquippedAtStartup);
