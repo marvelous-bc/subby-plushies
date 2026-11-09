@@ -1,6 +1,10 @@
 {
-  "version": "3.9.65",
+  "version": "3.9.66",
   "released": "2026-11-09",
-  "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Heartkeeper Lantern: halo-like bright feathered pink emission while lit; stays off when extinguished; same scale 0.62 / position X36 Y22 / priority 26; BC native controls preserved."
+  "name": "Subby's Plushies & Essentials",
+  "notes": [
+    "Fixed the Heartkeeper's Lantern halo-glow alignment so the bloom is centered on the lantern instead of drifting above-left.",
+    "The DOM halo overlay now anchors to the lantern sprite center and follows item translation/scale more accurately.",
+    "Kept the current lantern placement, size, and priority settings unchanged."
+  ]
 }

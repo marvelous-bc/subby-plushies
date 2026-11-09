@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.65
-// @description  3.9.65 Halo-style Heartkeeper glow with stable on/off and stronger visible bloom
+// @version      3.9.66
+// @description  3.9.66 Fix Heartkeeper halo-glow alignment and anchor it to the lantern center
 // @released     2026-11-09
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.65";
+    const VERSION = "3.9.66";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -3085,7 +3085,7 @@ function SubbysPlushiesPageMain() {
         img.alt='';img.draggable=false;
         img.setAttribute('aria-hidden','true');
         Object.assign(img.style,{position:'fixed',left:'-1000px',top:'-1000px',zIndex:'3000',
-            pointerEvents:'none',userSelect:'none',opacity:'0.94',mixBlendMode:'screen',
+            pointerEvents:'none',userSelect:'none',opacity:'0.88',mixBlendMode:'screen',
             transformOrigin:'center center',willChange:'transform',display:'none'});
         document.body.appendChild(img);
         subbyLanternHaloOverlay=img;
@@ -3119,12 +3119,15 @@ function SubbysPlushiesPageMain() {
         if (!canvas || !rect || rect.width<1 || rect.height<1) {subbyLanternHideHaloOverlay();return false;}
         const lx=rect.width/(Number(canvas.width)||2000);
         const ly=rect.height/(Number(canvas.height)||1000);
-        // The artwork is a feathered halo around the 188x192 source, with
-        // 90 logical pixels of breathing room on all sides.
+        // Anchor the glow to the lantern's real visual center rather than the
+        // inner heart flame. This keeps the bloom aligned when the item is
+        // shifted, scaled, or shown on a CSS-scaled BC canvas.
         const width=position.unit*position.scaleX*SUBBY_LANTERN_HALO_DIMENSIONS.width*lx;
         const height=position.unit*position.scaleY*SUBBY_LANTERN_HALO_DIMENSIONS.height*ly;
-        const x=rect.left+position.x*lx-width*((SUBBY_LANTERN_HALO_MARGIN+188*.52)/SUBBY_LANTERN_HALO_DIMENSIONS.width);
-        const y=rect.top+position.y*ly-height*((SUBBY_LANTERN_HALO_MARGIN+192*.57)/SUBBY_LANTERN_HALO_DIMENSIONS.height);
+        const centerX=rect.left+position.spriteCenterX*lx;
+        const centerY=rect.top+position.spriteCenterY*ly;
+        const x=centerX-width/2;
+        const y=centerY-height/2;
         const angle=position.rotation || 0;
         const hue=subbyLanternHaloHue(subbyLanternItemFor(C));
         const sig=[x,y,width,height,angle,hue].map(v=>Math.round(v*2)/2).join('|');
@@ -3257,13 +3260,18 @@ function SubbysPlushiesPageMain() {
             return characterPointToMainCanvas(C,x,y);
         };
         const center=project(cx,cy),ux=project(cx+1,cy),uy=project(cx,cy+1);
-        if(!center||!ux||!uy)return false;
+        const spriteCenter=project(place.left+entry.width/2,place.top+entry.height/2);
+        if(!center||!ux||!uy||!spriteCenter)return false;
         const ratio=layerTranslationHeightRatio(C) || 1;
-        const x=center.x+((ux.x-center.x)*tx+(uy.x-center.x)*ty)/ratio;
-        const y=center.y+((ux.y-center.y)*tx+(uy.y-center.y)*ty)/ratio;
+        const shiftX=((ux.x-center.x)*tx+(uy.x-center.x)*ty)/ratio;
+        const shiftY=((ux.y-center.y)*tx+(uy.y-center.y)*ty)/ratio;
+        const x=center.x+shiftX;
+        const y=center.y+shiftY;
+        const itemCenterX=spriteCenter.x+shiftX;
+        const itemCenterY=spriteCenter.y+shiftY;
         const unit=Math.max(Math.hypot(ux.x-center.x,ux.y-center.y),Math.hypot(uy.x-center.x,uy.y-center.y));
-        if(![x,y,unit].every(Number.isFinite)||unit<.01)return false;
-        const pos={x,y,unit,scaleX,scaleY,rotation};
+        if(![x,y,unit,itemCenterX,itemCenterY].every(Number.isFinite)||unit<.01)return false;
+        const pos={x,y,unit,scaleX,scaleY,rotation,spriteCenterX:itemCenterX,spriteCenterY:itemCenterY};
         // Visually obvious halo-style bloom for the local player. The art has
         // transparent interiors so BC's underlying hands stay legible.
         if (subbyLanternIsLocalCharacter(C)) {
