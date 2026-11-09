@@ -1,0 +1,22 @@
+{
+  "name": "SubbyHeartkeepersLantern",
+  "slot": "ItemHandheld",
+  "defaultFit": {
+    "TranslationX": 55,
+    "TranslationY": -55,
+    "ScaleX": 0.62,
+    "ScaleY": 0.62,
+    "Rotation": 0
+  },
+  "zones": {
+    "HeartFlame": "#FFE9F8",
+    "HandleWrap": "#8B1F64",
+    "Ribbon": "#C42377",
+    "LaceShadow": "#4A153F",
+    "GemsHearts": "#FF4FB5",
+    "GlassPanels": "#CE4EAF",
+    "ChainsBell": "#C6904E",
+    "MetalTrim": "#D4A35A",
+    "BodyFrame": "#51335D"
+  }
+}

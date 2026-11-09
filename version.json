@@ -1,5 +1,17 @@
 {
-  "version": "3.9.59",
+  "version": "3.9.61",
+  "releaseDate": "2026-11-09",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Fallen Seraph Rose default fitted to user-tested X=50 Y=-40, scale X/Y=0.70 and rotation 0; Reset Fit restores these values. Prevents older saved v2 values from overriding new default; fixed bootstrap/main version consistency; retains movement and all 10 recolorable zones."
+  "notes": "Adds Heartkeeper's Lantern to native ItemHandheld wardrobe; nine correctly dimensioned recolorable grayscale layers, asset PNG, saved fit controls and optional RP text palette. Preserves Fallen Seraph Rose and other wardrobe entries.",
+  "changes": [
+    {
+      "category": "Wardrobe — Heartkeeper Lantern",
+      "items": [
+        "New SubbyHeartkeepersLantern asset (188x192) and nine independent grayscale layers",
+        "Wardrobe mask schema v2 merge with preserved existing items",
+        "Editable position, scale and rotation; optional RP text inserts",
+        "Embedded image fallback for partial asset publishing; prior rose unchanged"
+      ]
+    }
+  ]
 }
