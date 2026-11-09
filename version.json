@@ -1,5 +1,5 @@
 {
-  "version": "3.9.56",
+  "version": "3.9.57",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Added Fallen Seraph Rose ItemHandheld with 10 recolorable color zones. All existing Essentials features retained."
+  "notes": "Fixed Fallen Seraph Rose native image rendering with embedded 10-zone sprite masks. Added Move/Resize/Rotate editor, drag preview, saved transformations."
 }
