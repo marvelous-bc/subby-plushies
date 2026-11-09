@@ -1,6 +1,6 @@
 {
-  "version": "3.9.64",
+  "version": "3.9.65",
   "released": "2026-11-09",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Heartkeeper Lantern - X -50, Y -90 relative shift; native layers priority capped at 26; brighter visible halo and stable one-click Use action. Other Essentials items preserved."
+  "notes": "Heartkeeper Lantern: halo-like bright feathered pink emission while lit; stays off when extinguished; same scale 0.62 / position X36 Y22 / priority 26; BC native controls preserved."
 }
