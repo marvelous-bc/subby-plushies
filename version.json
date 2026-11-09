@@ -1,5 +1,5 @@
 {
-  "version": "3.9.51",
+  "version": "3.9.55",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "v3.9.51: Improved plushie asset-name registration and recovery to prevent intermittent \"Missing Asset\" labels, including handheld and second-slot plushies. Retains the calmer Kitten UI with ivory text and electric-purple accents."
+  "notes": "v3.9.55: Cute scrapbook aesthetic moodboards, categorized sticker picker, rotate/duplicate tools, opt-in live collaboration with room players, and a room-specific board editable only by BC room administrators. Shared updates use bounded hidden messages; uploaded local images remain private. Works with PawLounge 1.2.22."
 }
