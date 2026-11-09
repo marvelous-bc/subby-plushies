@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.67
-// @description  3.9.67 Heartkeeper glow X/Y correction and Use-screen Exit fix
+// @version      3.9.69
+// @description  3.9.69 Heartkeeper independent Glow Layer calibration and live alignment guides
 // @released     2026-11-09
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.67";
+    const VERSION = "3.9.69";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2996,6 +2996,11 @@ function SubbysPlushiesPageMain() {
         Object.assign(glowSection.style,{marginTop:'14px',padding:'10px',border:'1px solid #755586',borderRadius:'8px'});
         const glowTitle=document.createElement('strong');glowTitle.textContent='✨ Glow alignment (lantern stays put)';
         glowSection.appendChild(glowTitle);
+        const glowLayerShortcut=document.createElement('button');
+        glowLayerShortcut.textContent='Open separate Glow Layer Calibration';
+        Object.assign(glowLayerShortcut.style,{display:'block',marginTop:'9px',padding:'8px 10px',borderRadius:'7px',color:'#fff',background:'#613065',border:'1px solid #cb8cda',cursor:'pointer'});
+        glowLayerShortcut.onclick=()=>{closeModal();openSubbyLanternGlowLayerEditor();};
+        glowSection.appendChild(glowLayerShortcut);
         const glowHint=document.createElement('p');glowHint.textContent='Higher X moves the glow RIGHT; lower X moves it LEFT. Higher Y moves it DOWN; lower Y moves it UP.';
         Object.assign(glowHint.style,{fontSize:'12px',opacity:'.88',lineHeight:'1.4'});glowSection.appendChild(glowHint);
         const glowInputs={};
@@ -3095,7 +3100,8 @@ function SubbysPlushiesPageMain() {
     // Independent cosmetic glow offset. Positive X -> right, positive Y -> down,
     // exactly like BC's native Move / Resize. Does not move the actual lantern.
     const SUBBY_LANTERN_GLOW_OFFSET_KEY = 'SubbysPlushies:HeartkeepersLantern:glow-offset:v1';
-    const SUBBY_LANTERN_GLOW_OFFSET_DEFAULT = Object.freeze({x:55,y:25});
+    const SUBBY_LANTERN_GLOW_OFFSET_DEFAULT = Object.freeze({x:63,y:33});
+    const SUBBY_LANTERN_GLOW_OFFSET_MIGRATION_KEY = 'SubbysPlushies:HeartkeepersLantern:glow-offset:migrated:v3';
     function subbyLanternGlowOffsetNormalize(raw) {
         const clamp=value=>Math.max(-250,Math.min(250,Math.round(value)));
         const valid=(value,fallback)=>value!==null && value!==undefined && value!=='' &&
@@ -3109,6 +3115,7 @@ function SubbysPlushiesPageMain() {
             return raw ? subbyLanternGlowOffsetNormalize(JSON.parse(raw)) : {...SUBBY_LANTERN_GLOW_OFFSET_DEFAULT};
         } catch (_) {return {...SUBBY_LANTERN_GLOW_OFFSET_DEFAULT};}
     }
+    subbyLanternMaybeMigrateGlowOffset();
     function subbyLanternGlowOffsetSet(change) {
         const next=subbyLanternGlowOffsetNormalize({...subbyLanternGlowOffsetGet(),...change});
         try {localStorage.setItem(SUBBY_LANTERN_GLOW_OFFSET_KEY,JSON.stringify(next));}catch(_){}
@@ -3123,11 +3130,81 @@ function SubbysPlushiesPageMain() {
         try {window.CharacterLoadCanvas?.(window.Player);}catch(_){}
         return subbyLanternGlowOffsetGet();
     }
+    // Independent cosmetic glow layer calibration. This layer is rendered as
+    // a DOM light bloom above the BC character canvas, not as a BC inventory
+    // color layer. It has its own coordinates and NEVER moves the lamp.
+    function openSubbyLanternGlowLayerEditor() {
+        if (!subbyLanternFitItem()) {
+            appendLocalInfoBox('Glow Layer',['Equip the Heartkeeper Lantern before adjusting its glow layer.']);
+            return false;
+        }
+        document.getElementById('subby-heartkeeper-glow-layer-editor')?.remove();
+        const root=document.createElement('section');root.id='subby-heartkeeper-glow-layer-editor';
+        Object.assign(root.style,{position:'fixed',top:'95px',right:'18px',zIndex:'2147483500',
+            width:'min(355px,calc(100vw - 24px))',maxHeight:'calc(100dvh - 110px)',overflowY:'auto',
+            boxSizing:'border-box',padding:'14px',background:'rgba(28,17,37,.97)',color:'#fff',
+            border:'2px solid #c98ddb',borderRadius:'12px',boxShadow:'0 12px 45px #000b',
+            font:'13px/1.5 Arial,sans-serif'});
+        const header=document.createElement('div');Object.assign(header.style,{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px',marginBottom:'8px'});
+        const title=document.createElement('strong');title.textContent='✨ Heartkeeper — Glow Layer';title.style.fontSize='16px';header.appendChild(title);
+        const close=document.createElement('button');close.textContent='✕';close.title='Close the editor; leave light and coordinates unchanged';header.appendChild(close);root.appendChild(header);
+        const info=document.createElement('p');info.textContent='Independent glow positioning. The lantern stays exactly where it is. +X → right, −X → left, +Y → down, −Y → up.';
+        Object.assign(info.style,{margin:'4px 0 10px',opacity:'.86'});root.appendChild(info);
+        const styleButton=b=>Object.assign(b.style,{background:'#50315e',color:'#fff',border:'1px solid #b78bcb',borderRadius:'6px',padding:'6px 8px',cursor:'pointer'});
+        styleButton(close);close.onclick=()=>root.remove();
+        const valueInputs={};let statusText;
+        const refresh=()=>{
+            const off=subbyLanternGlowOffsetGet();
+            for (const axis of ['x','y']) if(valueInputs[axis])valueInputs[axis].value=String(off[axis]);
+            if(statusText)statusText.textContent=`Glow X ${off.x >= 0?'+':''}${off.x}  |  Glow Y ${off.y >= 0?'+':''}${off.y}`;
+            if(lightButton)lightButton.textContent=subbyLanternIsLit()?'Extinguish light':'Light up for preview';
+            if(guideButton)guideButton.textContent=subbyLanternGlowGuidesEnabled?'Hide alignment guides':'Show alignment guides';
+        };
+        const move=(axis,delta)=>{const current=subbyLanternGlowOffsetGet();subbyLanternGlowOffsetSet({[axis]:current[axis]+delta});refresh();};
+        for (const [axis,name] of [['x','Glow X'],['y','Glow Y']]) {
+            const group=document.createElement('div');Object.assign(group.style,{margin:'9px 0',padding:'9px',borderRadius:'8px',background:'rgba(255,255,255,.045)'});
+            const labelRow=document.createElement('label');Object.assign(labelRow.style,{display:'flex',justifyContent:'space-between',gap:'8px',alignItems:'center'});
+            const label=document.createElement('strong');label.textContent=name;
+            const input=document.createElement('input');input.type='number';input.min='-250';input.max='250';input.step='1';
+            Object.assign(input.style,{width:'92px',padding:'5px',color:'#fff',background:'#3b2845',border:'1px solid #a88db6',borderRadius:'5px'});
+            input.onchange=()=>{const value=Number(input.value);if(Number.isFinite(value))subbyLanternGlowOffsetSet({[axis]:value});refresh();};
+            valueInputs[axis]=input;labelRow.append(label,input);group.appendChild(labelRow);
+            const nudges=document.createElement('div');Object.assign(nudges.style,{display:'grid',gridTemplateColumns:'repeat(6,minmax(0,1fr))',gap:'4px',marginTop:'8px'});
+            for(const step of [-10,-5,-1,1,5,10]){
+                const b=document.createElement('button');b.textContent=step>0?`+${step}`:String(step);b.title=`Move glow ${name} ${step>0?'positive':'negative'} ${Math.abs(step)}`;
+                styleButton(b);Object.assign(b.style,{padding:'6px 1px',fontSize:'12px'});b.onclick=()=>move(axis,step);nudges.appendChild(b);
+            }
+            group.appendChild(nudges);root.appendChild(group);
+        }
+        statusText=document.createElement('div');Object.assign(statusText.style,{fontWeight:'bold',padding:'10px',borderRadius:'6px',background:'rgba(255,255,255,.06)',textAlign:'center'});
+        root.appendChild(statusText);
+        const row=document.createElement('div');Object.assign(row.style,{display:'flex',flexWrap:'wrap',gap:'6px',marginTop:'10px'});root.appendChild(row);
+        const button=(name,handler)=>{const b=document.createElement('button');b.textContent=name;styleButton(b);b.onclick=handler;row.appendChild(b);return b;};
+        const guideButton=button('Show alignment guides',()=>{subbyLanternGlowGuidesSet(!subbyLanternGlowGuidesEnabled);refresh();});
+        const lightButton=button('Light up for preview',()=>{subbyLanternSetLight(!subbyLanternIsLit());refresh();});
+        button('Zero X/Y',()=>{subbyLanternGlowOffsetSet({x:0,y:0});refresh();});
+        button('Reset glow default',()=>{subbyLanternGlowOffsetReset();refresh();});
+        button('Copy X/Y',()=>{
+            const off=subbyLanternGlowOffsetGet();
+            const message=`Heartkeeper Glow Layer: X=${off.x}, Y=${off.y} (positive X right; positive Y down)`;
+            try {
+                const promise=navigator.clipboard?.writeText?.(message);
+                if(promise && typeof promise.catch==='function')promise.catch(()=>window.prompt?.('Copy Glow Layer X/Y',message));
+                else window.prompt?.('Copy Glow Layer X/Y',message);
+            } catch(_) {try{window.prompt?.('Copy Glow Layer X/Y',message);}catch(__){}}
+        });
+        const guideNote=document.createElement('p');guideNote.textContent='Guide markers: white dashed rectangle = glow bounds; pink dot = glow center; cyan dot = lantern center. Guides are temporary and stay visible until hidden or the page reloads.';
+        Object.assign(guideNote.style,{fontSize:'11px',opacity:'.8',margin:'10px 0 0'});root.appendChild(guideNote);
+        document.body.appendChild(root);
+        subbyLanternGlowGuidesSet(true);
+        refresh();
+        return true;
+    }
     // Keep this geometry calculation pure for quick regression tests.
     function subbyLanternHaloScreenRect(position, canvasRect, canvasWidth=2000, canvasHeight=1000, offset=SUBBY_LANTERN_GLOW_OFFSET_DEFAULT) {
         const sx=canvasRect.width/canvasWidth,sy=canvasRect.height/canvasHeight;
-        const width=position.unit*position.scaleX*SUBBY_LANTERN_HALO_DIMENSIONS.width*sx;
-        const height=position.unit*position.scaleY*SUBBY_LANTERN_HALO_DIMENSIONS.height*sy;
+        const width=position.unit*position.scaleX*SUBBY_LANTERN_HALO_DIMENSIONS.width*sx*1.07;
+        const height=position.unit*position.scaleY*SUBBY_LANTERN_HALO_DIMENSIONS.height*sy*1.07;
         // X/Y are applied to the CENTER after projecting into the BC canvas;
         // this prevents the offset from being rotated or stretched with the glow.
         const centerX=canvasRect.left+(position.spriteCenterX+offset.x*position.unit)*sx;
@@ -3136,6 +3213,44 @@ function SubbysPlushiesPageMain() {
     }
     let subbyLanternHaloOverlay = null;
     let subbyLanternHaloLastPosition = '';
+    let subbyLanternGlowGuidesEnabled = false;
+    let subbyLanternGlowGuideElements = null;
+    let subbyLanternGlowLastGeometry = null;
+    function subbyLanternGlowGuidesHide() {
+        if (!subbyLanternGlowGuideElements) return;
+        for (const el of Object.values(subbyLanternGlowGuideElements)) el.style.display='none';
+    }
+    function subbyLanternGlowGuidesSet(enabled) {
+        subbyLanternGlowGuidesEnabled=!!enabled;
+        if (!enabled) subbyLanternGlowGuidesHide();
+        else {
+            if (subbyLanternGlowLastGeometry) subbyLanternGlowGuideUpdate(subbyLanternGlowLastGeometry);
+            else try { window.CharacterLoadCanvas?.(window.Player); } catch(_) {}
+        }
+        return subbyLanternGlowGuidesEnabled;
+    }
+    function subbyLanternGlowGuideUpdate(g) {
+        subbyLanternGlowLastGeometry=g;
+        if (!subbyLanternGlowGuidesEnabled || !subbyLanternIsLit(window.Player)) { subbyLanternGlowGuidesHide(); return; }
+        if (!subbyLanternGlowGuideElements) {
+            const mk=(id,border,shape='circle')=>{
+                const el=document.createElement('div');el.id='subby-heartkeeper-'+id;
+                Object.assign(el.style,{position:'fixed',zIndex:'3100',pointerEvents:'none',boxSizing:'border-box',
+                    border,borderRadius:shape==='circle'?'50%':'0',display:'none',userSelect:'none'});
+                document.body.appendChild(el);return el;
+            };
+            subbyLanternGlowGuideElements={
+                bounds:mk('glow-outline','2px dashed rgba(255,255,255,.95)','rect'),
+                glowCenter:mk('glow-center','2px solid #ff65f2'),
+                lanternCenter:mk('lantern-center','2px solid #58e7ff')
+            };
+        }
+        const {bounds,glowCenter,lanternCenter}=subbyLanternGlowGuideElements;
+        Object.assign(bounds.style,{display:'block',left:`${g.x}px`,top:`${g.y}px`,width:`${g.width}px`,height:`${g.height}px`,transform:`rotate(${g.rotation}deg)`});
+        for (const [element,x,y] of [[glowCenter,g.glowCenterX,g.glowCenterY],[lanternCenter,g.lanternCenterX,g.lanternCenterY]]) {
+            Object.assign(element.style,{display:'block',left:`${x-6}px`,top:`${y-6}px`,width:'12px',height:'12px',background:element===glowCenter?'rgba(255,101,242,.45)':'rgba(88,231,255,.35)'});
+        }
+    }
     function subbyLanternIsLocalCharacter(C) {
         if (C === window.Player) return true;
         const member=Number(C?.MemberNumber), own=Number(window.Player?.MemberNumber);
@@ -3150,7 +3265,7 @@ function SubbysPlushiesPageMain() {
         img.alt='';img.draggable=false;
         img.setAttribute('aria-hidden','true');
         Object.assign(img.style,{position:'fixed',left:'-1000px',top:'-1000px',zIndex:'3000',
-            pointerEvents:'none',userSelect:'none',opacity:'0.88',mixBlendMode:'screen',
+            pointerEvents:'none',userSelect:'none',opacity:'0.94',mixBlendMode:'screen',
             transformOrigin:'center center',willChange:'transform',display:'none'});
         document.body.appendChild(img);
         subbyLanternHaloOverlay=img;
@@ -3159,6 +3274,8 @@ function SubbysPlushiesPageMain() {
     }
     function subbyLanternHideHaloOverlay() {
         if (subbyLanternHaloOverlay) subbyLanternHaloOverlay.style.display='none';
+        subbyLanternGlowLastGeometry=null;
+        subbyLanternGlowGuidesHide();
         subbyLanternHaloLastPosition='';
     }
     function subbyLanternHaloHue(item) {
@@ -3193,8 +3310,15 @@ function SubbysPlushiesPageMain() {
         if (subbyLanternHaloLastPosition!==sig || img.style.display!=='block') {
             Object.assign(img.style,{display:'block',left:`${x}px`,top:`${y}px`,
                 width:`${width}px`,height:`${height}px`,transform:`rotate(${angle}deg)`,
-                filter:`hue-rotate(${hue}deg)`});
+                filter:`hue-rotate(${hue}deg) brightness(1.18) saturate(1.08)`});
             subbyLanternHaloLastPosition=sig;
+        }
+        if (subbyLanternGlowGuidesEnabled) {
+            const canvasWidth=Number(canvas.width)||2000,canvasHeight=Number(canvas.height)||1000;
+            subbyLanternGlowGuideUpdate({x,y,width,height,rotation:angle,
+                glowCenterX:x+width/2,glowCenterY:y+height/2,
+                lanternCenterX:rect.left+position.spriteCenterX*rect.width/canvasWidth,
+                lanternCenterY:rect.top+position.spriteCenterY*rect.height/canvasHeight});
         }
         return true;
     }
@@ -3559,6 +3683,9 @@ function SubbysPlushiesPageMain() {
                 get: subbyLanternGlowOffsetGet,
                 set: subbyLanternGlowOffsetSet,
                 reset: subbyLanternGlowOffsetReset,
+                open: openSubbyLanternGlowLayerEditor,
+                get guides() { return subbyLanternGlowGuidesEnabled; },
+                setGuides: on => subbyLanternGlowGuidesSet(!!on),
             }),
             lanternRp: Object.freeze({
                 open: openSubbyLanternActionPalette,
@@ -15403,6 +15530,9 @@ function SubbysPlushiesPageMain() {
                 const lanternFitButton=makeExtensionsButton('🏮 Move / Resize / Rotate Lantern',openSubbyLanternFitEditor);
                 lanternFitButton.title='Opens draggable preview with native item X/Y, scale, rotation, saved settings and Reset.';
                 positionControls.prepend(lanternFitButton);
+                const glowLayerButton=makeExtensionsButton('✨ Edit Glow Layer X/Y', () => { closeExtensionsPanel(); openSubbyLanternGlowLayerEditor(); });
+                glowLayerButton.title='Independent live glow layer: numeric X/Y, nudges, alignment guides and copyable settings.';
+                positionControls.prepend(glowLayerButton);
                 const nativeLanternButton=makeExtensionsButton('↔ Open Native BC Move / Resize', () => { closeExtensionsPanel(); void openWardrobeNativeLayering(entry.name); });
                 nativeLanternButton.title='Open Bondage Club\'s built-in Move / Resize editor for the equipped lantern.';
                 positionControls.prepend(nativeLanternButton);

@@ -1,11 +1,11 @@
 {
-  "version": "3.9.67",
+  "version": "3.9.69",
   "released": "2026-11-09",
   "name": "Subby's Plushies & Essentials",
   "notes": [
-    "Corrected the Heartkeeper glow alignment with a positive-X-right and positive-Y-down calibration.",
-    "Added independent Glow X and Glow Y controls to the lantern fit editor; no changes to the item itself.",
-    "Fixed the upper-right Exit button in the Lantern Use / Extinguish screen.",
-    "Preserved lantern dimensions, native transform, priority 26, and other Essentials wardrobe assets."
+    "Added an independent Heartkeeper Glow Layer Calibration panel with separate live X and Y controls.",
+    "Added \u00b11, \u00b15 and \u00b110 nudge buttons and a copyable exact position readout.",
+    "Added optional overlay guides for glow bounds, glow center and lantern center.",
+    "Preserved lantern item fit, layer priority, and previous glow offsets without clearing saved data."
   ]
 }
