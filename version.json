@@ -1,5 +1,5 @@
 {
-  "version": "3.9.57",
+  "version": "3.9.58",
   "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Fixed Fallen Seraph Rose native image rendering with embedded 10-zone sprite masks. Added Move/Resize/Rotate editor, drag preview, saved transformations."
+  "notes": "Fixed Fallen Seraph Rose handheld sizing/placement; resized 10 embedded color layers to 104x175 and added native per-layer Move/Resize/Rotate for all color zones. Old 3.9.57 fit defaults reset; existing items preserved."
 }
