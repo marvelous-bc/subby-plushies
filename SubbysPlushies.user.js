@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      4.0.9
-// @description  V4.0.9 fixes missing Rose/Lantern layer labels inside BC R133 individual color pickers
+// @version      4.0.10
+// @description  4.0.10 Corrects native BC R133 ItemColor layer labels in TextCache and canvas drawing, scoped to Essentials items
 // @released     2026-11-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "4.0.9";
+    const VERSION = "4.0.10";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -26682,6 +26682,151 @@ function SubbysPlushiesPageMain() {
         };
     }
     window.SubbysLayerNamesDiag = wardrobeLayerLookupDiagnostic;
+    // v4.0.10: R133 ItemColor uses an asynchronously loaded LayerNames.csv
+    // TextCache, which is separate from the generic TextGet fallback.  The
+    // previous versions modified dictionaries that ItemColor wasn't reading.
+    // Patch ONLY exact keys belonging to our wardrobe items, and provide a
+    // last-mile fallback for its already-composed canvas heading.
+    const subbyNativeLayerLabelFixStats = {
+        textCachePatched:0, cacheReadsCorrected:0,
+        canvasMethodsPatched:0, canvasReplacements:0,
+        lastOriginal:null, lastRepaired:null, lastCacheMethod:null,
+        fallbackReady:false
+    };
+    const subbyNativeLayerLabelPatchMark = Symbol.for('SubbysPlushies.NativeLayerNames.4');
+    function subbyNativeLayerLabelTranslate(raw) {
+        if(typeof raw!=='string' || raw.length>2048 ||
+           !raw.includes('MISSING TEXT IN')) return raw;
+        return wardrobeRepairKnownLayerTranslationResult(raw);
+    }
+    function subbyNativeLayerLabelForExactKey(key) {
+        return typeof key==='string' ? wardrobeLayerQueryLabels.get(key) : undefined;
+    }
+    function subbyNativeLayerLabelWrapCacheMethod(owner, method, description) {
+        if(!owner || (typeof owner!=='object' && typeof owner!=='function')) return false;
+        const original=owner[method];
+        if(typeof original!=='function' || original[subbyNativeLayerLabelPatchMark]) return false;
+        // Never alter Map.prototype or the browser's standard containers.
+        if(owner===Map.prototype || owner===Set.prototype || owner===Object.prototype) return false;
+        function subbyLayerAwareCacheMethod(...args) {
+            // Some R133 helpers take (key), others take (csvName, key).
+            const label=args.slice(0,4).map(subbyNativeLayerLabelForExactKey)
+                .find(value=>value!==undefined);
+            if(label!==undefined) {
+                subbyNativeLayerLabelFixStats.cacheReadsCorrected++;
+                return label;
+            }
+            const actual=Reflect.apply(original,this,args);
+            const corrected=subbyNativeLayerLabelTranslate(actual);
+            if(corrected!==actual) subbyNativeLayerLabelFixStats.cacheReadsCorrected++;
+            return corrected;
+        }
+        try {
+            Object.defineProperty(subbyLayerAwareCacheMethod,subbyNativeLayerLabelPatchMark,{value:true});
+            // Prototype APIs are normally writable, but gracefully skip frozen APIs.
+            owner[method]=subbyLayerAwareCacheMethod;
+            if(owner[method]!==subbyLayerAwareCacheMethod) return false;
+            subbyNativeLayerLabelFixStats.textCachePatched++;
+            subbyNativeLayerLabelFixStats.lastCacheMethod=description+'.'+method;
+            return true;
+        } catch(_) {return false;}
+    }
+    function subbyNativeLayerLabelFindTextCaches() {
+        const cacheNames=[
+            'TextCache', 'ItemColorText', 'ItemColorTextCache',
+            'ItemColorLayerNames', 'ItemColorLayerNameText',
+            'ItemColorLayerText', 'ItemColorLayerNamesCache',
+            'TextLayerNames', 'LayerNames', 'Text_LayerNames'
+        ];
+        for(const name of cacheNames) {
+            let candidate;
+            try {candidate=window[name];}catch(_){continue;}
+            if(!candidate)continue;
+            const surfaces=[];
+            if(typeof candidate==='function') {
+                if(candidate.prototype) surfaces.push(candidate.prototype);
+                surfaces.push(candidate); // Support TextCache.get used as a static API.
+            }
+            if(typeof candidate==='object') {
+                surfaces.push(candidate);
+                const proto=Object.getPrototypeOf(candidate);
+                if(proto && proto!==Map.prototype && proto!==Object.prototype) surfaces.push(proto);
+            }
+            for(const surface of surfaces) {
+                for(const method of ['get','getText','textGet','Get','query','getTranslation'])
+                    subbyNativeLayerLabelWrapCacheMethod(surface,method,name);
+            }
+            // A BC TextCache may expose its already-resolved entries directly.
+            // Keep normal item layer data alone, and only amend known caches.
+            if(name!=='TextCache' && typeof candidate==='object') {
+                for(const key of ['cache','Cache','data','Data','translations','Texts','map','entries']) {
+                    const inner=candidate[key];
+                    if(inner instanceof Map) {
+                        for(const [layer,label] of wardrobeLayerQueryLabels) inner.set(layer,label);
+                    } else if(inner && typeof inner==='object' && !Array.isArray(inner) &&
+                        Object.getPrototypeOf(inner)===Object.prototype) {
+                        for(const [layer,label] of wardrobeLayerQueryLabels) inner[layer]=label;
+                    }
+                }
+            }
+        }
+        return subbyNativeLayerLabelFixStats.textCachePatched;
+    }
+    function subbyNativeLayerLabelWrapCanvasMethod(proto,method) {
+        if(!proto || typeof proto[method]!=='function') return false;
+        const original=proto[method];
+        if(original[subbyNativeLayerLabelPatchMark])return false;
+        function subbyLayerAwareCanvasText(text) {
+            // Normal drawing path: no per-frame array allocation; only copy
+            // the arguments when a known missing Essentials label is repaired.
+            if(typeof text==='string' && text.includes('MISSING TEXT IN')) {
+                const repaired=subbyNativeLayerLabelTranslate(text);
+                if(repaired!==text) {
+                    subbyNativeLayerLabelFixStats.canvasReplacements++;
+                    subbyNativeLayerLabelFixStats.lastOriginal=text.slice(0,240);
+                    subbyNativeLayerLabelFixStats.lastRepaired=repaired.slice(0,240);
+                    const corrected=Array.prototype.slice.call(arguments);
+                    corrected[0]=repaired;
+                    return Reflect.apply(original,this,corrected);
+                }
+            }
+            return Reflect.apply(original,this,arguments);
+        }
+        try {
+            Object.defineProperty(subbyLayerAwareCanvasText,subbyNativeLayerLabelPatchMark,{value:true});
+            proto[method]=subbyLayerAwareCanvasText;
+            if(proto[method]!==subbyLayerAwareCanvasText)return false;
+            subbyNativeLayerLabelFixStats.canvasMethodsPatched++;
+            return true;
+        } catch(_){return false;}
+    }
+    let subbyNativeLayerLastCacheScan=0;
+    function installSubbyNativeLayerLabelFix(force=false) {
+        // Repair late-loaded caches on dialog open; throttle checks during the
+        // per-frame drawing path to avoid unnecessary work in the chatroom.
+        const now=Date.now();
+        if(force || now-subbyNativeLayerLastCacheScan>1200){
+            subbyNativeLayerLastCacheScan=now;
+            subbyNativeLayerLabelFindTextCaches();
+        }
+        for(const ctor of [window.CanvasRenderingContext2D,window.OffscreenCanvasRenderingContext2D]){
+            if(ctor?.prototype){
+                subbyNativeLayerLabelWrapCanvasMethod(ctor.prototype,'fillText');
+                subbyNativeLayerLabelWrapCanvasMethod(ctor.prototype,'strokeText');
+            }
+        }
+        subbyNativeLayerLabelFixStats.fallbackReady=subbyNativeLayerLabelFixStats.canvasMethodsPatched>0;
+        return subbyNativeLayerLabelFixStats.fallbackReady || subbyNativeLayerLabelFixStats.textCachePatched>0;
+    }
+    window.SubbysNativeLayerLabelsDiag=()=>({
+        version:VERSION,
+        ...subbyNativeLayerLabelFixStats,
+        mappedKeys:wardrobeLayerQueryLabels.size,
+        roseSample:subbyNativeLayerLabelTranslate('Select “The Fallen Seraph\'s Rose/MISSING TEXT IN "LayerNames.csv": ItemHandheldSubbyFallenSeraphRoseHaloGlow” colors'),
+        lanternSample:subbyNativeLayerLabelTranslate('Select “The Heartkeeper\'s Lantern/MISSING TEXT IN "LayerNames.csv": ItemHandheldSubbyHeartkeepersLanternGlow” colors'),
+        textCacheExists:typeof window.TextCache,
+        colorPickerLoaded:typeof window.ItemColorDrawDefault==='function',
+    });
     function installWardrobeLayerTextHook() {
         // Avoid a global TextGet hook, which previously caused recursion
         // with other BC R133 mods. Use exact-key TextQuery hooks instead.
@@ -28042,6 +28187,9 @@ function SubbysPlushiesPageMain() {
                     const own=subbyLanternFitItem();
                     if(own)subbyLanternEnsureNativeGlowColor(own);
                     if(isWardrobeManagedItem(focus)) {
+                        // ItemColor's active text cache may be initialized only
+                        // once the color dialog has opened.
+                        installSubbyNativeLayerLabelFix(name==='ItemColorLoad');
                         const now=Date.now();
                         if(now-wardrobeItemColorLastTextRepair>700) {
                             wardrobeItemColorLastTextRepair=now;
@@ -33120,6 +33268,7 @@ function SubbysPlushiesPageMain() {
         optionalStartupStep("image-element-hook", installNativeImageElementHook);
         optionalStartupStep("asset-text-hook", installAssetTextHook);
         optionalStartupStep("wardrobe-layer-text", installWardrobeLayerTextHook);
+        optionalStartupStep("wardrobe-native-layer-labels", installSubbyNativeLayerLabelFix);
         optionalStartupStep("wardrobe-labels", installWardrobeVisibleLabelFix);
         setStartupStage("registering-wardrobe");
         subbyRoseMigratePlacement();
