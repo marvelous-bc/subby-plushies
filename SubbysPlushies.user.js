@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      4.0.0
-// @description  4.0.0 Clean V4 rebuild for Heartkeeper's Lantern using a single native Halo-style Glow layer baseline
+// @version      4.0.1
+// @description  4.0.1 Fix Heartkeeper color-page 2 and restore handheld Light up / Extinguish
 // @released     2026-11-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "4.0.0";
+    const VERSION = "4.0.1";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2948,7 +2948,7 @@ function SubbysPlushiesPageMain() {
                 try{
                     if(args[0]===window.Player && args[1]===SUBBY_LANTERN_NAME && args[2]==='ItemHandheld'){
                         const worn=subbyLanternFitItem();
-                        if(worn){subbyLanternEnsureNativeGlowColor(worn);subbyLanternFitApplySaved(worn);window.CharacterLoadCanvas?.(window.Player);}
+                        if(worn){subbyLanternEnsureNativeGlowColor(worn);subbyLanternFitApplySaved(worn);subbyLanternLightSync();window.CharacterLoadCanvas?.(window.Player);}
                     }
                 }catch(e){console.warn('[Heartkeeper Lantern] equip fit:',e);}
                 return result;
@@ -3149,7 +3149,12 @@ function SubbysPlushiesPageMain() {
                 const item = subbyLanternFitItem();
                 return Array.isArray(item?.Color) ? [...item.Color] : null;
             })(),
-            fit: subbyLanternFitCurrent(), overlayUsed: false, togglesUsed: false,
+            fit: subbyLanternFitCurrent(), overlayUsed: false,
+            useToggleInstalled: !!window[`${SUBBY_LANTERN_USE_PREFIX}Click`],
+            glowOn: subbyLanternLightIsOn(),
+            itemColorCount: subbyLanternLightItem()?.Color?.length ?? null,
+            itemColorSlot10: subbyLanternLightItem()?.Color?.[9] ?? null,
+            nativeGlowHasImage: asset?.Layer?.find(layer=>layer?.Name==='Glow')?.HasImage ?? null,
         };
     };
     Object.defineProperty(window, "SubbysWardrobeCurated", {
@@ -15064,6 +15069,9 @@ function SubbysPlushiesPageMain() {
                 positionControls.prepend(roseFitButton);
             }
             if (entry.name === SUBBY_LANTERN_NAME) {
+                const lanternLightButton=makeExtensionsButton(subbyLanternLightIsOn()?'✨ Extinguish':'✨ Light up',()=>subbyLanternLightSet(!subbyLanternLightIsOn()));
+                lanternLightButton.disabled=!subbyLanternLightItem();
+                positionControls.prepend(lanternLightButton);
                 const lanternFitButton=makeExtensionsButton('🏮 Move / Resize / Rotate Lantern',openSubbyLanternFitEditor);
                 lanternFitButton.title='Opens draggable preview with native item X/Y, scale, rotation, saved settings and Reset.';
                 positionControls.prepend(lanternFitButton);
@@ -27804,7 +27812,7 @@ function SubbysPlushiesPageMain() {
                 equipped.Color = [...entry.defaultColors];
             }
             if (entry.name === SUBBY_ROSE_NAME) subbyRoseFitApplySaved(equipped);
-            if (entry.name === SUBBY_LANTERN_NAME) { subbyLanternEnsureNativeGlowColor(equipped); subbyLanternFitApplySaved(equipped); }
+            if (entry.name === SUBBY_LANTERN_NAME) { subbyLanternEnsureNativeGlowColor(equipped); subbyLanternFitApplySaved(equipped); subbyLanternLightSync(); }
             wardrobeNeutralizeHeight(entry, equipped);
             try { if (typeof window.CharacterRefresh === "function") window.CharacterRefresh(window.Player, false, false); } catch (_) {}
             try { if (typeof window.CharacterLoadCanvas === "function") window.CharacterLoadCanvas(window.Player); } catch (_) {}
@@ -27836,13 +27844,48 @@ function SubbysPlushiesPageMain() {
             return false;
         }
     }
+    // R133's ItemColor page-two buttons require a real string for every color.
+    // Server/wardrobe updates can restore an old nine-color appearance, and a
+    // 10-element array with an empty final slot is just as dangerous. Only
+    // repair absent values; never overwrite a user's existing color choices.
     function subbyLanternEnsureNativeGlowColor(item) {
         if (!item || item?.Asset?.Name !== SUBBY_LANTERN_NAME) return false;
-        if (Array.isArray(item.Color) && item.Color.length === 9) {
-            item.Color.push('#FF78DC');
-            return true;
+        const entry=WARDROBE_ITEMS.find(e=>e.name===SUBBY_LANTERN_NAME);
+        if(!entry)return false;
+        const defaults=entry.defaultColors;
+        let colors;
+        if(Array.isArray(item.Color)) colors=[...item.Color];
+        else if(typeof item.Color==='string' && item.Color && item.Color!=='Default')
+            colors=Array(defaults.length).fill(item.Color);
+        else colors=[...defaults];
+        let modified=!Array.isArray(item.Color) || item.Color.length!==defaults.length;
+        for(let i=0;i<defaults.length;i++){
+            if(typeof colors[i]!=='string' || colors[i].trim()===''){
+                colors[i]=defaults[i];modified=true;
+            }
         }
-        return false;
+        if(colors.length>defaults.length){colors.length=defaults.length;modified=true;}
+        if(modified)item.Color=colors;
+        return modified;
+    }
+    const subbyLanternColorPageHooksInstalled=new Set();
+    function installSubbyLanternColorPageGuard() {
+        if(typeof modApi?.hookFunction!=='function')return false;
+        for(const name of ['ItemColorLoad','ItemColorClick','ItemColorDraw']){
+            if(subbyLanternColorPageHooksInstalled.has(name)||typeof window[name]!=='function')continue;
+            try{
+                modApi.hookFunction(name,-1000,(args,next)=>{
+                    // Validate before BC constructs or draws the page-two buttons.
+                    const focus=window.DialogFocusItem;
+                    if(focus?.Asset?.Name===SUBBY_LANTERN_NAME)subbyLanternEnsureNativeGlowColor(focus);
+                    const own=subbyLanternFitItem();
+                    if(own)subbyLanternEnsureNativeGlowColor(own);
+                    return next(args);
+                });
+                subbyLanternColorPageHooksInstalled.add(name);
+            }catch(e){console.warn('[Heartkeeper Lantern] Color page hook failed ('+name+'):',e);}
+        }
+        return subbyLanternColorPageHooksInstalled.has('ItemColorDraw');
     }
     function wardrobeNativeLayerDefinition(entry, zone) {
         const layer = { Name: zone, AllowColorize: true };
@@ -27853,7 +27896,8 @@ function SubbysPlushiesPageMain() {
         if (Number.isInteger(priority)) layer.Priority = priority;
         if (entry.name === SUBBY_LANTERN_NAME && zone === SUBBY_LANTERN_GLOW_LAYER.Name) {
             Object.assign(layer, {Left:SUBBY_LANTERN_GLOW_LAYER.Left,Top:SUBBY_LANTERN_GLOW_LAYER.Top,
-                Width:SUBBY_LANTERN_GLOW_LAYER.Width,Height:SUBBY_LANTERN_GLOW_LAYER.Height});
+                Width:SUBBY_LANTERN_GLOW_LAYER.Width,Height:SUBBY_LANTERN_GLOW_LAYER.Height,
+                HasImage:true,ColorIndex:9});
         }
         return layer;
     }
@@ -27871,7 +27915,7 @@ function SubbysPlushiesPageMain() {
             // The five draw attributes below are the entire Glow implementation.
             // It is NOT recreated when the light is switched or the menu opens.
             const fields = entry.name === SUBBY_LANTERN_NAME && layer.Name === 'Glow'
-                ? ['Priority','AllowColorize','Left','Top','Width','Height']
+                ? ['Priority','AllowColorize','Left','Top','Width','Height','ColorIndex']
                 : ['Priority'];
             for (const key of fields) if (layer[key] !== canonical[key]) {
                 layer[key]=canonical[key]; changed=true;
@@ -27883,6 +27927,96 @@ function SubbysPlushiesPageMain() {
             }
         }
         return changed;
+    }
+    const SUBBY_LANTERN_LIGHT_PROPERTY='SubbysHeartkeeperGlowEnabled';
+    const SUBBY_LANTERN_LIGHT_KEY='SubbysPlushies:HeartkeepersLantern:light-native-v4';
+    const SUBBY_LANTERN_USE_PREFIX='InventoryItemHandheldSubbyHeartkeepersLantern';
+    const SUBBY_LANTERN_USE_BUTTON=Object.freeze({x:1310,y:470,w:515,h:82});
+    let subbyLanternUseLastClickAt=0;
+    let subbyLanternUseRefreshTimer=null;
+    function subbyLanternLightItem(C=window.Player) {
+        if(!C)return null;
+        const item=typeof window.InventoryGet==='function'
+            ? window.InventoryGet(C,'ItemHandheld')
+            : C.Appearance?.find?.(part=>part?.Asset?.Group?.Name==='ItemHandheld');
+        return item?.Asset?.Name===SUBBY_LANTERN_NAME?item:null;
+    }
+    function subbyLanternLightStored() {
+        try {const v=localStorage.getItem(SUBBY_LANTERN_LIGHT_KEY);return v!=='off';}
+        catch(_){return true;}
+    }
+    function subbyLanternLightIsOn(C=window.Player) {
+        const item=subbyLanternLightItem(C);
+        if(!item)return false;
+        if(typeof item.Property?.[SUBBY_LANTERN_LIGHT_PROPERTY]==='boolean')
+            return item.Property[SUBBY_LANTERN_LIGHT_PROPERTY];
+        return C===window.Player?subbyLanternLightStored():true;
+    }
+    function subbyLanternLightSync() {
+        // BC uses one shared asset-layer definition per installed addon.
+        // Keep the full color row registered and affect only its native image.
+        const asset=window.AssetGet?.(FAMILY,'ItemHandheld',SUBBY_LANTERN_NAME);
+        const layer=asset?.Layer?.find?.(part=>part?.Name==='Glow');
+        if(!layer)return false;
+        const on=subbyLanternLightIsOn(window.Player);
+        if(layer.HasImage===on)return false;
+        layer.HasImage=on;
+        return true;
+    }
+    function subbyLanternLightPublish() {
+        try {window.CharacterRefresh?.(window.Player,false,false);}catch(_){}
+        try {window.CharacterLoadCanvas?.(window.Player);}catch(_){}
+        try {if(window.CurrentScreen==='ChatRoom')window.ChatRoomCharacterUpdate?.(window.Player);}catch(_){}
+        if(extensionsPanelElement?.isConnected)renderExtensionsPanel();
+    }
+    function subbyLanternLightSet(on,{fromUseMenu=false}={}) {
+        const item=subbyLanternLightItem(window.Player);
+        if(!item)return false;
+        if(!item.Property || typeof item.Property!=='object' || Array.isArray(item.Property))item.Property={};
+        item.Property[SUBBY_LANTERN_LIGHT_PROPERTY]=!!on;
+        try {localStorage.setItem(SUBBY_LANTERN_LIGHT_KEY,on?'on':'off');}catch(_){}
+        subbyLanternLightSync();
+        if(subbyLanternUseRefreshTimer!==null){clearTimeout(subbyLanternUseRefreshTimer);subbyLanternUseRefreshTimer=null;}
+        if(fromUseMenu){
+            // Do not refresh BC's character/dialog during the click callback.
+            try {window.DialogLeave?.();}catch(e){console.warn('[Heartkeeper Lantern] Use exit:',e);}
+            subbyLanternUseRefreshTimer=setTimeout(()=>{subbyLanternUseRefreshTimer=null;subbyLanternLightPublish();},120);
+        }else subbyLanternLightPublish();
+        return true;
+    }
+    function installSubbyLanternNativeUse() {
+        const prefix=SUBBY_LANTERN_USE_PREFIX;
+        window[`${prefix}Load`]=()=>{subbyLanternEnsureNativeGlowColor(subbyLanternLightItem());};
+        const draw=()=>{
+            const C=window.DialogFocusCharacter||window.Player;
+            if(!subbyLanternLightItem(C))return;
+            try{
+                window.DrawTextFit?.("The Heartkeeper's Lantern",1550,345,650,'White');
+                window.DrawTextFit?.(subbyLanternLightIsOn(C)?'The heartlight is glowing.':'The heartlight is sleeping.',1550,402,670,'White');
+                const p=SUBBY_LANTERN_USE_BUTTON;
+                window.DrawButton?.(p.x,p.y,p.w,p.h,subbyLanternLightIsOn(C)?'Extinguish':'Light up',C===window.Player?'White':'#CCCCCC');
+                window.DrawButton?.(1885,25,90,90,'','White','Icons/Exit.png','Exit');
+            }catch(e){console.warn('[Heartkeeper Lantern] Use draw:',e);}
+        };
+        window[`${prefix}Draw`]=draw;
+        window[`${prefix}Run`]=draw;
+        window[`${prefix}Click`]=()=>{
+            if(typeof window.MouseIn!=='function')return;
+            if(window.MouseIn(1885,25,90,90)){
+                try {window.DialogLeave?.();}catch(e){console.warn('[Heartkeeper Lantern] Use exit:',e);}
+                return;
+            }
+            const C=window.DialogFocusCharacter||window.Player;
+            if(C!==window.Player || !subbyLanternLightItem(C))return;
+            const p=SUBBY_LANTERN_USE_BUTTON;
+            if(!window.MouseIn(p.x,p.y,p.w,p.h))return;
+            const now=Date.now();if(now-subbyLanternUseLastClickAt<500)return;
+            subbyLanternUseLastClickAt=now;
+            subbyLanternLightSet(!subbyLanternLightIsOn(C),{fromUseMenu:true});
+        };
+        const asset=window.AssetGet?.(FAMILY,'ItemHandheld',SUBBY_LANTERN_NAME);
+        if(asset)asset.Extended=true;
+        return true;
     }
     function setupWardrobeAssets() {
         wardrobeState.attempted = true;
@@ -27903,7 +28037,7 @@ function SubbysPlushiesPageMain() {
                         Value: 0,
                         Difficulty: 0,
                         Random: false,
-                        Extended: false,
+                        Extended: entry.name === SUBBY_LANTERN_NAME,
                         Top: placement.top,
                         Left: placement.left,
                         Width: entry.width,
@@ -27924,7 +28058,7 @@ function SubbysPlushiesPageMain() {
                     wardrobeState.methods.push(`${entry.name}: already registered + picker catalogs`);
                 }
                 if (entry.name === SUBBY_LANTERN_NAME) {
-                    asset.Extended = false;
+                    asset.Extended = true;
                     subbyLanternEnsureNativeGlowColor(wardrobeEquippedItem(entry));
                 }
                 asset.DefaultColor = [...entry.defaultColors];
@@ -27934,6 +28068,7 @@ function SubbysPlushiesPageMain() {
                     asset.Layer = entry.colorZones.map(zone => wardrobeNativeLayerDefinition(entry, zone));
                 }
                 wardrobeRepairLayerPriorities(entry, asset);
+                if(entry.name===SUBBY_LANTERN_NAME)subbyLanternLightSync();
                 if (entry.poses?.size) {
                     asset.PoseMapping = { ...WARDROBE_NATIVE_POSE };
                     for (const layer of asset.Layer || []) layer.PoseMapping = { ...WARDROBE_NATIVE_POSE };
@@ -32827,6 +32962,10 @@ function SubbysPlushiesPageMain() {
         const subbyLanternEquippedAtStartup=subbyLanternFitItem();
         if(subbyLanternEquippedAtStartup){subbyLanternEnsureNativeGlowColor(subbyLanternEquippedAtStartup);subbyLanternFitApplySaved(subbyLanternEquippedAtStartup);}
         optionalStartupStep('lantern-native-equip-fit',installSubbyLanternWearHook);
+        optionalStartupStep('lantern-use-menu',installSubbyLanternNativeUse);
+        optionalStartupStep('lantern-color-page-guard',installSubbyLanternColorPageGuard);
+        for(const ms of [1200,4000])window.setTimeout(()=>optionalStartupStep('lantern-color-page-guard-retry',installSubbyLanternColorPageGuard),ms);
+        optionalStartupStep('lantern-light-native-layer',subbyLanternLightSync);
         // Prepare image mappings immediately and finish downloading images in
         // the background, so BC/network latency cannot block native registration.
         const plushStartupArtwork = prepareRenderImages();

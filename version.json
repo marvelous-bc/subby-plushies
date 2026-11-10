@@ -1,12 +1,11 @@
 {
-  "version": "4.0.0",
+  "version": "4.0.1",
   "released": "2026-11-10",
   "name": "Subby's Plushies & Essentials",
   "notes": [
-    "Clean V4 rebuild baseline for Heartkeeper's Lantern.",
-    "Uses one permanent native Glow color layer instead of overlay or toggle-driven glow logic.",
-    "Keeps the lantern's 10 color rows with Glow as the 10th row.",
-    "Keeps lantern layers at priority 25 and the Glow layer at priority 26.",
-    "Built as the clean baseline for the next Halo-style light-bloom pass."
+    "Fixes R133 ItemColor page-two crash caused by incomplete or undefined lantern color values.",
+    "Restores native Handheld Use menu: Light up / Extinguish, including Exit control.",
+    "Preserves the tenth Glow color row, all colors, and native rendering; toggles native HasImage only.",
+    "Preserves main lantern layers at priority 25 and Glow layer at 26; no overlay."
   ]
 }
