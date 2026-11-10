@@ -2,12 +2,12 @@
 // @name         Subby's Plushies & Essentials - Cleanup Auto Launcher
 // @namespace    subbycat.subbysplushies.launcher.cleanup
 // @author       Marvelous
-// @version      2.4.0
+// @version      2.4.1
 // @description  Loads the latest published Essentials release; removes obsolete launcher caches safely; prevents duplicate injection.
 // @homepageURL  https://github.com/marvelous-bc/subby-plushies
 // @supportURL   https://github.com/marvelous-bc/subby-plushies/issues
-// @updateURL    https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Cleanup-Launcher.user.js
-// @downloadURL  https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Cleanup-Launcher.user.js
+// @updateURL    https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js
+// @downloadURL  https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies-Launcher.user.js
 // @match        https://bondageprojects.elementfx.com/R*
 // @match        https://www.bondageprojects.elementfx.com/R*
 // @match        https://bondageprojects.com/R*
@@ -30,7 +30,7 @@
   // This launcher only deletes known obsolete *launcher caches* in localStorage.
   // It never deletes outfits, plushie settings, character data, repo files or userscripts.
   // Disable any other Subby's Plushies launcher/full userscript in Tampermonkey.
-  const VERSION = '2.4.0';
+  const VERSION = '2.4.1';
   const TAG = '[Subbycat Cleanup Launcher]';
   const REPO = 'https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/';
   const MIRROR = 'https://cdn.jsdelivr.net/gh/marvelous-bc/subby-plushies@main/';

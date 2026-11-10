@@ -1,8 +1,8 @@
 {
-  "release": "3.5.96",
-  "base": "3.5.95",
-  "date": "2026-10-25",
-  "script_sha256": "83b6465d4089013174a05b61098f5a75a93c76e3d55898917a5eceb997b1720d",
+  "release": "4.0.14",
+  "base": "4.0.13",
+  "date": "2026-11-10",
+  "script_sha256": "dda67a15564977f76764be35eeda6db3afe966361b93187942ae5d82a2267733",
   "pose_modes": [
     "native",
     "local-only"
@@ -29,6 +29,8 @@
     "glossy_neon_pink_ui_panel.png",
     "sleeping_tuxedo_kitten_on_a_ledge.png"
   ],
-  "launcher_modified": false,
-  "ui_theme_embedded": true
+  "launcher_modified": true,
+  "ui_theme_embedded": true,
+  "game_target": "R134 beta candidate",
+  "live_tested": false
 }

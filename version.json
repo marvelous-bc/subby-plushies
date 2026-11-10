@@ -1,11 +1,14 @@
 {
-  "version": "4.0.13",
+  "version": "4.0.14",
   "released": "2026-11-10",
   "name": "Subby's Plushies & Essentials",
   "changes": [
-    "Explicit HeightModifier 0 and no OverrideHeight on native floor-lantern asset",
-    "Remove floor-item-specific height overrides and normalize existing floor assets",
-    "Diagnose actual pre/post player height values through SubbysHeartkeeperFloorHeightDiag",
-    "No changes to floor artwork/position, handheld outfit, rose, glow or light controls"
-  ]
+    "R134 beta readiness pass; retains R133 and earlier compatible feature paths",
+    "Align internal bootstrap marker and runtime version to 4.0.14",
+    "Detect beta-suffixed BC release routes for synthetic plush ImageBitmap fetch adapter",
+    "Tolerate case differences in synthetic asset image URLs",
+    "Add SubbysPlushiesR134Diag() while preserving R133 diagnostic alias",
+    "R134 beta gameplay/API behavior still requires live verification"
+  ],
+  "channel": "R134 beta candidate"
 }

@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      4.0.13
-// @description  4.0.13 Fixes floor lantern avatar displacement by neutralizing BC asset and item height modifiers
+// @version      4.0.14
+// @description  R134 beta compatibility: aligned bootstrap version, expanded release diagnostics and resilient native asset loading.
 // @released     2026-11-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "4.0.13";
+    const VERSION = "4.0.14";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -20208,7 +20208,9 @@ function SubbysPlushiesPageMain() {
         };
         const report = {
             addonVersion: VERSION,
-            targetRelease: "R133",
+            targetRelease: "R133–R134+", 
+            gameVersion: String(window.GameVersion || window.location?.pathname?.match(/\/R\d+(?:[-_]?Beta\d*)?/i)?.[0]?.slice(1) || "unknown"),
+            betaCandidate: true,
             screen: window.CurrentScreen || null,
             startupStage: startupStage,
             ready,
@@ -20239,10 +20241,26 @@ function SubbysPlushiesPageMain() {
             member: Number(player?.MemberNumber) || null,
         };
         console.table(report.nativeAPIs);
-        console.log("[Subby R133 compatibility]", report);
+        console.log("[Subby BC compatibility]", report);
         return report;
     }
+    // Preserve the old diagnostic name for scripts already referring to it.
     window.SubbysPlushiesR133Diag = r133CompatibilityDiagnostics;
+    window.SubbysPlushiesR134Diag = () => {
+        const report = r133CompatibilityDiagnostics();
+        report.nativeImageBridge = typeof r133NativePlushFetchInstalled === 'boolean'
+            ? { installed: r133NativePlushFetchInstalled, ...r133NativeFetchStats }
+            : { installed: false };
+        report.activityHooks = Object.fromEntries([
+            'ChatRoomMessage','ChatRoomSendChat','ActivityRun',
+            'ActivityDictionaryText','ActivityAllowedForGroup'
+        ].map(name => [name, installedHooks.has(name)]));
+        report.bridge = {
+            pawLounge: typeof window.KittyChat?.version === 'string',
+            connected: !!window.SubbysPlushies?.ready,
+        };
+        return report;
+    };
     function makeHugTightlyActivity(activities) {
         const activityID = allocateHugTightlyActivityID(activities);
         hugTightlyActivityID = activityID;
@@ -27244,8 +27262,10 @@ function SubbysPlushiesPageMain() {
         try {
             value = decodeURIComponent(value);
         } catch (_) {}
-        const assetsIndex = value.indexOf("Assets/");
-        if (assetsIndex >= 0) value = value.slice(assetsIndex);
+        // The R134 beta may return an absolute URL or differently-cased asset
+        // directory from its renderer. Keep the synthetic asset mapping local.
+        const assetsMatch = /assets\//i.exec(value);
+        if (assetsMatch) value = 'Assets/' + value.slice(assetsMatch.index + assetsMatch[0].length);
         while (value.startsWith("./")) value = value.slice(2);
         while (value.startsWith("../")) value = value.slice(3);
         return value;
@@ -27484,9 +27504,12 @@ function SubbysPlushiesPageMain() {
     }
     function installR133NativePlushImageFetchBridge() {
         const bcVersion = String(window.GameVersion || "");
-        const isR133 = /^R(?:13[3-9]|1[4-9]\d|[2-9]\d{2,})\b/i.test(bcVersion) ||
-            /\/R(?:13[3-9]|1[4-9]\d|[2-9]\d{2,})(?:\/|$)/i.test(window.location?.pathname || "");
-        if (!isR133) return false;
+        // Accept R134Beta1/R134-Beta1 as well as normal /R134/ URLs. The
+        // image adapter remains restricted to our own synthetic PNG paths.
+        const release = /^R(\d{2,4})(?=$|[^0-9])/i.exec(bcVersion);
+        const pathRelease = /\/R(\d{2,4})(?=$|[^0-9])/i.exec(window.location?.pathname || "");
+        const nativeBitmapRenderer = Number(release?.[1] || pathRelease?.[1] || 0) >= 133;
+        if (!nativeBitmapRenderer) return false;
         const original = window.fetch;
         if (typeof original !== "function" || typeof window.Response !== "function") return false;
         if (original[R133_NATIVE_PLUSH_FETCH_MARK]) {
@@ -33664,7 +33687,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.59";
+    const VERSION = "4.0.14";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
