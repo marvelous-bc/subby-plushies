@@ -1,18 +1,12 @@
 {
-  "version": "3.9.80",
-  "releaseDate": "2026-11-10",
-  "downloadUrl": "https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js",
-  "notes": "Clean Heartkeeper Glow rebuild as permanent native Bondage Club tenth color layer, structurally matching HaloGlow. No overlay, toggle, or dynamic layer insertion.",
-  "changes": [
-    {
-      "category": "Wardrobe — Heartkeeper Lantern",
-      "items": [
-        "One permanent Glow color layer after Body Frame, independent color #FF78DC",
-        "Native Glow baseline X 94 / Y 330 plus saved fit +36/+22 reaches the observed X 130/Y 352; layer priority 26; other layers 25",
-        "Rebuilt white-alpha feathered glow sprite (236 x 240) colorable through BC color editor",
-        "Removed old glow DOM/canvas/toggle/offset logic without clearing user settings",
-        "Original nine lantern colors, rose and other wardrobe assets preserved"
-      ]
-    }
+  "version": "4.0.0",
+  "released": "2026-11-10",
+  "name": "Subby's Plushies & Essentials",
+  "notes": [
+    "Clean V4 rebuild baseline for Heartkeeper's Lantern.",
+    "Uses one permanent native Glow color layer instead of overlay or toggle-driven glow logic.",
+    "Keeps the lantern's 10 color rows with Glow as the 10th row.",
+    "Keeps lantern layers at priority 25 and the Glow layer at priority 26.",
+    "Built as the clean baseline for the next Halo-style light-bloom pass."
   ]
 }

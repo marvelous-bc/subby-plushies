@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      3.9.80
-// @description  3.9.80 Heartkeeper native Halo-style Glow color layer rebuilt without overlays or toggles
+// @version      4.0.0
+// @description  4.0.0 Clean V4 rebuild for Heartkeeper's Lantern using a single native Halo-style Glow layer baseline
 // @released     2026-11-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "3.9.80";
+    const VERSION = "4.0.0";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
