@@ -1,12 +1,14 @@
 {
-  "version": "4.0.3",
+  "version": "4.0.5",
   "released": "2026-11-10",
   "name": "Subby's Plushies & Essentials",
   "notes": [
-    "Recentered the halo-style native bloom over the lantern heart: native glow layer Left 57, Top 314.",
-    "Prevented R133 page-two ItemColorDrawDefault buttonText.startsWith undefined crash using a narrowly scoped ModSDK source expression patch.",
-    "Removed conflicting Glow ColorIndex registration; retained 10 color slots and preserved saved item colors.",
-    "Retained handheld Light up / Extinguish menu and native Glow priority 24 behind lantern layers at 25.",
-    "Includes a diagnostic window.SubbysHeartkeeperColorPageDiag() to check patch setup."
+    "Consolidates the V4 Heartkeeper radiating Halo-style bloom, centered native layer and handheld Light up/Extinguish toggle.",
+    "Preserves the nine original lantern colors and the tenth colorable Glow row, its priority 24 and other lantern layers at 25.",
+    "Unifies native asset labels and LayerNames.csv cache repair for both the Fallen Seraph Rose and Heartkeeper Lantern.",
+    "Expands localized text-cache path detection and refreshes labels when either custom item color editor is opened.",
+    "Retains R133 page-two safety code and fixes missing/incomplete color arrays without overwriting valid existing colors.",
+    "Removes duplicate embedded Glow sprites; one PNG supplies the native glow mask.",
+    "Source and asset consistency tested locally; requires live R133 validation for UI rendering and third-party mod interactions."
   ]
 }
