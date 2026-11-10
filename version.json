@@ -1,11 +1,12 @@
 {
-  "version": "3.9.75",
-  "released": "2026-11-09",
+  "version": "3.9.76",
+  "released": "2026-11-10",
   "name": "Subby's Plushies & Essentials",
   "notes": [
-    "Based on the confirmed-working v3.9.67 main userscript; retains its original bootstrap/runtime layout.",
-    "Adds a built-in Edit Glow Layer X/Y panel via Essentials > Wardrobe > Heartkeeper's Lantern.",
-    "Glow has direct X/Y inputs and ±1/5/10 nudges, Light up/Extinguish, guide outline, Copy X/Y, Reset and Exit.",
-    "Preserves all existing lantern placement, priority 26 and previous glow offset storage; no new native BC asset/color layer."
+    "The Heartkeeper glow is calibrated to X 40 / Y 15, preserving custom saved X/Y.",
+    "Glow image is ~55% softer and substantially smaller than the old DOM bloom.",
+    "The glow now uses a true optional BC asset layer at priority 26 rather than a DOM image over hands.",
+    "The 9 original lantern color layers are unchanged; native glow is appended only while lit.",
+    "Previous working bootstrap marker was deliberately left intact for reliable loading."
   ]
 }
