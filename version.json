@@ -1,12 +1,11 @@
 {
-  "version": "4.0.8",
+  "version": "4.0.9",
   "released": "2026-11-10",
   "name": "Subby's Plushies & Essentials",
   "notes": [
-    "Registers exact Essentials custom layer-name translations using BC TextGet and TextQuery hooks.",
-    "Deduplicates LayerNames.csv: each layer has one stable label. Keeps the user-chosen Heart Pendant label.",
-    "Improves fallback text substitution to replace only the missing layer segment inside longer BC color-picker headings.",
-    "Preserves lantern base/regular layer priority 26, Glow priority 27, native bloom and Light up/Extinguish menu.",
-    "No change to saved item colors, placements, or other wardrobe assets."
+    "Targets missing LayerNames.csv labels specifically when opening the individual BC R133 color picker for custom wardrobe items.",
+    "Fixes exact-key translation requests AND already-composed missing-translation results while leaving unrelated text intact.",
+    "Ensures native color-picker entry retries layer-name cache and canvas text hook registration.",
+    "Preserves Heartkeeper glow at priority 27, regular layers at 26, and native Light up/Extinguish menu."
   ]
 }

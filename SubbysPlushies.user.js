@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      4.0.8
-// @description  V4.0.8 fixes custom LayerNames.csv translations at runtime for Lantern and Rose (exact TextGet/TextQuery keys)
+// @version      4.0.9
+// @description  V4.0.9 fixes missing Rose/Lantern layer labels inside BC R133 individual color pickers
 // @released     2026-11-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "4.0.8";
+    const VERSION = "4.0.9";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -26607,7 +26607,7 @@ function SubbysPlushiesPageMain() {
     // Exact custom LayerNames.csv translations, shared by both CSV generation
     // and game runtime. No unrelated game labels are modified.
     const wardrobeLayerQueryHooks = new Set();
-    const wardrobeLayerQueryStats = {hits:0, cacheTables:0, lastKey:null, byFunction:{}};
+    const wardrobeLayerQueryStats = {hits:0, resultRepairs:0, cacheTables:0, lastKey:null, byFunction:{}, byReturnFunction:{}};
     const wardrobeLayerQueryLabels = wardrobeLayerTextMap();
     function wardrobeLayerLookupKeyFromArgs(args) {
         if (!Array.isArray(args)) return null;
@@ -26617,12 +26617,25 @@ function SubbysPlushiesPageMain() {
         }
         return null;
     }
+    function wardrobeRepairKnownLayerTranslationResult(text) {
+        // BC R133 can combine the missing CSV key with its own selection title.
+        // Match ONLY known Essentials keys and preserve the surrounding text.
+        // This runs on TextGet's RETURN value, not merely its input arguments.
+        if (typeof text !== 'string' || text.length > 2048 ||
+            !/MISSING TEXT IN\s*["']LayerNames\.csv["']/i.test(text)) return text;
+        return text.replace(
+            /MISSING TEXT IN\s*["']LayerNames\.csv["']\s*:\s*([A-Za-z0-9:_-]+)/gi,
+            (missing, key) => wardrobeLayerQueryLabels.get(key) ?? missing
+        );
+    }
     function installWardrobeLayerQueryHooks() {
         if (typeof modApi?.hookFunction !== 'function') return false;
-        // TextGet(key, cache) is the R133 ItemColor text path missed by v4.0.7.
-        // Exact-key intercept only; never call TextGet or any other text helper
-        // from this handler. All unrelated keys go directly to next(args).
-        for (const fn of ['TextGet', 'TextQuery', 'TextQueryMultiple']) {
+        // Fix R133's individual picker translation at its source. Older builds
+        // only recognized exact arguments; ItemColor can ask TextGet through a
+        // cache object or receive a composed MISSING TEXT result instead.
+        // Both cases are supported without replacing unrelated translations.
+        const targets=['TextGet','TextQuery','TextQueryMultiple','TextGetInList','TextGetFromCache'];
+        for (const fn of targets) {
             if (wardrobeLayerQueryHooks.has(fn) || typeof window[fn] !== 'function') continue;
             try {
                 modApi.hookFunction(fn, 50000, (args,next) => {
@@ -26633,7 +26646,13 @@ function SubbysPlushiesPageMain() {
                         wardrobeLayerQueryStats.byFunction[fn]=(wardrobeLayerQueryStats.byFunction[fn]||0)+1;
                         return wardrobeLayerQueryLabels.get(key);
                     }
-                    return next(args);
+                    const returned=next(args);
+                    const fixed=wardrobeRepairKnownLayerTranslationResult(returned);
+                    if (fixed !== returned) {
+                        wardrobeLayerQueryStats.resultRepairs++;
+                        wardrobeLayerQueryStats.byReturnFunction[fn]=(wardrobeLayerQueryStats.byReturnFunction[fn]||0)+1;
+                    }
+                    return fixed;
                 });
                 wardrobeLayerQueryHooks.add(fn);
             } catch (e) { warn(`Wardrobe layer query hook (${fn}) unavailable:`, e); }
@@ -26645,6 +26664,10 @@ function SubbysPlushiesPageMain() {
             version: VERSION,
             queryHooks:[...wardrobeLayerQueryHooks],
             queryHits:wardrobeLayerQueryStats.hits,
+            returnedTextRepairs:wardrobeLayerQueryStats.resultRepairs,
+            byReturnFunction:{...wardrobeLayerQueryStats.byReturnFunction},
+            drawHooks:[...wardrobeDrawLabelHooksInstalled],
+            drawTextRepairs:wardrobeDrawLabelCounts.canvas,
             lastKey:wardrobeLayerQueryStats.lastKey,
             mapEntries:wardrobeLayerQueryLabels.size,
             nativeCacheTablesPatched:wardrobeLayerQueryStats.cacheTables,
@@ -26655,6 +26678,7 @@ function SubbysPlushiesPageMain() {
             hitsByFunction:{...wardrobeLayerQueryStats.byFunction},
             textGetExists:typeof window.TextGet==='function',
             exactFallbackSample:wardrobeResolveMissingVisibleLabel(`MISSING TEXT IN "LayerNames.csv": ItemHandheldSubbyHeartkeepersLanternGlow`),
+            individualPickerSample:wardrobeRepairKnownLayerTranslationResult(`Select “The Fallen Seraph's Rose/MISSING TEXT IN "LayerNames.csv": ItemHandheldSubbyFallenSeraphRoseHaloGlow” colors`),
         };
     }
     window.SubbysLayerNamesDiag = wardrobeLayerLookupDiagnostic;
@@ -26693,10 +26717,7 @@ function SubbysPlushiesPageMain() {
         // R133 sometimes embeds a missing layer key in a longer sentence:
         // Select "Lantern/MISSING TEXT IN 'LayerNames.csv': ItemHandheld...Glow" colors.
         // Replace only the missing segment, preserving the rest of that sentence.
-        let changed=value.replace(
-            /MISSING TEXT IN\s*["']LayerNames\.csv["']\s*:\s*([A-Za-z0-9:_-]+)/gi,
-            (whole,key)=>wardrobeLayerQueryLabels.get(key) ?? whole
-        );
+        let changed=wardrobeRepairKnownLayerTranslationResult(value);
         if (changed!==value) return changed;
         for (const [key,label] of wardrobeLayerQueryLabels) {
             if (value.includes(key) && /MISSING TEXT IN|UNKNOWN TRANSLATION KEY/i.test(value)) {
@@ -28020,12 +28041,13 @@ function SubbysPlushiesPageMain() {
                     if(focus?.Asset?.Name===SUBBY_LANTERN_NAME)subbyLanternEnsureNativeGlowColor(focus);
                     const own=subbyLanternFitItem();
                     if(own)subbyLanternEnsureNativeGlowColor(own);
-                    if(focus?.Asset?.Name===SUBBY_LANTERN_NAME || focus?.Asset?.Name===SUBBY_ROSE_NAME) {
+                    if(isWardrobeManagedItem(focus)) {
                         const now=Date.now();
                         if(now-wardrobeItemColorLastTextRepair>700) {
                             wardrobeItemColorLastTextRepair=now;
                             wardrobeRepairLayerNamesCache();
                             installWardrobeLayerQueryHooks();
+                            installWardrobeDrawLabelHooks();
                         }
                     }
                     return next(args);
