@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      4.0.7
-// @description  V4.0.7 keeps lantern layers at 26, sets Glow to 27, and registers native LayerNames.csv labels for custom items
+// @version      4.0.8
+// @description  V4.0.8 fixes custom LayerNames.csv translations at runtime for Lantern and Rose (exact TextGet/TextQuery keys)
 // @released     2026-11-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "4.0.7";
+    const VERSION = "4.0.8";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -26462,7 +26462,9 @@ function SubbysPlushiesPageMain() {
         }
         return mappings;
     }
-    function wardrobeLayerDisplayName(zone) {
+    // Canonical Essentials label overrides. Item colors & layer IDs do not change.
+    function wardrobeLayerDisplayName(zone, entry = null) {
+        if (entry?.name === 'SubbyHeartCharm' && zone === 'Heart') return 'Heart Pendant';
         return String(zone).replace(/([a-z])([A-Z])/g, "$1 $2");
     }
     function wardrobeLayerKeyVariants(entry, zone) {
@@ -26501,7 +26503,7 @@ function SubbysPlushiesPageMain() {
                 textMap.set(`HairAccessory1${entry.name}`, entry.title);
             }
             for (const zone of entry.colorZones) {
-                const display = wardrobeLayerDisplayName(zone);
+                const display = wardrobeLayerDisplayName(zone, entry);
                 for (const key of wardrobeLayerKeyVariants(entry, zone)) textMap.set(key, display);
             }
         }
@@ -26513,7 +26515,7 @@ function SubbysPlushiesPageMain() {
         const labels = new Map();
         for (const entry of WARDROBE_ITEMS) {
             for (const zone of entry.colorZones) {
-                const display = wardrobeLayerDisplayName(zone);
+                const display = wardrobeLayerDisplayName(zone, entry);
                 for (const key of wardrobeLayerKeyVariants(entry, zone)) labels.set(key, display);
             }
         }
@@ -26605,7 +26607,7 @@ function SubbysPlushiesPageMain() {
     // Exact custom LayerNames.csv translations, shared by both CSV generation
     // and game runtime. No unrelated game labels are modified.
     const wardrobeLayerQueryHooks = new Set();
-    const wardrobeLayerQueryStats = {hits:0, cacheTables:0, lastKey:null};
+    const wardrobeLayerQueryStats = {hits:0, cacheTables:0, lastKey:null, byFunction:{}};
     const wardrobeLayerQueryLabels = wardrobeLayerTextMap();
     function wardrobeLayerLookupKeyFromArgs(args) {
         if (!Array.isArray(args)) return null;
@@ -26617,7 +26619,10 @@ function SubbysPlushiesPageMain() {
     }
     function installWardrobeLayerQueryHooks() {
         if (typeof modApi?.hookFunction !== 'function') return false;
-        for (const fn of ['TextQuery', 'TextQueryMultiple']) {
+        // TextGet(key, cache) is the R133 ItemColor text path missed by v4.0.7.
+        // Exact-key intercept only; never call TextGet or any other text helper
+        // from this handler. All unrelated keys go directly to next(args).
+        for (const fn of ['TextGet', 'TextQuery', 'TextQueryMultiple']) {
             if (wardrobeLayerQueryHooks.has(fn) || typeof window[fn] !== 'function') continue;
             try {
                 modApi.hookFunction(fn, 50000, (args,next) => {
@@ -26625,6 +26630,7 @@ function SubbysPlushiesPageMain() {
                     if (key) {
                         wardrobeLayerQueryStats.hits++;
                         wardrobeLayerQueryStats.lastKey=key;
+                        wardrobeLayerQueryStats.byFunction[fn]=(wardrobeLayerQueryStats.byFunction[fn]||0)+1;
                         return wardrobeLayerQueryLabels.get(key);
                     }
                     return next(args);
@@ -26645,6 +26651,10 @@ function SubbysPlushiesPageMain() {
             lanternHeartFlame:wardrobeLayerQueryLabels.get('ItemHandheldSubbyHeartkeepersLanternHeartFlame'),
             lanternGlow:wardrobeLayerQueryLabels.get('ItemHandheldSubbyHeartkeepersLanternGlow'),
             roseHaloGlow:wardrobeLayerQueryLabels.get('ItemHandheldSubbyFallenSeraphRoseHaloGlow'),
+            heartPendant:wardrobeLayerQueryLabels.get('NecklaceSubbyHeartCharmHeart'),
+            hitsByFunction:{...wardrobeLayerQueryStats.byFunction},
+            textGetExists:typeof window.TextGet==='function',
+            exactFallbackSample:wardrobeResolveMissingVisibleLabel(`MISSING TEXT IN "LayerNames.csv": ItemHandheldSubbyHeartkeepersLanternGlow`),
         };
     }
     window.SubbysLayerNamesDiag = wardrobeLayerLookupDiagnostic;
@@ -26676,29 +26686,32 @@ function SubbysPlushiesPageMain() {
     let wardrobeDisplayHookRetryIndex = 0;
     const WARDROBE_DISPLAY_HOOK_RETRIES_MS = Object.freeze([650, 1700, 4000]);
     function wardrobeResolveMissingVisibleLabel(value) {
-        if (typeof value !== "string" || value.length > 1024 ||
+        if (typeof value !== 'string' || value.length > 2048 ||
             !/MISSING TEXT IN|UNKNOWN TRANSLATION KEY|MISSING ASSET DESCRIPTION/i.test(value)) return value;
-        const plushLabel = plushNameResolveVisibleText(value);
+        const plushLabel=plushNameResolveVisibleText(value);
         if (plushLabel !== value) return plushLabel;
-        const layerMatch = /(?:MISSING TEXT IN|UNKNOWN TRANSLATION KEY)/i.test(value);
-        const itemMatch = /MISSING ASSET DESCRIPTION/i.test(value);
-        const normalized = value.trim().replace(/["'`\s]+$/g, "");
-        if (layerMatch) {
-            for (const [key, label] of wardrobeLayerTextMap()) {
-                if (normalized.endsWith(key) || normalized.includes(`${key} colors`) || normalized.includes(`${key} color`) || normalized.includes(`${key}" colors`) || normalized.includes(`${key}" color`)) return label;
+        // R133 sometimes embeds a missing layer key in a longer sentence:
+        // Select "Lantern/MISSING TEXT IN 'LayerNames.csv': ItemHandheld...Glow" colors.
+        // Replace only the missing segment, preserving the rest of that sentence.
+        let changed=value.replace(
+            /MISSING TEXT IN\s*["']LayerNames\.csv["']\s*:\s*([A-Za-z0-9:_-]+)/gi,
+            (whole,key)=>wardrobeLayerQueryLabels.get(key) ?? whole
+        );
+        if (changed!==value) return changed;
+        for (const [key,label] of wardrobeLayerQueryLabels) {
+            if (value.includes(key) && /MISSING TEXT IN|UNKNOWN TRANSLATION KEY/i.test(value)) {
+                // Never replace a whole heading with just a layer label.
+                const at=value.indexOf(key);
+                const before=value.slice(0,at);
+                const marker=before.search(/MISSING TEXT IN|UNKNOWN TRANSLATION KEY/i);
+                if(marker>=0) return before.slice(0,marker)+label+value.slice(at+key.length);
             }
-            const found = [...wardrobeLayerTextMap()].find(([key]) => normalized.includes(key));
-            if (found) return found[1];
         }
-        if (itemMatch) {
+        if (/MISSING ASSET DESCRIPTION/i.test(value)) {
             for (const entry of WARDROBE_ITEMS) {
-                const groups = entry.group === "HairAccessory2"
-                    ? ["HairAccessory1", "HairAccessory2"] : [entry.group];
-                for (const group of groups) {
-                    if ([`${group}${entry.name}`, `${group}-${entry.name}`, `${group}:${entry.name}`]
-                        .some(key => normalized.endsWith(key))) {
-                        const marker = value.search(/MISSING ASSET DESCRIPTION/i);
-                        return marker >= 0 ? value.slice(0, marker) + entry.title : entry.title;
+                for (const group of (entry.group==='HairAccessory2'?['HairAccessory1','HairAccessory2']:[entry.group])) {
+                    if (value.includes(`${group}${entry.name}`)) {
+                        return value.replace(/MISSING ASSET DESCRIPTION[^\n]*/i,entry.title);
                     }
                 }
             }

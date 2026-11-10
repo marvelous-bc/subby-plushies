@@ -1,11 +1,12 @@
 {
-  "version": "4.0.7",
+  "version": "4.0.8",
   "released": "2026-11-10",
   "name": "Subby's Plushies & Essentials",
   "notes": [
-    "All Heartkeeper Lantern base and standard color layers retain priority 26; Glow is now priority 27.",
-    "Ships real BC-format LayerNames.csv additions for all Essentials accessory color layers, including all Rose and Lantern layers.",
-    "Adds targeted runtime text lookup and cache registration for the custom LayerNames.csv entries.",
-    "Preserves the existing lantern bloom, Light up/Extinguish, page-two R133 guard, fitted positions and saved item colors."
+    "Registers exact Essentials custom layer-name translations using BC TextGet and TextQuery hooks.",
+    "Deduplicates LayerNames.csv: each layer has one stable label. Keeps the user-chosen Heart Pendant label.",
+    "Improves fallback text substitution to replace only the missing layer segment inside longer BC color-picker headings.",
+    "Preserves lantern base/regular layer priority 26, Glow priority 27, native bloom and Light up/Extinguish menu.",
+    "No change to saved item colors, placements, or other wardrobe assets."
   ]
 }
