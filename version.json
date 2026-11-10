@@ -1,11 +1,12 @@
 {
-  "version": "4.0.2",
+  "version": "4.0.3",
   "released": "2026-11-10",
   "name": "Subby's Plushies & Essentials",
   "notes": [
-    "Rebuilt Heartkeeper's Lantern Glow as a halo-style radiating bloom instead of a silhouette highlight.",
-    "Replaced the glow artwork with a broad soft white bloom that colorizes like a real light source.",
-    "Moved the Glow layer behind the lantern by setting Glow priority to 24 and the lantern layers to 25.",
-    "Preserved the second-page color fix and the handheld Use menu with Light up / Extinguish."
+    "Recentered the halo-style native bloom over the lantern heart: native glow layer Left 57, Top 314.",
+    "Prevented R133 page-two ItemColorDrawDefault buttonText.startsWith undefined crash using a narrowly scoped ModSDK source expression patch.",
+    "Removed conflicting Glow ColorIndex registration; retained 10 color slots and preserved saved item colors.",
+    "Retained handheld Light up / Extinguish menu and native Glow priority 24 behind lantern layers at 25.",
+    "Includes a diagnostic window.SubbysHeartkeeperColorPageDiag() to check patch setup."
   ]
 }
