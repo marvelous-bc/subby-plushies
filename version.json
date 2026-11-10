@@ -1,12 +1,11 @@
 {
-  "version": "3.9.76",
-  "released": "2026-11-10",
+  "version": "3.9.77",
+  "released": "2026-11-09",
   "name": "Subby's Plushies & Essentials",
   "notes": [
-    "The Heartkeeper glow is calibrated to X 40 / Y 15, preserving custom saved X/Y.",
-    "Glow image is ~55% softer and substantially smaller than the old DOM bloom.",
-    "The glow now uses a true optional BC asset layer at priority 26 rather than a DOM image over hands.",
-    "The 9 original lantern color layers are unchanged; native glow is appended only while lit.",
-    "Previous working bootstrap marker was deliberately left intact for reliable loading."
+    "Changed the Heartkeeper glow to behave as a true native BC layer, closer to how the halo glow works.",
+    "The glow layer is now inserted at the front of the lantern's BC layer stack instead of being appended at the end.",
+    "The native glow layer priority is now 25 so it sits behind the lantern and stays behind hands more naturally.",
+    "Reduced the native glow footprint to make it visibly smaller while keeping your calibrated default offset of X 40 / Y 15."
   ]
 }
