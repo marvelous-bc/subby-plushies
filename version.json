@@ -1,13 +1,11 @@
 {
-  "version": "4.0.11",
+  "version": "4.0.13",
   "released": "2026-11-10",
   "name": "Subby's Plushies & Essentials",
-  "notes": [
-    "Heartkeeper Glow is 120% of the previous sprite; center held fixed with corrected native layer bounds.",
-    "Glow native color slot explicitly maps to index 9, and selected color is saved/restored on equip and color-editor interactions.",
-    "Put on floor / Pick up action in handheld Use menu, with a separate native ItemHandheld floor sprite and placement.",
-    "Floor artwork is embedded and served to BC through the existing R133 PNG image path bridge.",
-    "Original lantern and Rose layers, colors, and priority 26/27 retained.",
-    "Keeps Light up / Extinguish in both modes and the v4.0.10 translation fallback."
+  "changes": [
+    "Explicit HeightModifier 0 and no OverrideHeight on native floor-lantern asset",
+    "Remove floor-item-specific height overrides and normalize existing floor assets",
+    "Diagnose actual pre/post player height values through SubbysHeartkeeperFloorHeightDiag",
+    "No changes to floor artwork/position, handheld outfit, rose, glow or light controls"
   ]
 }

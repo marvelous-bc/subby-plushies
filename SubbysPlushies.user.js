@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      4.0.12
-// @description  4.0.12 Keeps floor lantern from shifting the character by using held-item bounds with floor-only layer placement
+// @version      4.0.13
+// @description  4.0.13 Fixes floor lantern avatar displacement by neutralizing BC asset and item height modifiers
 // @released     2026-11-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "4.0.11";
+    const VERSION = "4.0.13";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -28352,6 +28352,38 @@ function SubbysPlushiesPageMain() {
     function subbyLanternAnyItem(C=window.Player) {
         return subbyLanternFloorItem(C) || subbyLanternLightItem(C);
     }
+    // The floor variant is decorative: it must not dictate the avatar's height.
+    // Do not alter HeightRatio, poses, or any other equipped asset.
+    function subbyLanternFloorNeutralizeItemHeight(item) {
+        if(item?.Asset?.Name!==SUBBY_LANTERN_FLOOR_NAME)return false;
+        let changed=false;
+        if(item.Asset.HeightModifier!==0){item.Asset.HeightModifier=0;changed=true;}
+        if(item.Asset.OverrideHeight!=null){item.Asset.OverrideHeight=null;changed=true;}
+        if(item.Property && typeof item.Property==='object' && !Array.isArray(item.Property)) {
+            for(const key of ['HeightModifier','OverrideHeight'])if(Object.prototype.hasOwnProperty.call(item.Property,key)){
+                delete item.Property[key];changed=true;
+            }
+        }
+        return changed;
+    }
+    function subbyLanternFloorHeightSnapshot(C=window.Player) {
+        const item=subbyLanternAnyItem(C);
+        const val=x=>Number.isFinite(x)?x:(x==null?null:String(x));
+        return {item:item?.Asset?.Name??null,
+            heightModifier:val(C?.HeightModifier),heightRatio:val(C?.HeightRatio),
+            heightRatioProportion:val(C?.HeightRatioProportion),
+            itemHeightModifier:val(item?.Asset?.HeightModifier),
+            itemOverrideHeight:item?.Asset?.OverrideHeight??null,
+            propertyHeightModifier:item?.Property?.HeightModifier??null,
+            propertyOverrideHeight:item?.Property?.OverrideHeight??null};
+    }
+    let subbyLanternFloorLastHeightTransition=null;
+    window.SubbysHeartkeeperFloorHeightDiag=()=>({
+        current:subbyLanternFloorHeightSnapshot(),lastTransition:subbyLanternFloorLastHeightTransition,
+        floorAsset:(()=>{const a=window.AssetGet?.(FAMILY,'ItemHandheld',SUBBY_LANTERN_FLOOR_NAME);
+            return a?{heightModifier:a.HeightModifier??null,overrideHeight:a.OverrideHeight??null,
+                left:a.Left,top:a.Top,width:a.Width,height:a.Height,
+                layers:a.Layer?.map(l=>({name:l.Name,left:l.Left,top:l.Top,width:l.Width,height:l.Height}))}:null;})()});
     function subbyLanternFloorRegister() {
         const group=findRuntimeAssetGroup('ItemHandheld');
         if(!group)return false;
@@ -28362,6 +28394,9 @@ function SubbysPlushiesPageMain() {
                 ...SUBBY_LANTERN_FLOOR_ASSET_BOUNDS,
                 Left:SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Left,Top:SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Top,
                 Width:SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Width,Height:SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Height,
+                // BC calculates character vertical placement from equipped assets' height modifiers.
+                // The previous floor item omitted HeightModifier (the handheld asset sets it to zero).
+                HeightModifier:0,OverrideHeight:null,
                 Priority:26,DefaultColor:['Default','#FF78DC'],ColorableLayerCount:2,
                 Layer:[{Name:'Floor',AllowColorize:false,HasImage:true,Priority:26,
                     Left:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Left,Top:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Top,
@@ -28373,6 +28408,9 @@ function SubbysPlushiesPageMain() {
         }
         if(!asset)return false;
         asset.Extended=true;asset.Random=false;
+        // Repair already-registered assets in the current BC session as well.
+        asset.HeightModifier=0;
+        if(asset.OverrideHeight!=null)asset.OverrideHeight=null;
         asset.Description="The Heartkeeper's Lantern (on floor)";
         asset.DefaultColor=['Default','#FF78DC'];
         asset.ColorableLayerCount=2;
@@ -28398,6 +28436,14 @@ function SubbysPlushiesPageMain() {
         }
         if(Array.isArray(window.Asset)&&!window.Asset.includes(asset))window.Asset.push(asset);
         if(Array.isArray(group.Asset)&&!group.Asset.includes(asset))group.Asset.push(asset);
+        // If the player loads the new script while the lantern is already on the floor,
+        // remove any leftover item-level vertical overrides from the older build.
+        const alreadyWorn=subbyLanternFloorItem(window.Player);
+        if(alreadyWorn){
+            subbyLanternFloorNeutralizeItemHeight(alreadyWorn);
+            try{window.CharacterRefresh?.(window.Player,false,false);}catch(_){}
+            try{window.CharacterLoadCanvas?.(window.Player);}catch(_){}
+        }
         return true;
     }
     function subbyLanternFloorSwitch(toFloor,{fromUseMenu=false}={}){
@@ -28414,15 +28460,19 @@ function SubbysPlushiesPageMain() {
         const preserveLight=subbyLanternLightIsOn(player);
         const apply=()=>{
             try {
+                const beforeHeight=subbyLanternFloorHeightSnapshot(player);
                 if(toFloor && !subbyLanternFloorRegister())throw new Error('Floor variant not registered');
                 window.InventoryWear(player,target,'ItemHandheld',colors);
                 const equipped=subbyLanternAnyItem(player);
                 if(equipped?.Asset?.Name!==target)throw new Error('InventoryWear did not equip '+target);
                 if(!equipped.Property || typeof equipped.Property!=='object')equipped.Property={};
                 equipped.Property[SUBBY_LANTERN_LIGHT_PROPERTY]=preserveLight;
-                if(!toFloor) {subbyLanternEnsureNativeGlowColor(equipped);subbyLanternFitApplySaved(equipped);}
+                if(toFloor)subbyLanternFloorNeutralizeItemHeight(equipped);
+                else {subbyLanternEnsureNativeGlowColor(equipped);subbyLanternFitApplySaved(equipped);}
                 subbyLanternLightSync();
                 subbyLanternLightPublish();
+                subbyLanternFloorLastHeightTransition={before:beforeHeight,
+                    after:subbyLanternFloorHeightSnapshot(player),action:toFloor?'Put on floor':'Pick up'};
                 return true;
             }catch(e){console.warn('[Heartkeeper Lantern] Floor mode:',e);return false;}
         };
