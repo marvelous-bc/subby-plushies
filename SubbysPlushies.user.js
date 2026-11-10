@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      4.0.5
-// @description  V4.0.5 unified Heartkeeper Halo-bloom, native handheld Light up/Extinguish, R133 color-page safety, and Rose/Lantern layer labels
+// @version      4.0.6
+// @description  V4.0.6 sets Heartkeeper default and regular layer priority to 26, preserving Glow at 24 and V4 fixes
 // @released     2026-11-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "4.0.5";
+    const VERSION = "4.0.6";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -2455,7 +2455,7 @@ function SubbysPlushiesPageMain() {
         {"name": "SubbyHeartCharm", "title": "Subby's Heart Charm Necklace", "group": "Necklace", "top": 220, "left": 199, "width": 116, "height": 105, "priority": 36, "colorZones": ["Chain", "Heart"], "defaultColors": ["#D9AE71", "#ED91BC"]},
         {"name":"SubbyDrapedWrapDress","title":"Subby's Draped Wrap Dress","group":"Cloth","top":182,"left":90,"width":279,"height":373,"priority":38,"layerPriorities":{"Fabric":29},"colorZones":["Fabric", "RearDrape", "Underlayer", "KnotSash"],"defaultColors":["#A6D0F5","#7EABD7","#B1D3EA","#D9B9EF"]},
         {"name":"SubbyFallenSeraphRose","title":"The Fallen Seraph's Rose","group":"ItemHandheld","top":368,"left":100,"width":104,"height":175,"priority":58,"colorZones":["HaloGlow","Halo","Stem","Leaves","Thorns","Ribbon","Petals","PetalEdges","HeartCore","Jewels"],"defaultColors":["#B65CFF","#B88A3D","#24162F","#603473","#B88A3D","#C93F87","#32173F","#D9689B","#F0B3DF","#D4A75D"]},
-        {"name":"SubbyHeartkeepersLantern","title":"The Heartkeeper's Lantern","group":"ItemHandheld","top":332,"left":82,"width":188,"height":192,"priority":25,"colorZones":["HeartFlame","HandleWrap","Ribbon","LaceShadow","GemsHearts","GlassPanels","ChainsBell","MetalTrim","BodyFrame","Glow"],"defaultColors":["#FFE9F8","#8B1F64","#C42377","#4A153F","#FF4FB5","#CE4EAF","#C6904E","#D4A35A","#51335D","#FF78DC"]}
+        {"name":"SubbyHeartkeepersLantern","title":"The Heartkeeper's Lantern","group":"ItemHandheld","top":332,"left":82,"width":188,"height":192,"priority":26,"colorZones":["HeartFlame","HandleWrap","Ribbon","LaceShadow","GemsHearts","GlassPanels","ChainsBell","MetalTrim","BodyFrame","Glow"],"defaultColors":["#FFE9F8","#8B1F64","#C42377","#4A153F","#FF4FB5","#CE4EAF","#C6904E","#D4A35A","#51335D","#FF78DC"]}
     ];
     const WARDROBE_ITEM_NAME_SET = new Set(WARDROBE_ITEMS.map(entry => entry.name));
     const WARDROBE_IMAGE_BY_NAME = new Map(WARDROBE_ITEMS.map(entry =>
@@ -2563,7 +2563,7 @@ function SubbysPlushiesPageMain() {
                 entry.defaultColors = names.map(name => (
                     typeof remoteColorValue(entry.name, name) === "string" ? remoteColorValue(entry.name, name) : previous.get(name) || "#FFFFFF"));
                 entry.layerPriorities = entry.name === SUBBY_LANTERN_NAME
-                    ? Object.fromEntries(entry.colorZones.map(zone => [zone, zone==='Glow' ? 24 : 25]))
+                    ? Object.fromEntries(entry.colorZones.map(zone => [zone, zone==='Glow' ? 24 : 26]))
                     : (payload.items[entry.name]?.layerPriorities || entry.layerPriorities || {});
                 entry.group = slot;
                 entry.poses = poses;
@@ -27962,7 +27962,7 @@ function SubbysPlushiesPageMain() {
         const layer = { Name: zone, AllowColorize: true };
         if (entry.poses?.size) layer.PoseMapping = { ...WARDROBE_NATIVE_POSE };
         const priority = entry.name === SUBBY_LANTERN_NAME
-            ? (zone === SUBBY_LANTERN_GLOW_LAYER.Name ? SUBBY_LANTERN_GLOW_LAYER.Priority : 25)
+            ? (zone === SUBBY_LANTERN_GLOW_LAYER.Name ? SUBBY_LANTERN_GLOW_LAYER.Priority : 26)
             : entry.layerPriorities?.[zone];
         if (Number.isInteger(priority)) layer.Priority = priority;
         if (entry.name === SUBBY_LANTERN_NAME && zone === SUBBY_LANTERN_GLOW_LAYER.Name) {
@@ -27974,8 +27974,8 @@ function SubbysPlushiesPageMain() {
     function wardrobeRepairLayerPriorities(entry, asset) {
         if (!Array.isArray(asset?.Layer)) return false;
         let changed = false;
-        if (entry.name === SUBBY_LANTERN_NAME && asset.Priority !== 25) {
-            asset.Priority=25;
+        if (entry.name === SUBBY_LANTERN_NAME && asset.Priority !== 26) {
+            asset.Priority=26;
             changed=true;
         }
         for (let i = 0; i < entry.colorZones.length; i++) {
