@@ -1,12 +1,13 @@
 {
-  "version": "4.0.10",
+  "version": "4.0.11",
   "released": "2026-11-10",
   "name": "Subby's Plushies & Essentials",
   "notes": [
-    "Corrected missing ItemColor picker headings using the active BC TextCache native get path (when available) and exact-key translation.",
-    "Added a last-mile canvas text repair specifically for known custom Essentials layer names, including Rose and Lantern.",
-    "All nine lantern main layers remain priority 26 and Glow remains priority 27.",
-    "Preserved Light up / Extinguish handheld Use menu, saved colors, glow artwork, and all other Essentials items.",
-    "Improved diagnostics and unit tests for the actual multi-line R133 missing-text heading."
+    "Heartkeeper Glow is 120% of the previous sprite; center held fixed with corrected native layer bounds.",
+    "Glow native color slot explicitly maps to index 9, and selected color is saved/restored on equip and color-editor interactions.",
+    "Put on floor / Pick up action in handheld Use menu, with a separate native ItemHandheld floor sprite and placement.",
+    "Floor artwork is embedded and served to BC through the existing R133 PNG image path bridge.",
+    "Original lantern and Rose layers, colors, and priority 26/27 retained.",
+    "Keeps Light up / Extinguish in both modes and the v4.0.10 translation fallback."
   ]
 }
