@@ -2,8 +2,8 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      4.0.11
-// @description  4.0.11 Enlarges Heartkeeper Glow 20%, preserves selected Glow color, and adds native Put on floor/Pick up mode
+// @version      4.0.12
+// @description  4.0.12 Keeps floor lantern from shifting the character by using held-item bounds with floor-only layer placement
 // @released     2026-11-10
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
@@ -28342,7 +28342,8 @@ function SubbysPlushiesPageMain() {
 
     // Native floor variant (separate sprite, separate native placement).  Only
     // available from Put on floor / Pick up, and never through a page overlay.
-    const SUBBY_LANTERN_FLOOR_GEOMETRY=Object.freeze({Left:255,Top:695,Width:176,Height:220});
+    const SUBBY_LANTERN_FLOOR_ASSET_BOUNDS=Object.freeze({Left:82,Top:332,Width:188,Height:192});
+    const SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY=Object.freeze({Left:255,Top:695,Width:176,Height:220});
     function subbyLanternFloorItem(C=window.Player) {
         const worn=C && (typeof window.InventoryGet==='function' ? window.InventoryGet(C,'ItemHandheld')
             : C.Appearance?.find(part=>part?.Asset?.Group?.Name==='ItemHandheld'));
@@ -28358,12 +28359,16 @@ function SubbysPlushiesPageMain() {
         if(!asset) {
             callAssetAdd({Name:SUBBY_LANTERN_FLOOR_NAME,Description:"The Heartkeeper's Lantern (on floor)",
                 Value:0,Difficulty:0,Random:false,Extended:true,ParentGroup:{},
-                ...SUBBY_LANTERN_FLOOR_GEOMETRY,
-                Left:SUBBY_LANTERN_FLOOR_GEOMETRY.Left,Top:SUBBY_LANTERN_FLOOR_GEOMETRY.Top,
-                Width:SUBBY_LANTERN_FLOOR_GEOMETRY.Width,Height:SUBBY_LANTERN_FLOOR_GEOMETRY.Height,
+                ...SUBBY_LANTERN_FLOOR_ASSET_BOUNDS,
+                Left:SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Left,Top:SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Top,
+                Width:SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Width,Height:SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Height,
                 Priority:26,DefaultColor:['Default','#FF78DC'],ColorableLayerCount:2,
-                Layer:[{Name:'Floor',AllowColorize:false,HasImage:true,Priority:26},
-                    {Name:'FloorGlow',AllowColorize:true,ColorIndex:1,HasImage:true,Priority:27}]},group,'ItemHandheld',null);
+                Layer:[{Name:'Floor',AllowColorize:false,HasImage:true,Priority:26,
+                    Left:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Left,Top:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Top,
+                    Width:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Width,Height:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Height},
+                    {Name:'FloorGlow',AllowColorize:true,ColorIndex:1,HasImage:true,Priority:27,
+                    Left:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Left,Top:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Top,
+                    Width:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Width,Height:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Height}]},group,'ItemHandheld',null);
             asset=window.AssetGet?.(FAMILY,'ItemHandheld',SUBBY_LANTERN_FLOOR_NAME);
         }
         if(!asset)return false;
@@ -28372,10 +28377,20 @@ function SubbysPlushiesPageMain() {
         asset.DefaultColor=['Default','#FF78DC'];
         asset.ColorableLayerCount=2;
         if(!Array.isArray(asset.Layer)||asset.Layer.length!==2||asset.Layer[0]?.Name!=='Floor'||asset.Layer[1]?.Name!=='FloorGlow'){
-            asset.Layer=[{Name:'Floor',AllowColorize:false,HasImage:true,Priority:26},
-                {Name:'FloorGlow',AllowColorize:true,ColorIndex:1,HasImage:true,Priority:27}];
+            asset.Layer=[{Name:'Floor',AllowColorize:false,HasImage:true,Priority:26,
+                Left:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Left,Top:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Top,
+                Width:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Width,Height:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Height},
+                {Name:'FloorGlow',AllowColorize:true,ColorIndex:1,HasImage:true,Priority:27,
+                Left:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Left,Top:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Top,
+                Width:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Width,Height:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Height}];
         }
-        for(const layer of asset.Layer)layer.Priority=layer.Name==='FloorGlow'?27:26;
+        asset.Left=SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Left; asset.Top=SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Top;
+        asset.Width=SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Width; asset.Height=SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Height;
+        for(const layer of asset.Layer){
+            layer.Priority=layer.Name==='FloorGlow'?27:26;
+            layer.Left=SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Left; layer.Top=SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Top;
+            layer.Width=SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Width; layer.Height=SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Height;
+        }
         const textKey='ItemHandheld'+SUBBY_LANTERN_FLOOR_NAME;
         for(const table of [window.AssetText,window.AssetTextCache]){
             if(table instanceof Map)table.set(textKey,asset.Description);
