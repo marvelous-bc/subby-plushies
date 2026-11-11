@@ -2,9 +2,9 @@
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      4.0.14
-// @description  R134 beta compatibility: aligned bootstrap version, expanded release diagnostics and resilient native asset loading.
-// @released     2026-11-10
+// @version      4.0.15
+// @description  4.0.15 R133 action-menu smoother: coalesced search updates, idle bookkeeping, native timing diagnostics
+// @released     2026-11-11
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
@@ -24,7 +24,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "4.0.14";
+    const VERSION = "4.0.15";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -20208,9 +20208,7 @@ function SubbysPlushiesPageMain() {
         };
         const report = {
             addonVersion: VERSION,
-            targetRelease: "R133–R134+", 
-            gameVersion: String(window.GameVersion || window.location?.pathname?.match(/\/R\d+(?:[-_]?Beta\d*)?/i)?.[0]?.slice(1) || "unknown"),
-            betaCandidate: true,
+            targetRelease: "R133",
             screen: window.CurrentScreen || null,
             startupStage: startupStage,
             ready,
@@ -20241,26 +20239,10 @@ function SubbysPlushiesPageMain() {
             member: Number(player?.MemberNumber) || null,
         };
         console.table(report.nativeAPIs);
-        console.log("[Subby BC compatibility]", report);
+        console.log("[Subby R133 compatibility]", report);
         return report;
     }
-    // Preserve the old diagnostic name for scripts already referring to it.
     window.SubbysPlushiesR133Diag = r133CompatibilityDiagnostics;
-    window.SubbysPlushiesR134Diag = () => {
-        const report = r133CompatibilityDiagnostics();
-        report.nativeImageBridge = typeof r133NativePlushFetchInstalled === 'boolean'
-            ? { installed: r133NativePlushFetchInstalled, ...r133NativeFetchStats }
-            : { installed: false };
-        report.activityHooks = Object.fromEntries([
-            'ChatRoomMessage','ChatRoomSendChat','ActivityRun',
-            'ActivityDictionaryText','ActivityAllowedForGroup'
-        ].map(name => [name, installedHooks.has(name)]));
-        report.bridge = {
-            pawLounge: typeof window.KittyChat?.version === 'string',
-            connected: !!window.SubbysPlushies?.ready,
-        };
-        return report;
-    };
     function makeHugTightlyActivity(activities) {
         const activityID = allocateHugTightlyActivityID(activities);
         hugTightlyActivityID = activityID;
@@ -25065,6 +25047,72 @@ function SubbysPlushiesPageMain() {
         const targets = Array.isArray(entry?.Target) ? entry.Target : (Array.isArray(entry?.Activity?.Target) ? entry.Activity.Target : []);
         return [name, label, ...targets].join(" ").toLowerCase();
     }
+    // === R133 native action-menu smoother (v4.0.15) ===
+    // Does not bypass BC activity permission checks or cache allowed activities.
+    // The native engine keeps sole responsibility for each activity execution.
+    const r133ActionSmoother = {
+        enabled: true,
+        menu: { calls: 0, totalMs: 0, slowCalls: 0, maxMs: 0 },
+        run: { calls: 0, totalMs: 0, slowCalls: 0, maxMs: 0 },
+        queuedJobs: 0, deliveredJobs: 0, failedJobs: 0,
+        searchReloads: 0, searchEventsCoalesced: 0,
+    };
+    function r133ActionMeasure(which, elapsed) {
+        const stats = r133ActionSmoother[which];
+        if (!stats) return;
+        stats.calls++;
+        stats.totalMs += elapsed;
+        if (elapsed > stats.maxMs) stats.maxMs = elapsed;
+        if (elapsed >= 16) stats.slowCalls++;
+    }
+    // Work not needed to *perform* the activity (plush mood, stat history,
+    // relationship milestones) runs after BC gets a chance to paint the click.
+    // requestIdleCallback is bounded, so active chatrooms cannot starve updates.
+    function r133DeferActionBookkeeping(job) {
+        if (!r133ActionSmoother.enabled) { job(); return; }
+        r133ActionSmoother.queuedJobs++;
+        const run = () => {
+            try { job(); }
+            catch (err) {
+                r133ActionSmoother.failedJobs++;
+                warn('R133 deferred action bookkeeping failed:', err);
+            } finally { r133ActionSmoother.deliveredJobs++; }
+        };
+        if (!document.hidden && typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(run, {timeout: 180});
+        } else {
+            window.setTimeout(run, 32);
+        }
+    }
+    function r133ActionSmootherStatus() {
+        const timing = stats => ({calls: stats.calls,
+            averageMs: Math.round(stats.totalMs * 100 / Math.max(1, stats.calls)) / 100,
+            worstMs: Math.round(stats.maxMs * 100) / 100,
+            over16ms: stats.slowCalls});
+        return {version: VERSION, target: 'R133', enabled: r133ActionSmoother.enabled,
+            nativeAllowedList: timing(r133ActionSmoother.menu),
+            nativeActivityExecution: timing(r133ActionSmoother.run),
+            deferred: {queued: r133ActionSmoother.queuedJobs,
+                completed: r133ActionSmoother.deliveredJobs,
+                failed: r133ActionSmoother.failedJobs},
+            search: {menuReloads: r133ActionSmoother.searchReloads,
+                coalescedKeystrokes: r133ActionSmoother.searchEventsCoalesced},
+            note: 'Native timing includes all downstream BC and other-addon hooks. No permissions, actions, or character updates are skipped.'};
+    }
+    window.SubbysR133ActionsDiag = r133ActionSmootherStatus;
+    window.SubbysR133ActionSmoother = Object.freeze({
+        status: r133ActionSmootherStatus,
+        enable: () => (r133ActionSmoother.enabled = true),
+        disable: () => (r133ActionSmoother.enabled = false),
+        resetStats: () => {
+            for (const name of ['menu', 'run']) Object.assign(r133ActionSmoother[name],
+                {calls:0, totalMs:0, slowCalls:0, maxMs:0});
+            for (const key of ['queuedJobs','deliveredJobs','failedJobs','searchReloads','searchEventsCoalesced'])
+                r133ActionSmoother[key] = 0;
+            return r133ActionSmootherStatus();
+        },
+    });
+    // === End R133 native action-menu smoother ===
     let activitySearchTokenizedQuery = null;
     let activitySearchTokenizedTerms = [];
     function activitySearchMatches(entry) {
@@ -25077,21 +25125,84 @@ function SubbysPlushiesPageMain() {
         const text = activitySearchEntryText(entry);
         return activitySearchTokenizedTerms.every(term => text.includes(term));
     }
+    let activitySearchPositionFrame = null;
+    let activitySearchDebounceTimer = null;
+    let activitySearchResizeObserver = null;
+    let activitySearchObservedCanvas = null;
+    let activitySearchResizeListenerAdded = false;
+    let activitySearchLastPosition = '';
     function positionActivitySearchInput() {
         if (!activitySearchInput?.isConnected) return false;
-        const canvas = window.MainCanvas || document.querySelector("canvas");
+        const canvas = window.MainCanvas || document.querySelector('canvas');
         const rect = canvas?.getBoundingClientRect?.();
         if (!rect || !rect.width || !rect.height) return false;
         const sx = rect.width / 2000;
         const sy = rect.height / 1000;
-        Object.assign(activitySearchInput.style, {
-            left: `${Math.round(rect.left + 1055 * sx)}px`,
-            top: `${Math.round(rect.top + 64 * sy)}px`,
-            width: `${Math.max(250, Math.round(835 * sx))}px`,
-            height: `${Math.max(30, Math.round(46 * sy))}px`,
-            fontSize: `${Math.max(13, Math.round(21 * Math.min(sx, sy)))}px`,
-        });
+        const left = `${Math.round(rect.left + 1055 * sx)}px`;
+        const top = `${Math.round(rect.top + 64 * sy)}px`;
+        const width = `${Math.max(250, Math.round(835 * sx))}px`;
+        const height = `${Math.max(30, Math.round(46 * sy))}px`;
+        const fontSize = `${Math.max(13, Math.round(21 * Math.min(sx, sy)))}px`;
+        const signature = `${left}|${top}|${width}|${height}|${fontSize}`;
+        if (activitySearchLastPosition === signature) return true;
+        activitySearchLastPosition = signature;
+        const style = activitySearchInput.style;
+        style.left = left; style.top = top; style.width = width;
+        style.height = height; style.fontSize = fontSize;
         return true;
+    }
+    function queueActivitySearchPosition() {
+        if (!activitySearchInput?.isConnected || activitySearchPositionFrame != null) return;
+        if (typeof window.requestAnimationFrame !== 'function') {
+            positionActivitySearchInput(); return;
+        }
+        activitySearchPositionFrame = window.requestAnimationFrame(() => {
+            activitySearchPositionFrame = null;
+            positionActivitySearchInput();
+        });
+    }
+    function observeActivitySearchCanvas() {
+        if (!activitySearchInput?.isConnected) return;
+        if (!activitySearchResizeListenerAdded) {
+            window.addEventListener('resize', queueActivitySearchPosition, {passive:true});
+            activitySearchResizeListenerAdded = true;
+        }
+        const canvas = window.MainCanvas || document.querySelector('canvas');
+        if (canvas === activitySearchObservedCanvas) return;
+        activitySearchResizeObserver?.disconnect();
+        activitySearchResizeObserver = null;
+        activitySearchObservedCanvas = canvas;
+        if (canvas && typeof window.ResizeObserver === 'function') {
+            activitySearchResizeObserver = new window.ResizeObserver(queueActivitySearchPosition);
+            activitySearchResizeObserver.observe(canvas);
+        }
+    }
+    function scheduleActivitySearchReload() {
+        if (activitySearchDebounceTimer != null) {
+            window.clearTimeout(activitySearchDebounceTimer);
+            r133ActionSmoother.searchEventsCoalesced++;
+        }
+        if (!r133ActionSmoother.enabled) {
+            activitySearchDebounceTimer = null;
+            r133ActionSmoother.searchReloads++;
+            reloadCurrentActivityMenu();
+            return;
+        }
+        activitySearchDebounceTimer = window.setTimeout(() => {
+            activitySearchDebounceTimer = null;
+            if (activitySearchInput?.isConnected) {
+                r133ActionSmoother.searchReloads++;
+                reloadCurrentActivityMenu();
+            }
+        }, 85);
+    }
+    function flushActivitySearchReload() {
+        if (activitySearchDebounceTimer != null) {
+            window.clearTimeout(activitySearchDebounceTimer);
+            activitySearchDebounceTimer = null;
+        }
+        r133ActionSmoother.searchReloads++;
+        reloadCurrentActivityMenu();
     }
     function reloadCurrentActivityMenu() {
         try {
@@ -25106,8 +25217,21 @@ function SubbysPlushiesPageMain() {
         return false;
     }
     function removeActivitySearchInput(clearQuery = true) {
+        if (activitySearchDebounceTimer != null) window.clearTimeout(activitySearchDebounceTimer);
+        activitySearchDebounceTimer = null;
+        if (activitySearchPositionFrame != null && typeof window.cancelAnimationFrame === 'function')
+            window.cancelAnimationFrame(activitySearchPositionFrame);
+        activitySearchPositionFrame = null;
+        activitySearchResizeObserver?.disconnect();
+        activitySearchResizeObserver = null;
+        activitySearchObservedCanvas = null;
+        if (activitySearchResizeListenerAdded) {
+            window.removeEventListener('resize', queueActivitySearchPosition);
+            activitySearchResizeListenerAdded = false;
+        }
         if (activitySearchInput?.isConnected) activitySearchInput.remove();
         activitySearchInput = null;
+        activitySearchLastPosition = '';
         activitySearchLastGroup = null;
         if (clearQuery) activitySearchQuery = "";
     }
@@ -25136,7 +25260,7 @@ function SubbysPlushiesPageMain() {
             });
             input.addEventListener("input", () => {
                 activitySearchQuery = input.value;
-                reloadCurrentActivityMenu();
+                scheduleActivitySearchReload();
             });
             input.addEventListener("keydown", event => {
                 event.stopPropagation();
@@ -25144,7 +25268,7 @@ function SubbysPlushiesPageMain() {
                     if (input.value) {
                         input.value = "";
                         activitySearchQuery = "";
-                        reloadCurrentActivityMenu();
+                        flushActivitySearchReload();
                     } else {
                         input.blur();
                     }
@@ -25154,7 +25278,10 @@ function SubbysPlushiesPageMain() {
             document.body.appendChild(input);
             activitySearchInput = input;
         }
-        positionActivitySearchInput();
+        observeActivitySearchCanvas();
+        // No forced layout on every BC activity-list regeneration. Geometry is
+        // remeasured only when the search input appears or the canvas resizes.
+        if (!activitySearchLastPosition) queueActivitySearchPosition();
         return true;
     }
     function installActivityMenuOrderingHook() {
@@ -25163,7 +25290,10 @@ function SubbysPlushiesPageMain() {
             return true;
         }
         const installed = installHook("ActivityAllowedForGroup", 10000, (args, next) => {
-            const result = next(args);
+            const nativeStarted = performance.now();
+            let result;
+            try { result = next(args); }
+            finally { r133ActionMeasure('menu', performance.now() - nativeStarted); }
             if (!Array.isArray(result)) return result;
             const playerMember = Number(window.Player?.MemberNumber);
             const focused = window.DialogFocusCharacter;
@@ -25210,7 +25340,7 @@ function SubbysPlushiesPageMain() {
                 removeActivitySearchInput(true);
                 return result;
             });
-            log("Installed R132 activity-list ordering + in-menu search hook (plush actions, then Extra Actions last).");
+            log("Installed R133 lightweight activity ordering/search hook and native action smoother.");
         } else warn("ActivityAllowedForGroup was unavailable; plush activity ordering/search was not installed.");
         return installed;
     }
@@ -25261,8 +25391,20 @@ function SubbysPlushiesPageMain() {
                 pendingLocalCustomActivity = null;
                 return;
             }
-            const result = next(args);
-            if (customSpec && !isExtraActionSpec(customSpec) && focusedTarget && focusedTarget !== window.Player) trackSocialPlayer(focusedTarget.MemberNumber);
+            const nativeStarted = performance.now();
+            let result;
+            try { result = next(args); }
+            finally { r133ActionMeasure('run', performance.now() - nativeStarted); }
+            if (customSpec && !isExtraActionSpec(customSpec) && customSpec.effect !== "balanceHead") {
+                const key = customSpec.key;
+                const otherMemberNumber = focusedTarget && focusedTarget !== window.Player ? focusedTarget.MemberNumber : null;
+                r133DeferActionBookkeeping(() => {
+                    if (otherMemberNumber != null) trackSocialPlayer(otherMemberNumber);
+                    handleLocalPlushInteraction(key);
+                });
+            } else if (customSpec && !isExtraActionSpec(customSpec) && focusedTarget && focusedTarget !== window.Player) {
+                r133DeferActionBookkeeping(() => trackSocialPlayer(focusedTarget.MemberNumber));
+            }
             if (runBalanceEffect) {
                 window.setTimeout(startBalanceHeadMinigame, 120);
             }
@@ -25279,7 +25421,6 @@ function SubbysPlushiesPageMain() {
             if (customSpec?.key === "wave") {
                 window.setTimeout(() => maybeStartSharedWaveChain(null, true), 0);
             }
-            if (customSpec && !isExtraActionSpec(customSpec) && customSpec.effect !== "balanceHead") handleLocalPlushInteraction(customSpec.key);
             if (jealousReaction) window.setTimeout(() => triggerJealousReaction(jealousReaction.target, jealousReaction.activityName), 80);
             return result;
         });
@@ -27262,10 +27403,8 @@ function SubbysPlushiesPageMain() {
         try {
             value = decodeURIComponent(value);
         } catch (_) {}
-        // The R134 beta may return an absolute URL or differently-cased asset
-        // directory from its renderer. Keep the synthetic asset mapping local.
-        const assetsMatch = /assets\//i.exec(value);
-        if (assetsMatch) value = 'Assets/' + value.slice(assetsMatch.index + assetsMatch[0].length);
+        const assetsIndex = value.indexOf("Assets/");
+        if (assetsIndex >= 0) value = value.slice(assetsIndex);
         while (value.startsWith("./")) value = value.slice(2);
         while (value.startsWith("../")) value = value.slice(3);
         return value;
@@ -27504,12 +27643,9 @@ function SubbysPlushiesPageMain() {
     }
     function installR133NativePlushImageFetchBridge() {
         const bcVersion = String(window.GameVersion || "");
-        // Accept R134Beta1/R134-Beta1 as well as normal /R134/ URLs. The
-        // image adapter remains restricted to our own synthetic PNG paths.
-        const release = /^R(\d{2,4})(?=$|[^0-9])/i.exec(bcVersion);
-        const pathRelease = /\/R(\d{2,4})(?=$|[^0-9])/i.exec(window.location?.pathname || "");
-        const nativeBitmapRenderer = Number(release?.[1] || pathRelease?.[1] || 0) >= 133;
-        if (!nativeBitmapRenderer) return false;
+        const isR133 = /^R(?:13[3-9]|1[4-9]\d|[2-9]\d{2,})\b/i.test(bcVersion) ||
+            /\/R(?:13[3-9]|1[4-9]\d|[2-9]\d{2,})(?:\/|$)/i.test(window.location?.pathname || "");
+        if (!isR133) return false;
         const original = window.fetch;
         if (typeof original !== "function" || typeof window.Response !== "function") return false;
         if (original[R133_NATIVE_PLUSH_FETCH_MARK]) {
@@ -33687,7 +33823,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "4.0.14";
+    const VERSION = "3.9.59";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
