@@ -1,14 +1,11 @@
 {
-  "version": "4.0.14",
-  "released": "2026-11-10",
+  "version": "4.0.15",
+  "released": "2026-11-11",
   "name": "Subby's Plushies & Essentials",
   "changes": [
-    "R134 beta readiness pass; retains R133 and earlier compatible feature paths",
-    "Align internal bootstrap marker and runtime version to 4.0.14",
-    "Detect beta-suffixed BC release routes for synthetic plush ImageBitmap fetch adapter",
-    "Tolerate case differences in synthetic asset image URLs",
-    "Add SubbysPlushiesR134Diag() while preserving R133 diagnostic alias",
-    "R134 beta gameplay/API behavior still requires live verification"
-  ],
-  "channel": "R134 beta candidate"
+    "R133: coalesce native activity search reloads across keystrokes (85 ms) and update search input geometry at most once per frame",
+    "R133: defer noncritical plush mood/stat bookkeeping until browser idle after BC handles actions",
+    "R133: add opt-in diagnostic console API SubbysR133ActionsDiag() and runtime kill switch SubbysR133ActionSmoother.disable()",
+    "Keep native activity permission checks, character updates, multiplayer messaging, and existing actions unchanged"
+  ]
 }
