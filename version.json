@@ -1,11 +1,13 @@
 {
-  "version": "4.0.15",
-  "released": "2026-11-11",
+  "version": "4.0.17",
+  "released": "2026-11-18",
   "name": "Subby's Plushies & Essentials",
   "changes": [
-    "R133: coalesce native activity search reloads across keystrokes (85 ms) and update search input geometry at most once per frame",
-    "R133: defer noncritical plush mood/stat bookkeeping until browser idle after BC handles actions",
-    "R133: add opt-in diagnostic console API SubbysR133ActionsDiag() and runtime kill switch SubbysR133ActionSmoother.disable()",
-    "Keep native activity permission checks, character updates, multiplayer messaging, and existing actions unchanged"
+    "R134: create and repair each synthetic wardrobe asset layer with its own DefaultColor as required by the R134 asset color migration (#6820)",
+    "R134: keep Heartkeeper Lantern and floor Glow color slots/defaults stable across wardrobe and ItemColor interactions",
+    "R134: Harmonizer discovers per-layer default colors where native Asset.DefaultColor is no longer present, without inventing extra slots",
+    "Retain all R133 4.0.15 action-menu and 4.0.16 long-session character-click optimizations",
+    "Expose SubbysR134Diag() for quick R134 asset registration and performance inspection",
+    "R134 in-game multiplayer compatibility requires local testing; no server or permissions behavior changed"
   ]
 }
