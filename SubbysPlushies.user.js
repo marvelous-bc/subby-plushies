@@ -1,21 +1,75 @@
+Can you send me the fully updated essentials plug-in for r134 and the pawlounge one?
+
+Current version for essentials ends with .15 and pawlounge .22 as r133 but r134 came out. You already made them r134 friendly, just make sure everything is still up to date Mira and please do send me back the files
+
+Both plugins are updated and packaged for Bondage Club R134, with their existing features, artwork, and Marvelous integration preserved.
+ Subby's Plushies & Essentials — v4.0.17
+
+Complete R134 release
+Packaged
+
+Download full Essentials ZIP
+Script (.txt)
+Userscript (.js)
+
+Includes all original assets, launchers, configuration files, and documentation.
+
+Updates included: R134 custom-asset color compatibility, Heartkeeper Lantern color handling, and Harmonizer support for per-layer color defaults. It also retains the v4.0.15 action-speed improvements and the v4.0.16 long-session character-click smoother.
+ PawLounge — v1.2.24
+
+Complete R134 release
+Packaged
+
+Download full PawLounge ZIP
+Script (.txt)
+Userscript (.js)
+
+Includes all original graphics, stickers, launcher, and configuration files.
+
+Updates included: More reliable registration of native BC hooks, protection against duplicate hooks, and corrected update metadata. Existing messaging, profiles, moodboards, and Essentials integration are retained.
+Validation
+
+JavaScript syntax checks passed.
+
+Targeted R134 compatibility tests passed.
+
+ZIP integrity verified; no original asset files missing.
+
+Live R134 gameplay testing is still needed before calling either build fully verified.
+
+Installation instructions for both plugins
+
+Important: Disable your older versions before installing these standalone scripts. If you use automatic-update launchers, publish the updated files to your GitHub repositories first; otherwise the launchers will continue loading the old releases.
+R134_Essentials_PawLounge_Installation.txtDocument
+Subbys_Essentials_R134_4.0.17.txtDocument
+Subbys_Essentials_R134_4.0.17.user.jsCode
+PawLounge_R134_1.2.24.txtDocument
+PawLounge_R134_1.2.24.user.jsCode
+Show less
 // ==UserScript==
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
 // @author	     Marvelous
-// @version      4.0.15
-// @description  4.0.15 R133 action-menu smoother: coalesced search updates, idle bookkeeping, native timing diagnostics
-// @released     2026-11-11
+// @version      4.0.17
+// @description  4.0.17 R134 compatibility: layer colors, wardrobe and action/character smoothers
+// @released     2026-11-18
 // @homepageURL   https://github.com/marvelous-bc/subby-plushies
 // @supportURL    https://github.com/marvelous-bc/subby-plushies/issues
 // @updateURL     https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
 // @downloadURL   https://raw.githubusercontent.com/marvelous-bc/subby-plushies/main/SubbysPlushies.user.js
 // @match        https://*.bondageprojects.elementfx.com/R*
+// @match        https://bondageprojects.elementfx.com/R*
+// @match        https://bondageprojects.com/R*
+// @match        https://bondage-europe.com/R*
+// @match        https://bondageeurope.com/R*
 // @match        https://*.bondageprojects.com/R*
 // @match        https://*.bondage-europe.com/R*
 // @match        https://*.bondageeurope.com/R*
 // @match        https://*.bondage-asia.com/club/*
 // @match        https://*.bondageeurope.com/*/BondageClub/*
 // @match        https://*.bondage-europe.com/*/BondageClub/*
+// @match        https://bondage-asia.com/club/*
+// @match        https://www.bondage-asia.com/club/*
 // @run-at       document-start
 // @noframes
 // @grant        none
@@ -24,7 +78,7 @@
 // ==/UserScript==
 function SubbysPlushiesPageMain() {
     "use strict";
-    const VERSION = "4.0.15";
+    const VERSION = "4.0.17";
     try {
         document.documentElement?.setAttribute("data-subbys-plushies-runtime", "main-world-active");
         document.documentElement?.setAttribute("data-subbys-plushies-version", VERSION);
@@ -11531,6 +11585,84 @@ function SubbysPlushiesPageMain() {
     let roomMascotUiTrailingTimer = null;
     let roomMascotCanvasRetryTimer = null;
     let roomMascotCanvasRetryAttempts = 0;
+    // R133 4.0.16: Character selection must not search the entire, ever-growing
+    // chat/document tree on every click. Existing targeted observers supply a
+    // bounded list of potential modal roots; rescan only on relevant changes.
+    // This affects addon chrome only. BC character selection stays synchronous.
+    const r133CharacterSmoother = {
+        enabled: true, canvasClicks: 0, skippedCanvasRescans: 0,
+        cachedModalChecks: 0, fullModalScans: 0, fullModalScanMs: 0,
+        worstFullModalScanMs: 0, delayedRescans: 0,
+        lastFullModalScanAt: 0, nativeHooks: Object.create(null),
+        native: Object.create(null),
+    };
+    function r133CharacterNativeObserve(name, duration) {
+        const stat = r133CharacterSmoother.native[name] ||
+            (r133CharacterSmoother.native[name] = { calls: 0, totalMs: 0, maxMs: 0, slowCalls: 0 });
+        stat.calls++;
+        stat.totalMs += duration;
+        stat.maxMs = Math.max(stat.maxMs, duration);
+        if (duration >= 16) stat.slowCalls++;
+    }
+    function r133CharacterSmootherReport() {
+        const native = {};
+        for (const [name, stat] of Object.entries(r133CharacterSmoother.native)) {
+            native[name] = { calls: stat.calls,
+                averageMs: Math.round(stat.totalMs / Math.max(1, stat.calls) * 100) / 100,
+                worstMs: Math.round(stat.maxMs * 100) / 100,
+                over16ms: stat.slowCalls };
+        }
+        return { version: VERSION, target: 'R133', enabled: r133CharacterSmoother.enabled,
+            modalVisibility: { trackedRoots: roomMascotWatchedModals.size,
+                cachedChecks: r133CharacterSmoother.cachedModalChecks,
+                fullDocumentScans: r133CharacterSmoother.fullModalScans,
+                averageScanMs: Math.round(r133CharacterSmoother.fullModalScanMs /
+                    Math.max(1, r133CharacterSmoother.fullModalScans) * 100) / 100,
+                worstScanMs: Math.round(r133CharacterSmoother.worstFullModalScanMs * 100) / 100,
+                skippedCanvasRescans: r133CharacterSmoother.skippedCanvasRescans,
+                delayedRescans: r133CharacterSmoother.delayedRescans },
+            characterSelection: native,
+            installedTimingHooks: {...r133CharacterSmoother.nativeHooks},
+            note: 'Native times include BC and other addons. No character or action checks are skipped.' };
+    }
+    window.SubbysR133CharacterDiag = r133CharacterSmootherReport;
+    window.SubbysR134Diag = () => {
+        const wardrobe = WARDROBE_ITEMS.map(entry => {
+            const asset = window.AssetGet?.(FAMILY, entry.group, entry.name);
+            return {name:entry.name, registered:!!asset, zones:entry.colorZones.length,
+                layerDefaults:entry.colorZones.filter((zone,i) =>
+                    asset?.Layer?.find?.(layer=>layer?.Name===zone)?.DefaultColor===entry.defaultColors[i]).length};
+        });
+        return {version:VERSION, gamePath:location.pathname, stage:startupStage,
+            wardrobe, allLayerDefaultsReady:wardrobe.every(x=>x.registered && x.layerDefaults===x.zones),
+            actionTiming:typeof window.SubbysR133ActionsDiag==='function'?window.SubbysR133ActionsDiag():null,
+            characterTiming:r133CharacterSmootherReport(),
+            note:'Local compatibility diagnostics only; live gameplay checks are still needed.'};
+    };
+    window.SubbysR133CharacterSmoother = Object.freeze({
+        status: r133CharacterSmootherReport,
+        enable: () => (r133CharacterSmoother.enabled = true),
+        disable: () => (r133CharacterSmoother.enabled = false),
+        resetStats: () => {
+            for (const stat of Object.values(r133CharacterSmoother.native))
+                Object.assign(stat,{calls:0,totalMs:0,maxMs:0,slowCalls:0});
+            for (const key of ['canvasClicks','skippedCanvasRescans','cachedModalChecks',
+                'fullModalScans','fullModalScanMs','worstFullModalScanMs','delayedRescans'])
+                r133CharacterSmoother[key] = 0;
+            return r133CharacterSmootherReport();
+        },
+    });
+    // Timing only: wraps the native call without changing its args or return value.
+    function installR133CharacterSelectionTiming() {
+        for (const name of ['ChatRoomClick', 'DialogLoad', 'ChatRoomClickCharacter']) {
+            if (r133CharacterSmoother.nativeHooks[name] || typeof window[name] !== 'function') continue;
+            r133CharacterSmoother.nativeHooks[name] = installHook(name, 9500, (args, next) => {
+                const began = performance.now();
+                try { return next(args); }
+                finally { r133CharacterNativeObserve(name, performance.now() - began); }
+            });
+        }
+    }
     function roomMascotVisibleModal(element) {
         if (!(element instanceof Element) || !element.isConnected ||
             element === roomMascotOverlay || roomMascotOverlay?.contains(element) ||
@@ -11572,8 +11704,26 @@ function SubbysPlushiesPageMain() {
         } catch (_) {}
         // Catch visible addon windows; ignore permanently mounted closed roots.
         try {
-            for (const node of document.querySelectorAll(ROOM_MASCOT_MODAL_SELECTOR)) {
-                if (roomMascotVisibleModal(node)) return `other-interface:${node.id || node.getAttribute('role') || node.tagName.toLowerCase()}`;
+            // Fast path: check only known modal roots. This does not grow with
+            // chat messages after several hours online. Disconnected roots are
+            // pruned without a global query.
+            if (r133CharacterSmoother.enabled && mascotUiHooksInstalled) {
+                for (const [node, observer] of roomMascotWatchedModals) {
+                    if (!node.isConnected) {
+                        observer.disconnect();
+                        roomMascotWatchedModals.delete(node);
+                        continue;
+                    }
+                    r133CharacterSmoother.cachedModalChecks++;
+                    if (roomMascotVisibleModal(node))
+                        return `other-interface:${node.id || node.getAttribute('role') || node.tagName.toLowerCase()}`;
+                }
+            } else {
+                // Diagnostic fallback allows a fair on/off comparison.
+                for (const node of document.querySelectorAll(ROOM_MASCOT_MODAL_SELECTOR)) {
+                    if (roomMascotVisibleModal(node))
+                        return `other-interface:${node.id || node.getAttribute('role') || node.tagName.toLowerCase()}`;
+                }
             }
         } catch (_) {}
         return null;
@@ -11612,6 +11762,7 @@ function SubbysPlushiesPageMain() {
     const roomMascotWatchedModals = new Map();
     function roomMascotSyncTargetedObservers() {
         if (!mascotUiHooksInstalled || typeof MutationObserver !== 'function') return;
+        const began = performance.now();
         const roots = new Set();
         try {
             for (const element of document.querySelectorAll(ROOM_MASCOT_MODAL_SELECTOR))
@@ -11619,6 +11770,13 @@ function SubbysPlushiesPageMain() {
             const pawPanel = document.getElementById('kittychat-host')?.shadowRoot?.getElementById('kc-panel');
             if (pawPanel) roots.add(pawPanel);
         } catch (_) {}
+        finally {
+            const ms = performance.now() - began;
+            r133CharacterSmoother.fullModalScans++;
+            r133CharacterSmoother.fullModalScanMs += ms;
+            r133CharacterSmoother.worstFullModalScanMs = Math.max(r133CharacterSmoother.worstFullModalScanMs, ms);
+            r133CharacterSmoother.lastFullModalScanAt = performance.now();
+        }
         for (const [element, observer] of roomMascotWatchedModals) {
             if (element.isConnected && roots.has(element)) continue;
             observer.disconnect();
@@ -11666,7 +11824,9 @@ function SubbysPlushiesPageMain() {
                     if (modalRootChanged) break;
                 }
                 if (!modalRootChanged) return;
-                roomMascotSyncTargetedObservers();
+                // A structural modal change really requires an index rebuild.
+                // Run it once on the next frame, never inside this observer.
+                sharedPerfNextFrame('mascot-modal-roots', roomMascotSyncTargetedObservers);
                 scheduleRoomMascotUiRefresh();
             });
             roomMascotUiObserver.observe(document.body,{childList:true});
@@ -11674,13 +11834,31 @@ function SubbysPlushiesPageMain() {
         roomMascotSyncTargetedObservers();
         // Re-evaluate in the event loop only after possible UI interactions.
         // This also detects controls nested in app roots and Shadow DOM.
-        const refreshAfterInteraction = () => {
+        const isCanvasInteraction = event => event?.target instanceof HTMLCanvasElement;
+        const refreshAfterInteraction = event => {
+            // Clicking a BC canvas character already triggers its native UI.
+            // Never re-query all of document while that dialog is opening.
+            if (r133CharacterSmoother.enabled && isCanvasInteraction(event)) {
+                r133CharacterSmoother.canvasClicks++;
+                r133CharacterSmoother.skippedCanvasRescans++;
+                scheduleRoomMascotUiRefresh();
+                return;
+            }
             scheduleRoomMascotUiInteraction();
-            sharedPerfNextFrame('mascot-modal-roots', roomMascotSyncTargetedObservers);
+            if (!r133CharacterSmoother.enabled ||
+                performance.now() - r133CharacterSmoother.lastFullModalScanAt > 2500) {
+                r133CharacterSmoother.delayedRescans++;
+                sharedPerfNextFrame('mascot-modal-roots', roomMascotSyncTargetedObservers);
+            }
         };
         document.addEventListener('pointerdown', event => {
             if (roomMascotOverlay?.contains(event.target)) return;
-            refreshAfterInteraction();
+            if (r133CharacterSmoother.enabled) {
+                // No costly modal traversal before BC receives pointerdown.
+                if (!isCanvasInteraction(event)) scheduleRoomMascotUiRefresh();
+                return;
+            }
+            refreshAfterInteraction(event);
         }, true);
         document.addEventListener('click', refreshAfterInteraction, true);
         document.addEventListener('keydown', event => {
@@ -28461,7 +28639,13 @@ function SubbysPlushiesPageMain() {
         return subbyLanternColorPageHooksInstalled.has('ItemColorDraw');
     }
     function wardrobeNativeLayerDefinition(entry, zone) {
-        const layer = { Name: zone, AllowColorize: true };
+        // R134 stores default colors on individual asset layers, not only
+        // Asset.DefaultColor. Keep the old asset-level array too so older BC
+        // releases and existing client-side wardrobe data remain readable.
+        const zoneIndex = entry.colorZones.indexOf(zone);
+        const zoneDefault = zoneIndex >= 0 ? entry.defaultColors?.[zoneIndex] : undefined;
+        const layer = { Name: zone, AllowColorize: true,
+            ...(typeof zoneDefault === 'string' ? { DefaultColor: zoneDefault } : {}) };
         if (entry.poses?.size) layer.PoseMapping = { ...WARDROBE_NATIVE_POSE };
         const priority = entry.name === SUBBY_LANTERN_NAME
             ? (zone === SUBBY_LANTERN_GLOW_LAYER.Name ? SUBBY_LANTERN_GLOW_LAYER.Priority : 26)
@@ -28488,8 +28672,8 @@ function SubbysPlushiesPageMain() {
             // Native Glow is a permanent 10th image-backed color layer;
             // Light up/Extinguish changes only its HasImage state.
             const fields = entry.name === SUBBY_LANTERN_NAME && layer.Name === 'Glow'
-                ? ['Priority','AllowColorize','Left','Top','Width','Height','ColorIndex']
-                : ['Priority'];
+                ? ['Priority','AllowColorize','Left','Top','Width','Height','ColorIndex','DefaultColor']
+                : ['Priority','DefaultColor'];
             for (const key of fields) if (layer[key] !== canonical[key]) {
                 layer[key]=canonical[key]; changed=true;
             }
@@ -28557,10 +28741,10 @@ function SubbysPlushiesPageMain() {
                 // The previous floor item omitted HeightModifier (the handheld asset sets it to zero).
                 HeightModifier:0,OverrideHeight:null,
                 Priority:26,DefaultColor:['Default','#FF78DC'],ColorableLayerCount:2,
-                Layer:[{Name:'Floor',AllowColorize:false,HasImage:true,Priority:26,
+                Layer:[{Name:'Floor',AllowColorize:false,DefaultColor:'Default',HasImage:true,Priority:26,
                     Left:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Left,Top:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Top,
                     Width:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Width,Height:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Height},
-                    {Name:'FloorGlow',AllowColorize:true,ColorIndex:1,HasImage:true,Priority:27,
+                    {Name:'FloorGlow',AllowColorize:true,ColorIndex:1,DefaultColor:'#FF78DC',HasImage:true,Priority:27,
                     Left:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Left,Top:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Top,
                     Width:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Width,Height:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Height}]},group,'ItemHandheld',null);
             asset=window.AssetGet?.(FAMILY,'ItemHandheld',SUBBY_LANTERN_FLOOR_NAME);
@@ -28574,16 +28758,19 @@ function SubbysPlushiesPageMain() {
         asset.DefaultColor=['Default','#FF78DC'];
         asset.ColorableLayerCount=2;
         if(!Array.isArray(asset.Layer)||asset.Layer.length!==2||asset.Layer[0]?.Name!=='Floor'||asset.Layer[1]?.Name!=='FloorGlow'){
-            asset.Layer=[{Name:'Floor',AllowColorize:false,HasImage:true,Priority:26,
+            asset.Layer=[{Name:'Floor',AllowColorize:false,DefaultColor:'Default',HasImage:true,Priority:26,
                 Left:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Left,Top:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Top,
                 Width:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Width,Height:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Height},
-                {Name:'FloorGlow',AllowColorize:true,ColorIndex:1,HasImage:true,Priority:27,
+                {Name:'FloorGlow',AllowColorize:true,ColorIndex:1,DefaultColor:'#FF78DC',HasImage:true,Priority:27,
                 Left:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Left,Top:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Top,
                 Width:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Width,Height:SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Height}];
         }
         asset.Left=SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Left; asset.Top=SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Top;
         asset.Width=SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Width; asset.Height=SUBBY_LANTERN_FLOOR_ASSET_BOUNDS.Height;
         for(const layer of asset.Layer){
+            // R134's per-layer default colors must also be repaired for assets
+            // already registered earlier in this session.
+            layer.DefaultColor = layer.Name === 'FloorGlow' ? '#FF78DC' : 'Default';
             layer.Priority=layer.Name==='FloorGlow'?27:26;
             layer.Left=SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Left; layer.Top=SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Top;
             layer.Width=SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Width; layer.Height=SUBBY_LANTERN_FLOOR_LAYER_GEOMETRY.Height;
@@ -32267,15 +32454,39 @@ function SubbysPlushiesPageMain() {
         // R133 uses Asset.ColorableLayerCount and DefaultColor when accepting
         // outfit bundles. Do not let a stale item.Color array or a decorative
         // render layer invent extra server-side slots.
+        // R134 moved asset color defaults to each render layer (#6820).
+        // Respect native color-slot counts first; never infer extra color slots
+        // from decorative layers or duplicate ColorIndex values.
         const countColorZones = item => {
             const asset = item?.Asset;
             const native = Number(asset?.ColorableLayerCount);
             if (Number.isInteger(native) && native > 0 && native <= 64) return native;
-            if (Array.isArray(asset?.DefaultColor) && asset.DefaultColor.length && asset.DefaultColor.length <= 64)
-                return asset.DefaultColor.length;
             const custom = WARDROBE_ITEMS.find(entry => entry.name === asset?.Name && entry.group === asset?.Group?.Name);
             if (custom?.colorZones?.length) return clamp(custom.colorZones.length,1,64);
-            return clamp(Array.isArray(item?.Color) ? item.Color.length : 1,1,64);
+            if (Array.isArray(item?.Color) && item.Color.length > 0 && item.Color.length <= 64)
+                return item.Color.length;
+            if (Array.isArray(asset?.DefaultColor) && asset.DefaultColor.length && asset.DefaultColor.length <= 64)
+                return asset.DefaultColor.length;
+            const layers = Array.isArray(asset?.Layer) ? asset.Layer.filter(l => l && l.AllowColorize !== false) : [];
+            const indexes = layers.filter(l => Number.isInteger(l.ColorIndex) && l.ColorIndex >= 0 && l.ColorIndex < 64);
+            if (indexes.length === layers.length && indexes.length)
+                return Math.max(...indexes.map(l => l.ColorIndex)) + 1;
+            return clamp(layers.length || 1, 1, 64);
+        };
+        const assetColorDefaults = (asset, count) => {
+            const legacy = Array.isArray(asset?.DefaultColor) ? asset.DefaultColor :
+                typeof asset?.DefaultColor === 'string' ? [asset.DefaultColor] : [];
+            const defaults = Array.from({length:count}, (_,i) => legacy[i] ?? 'Default');
+            let ordinal = 0;
+            for (const layer of (Array.isArray(asset?.Layer) ? asset.Layer : [])) {
+                if (!layer || layer.AllowColorize === false) continue;
+                const index = Number.isInteger(layer.ColorIndex) && layer.ColorIndex >= 0 && layer.ColorIndex < count
+                    ? layer.ColorIndex : ordinal;
+                if (index < count && typeof layer.DefaultColor === 'string' && layer.DefaultColor)
+                    defaults[index] = layer.DefaultColor;
+                ordinal++;
+            }
+            return defaults;
         };
         // Some vanilla jewelry groups are appearance accessories rather than
         // clothing; explicitly allow only recognized jewelry, not body parts.
@@ -32338,7 +32549,7 @@ function SubbysPlushiesPageMain() {
                 if(!group || group.Category!=='Appearance' || !(group.Clothing||isJewelryItem(item)||WARDROBE_ITEM_NAME_SET.has(item?.Asset?.Name)))continue;
                 const count=countColorZones(item);
                 const colors=Array.isArray(item.Color)?item.Color:[item.Color];
-                const defaults=Array.isArray(item.Asset?.DefaultColor)?item.Asset.DefaultColor:[item.Asset?.DefaultColor];
+                const defaults=assetColorDefaults(item.Asset,count);
                 const zones=colorZoneNames(item,count);
                 for(let i=0;i<Math.min(count,64);i++) {
                     const value=safeHex(colors[i])||
@@ -32463,7 +32674,7 @@ function SubbysPlushiesPageMain() {
                 useAccent=itemIndex%2===1;
             const baseColor=useAccent?secondary:primary,trimColor=useAccent?primary:secondary;
             const current=Array.isArray(item.Color)?item.Color:[item.Color];
-            const fallback=Array.isArray(item.Asset?.DefaultColor)?item.Asset.DefaultColor:[];
+            const fallback=assetColorDefaults(item.Asset,zones);
             const colors=[];
             for(let i=0;i<zones;i++) {
                 const override=rules[String(i)]||'auto',zone=names[i]||'';
@@ -33746,6 +33957,10 @@ function SubbysPlushiesPageMain() {
             if(flags.performanceMode!=='low')setPerformanceMode('low');
         }
         optionalStartupStep("mascot-ui-safety", installRoomMascotUiSafety);
+        optionalStartupStep("R133-character-selection-timing", installR133CharacterSelectionTiming);
+        // Some beta/R133 builds expose optional selection entrypoints later.
+        for (const delay of [1800, 5500])
+            window.setTimeout(installR133CharacterSelectionTiming, delay);
         optionalStartupStep("mascot-admin-picker", installRoomMascotAdminPicker);
         optionalStartupStep("visibility-hooks", installVisibilityPerformanceHooks);
         optionalStartupStep("native-extensions-menu", startPreferencesExtensionsIntegration);
@@ -33823,7 +34038,7 @@ function SubbysPlushiesPageMain() {
 (() => {
     "use strict";
     const BOOT_TAG = "[Subby's Plushies bootstrap]";
-    const VERSION = "3.9.59";
+    const VERSION = "4.0.17";
     const RUNTIME_ATTR = "data-subbys-plushies-runtime";
     const VERSION_ATTR = "data-subbys-plushies-version";
     function pageGlobalsVisible() {
@@ -33891,3 +34106,6 @@ function SubbysPlushiesPageMain() {
     exposeBootstrapDiag("bootstrap-loaded");
     void bootstrap();
 })();
+Draggable item chatgpt-project-conversation:g-p-6ab7ff5a18d88191ac5534519d4ccf7d:6af37644-de64-83ea-83b8-464c9e41fb71 was dropped.
+
+
