@@ -1,51 +1,3 @@
-Can you send me the fully updated essentials plug-in for r134 and the pawlounge one?
-
-Current version for essentials ends with .15 and pawlounge .22 as r133 but r134 came out. You already made them r134 friendly, just make sure everything is still up to date Mira and please do send me back the files
-
-Both plugins are updated and packaged for Bondage Club R134, with their existing features, artwork, and Marvelous integration preserved.
- Subby's Plushies & Essentials — v4.0.17
-
-Complete R134 release
-Packaged
-
-Download full Essentials ZIP
-Script (.txt)
-Userscript (.js)
-
-Includes all original assets, launchers, configuration files, and documentation.
-
-Updates included: R134 custom-asset color compatibility, Heartkeeper Lantern color handling, and Harmonizer support for per-layer color defaults. It also retains the v4.0.15 action-speed improvements and the v4.0.16 long-session character-click smoother.
- PawLounge — v1.2.24
-
-Complete R134 release
-Packaged
-
-Download full PawLounge ZIP
-Script (.txt)
-Userscript (.js)
-
-Includes all original graphics, stickers, launcher, and configuration files.
-
-Updates included: More reliable registration of native BC hooks, protection against duplicate hooks, and corrected update metadata. Existing messaging, profiles, moodboards, and Essentials integration are retained.
-Validation
-
-JavaScript syntax checks passed.
-
-Targeted R134 compatibility tests passed.
-
-ZIP integrity verified; no original asset files missing.
-
-Live R134 gameplay testing is still needed before calling either build fully verified.
-
-Installation instructions for both plugins
-
-Important: Disable your older versions before installing these standalone scripts. If you use automatic-update launchers, publish the updated files to your GitHub repositories first; otherwise the launchers will continue loading the old releases.
-R134_Essentials_PawLounge_Installation.txtDocument
-Subbys_Essentials_R134_4.0.17.txtDocument
-Subbys_Essentials_R134_4.0.17.user.jsCode
-PawLounge_R134_1.2.24.txtDocument
-PawLounge_R134_1.2.24.user.jsCode
-Show less
 // ==UserScript==
 // @name         Subby's Plushies & Essentials
 // @namespace    subbycat.subbysplushies
@@ -34106,6 +34058,3 @@ function SubbysPlushiesPageMain() {
     exposeBootstrapDiag("bootstrap-loaded");
     void bootstrap();
 })();
-Draggable item chatgpt-project-conversation:g-p-6ab7ff5a18d88191ac5534519d4ccf7d:6af37644-de64-83ea-83b8-464c9e41fb71 was dropped.
-
-
